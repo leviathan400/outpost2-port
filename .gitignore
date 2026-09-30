@@ -1,0 +1,27 @@
+# =============================================================================
+# Whitelist: ignora TUDO por padrão e libera só o trabalho do port.
+# Isto é proposital: a pasta do projeto é a instalação do jogo original de 1997
+# (OUTPOST2.EXE, *.DLL, *.VOL, OP2_ART.BMP, *.ANI, *.INI ...) e contém o
+# disassembly (Outpost2_src/*.asm/.lst/.i64) — tudo material comercial protegido
+# (Sierra/Dynamix) que NÃO pode ser versionado/publicado. Só o nosso código vai.
+# =============================================================================
+/*
+
+# --- liberado: o trabalho do port ---
+!/.gitignore
+!/README.md
+!/PORT_STATUS.md
+!/CMakeLists.txt
+!/src/
+!/tools/
+
+# --- dentro de tools/: excluir amostras/artefatos derivados de assets originais ---
+tools/__pycache__/
+tools/*.png
+tools/*.bmp
+tools/*.json
+tools/*.raw
+tools/*.prt
+tools/*.map
+tools/*.txt
+tools/*.wav
