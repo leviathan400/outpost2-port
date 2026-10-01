@@ -196,6 +196,23 @@ int pfSmoothPath(int* dirs, int count) {   // sub_43FC50 (ecx=dirs, edx=count)
     return edx + 1;
 }
 
+void pfWallFollow(int& dir, int& x, int& y, int turnSign) {  // sub_43FBB0
+    int rev = 8 - turnSign;                 // var_4: passo de rotação reverso
+    int mask = g_gameMap.width() - 1;
+    for (int guard = 0; guard < 8; ++guard) {   // no original é ilimitado; guard = 1 volta
+        int d = dir & 7;
+        int nx = (x + kDir8[d].dx) & mask;
+        int ny = y + kDir8[d].dy;
+        if (pfCanEnter(nx, ny)) {           // dword_550700
+            x = nx;
+            y = ny;
+            dir = (d + ((d & 1) ? turnSign * 2 : turnSign)) & 7;  // ajuste (×2 se diagonal)
+            return;
+        }
+        dir = (d + rev) & 7;                 // rotaciona
+    }
+}
+
 StepChoice pfChooseStep(int unitId, int currentDir, int avoidDir) {
     StepChoice best;
     if (unitId <= 0 || unitId >= static_cast<int>(g_units.size())) return best;

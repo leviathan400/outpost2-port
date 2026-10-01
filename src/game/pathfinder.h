@@ -76,6 +76,13 @@ int pfDirFromDelta(int dx, int dy);
 // novo tamanho. Pós-processamento da rota encontrada.
 int pfSmoothPath(int* dirs, int count);
 
+// pfWallFollow (sub_43FBB0 @106230): primitiva de seguir-parede da busca. A partir
+// de (x,y) e direção `dir`, rotaciona `dir` em passos de (8-turnSign) até a célula
+// vizinha ser enterável (pfCanEnter, com o contexto atual), anda para ela e ajusta
+// `dir` por turnSign (×2 se diagonal). Edita dir/x/y no lugar. Assume que existe ao
+// menos uma célula enterável (como o original garante antes de chamar).
+void pfWallFollow(int& dir, int& x, int& y, int turnSign);
+
 // --- Helpers de ocupação (sub_44BD60 / sub_44D4E0 / sub_490C50) --------------
 // Jogador `a` é aliado de `b`? (sub_490C50: bit a no allyMask de b.)
 bool pfPlayersAllied(int a, int b);
