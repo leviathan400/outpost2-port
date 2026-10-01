@@ -33,6 +33,7 @@ add_executable(outpost2_modern
     src/res/res_manager.cpp
     src/gfx/pbmp.cpp
     src/game/game_map.cpp
+    src/game/terrain_cost.cpp
     src/game/terrain_renderer.cpp
     src/game/game_rng.cpp
     src/game/tethys_game.cpp

@@ -4,6 +4,7 @@
 #include <cstring>
 
 #include "../res/res_manager.h"
+#include "terrain_cost.h"
 
 namespace op2 {
 
@@ -116,20 +117,11 @@ int GameMap::getCellType(LOCATION loc) const {
 }
 
 bool GameMap::cellTypePassable(int cellType) {
-    // Impassáveis = entradas de custo 0 na tabela do engine (sub_40B500 @18551).
-    // Os nomes na tabela começam em cellType 1 (cellType 0 = fastPassible1,
-    // passável, setado antes). Logo: 1=Impassible2, 6=Impassible1, 8=NorthCliffs,
-    // 9=CliffsHighSide, 10=CliffsLowSide. (0 e 7 são fast-passible = passáveis.)
-    switch (cellType) {
-    case 1:
-    case 6:
-    case 8:
-    case 9:
-    case 10:
-        return false;
-    default:
-        return true;
-    }
+    // Passabilidade = custo != 0 na tabela real do engine (dword_4DEB9C, extraída
+    // de sub_40B500 @18551; ver terrain_cost). Usa a classe de movimento 0 (veículo
+    // terrestre padrão). Impassáveis de terreno: cellTypes {1,6,8,9,10} (custo 0),
+    // conferido empiricamente no overlay (cânions/cliffs/vents).
+    return terrainPassable(cellType, 0);
 }
 
 LOCATION GameMap::findPassableNear(LOCATION start, int maxRadius) const {
