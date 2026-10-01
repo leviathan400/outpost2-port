@@ -28,6 +28,8 @@ private:
     TerrainRenderer m_terrain;   // desenha sobre o g_gameMap (singleton do engine)
     int m_camX = 0, m_camY = 0;
     int m_maxX = 0, m_maxY = 0;
+    float m_tickAccum = 0.0f;     // acumulador p/ avançar o tick de simulação
+    int m_lastRand = 0;           // última amostra do RNG (1 por tick), p/ o HUD
     void clampCamera();
 };
 

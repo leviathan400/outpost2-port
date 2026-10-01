@@ -1,4 +1,6 @@
 #include <SDL.h>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <iostream>
@@ -9,7 +11,25 @@
 #include "res/res_manager.h"
 #include "game/game_map.h"
 #include "game/terrain_renderer.h"
+#include "game/game_rng.h"
 #include "app/tapp.h"
+
+// --rngtest <seedHex> <count>: imprime a sequência do RNG (next cru e getRand),
+// para validar o port contra uma transcrição independente do x86.
+static int runRngTest(const char* seedStr, const char* countStr) {
+    uint32_t seed = static_cast<uint32_t>(strtoul(seedStr, nullptr, 0));
+    int count = atoi(countStr);
+    op2::GameRNG rng;
+    rng.setSeed(seed);
+    std::printf("seed=0x%08X  s0=0x%08X s1=0x%08X\n", seed, rng.s0(), rng.s1());
+    op2::GameRNG r2; r2.setSeed(seed);
+    for (int i = 0; i < count; ++i) {
+        uint32_t raw = rng.next();
+        int rnd = r2.getRand(100);
+        std::printf("%3d  next=0x%08X  getRand(100)=%d\n", i, raw, rnd);
+    }
+    return 0;
+}
 
 // Modo utilitário (sem SDL): extrai um recurso via ResManager e grava em disco.
 // Usado para validar o leitor de VOL/LZHUF contra o decoder Python (byte a byte).
@@ -182,6 +202,8 @@ int main(int argc, char* argv[]) {
             return runGameView(argv[i + 1]);
         if (std::strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc)
             return runScreenshot(argc, argv, argv[i + 1]);
+        if (std::strcmp(argv[i], "--rngtest") == 0 && i + 2 < argc)
+            return runRngTest(argv[i + 1], argv[i + 2]);
     }
 
     // --play <map>: entra direto no jogo com o mapa (via o backbone TApp).
