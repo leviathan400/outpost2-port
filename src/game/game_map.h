@@ -52,8 +52,43 @@ public:
     // `start` se nada for achado dentro de maxRadius.
     LOCATION findPassableNear(LOCATION start, int maxRadius = 16) const;
 
-    // Célula crua (u32) em (x,y) com wrap em X.
+    // ---- Célula runtime (grid de simulação) --------------------------------
+    // No engine a célula é UMA u32 (dword_54F01C aponta para o grid): os bits
+    // baixos vêm do disco (cellType 0..4, tileIndex 5..15) e os bits altos
+    // guardam o estado dinâmico. Layout confirmado em sub_4382C0/sub_438390 @asm:
+    //   bits 0..4   cellType
+    //   bits 5..15  tileIndex
+    //   bits 16..26 ocupação (id da unidade ocupante, 0 = livre) — 0x07FF0000
+    //   bit  27     0x08000000  \  parte de HARD-BLOCK (0x28000000): intransponível
+    //   bit  29     0x20000000  /  (parede/estrutura sólida)
+    //   bit  31     0x80000000  marca "estrutura/tubo": exige teste de cellType
+    //   (0xA8000000 = qualquer dos bits 31/29/27 → sai do caminho de terreno)
+    static constexpr uint32_t CELL_OCCUPANCY = 0x07FF0000u;  // bits 16..26
+    static constexpr uint32_t CELL_WALLBITS  = 0xA8000000u;  // bits 31|29|27
+    static constexpr uint32_t CELL_HARDBLOCK = 0x28000000u;  // bits 29|27
+    static constexpr uint32_t CELL_STRUCT    = 0x80000000u;  // bit 31
+    static constexpr int      CELL_OCC_SHIFT = 16;
+    // cellTypes de tubo (passáveis via dword_4E0C08) — faixa 0x17..0x19.
+    static constexpr int TUBE_CELLTYPE_LO = 0x17;
+    static constexpr int TUBE_CELLTYPE_HI = 0x19;
+
+    // Célula crua (u32) em (x,y) com wrap em X. (leitura)
     uint32_t rawCell(int x, int y) const;
+
+    // Índice linear da célula (x,y) no grid, no layout de faixa do engine:
+    //   idx = ((x>>5)*H + y)*32 + (x&31)   [H potência de 2 ⇒ == o shl do asm]
+    // y é clampeado; x faz wrap por widthMask. -1 se o grid não está carregado.
+    size_t cellIndex(int x, int y) const;
+
+    // Escreve/lê a ocupação por unidade (bits 16..26). setUnitOccupancy grava o
+    // id (mascara em 11 bits); clear zera; cellOccupant devolve o id (0 = livre).
+    void setUnitOccupancy(int x, int y, int unitId);
+    void clearUnitOccupancy(int x, int y);
+    int  cellOccupant(int x, int y) const;
+
+    // Flags de célula (bits altos).
+    bool cellHardBlocked(int x, int y) const { return (rawCell(x, y) & CELL_HARDBLOCK) != 0; }
+    bool cellHasStruct(int x, int y) const { return (rawCell(x, y) & CELL_WALLBITS) != 0; }
 
 private:
     bool m_ok = false;

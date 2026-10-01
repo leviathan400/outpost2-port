@@ -73,15 +73,38 @@ bool GameMap::load(const uint8_t* d, size_t size) {
     return true;
 }
 
-uint32_t GameMap::rawCell(int x, int y) const {
+size_t GameMap::cellIndex(int x, int y) const {
+    if (m_tiles.empty()) return static_cast<size_t>(-1);
     x &= m_widthMask;                       // wrap horizontal (como o engine)
     if (y < 0) y = 0;
     if (y >= m_height) y = m_height - 1;
-    // Layout real do engine (GameMap::GetTile @191591): faixas verticais de 32
-    // colunas. offset_u32 = ((x>>5)*H + y)*32 + (x&31)  [H sempre potência de 2].
+    // Layout real do engine (GameMap::GetTile @191591; idêntico ao índice de
+    // sub_4382C0/sub_438390): faixas verticais de 32 colunas.
+    //   idx_u32 = ((x>>5)*H + y)*32 + (x&31)   [H potência de 2 ⇒ == o shl do asm]
     // NÃO é row-major — ler row-major embaralha o mapa.
-    size_t idx = (static_cast<size_t>(x >> 5) * m_height + y) * 32 + (x & 31);
-    return m_tiles[idx];
+    return (static_cast<size_t>(x >> 5) * m_height + y) * 32 + (x & 31);
+}
+
+uint32_t GameMap::rawCell(int x, int y) const {
+    size_t idx = cellIndex(x, y);
+    return idx == static_cast<size_t>(-1) ? 0u : m_tiles[idx];
+}
+
+void GameMap::setUnitOccupancy(int x, int y, int unitId) {
+    size_t idx = cellIndex(x, y);
+    if (idx == static_cast<size_t>(-1)) return;
+    uint32_t occ = (static_cast<uint32_t>(unitId) << CELL_OCC_SHIFT) & CELL_OCCUPANCY;
+    m_tiles[idx] = (m_tiles[idx] & ~CELL_OCCUPANCY) | occ;
+}
+
+void GameMap::clearUnitOccupancy(int x, int y) {
+    size_t idx = cellIndex(x, y);
+    if (idx == static_cast<size_t>(-1)) return;
+    m_tiles[idx] &= ~CELL_OCCUPANCY;
+}
+
+int GameMap::cellOccupant(int x, int y) const {
+    return static_cast<int>((rawCell(x, y) & CELL_OCCUPANCY) >> CELL_OCC_SHIFT);
 }
 
 int GameMap::getTile(LOCATION loc) const {

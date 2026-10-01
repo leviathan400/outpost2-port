@@ -100,6 +100,14 @@ bool createUnit(Unit& out, map_id type, LOCATION loc, int owner,
     r.rotation = static_cast<uint8_t>(rotation & 0xFF);
     r.flags  = mapIdIsBuilding(type) ? UNIT_BUILDING : UNIT_VEHICLE;
 
+    // Grava a ocupação do tile no grid runtime (bits 16-26), como o engine faz ao
+    // posicionar a unidade — é exatamente o que sub_4382C0/sub_438390 leem. Só
+    // para veículo (1 tile); o footprint multi-tile de prédio vem no passo de
+    // colocação de estruturas.
+    if (!mapIdIsBuilding(type) && g_gameMap.ok()) {
+        g_gameMap.setUnitOccupancy(r.pixelX >> 5, r.pixelY >> 5, slot);
+    }
+
     out.SetId(slot);
     return true;
 }
