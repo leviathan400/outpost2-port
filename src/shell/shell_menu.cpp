@@ -239,6 +239,24 @@ void ShellMenu::activateControl(int index) {
     }
 }
 
+// Lê o export MapName da DLL de uma missão (o .map que ela usa). "" se falhar.
+static std::string missionMapName(const char* dll) {
+    PeResourceReader m;
+    if (m.load(dll)) {
+        std::string mn = m.getExportString("MapName");
+        if (!mn.empty()) return mn;
+    }
+    return "";
+}
+
+bool ShellMenu::consumeLaunch(std::string& outMap) {
+    if (!m_launchRequested) return false;
+    outMap = m_launchMap;
+    m_launchRequested = false;
+    m_launchMap.clear();
+    return true;
+}
+
 void ShellMenu::dispatchButton(int id) {
     switch (m_state) {
     case MenuState::MainMenu:
@@ -253,20 +271,27 @@ void ShellMenu::dispatchButton(int id) {
         }
         break;
     case MenuState::Tutorials:
-        if (id == 1)
-            std::cout << "[Tutorials] START: T" << (m_selectedTutorial + 1) << " - "
-                      << m_tutorialList[m_selectedTutorial] << " (tutorial.map)" << std::endl;
-        else if (id == 2) setState(MenuState::MainMenu);
+        if (id == 1) {   // START: resolve o .map da missão de tutorial selecionada
+            char dll[16];
+            std::snprintf(dll, sizeof(dll), "T%02d.DLL", m_selectedTutorial + 1);
+            std::string map = missionMapName(dll);
+            std::cout << "[Tutorials] START: " << dll << " -> "
+                      << (map.empty() ? "(MapName nao encontrado)" : map) << std::endl;
+            if (!map.empty()) { m_launchMap = map; m_launchRequested = true; }
+        } else if (id == 2) setState(MenuState::MainMenu);
         break;
     case MenuState::ColonyGames:
         if (id == 12) setState(MenuState::MainMenu);
         else std::cout << "[Colony] botão " << id << std::endl;
         break;
     case MenuState::NewCampaign:
-        if (id == 1) {
+        if (id == 1) {   // OK: inicia a missão 1 da colônia escolhida (E01/P01)
+            const char* dll = (m_campaignColony == 0) ? "E01.DLL" : "P01.DLL";
+            std::string map = missionMapName(dll);
             std::cout << "[Campaign] " << (m_campaignColony == 0 ? "Eden" : "Plymouth")
-                      << " dificuldade " << m_campaignDifficulty << std::endl;
-            setState(MenuState::MainMenu);
+                      << " dif " << m_campaignDifficulty << " -> " << dll << " -> "
+                      << (map.empty() ? "(MapName nao encontrado)" : map) << std::endl;
+            if (!map.empty()) { m_launchMap = map; m_launchRequested = true; }
         } else if (id == 2) setState(MenuState::MainMenu);
         break;
     case MenuState::Preferences:

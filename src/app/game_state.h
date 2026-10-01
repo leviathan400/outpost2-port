@@ -1,0 +1,34 @@
+#pragma once
+
+#include <string>
+
+#include "ui_state.h"
+#include "../game/game_map.h"
+#include "../game/terrain_renderer.h"
+
+namespace op2 {
+
+// UIState do jogo — equivale à UIState estática do engine (dword_574A80, criada
+// uma vez em TApp::CreateFrames). Por enquanto desenha o terreno da missão e rola
+// com as setas; a simulação (TethysGame/Unit) entra nos próximos slices.
+class GameState : public UIState {
+public:
+    // Carrega o mapa de uma missão (nome do .map, resolvido do export MapName da
+    // DLL). false se o mapa/tilesets não forem encontrados.
+    bool load(const std::string& mapName);
+    bool hasMap() const { return m_terrain.ok(); }
+    const std::string& mapName() const { return m_mapName; }
+
+    void onActivate() override;
+    void onIdle(Renderer& renderer, float dt) override;
+    void handleEvent(Renderer& renderer, const SDL_Event& e) override;
+
+private:
+    std::string m_mapName;
+    TerrainRenderer m_terrain;   // desenha sobre o g_gameMap (singleton do engine)
+    int m_camX = 0, m_camY = 0;
+    int m_maxX = 0, m_maxY = 0;
+    void clampCamera();
+};
+
+} // namespace op2

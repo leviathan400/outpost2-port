@@ -451,6 +451,7 @@ recursos que o port lê em runtime).
 | **Motor de jogo (RTS, simulação, mapas, IA, unidades)** | ❌ Não iniciado |
 | Leitura de `.VOL`/LZHUF no port (`ResManager`) | ✅ Funcional (byte-exato) |
 | `GameMap` + render de terreno no port (in-engine) | ✅ Funcional (pixel-exato) |
+| Backbone `TApp`/`UIState` (loop + troca shell↔jogo) | ✅ Funcional |
 | Áudio / música / vídeos | ❌ Não iniciado |
 | Multiplayer / rede | ❌ Não iniciado |
 

@@ -34,6 +34,9 @@ add_executable(outpost2_modern
     src/gfx/pbmp.cpp
     src/game/game_map.cpp
     src/game/terrain_renderer.cpp
+    src/app/tapp.cpp
+    src/app/shell_state.cpp
+    src/app/game_state.cpp
     src/core/config.cpp
 )
 
@@ -44,6 +47,7 @@ target_include_directories(outpost2_modern PRIVATE
     src/shell
     src/res
     src/game
+    src/app
     src/core
 )
 

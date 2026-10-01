@@ -60,6 +60,11 @@ public:
 
     bool shouldQuit() const { return m_quitRequested; }
 
+    // O menu pediu para iniciar uma missão? Se sim, devolve o nome do .map (do
+    // export MapName da DLL da missão) e limpa o pedido. Consumido pelo ShellState
+    // para o TApp trocar para o jogo (ActivateGame). Ver [[op2-engine-architecture]].
+    bool consumeLaunch(std::string& outMap);
+
     // Abre diretamente uma sub-tela (usado pelo modo --screenshot para captura).
     void showTutorials() { setState(MenuState::Tutorials); }
     void showMainMenu() { setState(MenuState::MainMenu); }
@@ -72,6 +77,10 @@ private:
     MenuState m_state = MenuState::Splash;
     bool m_quitRequested = false;
     float m_splashTimer = 0.0f;     // tempo na tela de splash
+
+    // Pedido de início de missão (START/OK): nome do .map resolvido via MapName.
+    bool m_launchRequested = false;
+    std::string m_launchMap;
 
     // Original art resources from OP2SHRES.DLL
     Bitmap m_bgBitmap;     // Bitmap 190 (640x480 space/planet art)

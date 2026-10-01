@@ -9,6 +9,7 @@
 #include "res/res_manager.h"
 #include "game/game_map.h"
 #include "game/terrain_renderer.h"
+#include "app/tapp.h"
 
 // Modo utilitário (sem SDL): extrai um recurso via ResManager e grava em disco.
 // Usado para validar o leitor de VOL/LZHUF contra o decoder Python (byte a byte).
@@ -142,19 +143,69 @@ static int runGameView(const std::string& mapName) {
     return 0;
 }
 
-int main(int argc, char* argv[]) {
-    // Modos utilitários que não precisam de janela/SDL.
+// Modo de captura (um frame de uma tela do shell), para screenshots.
+//   outpost2_modern.exe [--menu|--tutorials|--campaign|--prefs|--colony|--about] --screenshot <out.bmp>
+static int runScreenshot(int argc, char* argv[], const std::string& outPath) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) { std::cerr << "SDL_Init: " << SDL_GetError() << std::endl; return 1; }
+    op2::g_ResManager.init(".");
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 screenshot", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::ShellMenu shellMenu;
+    shellMenu.init("OP2SHRES.DLL");
     for (int i = 1; i < argc; ++i) {
-        if (std::strcmp(argv[i], "--extract") == 0 && i + 2 < argc) {
-            return runExtract(argv[i + 1], argv[i + 2]);
-        }
-        if (std::strcmp(argv[i], "--rendermap") == 0 && i + 2 < argc) {
-            return runRenderMap(argv[i + 1], argv[i + 2]);
-        }
-        if (std::strcmp(argv[i], "--game") == 0 && i + 1 < argc) {
-            return runGameView(argv[i + 1]);
-        }
+        std::string a = argv[i];
+        if (a == "--tutorials") shellMenu.showTutorials();
+        else if (a == "--menu") shellMenu.showMainMenu();
+        else if (a == "--campaign") shellMenu.showNewCampaign();
+        else if (a == "--prefs") shellMenu.showPreferences();
+        else if (a == "--colony") shellMenu.showColonyGames();
+        else if (a == "--about") shellMenu.showAbout();
     }
+    renderer.clear(0xFF000000);
+    shellMenu.render(renderer);
+    bool ok = writeBmp32(outPath, renderer.getFramebuffer(),
+                         op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+    std::cout << "[Screenshot] " << (ok ? "salvo em " : "falha ao salvar ") << outPath << std::endl;
+    renderer.shutdown();
+    SDL_Quit();
+    return ok ? 0 : 1;
+}
+
+int main(int argc, char* argv[]) {
+    // Modos utilitários (sem o loop interativo).
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--extract") == 0 && i + 2 < argc)
+            return runExtract(argv[i + 1], argv[i + 2]);
+        if (std::strcmp(argv[i], "--rendermap") == 0 && i + 2 < argc)
+            return runRenderMap(argv[i + 1], argv[i + 2]);
+        if (std::strcmp(argv[i], "--game") == 0 && i + 1 < argc)
+            return runGameView(argv[i + 1]);
+        if (std::strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc)
+            return runScreenshot(argc, argv, argv[i + 1]);
+    }
+
+    // --play <map>: entra direto no jogo com o mapa (via o backbone TApp).
+    std::string initialMap;
+    for (int i = 1; i < argc; ++i)
+        if (std::strcmp(argv[i], "--play") == 0 && i + 1 < argc) initialMap = argv[i + 1];
+
+    std::cout << "========================================" << std::endl;
+    std::cout << "  Outpost 2: Divided Destiny Modern Port " << std::endl;
+    std::cout << "  Engine Version: 1.0.0 (MSVC + SDL2)   " << std::endl;
+    std::cout << "========================================" << std::endl;
+
+    // Backbone TApp (asm): Init -> CreateFrames -> Run -> ShutDown.
+    if (!op2::gTApp.init())                   { op2::gTApp.shutdown(); return 1; }
+    if (!op2::gTApp.createFrames(initialMap)) { op2::gTApp.shutdown(); return 1; }
+    op2::gTApp.run();
+    op2::gTApp.shutdown();
+    return 0;
+}
+
+// (código antigo abaixo removido: o loop interativo agora vive em TApp::run)
+#if 0
+int main_old(int argc, char* argv[]) {
+    for (int i = 1; i < argc; ++i) {}
 
     std::cout << "========================================" << std::endl;
     std::cout << "  Outpost 2: Divided Destiny Modern Port " << std::endl;
@@ -304,3 +355,4 @@ int main(int argc, char* argv[]) {
     SDL_Quit();
     return 0;
 }
+#endif // 0
