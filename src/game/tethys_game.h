@@ -3,6 +3,8 @@
 #include <cstdint>
 
 #include "game_rng.h"
+#include "unit.h"
+#include "location.h"
 
 namespace op2 {
 
@@ -27,6 +29,12 @@ public:
     static void setSeed(uint32_t seed) { s_rng.setSeed(seed); }
     static int  getRand(int n)         { return s_rng.getRand(n); }
     static GameRNG& rng()              { return s_rng; }
+
+    // CreateUnit (@195141): cria uma unidade e devolve o handle em `unit`.
+    static int CreateUnit(Unit& unit, map_id type, LOCATION loc, int owner,
+                          map_id cargo = kMapIdNone, int rotation = 0) {
+        return createUnit(unit, type, loc, owner, cargo, rotation) ? 1 : 0;
+    }
 
 private:
     static uint32_t s_tick;        // dword_56DEDC

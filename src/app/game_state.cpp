@@ -11,6 +11,7 @@
 #include "../res/res_manager.h"
 #include "../game/tethys_game.h"
 #include "../game/player.h"
+#include "../game/unit.h"
 
 namespace op2 {
 
@@ -55,6 +56,23 @@ bool GameState::load(const std::string& mapName) {
     p.SetScientists(8);
     p.SetKids(4);
 
+    // Cria algumas unidades iniciais (como o InitProc/CreateUnit de uma missão),
+    // centradas na área jogável — prova o pool de unidades + CreateUnit + render.
+    resetUnits();
+    int cx = (g_gameMap.clipRect().x1 + g_gameMap.clipRect().x2) / 2;
+    int cy = (g_gameMap.clipRect().y1 + g_gameMap.clipRect().y2) / 2;
+    int owner = TethysGame::localPlayer();
+    Unit u;
+    TethysGame::CreateUnit(u, /*prédio*/ kFirstBuilding, LOCATION{cx, cy}, owner);
+    TethysGame::CreateUnit(u, /*veículo*/ 1, LOCATION{cx + 2, cy}, owner);
+    TethysGame::CreateUnit(u, /*veículo*/ 1, LOCATION{cx - 2, cy + 1}, owner);
+    TethysGame::CreateUnit(u, /*veículo*/ 2, LOCATION{cx + 1, cy - 2}, owner);
+
+    // Centraliza a câmera na base inicial (como CenterViewOn do jogo).
+    m_camX = cx * 32 - Renderer::NATIVE_WIDTH / 2;
+    m_camY = cy * 32 - Renderer::NATIVE_HEIGHT / 2;
+    clampCamera();
+
     std::cout << "[GameState] mapa " << mapName << " carregado ("
               << g_gameMap.width() << "x" << g_gameMap.height() << " tiles)" << std::endl;
     return true;
@@ -93,6 +111,25 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     m_terrain.render(renderer.getFramebuffer(), Renderer::NATIVE_WIDTH,
                      Renderer::NATIVE_HEIGHT, m_camX, m_camY);
 
+    // Unidades: por ora marcadores coloridos por dono (os sprites op2_art entram
+    // num slice futuro). Prédio = quadrado maior; veículo = menor.
+    static const uint32_t kOwnerColor[7] = {
+        0xFF40A0FF, 0xFFFF5040, 0xFF40D070, 0xFFFFD040,
+        0xFFC060FF, 0xFF40E0E0, 0xFFFF9030,
+    };
+    for (size_t i = 1; i < g_units.size(); ++i) {
+        Unit un(static_cast<int>(i));
+        if (!un.IsLive()) continue;
+        LOCATION l = un.Location();
+        int sx = l.x * 32 - m_camX;
+        int sy = l.y * 32 - m_camY;
+        uint32_t col = kOwnerColor[un.OwnerID() % 7];
+        int sz = un.IsBuilding() ? 26 : 16;
+        int off = (32 - sz) / 2;
+        renderer.fillRect(sx + off, sy + off, sz, sz, col);
+        renderer.drawRect(sx + off, sy + off, sz, sz, 0xFF101010);
+    }
+
     // Overlay: relógio (Tick/Time) + uma amostra do RNG — prova visível de que o
     // núcleo de simulação está rodando determinístico.
     uint32_t* fb = renderer.getFramebuffer();
@@ -107,10 +144,14 @@ void GameState::onIdle(Renderer& renderer, float dt) {
                   p.IsEden() ? "EDEN" : "PLYMOUTH",
                   p.Ore(), p.RareOre(), p.FoodStored(),
                   p.Workers(), p.Scientists(), p.Kids());
+    int liveUnits = 0;
+    for (size_t i = 1; i < g_units.size(); ++i) { Unit u((int)i); if (u.IsLive()) ++liveUnits; }
+    char l3[128];
+    std::snprintf(l3, sizeof(l3), "%s   Units %d   (setas: rolar | ESC: menu)",
+                  m_mapName.c_str(), liveUnits);
     Font::drawText(fb, VW, VH, l1, 8, 8, 0xFFFFE060, true);
     Font::drawText(fb, VW, VH, l2, 8, 20, 0xFF80E0A0, true);
-    Font::drawText(fb, VW, VH, m_mapName + "   (setas: rolar | ESC: menu)",
-                   8, 32, 0xFFB0C4DE, true);
+    Font::drawText(fb, VW, VH, l3, 8, 32, 0xFFB0C4DE, true);
 
     renderer.present();
 }

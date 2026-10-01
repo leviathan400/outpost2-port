@@ -13,7 +13,33 @@
 #include "game/terrain_renderer.h"
 #include "game/game_rng.h"
 #include "game/player.h"
+#include "game/unit.h"
+#include "game/tethys_game.h"
 #include "app/tapp.h"
+#include "app/game_state.h"
+
+// --unittest: exercita o pool de unidades + o wrapper Unit.
+static int runUnitTest() {
+    op2::resetUnits();
+    op2::Unit b, v;
+    op2::TethysGame::CreateUnit(b, op2::kFirstBuilding, op2::LOCATION{10, 10}, 0);
+    op2::TethysGame::CreateUnit(v, 1, op2::LOCATION{12, 10}, 1);
+    auto show = [](const char* nm, op2::Unit& u) {
+        op2::LOCATION l = u.Location();
+        std::printf("%s id=%d live=%d type=%d owner=%d loc=(%d,%d) bld=%d veh=%d\n",
+                    nm, u.id(), u.IsLive(), u.GetType(), u.OwnerID(), l.x, l.y,
+                    u.IsBuilding(), u.IsVehicle());
+    };
+    show("building", b);
+    show("vehicle ", v);
+    v.DoDeath();   // marca morta (flag 0x20000); slot continua ocupado (fiel)
+    std::printf("apos DoDeath: vehicle live=%d (morta, mas slot nao e liberado)\n", v.IsLive());
+    op2::Unit v2;
+    op2::TethysGame::CreateUnit(v2, 2, op2::LOCATION{5, 5}, 0);
+    std::printf("novo veiculo id=%d type=%d (novo slot, pois morta != removida)\n",
+                v2.id(), v2.GetType());
+    return 0;
+}
 
 // --playertest: exercita a API de _Player (wrapper de índice + array global).
 static int runPlayerTest() {
@@ -209,6 +235,25 @@ static int runScreenshot(int argc, char* argv[], const std::string& outPath) {
     return ok ? 0 : 1;
 }
 
+// --playshot <map> <out.bmp>: carrega o jogo, roda alguns frames e salva o
+// framebuffer (terreno + unidades + HUD) para inspeção visual.
+static int runPlayShot(const std::string& mapName, const std::string& outPath) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) { std::cerr << "SDL_Init: " << SDL_GetError() << std::endl; return 1; }
+    op2::g_ResManager.init(".");
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 playshot", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    for (int i = 0; i < 5; ++i) gs.onIdle(renderer, 0.1f);   // avança alguns ticks
+    bool ok = writeBmp32(outPath, renderer.getFramebuffer(),
+                         op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+    std::cout << "[PlayShot] " << (ok ? "salvo em " : "falha ") << outPath << std::endl;
+    renderer.shutdown();
+    SDL_Quit();
+    return ok ? 0 : 1;
+}
+
 int main(int argc, char* argv[]) {
     // Modos utilitários (sem o loop interativo).
     for (int i = 1; i < argc; ++i) {
@@ -224,6 +269,10 @@ int main(int argc, char* argv[]) {
             return runRngTest(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--playertest") == 0)
             return runPlayerTest();
+        if (std::strcmp(argv[i], "--unittest") == 0)
+            return runUnitTest();
+        if (std::strcmp(argv[i], "--playshot") == 0 && i + 2 < argc)
+            return runPlayShot(argv[i + 1], argv[i + 2]);
     }
 
     // --play <map>: entra direto no jogo com o mapa (via o backbone TApp).

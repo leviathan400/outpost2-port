@@ -454,7 +454,8 @@ recursos que o port lê em runtime).
 | Backbone `TApp`/`UIState` (loop + troca shell↔jogo) | ✅ Funcional |
 | Núcleo de simulação `TethysGame` (clock + RNG determinístico) | ✅ Funcional (RNG bit-exato) |
 | `_Player` (modelo de jogador/economia + API) | ✅ Funcional (offsets reais) |
-| `Unit` (unidades) + update per-tick da economia | ⬜ Próximo passo |
+| `Unit` (pool + CreateUnit + render de unidades) | ✅ Funcional (desenho fiel) |
+| Sprites de unidade (op2_art) + economia per-tick | ⬜ Próximo passo |
 | Áudio / música / vídeos | ❌ Não iniciado |
 | Multiplayer / rede | ❌ Não iniciado |
 
