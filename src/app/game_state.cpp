@@ -110,6 +110,8 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     while (m_tickAccum >= kTickPeriod) {
         TethysGame::advanceTick();
         m_lastRand = TethysGame::getRand(100);  // 1 consumo determinístico por tick
+        // (O driver de movimento por tick entra quando a busca de rota real
+        // — sub_440550/sub_4401F0 — + o integrador sub_44B650 estiverem portados.)
         m_tickAccum -= kTickPeriod;
     }
 
@@ -191,12 +193,26 @@ void GameState::onIdle(Renderer& renderer, float dt) {
 }
 
 void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
-    (void)renderer;
     if (e.type == SDL_KEYDOWN) {
         // ESC volta ao shell (menu), como o jogo (ActivateShell).
         if (e.key.keysym.sym == SDLK_ESCAPE) gTApp.activateShell();
         // G alterna o overlay de passabilidade (debug).
         if (e.key.keysym.sym == SDLK_g) m_showPassability = !m_showPassability;
+    }
+    // Clique-direito: ordena mover todos os veículos do jogador local para o tile
+    // clicado — exercita o pipeline real Unit::DoMove -> dispatcher -> bloco de
+    // ordem -> stepper por tick.
+    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_RIGHT) {
+        int nx, ny;
+        renderer.screenToNative(e.button.x, e.button.y, nx, ny);
+        int tileX = (m_camX + nx) / 32;
+        int tileY = (m_camY + ny) / 32;
+        int me = TethysGame::localPlayer();
+        for (int i = 1; i < static_cast<int>(g_units.size()); ++i) {
+            Unit u(i);
+            if (!u.IsLive() || u.OwnerID() != me || !u.IsVehicle()) continue;
+            u.DoMove(LOCATION{ tileX, tileY });
+        }
     }
 }
 
