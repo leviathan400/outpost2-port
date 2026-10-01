@@ -18,6 +18,8 @@ enum MoraleLevels { MORALE_ROTTEN = 0, MORALE_POOR = 1, MORALE_OK = 2,
 // Aqui mantemos o MESMO desenho (wrapper + array global), modelando os campos de
 // economia/colônia decodificados do disassembly (offsets reais no comentário).
 struct PlayerData {
+    uint32_t allyMask = 0; // +0x04 bitmask de aliança (dword_56E2E0; bit j = aliado de j),
+                           // usado por sub_490C50 no pathfinder
     int difficulty  = 1;   // +0x0C (0=fácil,1=normal,2=difícil)
     int ore         = 0;   // +0x20 common ore
     int rareOre     = 0;   // +0x24 rare ore

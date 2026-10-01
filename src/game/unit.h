@@ -55,6 +55,9 @@ struct UnitRecord {
     int      field3C = 0;          // +0x3C (progresso/contador da ordem)
     uint32_t flags  = 0;           // +0x44
     uint8_t  rotation = 0;         // +0x1C (direção<<5 no original)
+    int      moveClass = 0;        // classe de movimento (no original [objUnit+0x1E8];
+                                   // índice na tabela de custo; vem do descritor do tipo)
+    uint16_t field4E = 0x7FFF;     // +0x4E (usado por sub_44BD60; 0x7FFF = padrão)
     OrderBlock order;              // +0x38 (ponteiro no original; aqui embutido)
     bool hasOrder = false;         // order block alocado? (unit+0x38 != null)
 };

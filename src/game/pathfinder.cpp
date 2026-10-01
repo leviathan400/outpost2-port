@@ -1,0 +1,179 @@
+#include "pathfinder.h"
+
+#include "game_map.h"
+#include "terrain_cost.h"
+#include "unit.h"
+#include "player.h"
+
+namespace op2 {
+
+PfContext g_pf;
+std::vector<PfContext> g_pfStack;
+
+static constexpr int kSentinel = static_cast<int>(0x80000000);
+
+// ---- Pilha / contexto -------------------------------------------------------
+
+void pfResetContext() {               // sub_438100
+    g_pf.unitId = 0;
+    g_pf.targetX = g_pf.targetY = kSentinel;
+    g_pf.target2X = g_pf.target2Y = kSentinel;
+}
+
+void pfInitStack() {                   // sub_438130
+    g_pfStack.clear();
+}
+
+void pfPush() {                        // sub_438180: empilha o ctx atual e reinicia alvos
+    g_pfStack.push_back(g_pf);
+    g_pf.unitId = 0;
+    g_pf.targetX = g_pf.targetY = kSentinel;
+    g_pf.target2X = g_pf.target2Y = kSentinel;
+}
+
+void pfPop() {                         // sub_438200: restaura o ctx do topo
+    if (g_pfStack.empty()) { g_pf = PfContext{}; return; }
+    g_pf = g_pfStack.back();
+    g_pfStack.pop_back();
+    if (g_pf.unitId != 0) {            // revalida classe/tubo do ctx restaurado
+        pfSetContext(g_pf.unitId);
+    }
+}
+
+void pfSetContext(int unitId) {        // sub_438260
+    g_pf.unitId = unitId;
+    if (unitId <= 0 || unitId >= static_cast<int>(g_units.size())) {
+        g_pf.moveClass = 0; g_pf.tubeCost = 0; return;
+    }
+    g_pf.moveClass = g_units[unitId].moveClass;   // [objUnit+0x1E8]
+    g_pf.tubeCost  = pfUnitCanUseTube(unitId);     // sub_44D4E0 → dword_4E0C08
+}
+
+void pfSetTarget(int x, int y)  { g_pf.targetX = x;  g_pf.targetY = y;  }   // sub_438290
+void pfSetTarget2(int x, int y) { g_pf.target2X = x; g_pf.target2Y = y; }   // sub_4382A0
+void pfSetRadius(int r)         { g_pf.radius2 = r * r; }                    // sub_4382B0
+
+// ---- Helpers de ocupação ----------------------------------------------------
+
+bool pfPlayersAllied(int a, int b) {   // sub_490C50: bit a no allyMask de b
+    if (b < 0 || b >= kMaxPlayers) return false;
+    return (g_playerData[b].allyMask & (1u << (a & 0x1F))) != 0;
+}
+
+int pfUnitCanUseTube(int unitId) {     // sub_44D4E0
+    if (unitId <= 0 || unitId >= static_cast<int>(g_units.size())) return 0;
+    const UnitRecord& u = g_units[unitId];
+    int owner = u.owner & 0x0F;
+    // dword_56E304[owner*777] = campo do jogador em +0x28 (0 = pode usar parede/tubo).
+    // Modelado como isHuman (refinar quando o struct completo do jogador for mapeado).
+    if (owner >= 0 && owner < kMaxPlayers && g_playerData[owner].isHuman != 0) return 0;
+    if (!(u.flags & 0x10)) return 0;               // flag +0x44 bit4
+    uint16_t cargo = u.cargo;                       // +0x24
+    if (cargo == 0x3D || cargo == 0x3E) return 1;
+    return 0;
+}
+
+int pfOccupantPassable(int occId, int searcherId) {  // sub_44BD60
+    if (occId <= 0 || occId >= static_cast<int>(g_units.size())) return 1;
+    const UnitRecord& o = g_units[occId];
+    if (o.id == -1) return 1;                        // [+4]==-1 (morto) → atravessável
+    uint32_t f = o.flags;                            // [+0x44]
+    if (f & UNIT_DEAD) return 1;                      // 0x20000 → atravessável
+    if (!(f & UNIT_VEHICLE)) return 0;               // !bit2(=0x2? bit1) prédio → bloqueia
+    if (f & 0xC0000) return 0;                        // flags 18/19 → bloqueia
+
+    int occOwner = o.owner & 0x0F;
+    int searcherOwner = 0;
+    if (searcherId > 0 && searcherId < static_cast<int>(g_units.size()))
+        searcherOwner = g_units[searcherId].owner & 0x0F;
+
+    // Aliança: sub_490C50(cmdObj[occOwner], searcherOwner).
+    bool allied = pfPlayersAllied(occOwner, searcherOwner);
+    if (!allied) {
+        if (!(f & 0x10)) return 0;                   // não-aliado e sem flag 0x10 → bloqueia
+    }
+
+    uint8_t action = o.action;                       // [+0x21]
+    switch (action) {                                // ações ocupadas → bloqueia
+        case 0x27: case 0x28: case 3: case 1:
+        case 0x26: case 0x1F: case 0x0F:
+            return 0;
+        case 6:
+            if (o.field22 == 0) return 0;
+            break;
+        default: break;
+    }
+    uint8_t sub = o.field22;                          // [+0x22]
+    if (sub == 0x0A) return 0;
+    if (f & 0x10) {                                   // flag 0x10 → exige field4E == 0x7FFF
+        if (o.field4E != 0x7FFF) return 0;
+    }
+    return (sub != 8) ? 1 : 0;                        // bloqueia só se sub-estado 8
+}
+
+// ---- Primitivas de célula ---------------------------------------------------
+
+int pfCanEnter(int x, int y) {         // sub_4382C0
+    if (y < 0 || y >= g_gameMap.height()) return 0;
+    uint32_t cell = g_gameMap.rawCell(x, y);
+
+    if (cell & GameMap::CELL_WALLBITS) {             // 0xA8000000
+        if (cell & GameMap::CELL_HARDBLOCK) return 0; // 0x28000000
+        int ct = static_cast<int>(cell & 0x1F);
+        if (ct >= GameMap::TUBE_CELLTYPE_LO && ct <= GameMap::TUBE_CELLTYPE_HI)
+            return g_pf.tubeCost;                     // dword_4E0C08
+        return 0;
+    }
+
+    int ct = static_cast<int>(cell & 0x1F);
+    if (terrainMoveCost(ct, g_pf.moveClass) == 0) return 0;  // custo 0 = impassável
+
+    uint32_t occ = cell & GameMap::CELL_OCCUPANCY;    // 0x7FF0000
+    if (occ == 0) return 1;
+    int occId = static_cast<int>(occ >> GameMap::CELL_OCC_SHIFT);
+    if (occId == g_pf.unitId) return 1;               // própria unidade
+    return pfOccupantPassable(occId, g_pf.unitId) ? 1 : 0;
+}
+
+int pfMoveCost(int x, int y) {         // sub_438390
+    if (y < 0 || y >= g_gameMap.height()) return PF_BLOCKED;
+    uint32_t cell = g_gameMap.rawCell(x, y);
+
+    int base;
+    if (cell & GameMap::CELL_WALLBITS) {              // 0xA8000000
+        int gate;
+        if (cell & GameMap::CELL_HARDBLOCK) {         // 0x28000000
+            gate = 0;
+        } else {
+            int ct = static_cast<int>(cell & 0x1F);
+            gate = (ct >= GameMap::TUBE_CELLTYPE_LO && ct <= GameMap::TUBE_CELLTYPE_HI)
+                   ? g_pf.tubeCost : 0;
+        }
+        if (gate == 0) return PF_BLOCKED;
+        base = 0x8000;                                // custo-base fixo de parede/tubo
+    } else {
+        int ct = static_cast<int>(cell & 0x1F);
+        base = terrainMoveCost(ct, g_pf.moveClass);
+        if (base == 0) return PF_BLOCKED;
+    }
+
+    // Célula-alvo → custo negativo (prioridade).
+    if (x == g_pf.targetX && y == g_pf.targetY) base = -base;
+
+    uint32_t occ = cell & GameMap::CELL_OCCUPANCY;
+    if (occ == 0) return base;
+    int occId = static_cast<int>(occ >> GameMap::CELL_OCC_SHIFT);
+    if (occId == g_pf.unitId) return base;            // própria unidade
+
+    if (occId <= 0 || occId >= static_cast<int>(g_units.size())) return base;
+    const UnitRecord& o = g_units[occId];
+    if (o.id == -1) return base;                      // morto
+    if (o.flags & UNIT_DEAD) return base;             // 0x20000
+    if (!(o.flags & UNIT_VEHICLE)) return PF_BLOCKED; // prédio → bloqueia
+
+    if (!pfOccupantPassable(occId, g_pf.unitId)) return PF_BLOCKED;  // inimigo/ocupado
+    if (o.field22 == 0) return base + base;           // veículo parado → ×2
+    return base * 4;                                  // veículo movendo → ×4
+}
+
+} // namespace op2
