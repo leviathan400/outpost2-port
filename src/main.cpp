@@ -12,7 +12,25 @@
 #include "game/game_map.h"
 #include "game/terrain_renderer.h"
 #include "game/game_rng.h"
+#include "game/player.h"
 #include "app/tapp.h"
+
+// --playertest: exercita a API de _Player (wrapper de índice + array global).
+static int runPlayerTest() {
+    op2::resetPlayers(4);
+    op2::Player[0].GoEden();     op2::Player[0].SetOre(5000); op2::Player[0].SetWorkers(16);
+    op2::Player[1].GoPlymouth(); op2::Player[1].SetOre(1234); op2::Player[1].GoAI();
+    op2::Player[0].SetSolarSat(99);  // deve saturar em 15
+    for (int i = 0; i < 2; ++i) {
+        const op2::_Player& p = op2::Player[i];
+        std::printf("Player %d: %s %s  Ore=%d Workers=%d SolarSat=%d\n",
+                    i, p.IsEden() ? "EDEN" : "PLYMOUTH", p.IsHuman() ? "HUMAN" : "AI",
+                    p.Ore(), p.Workers(), p.SolarSat());
+    }
+    std::printf("P0.Ore=%d  P1.Ore=%d (independentes)  P0.SolarSat(clamp)=%d\n",
+                op2::Player[0].Ore(), op2::Player[1].Ore(), op2::Player[0].SolarSat());
+    return 0;
+}
 
 // --rngtest <seedHex> <count>: imprime a sequência do RNG (next cru e getRand),
 // para validar o port contra uma transcrição independente do x86.
@@ -204,6 +222,8 @@ int main(int argc, char* argv[]) {
             return runScreenshot(argc, argv, argv[i + 1]);
         if (std::strcmp(argv[i], "--rngtest") == 0 && i + 2 < argc)
             return runRngTest(argv[i + 1], argv[i + 2]);
+        if (std::strcmp(argv[i], "--playertest") == 0)
+            return runPlayerTest();
     }
 
     // --play <map>: entra direto no jogo com o mapa (via o backbone TApp).

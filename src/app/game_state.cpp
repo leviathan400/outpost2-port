@@ -10,6 +10,7 @@
 #include "../gfx/font.h"
 #include "../res/res_manager.h"
 #include "../game/tethys_game.h"
+#include "../game/player.h"
 
 namespace op2 {
 
@@ -37,6 +38,22 @@ bool GameState::load(const std::string& mapName) {
     // missão/netgame nos próximos slices; por ora um valor fixo p/ determinismo.
     TethysGame::reset(/*seed*/ 0x12345678u, /*numPlayers*/ 1, /*localPlayer*/ 0);
     m_tickAccum = 0.0f;
+
+    // Semeia o jogador local como uma missão faria no InitProc (via Set*). A
+    // colônia/recursos reais virão da DLL da missão no próximo slice.
+    resetPlayers(TethysGame::noPlayers());
+    _Player& p = Player[TethysGame::localPlayer()];
+    bool plymouth = (mapName.size() >= 3 &&
+                     (mapName[0] == 'p' || mapName[0] == 'P') &&
+                     (mapName[1] == 'l' || mapName[1] == 'L'));
+    if (plymouth) p.GoPlymouth(); else p.GoEden();
+    p.GoHuman();
+    p.SetOre(5000);
+    p.SetRareOre(0);
+    p.SetFoodStored(3000);
+    p.SetWorkers(16);
+    p.SetScientists(8);
+    p.SetKids(4);
 
     std::cout << "[GameState] mapa " << mapName << " carregado ("
               << g_gameMap.width() << "x" << g_gameMap.height() << " tiles)" << std::endl;
@@ -78,14 +95,22 @@ void GameState::onIdle(Renderer& renderer, float dt) {
 
     // Overlay: relógio (Tick/Time) + uma amostra do RNG — prova visível de que o
     // núcleo de simulação está rodando determinístico.
-    char hud[96];
-    std::snprintf(hud, sizeof(hud), "Tick %d   Time %d   Rand %d",
-                  TethysGame::tick(), TethysGame::time(), m_lastRand);
     uint32_t* fb = renderer.getFramebuffer();
-    Font::drawText(fb, Renderer::NATIVE_WIDTH, Renderer::NATIVE_HEIGHT, hud,
-                   8, 8, 0xFFFFE060, true);
-    Font::drawText(fb, Renderer::NATIVE_WIDTH, Renderer::NATIVE_HEIGHT,
-                   m_mapName + "   (setas: rolar | ESC: menu)", 8, 20, 0xFFB0C4DE, true);
+    const int VW = Renderer::NATIVE_WIDTH, VH = Renderer::NATIVE_HEIGHT;
+    const _Player& p = Player[TethysGame::localPlayer()];
+
+    char l1[96], l2[128];
+    std::snprintf(l1, sizeof(l1), "Tick %d   Time %d   Rand %d",
+                  TethysGame::tick(), TethysGame::time(), m_lastRand);
+    std::snprintf(l2, sizeof(l2),
+                  "%s   Ore %d  Rare %d  Food %d   W%d S%d K%d",
+                  p.IsEden() ? "EDEN" : "PLYMOUTH",
+                  p.Ore(), p.RareOre(), p.FoodStored(),
+                  p.Workers(), p.Scientists(), p.Kids());
+    Font::drawText(fb, VW, VH, l1, 8, 8, 0xFFFFE060, true);
+    Font::drawText(fb, VW, VH, l2, 8, 20, 0xFF80E0A0, true);
+    Font::drawText(fb, VW, VH, m_mapName + "   (setas: rolar | ESC: menu)",
+                   8, 32, 0xFFB0C4DE, true);
 
     renderer.present();
 }
