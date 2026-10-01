@@ -1,6 +1,7 @@
 #include "unit.h"
 
 #include "game_map.h"
+#include "command.h"
 
 namespace op2 {
 
@@ -65,6 +66,25 @@ void Unit::SetCargo(map_id c) {
 void Unit::DoDeath() {
     UnitRecord* r = rec();
     if (r) r->flags |= UNIT_DEAD;
+}
+
+void Unit::DoMove(LOCATION dest) {
+    // Porta Unit::DoMove @asm 190538: valida slot vivo + alvo dentro do mapa,
+    // monta o CommandPacket tipo 2 (MOVE) com o tile empacotado e despacha pelo
+    // objeto de comando do dono.
+    UnitRecord* r = rec();
+    if (!r || r->id == -1) return;             // [esi+4] == -1 (slot morto)
+    if (r->flags & UNIT_DEAD) return;          // flags & 0x20000
+    if (g_gameMap.ok()) {
+        if (dest.x < 0 || dest.x >= g_gameMap.width())  return;  // 0 <= x < width (54EBC8)
+        if (dest.y < 0 || dest.y >= g_gameMap.height()) return;  // 0 <= y < height (54EBD0)
+    }
+
+    CommandPacket pkt;
+    pkt.type = CMD_MOVE;                        // var_74 = 2
+    pkt.unitIds.push_back(m_id);               // lista de unidades (count=1)
+    pkt.waypoints.push_back(packLocation(dest.x, dest.y));  // LOCATION empacotado
+    processCommandPacket(r->owner & 0x0F, pkt);            // sub_40E210
 }
 
 bool createUnit(Unit& out, map_id type, LOCATION loc, int owner,

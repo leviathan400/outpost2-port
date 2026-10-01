@@ -24,19 +24,39 @@ enum UnitFlags : uint32_t {
     UNIT_DEAD     = 1u << 17,  // bit17 (morta/armazenada; IsLive testa isto)
 };
 
+// Bloco de ordem — porta o bloco alocado em unit+0x38 por sub_4230F0 (@asm 57211;
+// no original 0x35 dwords = 212 bytes, alocado de unk_5565E0 via sub_446A50).
+// Guarda a lista de waypoints da ordem de movimento e o progresso do pathfinder.
+struct OrderBlock {
+    int count       = 0;   // [0x00] nº de waypoints
+    int countMinus1 = 0;   // [0x04] count-1
+    uint32_t flags  = 0;   // [0x34] (|= 1 ao setar a ordem)
+    int multiFlag   = 0;   // [0x3C] (setado p/ grupos > 4 unidades)
+    int field40     = 0;   // [0x40]
+    // [0x14...] lista de LOCATIONs EMPACOTADOS (ver packLocation): x em bits5-14,
+    // y em bits20-28, campo de 29 bits. Copiada verbatim do buffer de comando.
+    std::vector<uint32_t> waypoints;
+    int curWaypoint = 0;   // índice do waypoint atual (consumido no tick/busca)
+};
+
 // Registro de unidade — no original é um array global (dword_54EC08) de registros
-// de 120 bytes; aqui modelamos os campos semânticos decodificados (offset real no
-// comentário). O tipo, que no original vem do vtable (+0x00), guardamos direto.
+// de 120 bytes (0x78); aqui modelamos os campos semânticos decodificados (offset
+// real no comentário). O tipo, que no original vem do vtable (+0x00), guardamos direto.
 struct UnitRecord {
     map_id   type   = kMapIdNone;  // (+0x00 vtable→GetType) tipo da unidade
     int      id     = -1;          // +0x04 (-1/0xFFFFFFFF = slot livre)
     int      pixelX = 0;           // +0x14 (tile<<5)
     int      pixelY = 0;           // +0x18 (tile<<5)
     uint8_t  owner  = 0;           // +0x1D nibble baixo = dono (jogador)
-    uint8_t  action = 0;           // +0x21 (ação/ocupado)
+    uint8_t  field20 = 0;          // +0x20 (=1 quando há ordem ativa)
+    uint8_t  action = 0;           // +0x21 (tipo da ação/ordem atual; 2 = move)
+    uint8_t  field22 = 0;          // +0x22 (sub-estado; 0x0D = não-comandável)
     uint16_t cargo  = 0;           // +0x24 (cargo/arma, map_id)
+    int      field3C = 0;          // +0x3C (progresso/contador da ordem)
     uint32_t flags  = 0;           // +0x44
     uint8_t  rotation = 0;         // +0x1C (direção<<5 no original)
+    OrderBlock order;              // +0x38 (ponteiro no original; aqui embutido)
+    bool hasOrder = false;         // order block alocado? (unit+0x38 != null)
 };
 
 // Pool global de unidades (índice = id da unidade). O id 0 é "nenhuma unidade".
@@ -62,6 +82,11 @@ public:
     map_id GetCargo() const;
     void SetCargo(map_id c);
     void DoDeath();                              // marca morta (flags bit17)
+
+    // DoMove — porta Unit::DoMove @asm 190538. Monta um CommandPacket tipo 2
+    // (MOVE) com o tile alvo empacotado e despacha pelo objeto de comando do
+    // dono (sub_40E210). Valida slot vivo + alvo dentro do mapa, como o original.
+    void DoMove(LOCATION dest);
 
 private:
     int m_id;   // this+0 = id da unidade
