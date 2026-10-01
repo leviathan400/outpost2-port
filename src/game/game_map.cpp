@@ -1,5 +1,6 @@
 #include "game_map.h"
 
+#include <cstdlib>
 #include <cstring>
 
 #include "../res/res_manager.h"
@@ -89,6 +90,38 @@ int GameMap::getTile(LOCATION loc) const {
 
 int GameMap::getCellType(LOCATION loc) const {
     return rawCell(loc.x, loc.y) & 0x1F;            // bits 0..4
+}
+
+bool GameMap::cellTypePassable(int cellType) {
+    // Impassáveis = entradas de custo 0 na tabela do engine (sub_40B500 @18551).
+    // Os nomes na tabela começam em cellType 1 (cellType 0 = fastPassible1,
+    // passável, setado antes). Logo: 1=Impassible2, 6=Impassible1, 8=NorthCliffs,
+    // 9=CliffsHighSide, 10=CliffsLowSide. (0 e 7 são fast-passible = passáveis.)
+    switch (cellType) {
+    case 1:
+    case 6:
+    case 8:
+    case 9:
+    case 10:
+        return false;
+    default:
+        return true;
+    }
+}
+
+LOCATION GameMap::findPassableNear(LOCATION start, int maxRadius) const {
+    if (isPassable(start)) return start;
+    for (int r = 1; r <= maxRadius; ++r) {
+        for (int dy = -r; dy <= r; ++dy) {
+            for (int dx = -r; dx <= r; ++dx) {
+                if (std::abs(dx) != r && std::abs(dy) != r) continue;  // só a borda do anel
+                LOCATION c{ start.x + dx, start.y + dy };
+                if (c.y < 0 || c.y >= m_height) continue;
+                if (isPassable(c)) return c;
+            }
+        }
+    }
+    return start;
 }
 
 } // namespace op2

@@ -237,7 +237,7 @@ static int runScreenshot(int argc, char* argv[], const std::string& outPath) {
 
 // --playshot <map> <out.bmp>: carrega o jogo, roda alguns frames e salva o
 // framebuffer (terreno + unidades + HUD) para inspeção visual.
-static int runPlayShot(const std::string& mapName, const std::string& outPath) {
+static int runPlayShot(const std::string& mapName, const std::string& outPath, bool passOverlay) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) { std::cerr << "SDL_Init: " << SDL_GetError() << std::endl; return 1; }
     op2::g_ResManager.init(".");
     op2::Renderer renderer;
@@ -245,6 +245,7 @@ static int runPlayShot(const std::string& mapName, const std::string& outPath) {
     op2::GameState gs;
     if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
     gs.onActivate();
+    gs.setShowPassability(passOverlay);
     for (int i = 0; i < 5; ++i) gs.onIdle(renderer, 0.1f);   // avança alguns ticks
     bool ok = writeBmp32(outPath, renderer.getFramebuffer(),
                          op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
@@ -271,8 +272,10 @@ int main(int argc, char* argv[]) {
             return runPlayerTest();
         if (std::strcmp(argv[i], "--unittest") == 0)
             return runUnitTest();
-        if (std::strcmp(argv[i], "--playshot") == 0 && i + 2 < argc)
-            return runPlayShot(argv[i + 1], argv[i + 2]);
+        if (std::strcmp(argv[i], "--playshot") == 0 && i + 2 < argc) {
+            bool pass = (i + 3 < argc && std::strcmp(argv[i + 3], "pass") == 0);
+            return runPlayShot(argv[i + 1], argv[i + 2], pass);
+        }
     }
 
     // --play <map>: entra direto no jogo com o mapa (via o backbone TApp).

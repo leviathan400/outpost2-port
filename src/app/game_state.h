@@ -23,6 +23,8 @@ public:
     void onIdle(Renderer& renderer, float dt) override;
     void handleEvent(Renderer& renderer, const SDL_Event& e) override;
 
+    void setShowPassability(bool v) { m_showPassability = v; }
+
 private:
     std::string m_mapName;
     TerrainRenderer m_terrain;   // desenha sobre o g_gameMap (singleton do engine)
@@ -30,6 +32,7 @@ private:
     int m_maxX = 0, m_maxY = 0;
     float m_tickAccum = 0.0f;     // acumulador p/ avançar o tick de simulação
     int m_lastRand = 0;           // última amostra do RNG (1 por tick), p/ o HUD
+    bool m_showPassability = false; // overlay de debug (tecla G)
     void clampCamera();
 };
 

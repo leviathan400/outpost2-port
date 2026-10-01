@@ -62,11 +62,17 @@ bool GameState::load(const std::string& mapName) {
     int cx = (g_gameMap.clipRect().x1 + g_gameMap.clipRect().x2) / 2;
     int cy = (g_gameMap.clipRect().y1 + g_gameMap.clipRect().y2) / 2;
     int owner = TethysGame::localPlayer();
-    Unit u;
-    TethysGame::CreateUnit(u, /*prédio*/ kFirstBuilding, LOCATION{cx, cy}, owner);
-    TethysGame::CreateUnit(u, /*veículo*/ 1, LOCATION{cx + 2, cy}, owner);
-    TethysGame::CreateUnit(u, /*veículo*/ 1, LOCATION{cx - 2, cy + 1}, owner);
-    TethysGame::CreateUnit(u, /*veículo*/ 2, LOCATION{cx + 1, cy - 2}, owner);
+    // Posiciona cada unidade na célula passável mais próxima do ponto desejado
+    // (evita montanhas/cânions). As posições reais virão da missão depois.
+    auto place = [&](map_id type, int dx, int dy) {
+        Unit u;
+        LOCATION loc = g_gameMap.findPassableNear(LOCATION{cx + dx, cy + dy});
+        TethysGame::CreateUnit(u, type, loc, owner);
+    };
+    place(kFirstBuilding, 0, 0);   // prédio
+    place(1, 2, 0);                // veículos
+    place(1, -2, 1);
+    place(2, 1, -2);
 
     // Centraliza a câmera na base inicial (como CenterViewOn do jogo).
     m_camX = cx * 32 - Renderer::NATIVE_WIDTH / 2;
@@ -111,6 +117,34 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     m_terrain.render(renderer.getFramebuffer(), Renderer::NATIVE_WIDTH,
                      Renderer::NATIVE_HEIGHT, m_camX, m_camY);
 
+    // Overlay de passabilidade (debug, tecla G): tinge de vermelho as células
+    // impassáveis visíveis. Base visual para waypoints/pathfinding.
+    if (m_showPassability) {
+        uint32_t* fb = renderer.getFramebuffer();
+        int t0x = m_camX / 32, t0y = m_camY / 32;
+        int t1x = (m_camX + Renderer::NATIVE_WIDTH) / 32;
+        int t1y = (m_camY + Renderer::NATIVE_HEIGHT) / 32;
+        for (int ty = t0y; ty <= t1y; ++ty) {
+            if (ty < 0 || ty >= g_gameMap.height()) continue;
+            for (int tx = t0x; tx <= t1x; ++tx) {
+                if (g_gameMap.isPassable(LOCATION{tx, ty})) continue;
+                int sx = tx * 32 - m_camX, sy = ty * 32 - m_camY;
+                for (int yy = 0; yy < 32; ++yy) {
+                    int py = sy + yy;
+                    if (py < 0 || py >= Renderer::NATIVE_HEIGHT) continue;
+                    for (int xx = 0; xx < 32; ++xx) {
+                        int px = sx + xx;
+                        if (px < 0 || px >= Renderer::NATIVE_WIDTH) continue;
+                        uint32_t c = fb[py * Renderer::NATIVE_WIDTH + px];
+                        uint32_t r = ((c >> 16) & 0xFF), g = (c >> 8) & 0xFF, b = c & 0xFF;
+                        r = r / 2 + 128; g = g / 2; b = b / 2;   // tinge vermelho
+                        fb[py * Renderer::NATIVE_WIDTH + px] = 0xFF000000 | (r << 16) | (g << 8) | b;
+                    }
+                }
+            }
+        }
+    }
+
     // Unidades: por ora marcadores coloridos por dono (os sprites op2_art entram
     // num slice futuro). Prédio = quadrado maior; veículo = menor.
     static const uint32_t kOwnerColor[7] = {
@@ -147,7 +181,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     int liveUnits = 0;
     for (size_t i = 1; i < g_units.size(); ++i) { Unit u((int)i); if (u.IsLive()) ++liveUnits; }
     char l3[128];
-    std::snprintf(l3, sizeof(l3), "%s   Units %d   (setas: rolar | ESC: menu)",
+    std::snprintf(l3, sizeof(l3), "%s   Units %d   (setas rolar | G passab | ESC menu)",
                   m_mapName.c_str(), liveUnits);
     Font::drawText(fb, VW, VH, l1, 8, 8, 0xFFFFE060, true);
     Font::drawText(fb, VW, VH, l2, 8, 20, 0xFF80E0A0, true);
@@ -158,9 +192,12 @@ void GameState::onIdle(Renderer& renderer, float dt) {
 
 void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
     (void)renderer;
-    // ESC volta ao shell (menu), como o jogo (ActivateShell).
-    if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE)
-        gTApp.activateShell();
+    if (e.type == SDL_KEYDOWN) {
+        // ESC volta ao shell (menu), como o jogo (ActivateShell).
+        if (e.key.keysym.sym == SDLK_ESCAPE) gTApp.activateShell();
+        // G alterna o overlay de passabilidade (debug).
+        if (e.key.keysym.sym == SDLK_g) m_showPassability = !m_showPassability;
+    }
 }
 
 } // namespace op2

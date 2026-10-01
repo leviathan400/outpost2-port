@@ -41,6 +41,17 @@ public:
     int getTile(LOCATION loc) const;
     int getCellType(LOCATION loc) const;
 
+    // Passabilidade: um cellType é impassável quando sua entrada na tabela de
+    // custo do engine (sub_40B500 @asm 18551) tem custo 0. São eles: 0=Impassible2,
+    // 5=Impassible1, 7=NorthCliffs, 8=CliffsHigh, 9=CliffsLow. Verificado contra o
+    // terreno (montanhas/cânions). Base para colocação de unidades e pathfinding.
+    static bool cellTypePassable(int cellType);
+    bool isPassable(LOCATION loc) const { return cellTypePassable(getCellType(loc)); }
+
+    // Acha a célula passável mais próxima de `start` (busca em espiral); devolve
+    // `start` se nada for achado dentro de maxRadius.
+    LOCATION findPassableNear(LOCATION start, int maxRadius = 16) const;
+
     // Célula crua (u32) em (x,y) com wrap em X.
     uint32_t rawCell(int x, int y) const;
 
