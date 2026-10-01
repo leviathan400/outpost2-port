@@ -65,6 +65,17 @@ struct StepChoice {
 // contexto como o original. Sem movimento possível → found=false.
 StepChoice pfChooseStep(int unitId, int currentDir, int avoidDir);
 
+// --- Blocos da busca de rota (componentes do pathfinder real) ----------------
+// pfDirFromDelta (sub_45C540 @149753): direção-octante (0..7, kDir8) a partir do
+// vetor delta (dx,dy). Usa a razão (dy<<8)/dx com limiares 0x6A (tan 22.5°) e
+// 0x26A (tan 67.5°). Base da busca de rota (direção start→dest).
+int pfDirFromDelta(int dx, int dy);
+
+// pfSmoothPath (sub_43FC50 @106305): suaviza um array de direções `dirs[0..n-1]`
+// (colapsa curvas redundantes/zigue-zagues). Edita o array no lugar e devolve o
+// novo tamanho. Pós-processamento da rota encontrada.
+int pfSmoothPath(int* dirs, int count);
+
 // --- Helpers de ocupação (sub_44BD60 / sub_44D4E0 / sub_490C50) --------------
 // Jogador `a` é aliado de `b`? (sub_490C50: bit a no allyMask de b.)
 bool pfPlayersAllied(int a, int b);

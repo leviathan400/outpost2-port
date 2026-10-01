@@ -147,6 +147,55 @@ const DirDelta kDir8[8] = {
     { 1, -1},  // 7 NE
 };
 
+int pfDirFromDelta(int dx, int dy) {       // sub_45C540 (ecx=dx, edx=dy)
+    if (dx == 0) {
+        return (dy < 0) ? 6 : 2;           // N : S  (y para baixo)
+    }
+    // razão = (dy<<8)/dx  (idiv, trunca p/ zero como o asm)
+    int ratio = (dy << 8) / dx;
+    if (ratio >= 0x26A) {                   // loc_45C57C (quase vertical)
+        return (dx < 0) ? 6 : 2;            //   dx<0 → N : S
+    }
+    if (ratio <= -0x26A) {                   // loc_45C58C
+        return (dx >= 0) ? 6 : 2;           //   dx>=0 → N : S
+    }
+    if (ratio >= 0x6A) {                     // loc_45C596 (diagonal)
+        return (dx < 0) ? 5 : 1;           //   dx<0 → NW : SE
+    }
+    if (ratio <= -0x6A) {                    // loc_45C5A6
+        return (dx < 0) ? 3 : 7;           //   dx<0 → SW : NE
+    }
+    return (dx < 0) ? 4 : 0;                 // quase horizontal: W : E
+}
+
+int pfSmoothPath(int* dirs, int count) {   // sub_43FC50 (ecx=dirs, edx=count)
+    int edx = count - 1;                     // último índice
+    if (edx < 1) return edx + 1;
+    for (;;) {                               // loc_43FC58
+        int ebx = dirs[edx];                 // direção atual
+        int prev = dirs[edx - 1];            // direção anterior
+        int esi = (ebx - prev) & 7;          // diferença
+        bool adjusted = false;
+        if (prev & 1) {                      // anterior = diagonal (ímpar)
+            if (esi == 3)      { edx--; ebx -= 2; adjusted = true; }
+            else if (esi == 4) { edx -= 2; }
+            else if (esi == 5) { edx--; ebx += 2; adjusted = true; }
+            else break;                      // {0,1,2,6,7} → fim
+        } else {                             // anterior = cardinal (par)
+            if (esi == 2 || esi == 3) { edx--; ebx -= 1; adjusted = true; }
+            else if (esi == 4)        { edx -= 2; }
+            else if (esi == 5 || esi == 6) { edx--; ebx += 1; adjusted = true; }
+            else break;                      // {0,1,7} → fim
+        }
+        if (adjusted) {                      // loc_43FCBA
+            ebx &= 7;
+            dirs[edx] = ebx;
+        }
+        if (edx < 1) break;                  // loc_43FCC0
+    }
+    return edx + 1;
+}
+
 StepChoice pfChooseStep(int unitId, int currentDir, int avoidDir) {
     StepChoice best;
     if (unitId <= 0 || unitId >= static_cast<int>(g_units.size())) return best;
