@@ -135,6 +135,63 @@ int pfCanEnter(int x, int y) {         // sub_4382C0
     return pfOccupantPassable(occId, g_pf.unitId) ? 1 : 0;
 }
 
+// Tabela de direções dword_4D5338 (verbatim do asm @326542).
+const DirDelta kDir8[8] = {
+    { 1,  0},  // 0 E
+    { 1,  1},  // 1 SE
+    { 0,  1},  // 2 S
+    {-1,  1},  // 3 SW
+    {-1,  0},  // 4 W
+    {-1, -1},  // 5 NW
+    { 0, -1},  // 6 N
+    { 1, -1},  // 7 NE
+};
+
+StepChoice pfChooseStep(int unitId, int currentDir, int avoidDir) {
+    StepChoice best;
+    if (unitId <= 0 || unitId >= static_cast<int>(g_units.size())) return best;
+    const UnitRecord& u = g_units[unitId];
+
+    int back = (currentDir + 4) & 7;       // var_2C: direção de trás (não voltar)
+    int curX = u.pixelX >> 5;              // [+0x14] >> 5
+    int curY = u.pixelY >> 5;              // [+0x18] >> 5
+
+    pfPush();                              // sub_438180
+    pfSetContext(unitId);                  // sub_438260
+
+    int bestCost = PF_BLOCKED;             // var_28
+    int ebx = back;
+    for (;;) {
+        ebx = (ebx + 1) & 7;               // próxima direção
+        if (ebx == back) break;            // tentou todas menos a de trás
+        int newX = (curX + kDir8[ebx].dx) & (g_gameMap.width() - 1);  // wrap em X
+        int newY = curY + kDir8[ebx].dy;
+        if (newY <= 0) newY = 0;
+        if (newY >= g_gameMap.height()) newY = g_gameMap.height() - 1;
+
+        int cost = pfMoveCost(newX, newY); // sub_438390
+        if (ebx == avoidDir) {             // breadcrumb → penaliza (3*cost - sign) >> 1
+            int32_t t = static_cast<int32_t>(static_cast<uint32_t>(cost) * 3u);  // wrap 32-bit como o asm
+            t -= (t < 0 ? -1 : 0);         // sub eax, edx (edx = sign)
+            cost = t >> 1;                 // sar eax, 1 (aritmético)
+        }
+        if (cost < bestCost) {
+            bestCost = cost;
+            best.dir = ebx;
+            best.x = newX;
+            best.y = newY;
+        }
+    }
+
+    pfPop();                               // sub_438200
+
+    if (bestCost != PF_BLOCKED) {
+        best.found = true;
+        best.cost = bestCost;
+    }
+    return best;
+}
+
 int pfMoveCost(int x, int y) {         // sub_438390
     if (y < 0 || y >= g_gameMap.height()) return PF_BLOCKED;
     uint32_t cell = g_gameMap.rawCell(x, y);

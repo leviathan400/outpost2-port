@@ -45,6 +45,26 @@ int pfCanEnter(int x, int y);
 int pfMoveCost(int x, int y);
 constexpr int PF_BLOCKED = 0x7FFFFFFF;
 
+// --- Direções (tabela dword_4D5338) -----------------------------------------
+// 8 direções horárias a partir de Leste, y para baixo. Oposto = (d+4)&7.
+struct DirDelta { int dx, dy; };
+extern const DirDelta kDir8[8];
+
+// Resultado da escolha de passo.
+struct StepChoice {
+    bool found = false;
+    int dir = 0;      // direção escolhida (0..7)
+    int x = 0, y = 0; // célula de destino do passo (tile)
+    int cost = PF_BLOCKED;
+};
+
+// pfChooseStep (parte de seleção de sub_44BBA0 @122793): avalia as 8 direções
+// vizinhas da unidade `unitId` (exceto a de trás = (currentDir+4)&7), calcula o
+// custo de cada com pfMoveCost e escolhe a de menor custo. `avoidDir` recebe
+// penalidade ×1.5 (anti-oscilação; breadcrumb do original). Faz push/set/pop do
+// contexto como o original. Sem movimento possível → found=false.
+StepChoice pfChooseStep(int unitId, int currentDir, int avoidDir);
+
 // --- Helpers de ocupação (sub_44BD60 / sub_44D4E0 / sub_490C50) --------------
 // Jogador `a` é aliado de `b`? (sub_490C50: bit a no allyMask de b.)
 bool pfPlayersAllied(int a, int b);
