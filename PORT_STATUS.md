@@ -254,11 +254,14 @@ Header (5 x u32 = 20 bytes):
   u32 height     (em tiles)
   u32 numTileMappings  (ex.: 512 — usado na seção "TILE SET", ainda TODO)
 
-TileData [width*height] (u32 cada, ordem de linha):
+TileData [width*height] (u32 cada) — LAYOUT EM FAIXAS (NÃO row-major):
+  idx_u32 = ((x>>5) * height + y) * 32 + (x & 31)    (faixas verticais de 32 col)
   bits 0-4  : cellType  (passabilidade/terreno; 0-31)
-  bits 5-31 : tileIndex (índice no pool global de tiles de todos os tilesets)
+  bits 5-15 : tileIndex (índice no pool global; máscara 0xFFE0 >> 5, 11 bits)
+  bit  27   : flag por célula (lava/dirty), usado pelas rotinas de paint
+  x dá wrap horizontal (widthMask = width-1); height é sempre potência de 2.
 
-clipRect (4 x i32): x1, y1, x2, y2  (área jogável; x1=32 = borda padrão OP2)
+clipRect (4 x i32): x1, y1, x2, y2  (área jogável; eden01 = 32,0,95,62)
 
 Tabela de tilesets: repete { u32 nameLen; char name[nameLen]; u32 numTiles }
   enquanto nameLen for plausível. Ex.: well0000..well0012 (13 fontes .bmp;
@@ -271,8 +274,12 @@ Tabela de tilesets: repete { u32 nameLen; char name[nameLen]; u32 numTiles }
 alguns `.bmp` (paletas). Dimensões vêm do header; largura sempre potência de 2.
 
 **Status:** ✅ header, grid de tiles (cellType + tileIndex), clipRect, tabela de
-tilesets e render com gráficos — completos e **validados visualmente**.
-Uso: `python tools/op2map.py eden01.map`.
+tilesets e render com gráficos — completos. **Mecanismo confirmado no disassembly**:
+o acesso em faixa aparece idêntico em `GameMap::GetTile` (@191591) e nas rotinas de
+paint `sub_4322C0`/`sub_432560` (`((x>>5)<<lgHeight + y)*128 + (x&31)*4` sobre
+`dword_54F01C`). O render do port é **pixel-idêntico ao render original da wiki**
+(eden01/eden02). Uso: `python tools/op2map.py eden01.map` ou
+`outpost2_modern.exe --rendermap eden01.map out.bmp`.
 
 **Seção "TILE SET"** (após a tabela de tilesets) — *entendida, não necessária para
 renderizar*: uma **tabela de tile mappings** (`numTileMappings`, ex. 512, registros
