@@ -83,6 +83,25 @@ int pfSmoothPath(int* dirs, int count);
 // menos uma célula enterável (como o original garante antes de chamar).
 void pfWallFollow(int& dir, int& x, int& y, int turnSign);
 
+// pfOctDistToTarget (sub_43FCD0 @106389): distância octogonal (max+min/2, ×65536)
+// de (x,y) ao destino do contexto atual (g_pf.targetX/Y), com wrap em X.
+int pfOctDistToTarget(int x, int y);
+
+// Contexto de uma busca de rota (equivale ao objeto dword_550700 do original:
+// +0x0C/10 = start, +0x14/18 = dest).
+struct SearchContext {
+    int unitId = 0;
+    int startX = 0, startY = 0;
+    int destX = 0, destY = 0;
+};
+
+// pfSearchRoute (sub_43F5B0 @105666): busca de rota (seguir-parede bidirecional).
+// Escreve as direções (0..7) da rota em outDirs (até maxDirs) e devolve o tamanho;
+// se `reached` != null, *reached = 1 se a rota chega ao destino. Requer o contexto
+// de pathfinder já armado (pfSetContext(unitId) + pfSetTarget(dest)).
+// FASE A (reta rumo ao alvo) portada; FASE B (contorno de obstáculo) em progresso.
+int pfSearchRoute(const SearchContext& ctx, int* outDirs, int maxDirs, int* reached);
+
 // --- Helpers de ocupação (sub_44BD60 / sub_44D4E0 / sub_490C50) --------------
 // Jogador `a` é aliado de `b`? (sub_490C50: bit a no allyMask de b.)
 bool pfPlayersAllied(int a, int b);

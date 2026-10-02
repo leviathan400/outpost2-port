@@ -213,6 +213,64 @@ void pfWallFollow(int& dir, int& x, int& y, int turnSign) {  // sub_43FBB0
     }
 }
 
+// Distância horizontal com wrap em X, mapeada p/ [-metade, +metade] (loc_43F609
+// do asm): diff = dx; se diff < -half → +width; se diff > half → -((-diff)&mask).
+static int pfWrapDX(int diff) {
+    int mask = g_gameMap.width() - 1;      // dword_54EBC4
+    int w    = g_gameMap.width();           // dword_54EBC8
+    int half = mask >> 1;
+    if (-half > diff) diff += w;
+    else if (half < diff) diff = -(((-diff)) & mask);
+    return diff;
+}
+
+int pfOctDistToTarget(int x, int y) {       // sub_43FCD0
+    int dx = pfWrapDX(g_pf.targetX - x);
+    int adx = (dx < 0 ? -dx : dx) << 16;
+    int dy = g_pf.targetY - y;
+    int ady = (dy < 0 ? -dy : dy) << 16;
+    int mx = adx, mn = ady;
+    if (mn > mx) { int t = mx; mx = mn; mn = t; }   // mx = maior, mn = menor
+    return mx + (mn >> 1);                           // max + min/2
+}
+
+int pfSearchRoute(const SearchContext& ctx, int* outDirs, int maxDirs, int* reached) {
+    // sub_43F5B0 — FASE A (reta rumo ao alvo). Anda célula a célula na direção do
+    // destino (pfDirFromDelta); se a próxima é enterável (pfCanEnter), acrescenta a
+    // direção e suaviza (pfSmoothPath); senão entra na fase de contorno (FASE B,
+    // em progresso — por ora encerra a rota sem alcançar).
+    int curX = ctx.startX;
+    int curY = ctx.startY;
+    int pathLen = 0;
+    int mask = g_gameMap.width() - 1;
+
+    for (;;) {                                        // loc_43F5EB
+        if (curX == ctx.destX && curY == ctx.destY) { // chegou
+            if (reached) *reached = 1;
+            return pathLen;
+        }
+        if (pathLen >= maxDirs) {                      // buffer cheio
+            if (reached) *reached = 0;
+            return pathLen;
+        }
+        int dx = pfWrapDX(ctx.destX - curX);
+        int dy = ctx.destY - curY;
+        int dir = pfDirFromDelta(dx, dy);              // sub_45C540
+        int nx = (curX + kDir8[dir].dx) & mask;
+        int ny = curY + kDir8[dir].dy;
+        if (pfCanEnter(nx, ny)) {                       // passo reto possível
+            outDirs[pathLen++] = dir;
+            pathLen = pfSmoothPath(outDirs, pathLen);   // sub_43FC50
+            curX = nx;
+            curY = ny;
+            continue;
+        }
+        // FASE B (contorno de obstáculo / seguir-parede bidirecional): a portar.
+        if (reached) *reached = 0;
+        return pathLen;
+    }
+}
+
 StepChoice pfChooseStep(int unitId, int currentDir, int avoidDir) {
     StepChoice best;
     if (unitId <= 0 || unitId >= static_cast<int>(g_units.size())) return best;

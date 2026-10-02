@@ -14,6 +14,7 @@
 #include "../game/player.h"
 #include "../game/unit.h"
 #include "../game/command.h"
+#include "../game/pathfinder.h"
 
 namespace op2 {
 
@@ -80,6 +81,37 @@ bool GameState::load(const std::string& mapName) {
     m_camX = cx * 32 - Renderer::NATIVE_WIDTH / 2;
     m_camY = cy * 32 - Renderer::NATIVE_HEIGHT / 2;
     clampCamera();
+
+    // --- Self-test do pathfinder (Fase A) no mapa real ---------------------
+    // Escolhe um veículo como start e um tile passável ~18 células a leste como
+    // dest, roda a busca de rota e re-executa as direções validando cada passo.
+    {
+        int startId = 0;
+        for (int i = 1; i < static_cast<int>(g_units.size()); ++i)
+            if (g_units[i].id != -1 && (g_units[i].flags & UNIT_VEHICLE)) { startId = i; break; }
+        if (startId) {
+            LOCATION s{ g_units[startId].pixelX >> 5, g_units[startId].pixelY >> 5 };
+            LOCATION d = g_gameMap.findPassableNear(LOCATION{ s.x + 18, s.y + 6 });
+            pfSetContext(startId);
+            pfSetTarget(d.x, d.y);
+            SearchContext sc; sc.unitId = startId;
+            sc.startX = s.x; sc.startY = s.y; sc.destX = d.x; sc.destY = d.y;
+            int dirs[600]; int reached = 0;
+            int n = pfSearchRoute(sc, dirs, 600, &reached);
+            // Re-executa e valida.
+            int cx = s.x, cy = s.y; bool allOk = true; int mask = g_gameMap.width() - 1;
+            for (int i = 0; i < n; ++i) {
+                int nx = (cx + kDir8[dirs[i]].dx) & mask;
+                int ny = cy + kDir8[dirs[i]].dy;
+                if (!pfCanEnter(nx, ny)) { allOk = false; break; }
+                cx = nx; cy = ny;
+            }
+            std::cout << "[PF self-test] start(" << s.x << "," << s.y << ") dest("
+                      << d.x << "," << d.y << ") rota=" << n << " dirs, reached="
+                      << reached << " fim(" << cx << "," << cy << ") passos_validos="
+                      << (allOk ? "OK" : "FALHOU") << std::endl;
+        }
+    }
 
     std::cout << "[GameState] mapa " << mapName << " carregado ("
               << g_gameMap.width() << "x" << g_gameMap.height() << " tiles)" << std::endl;
