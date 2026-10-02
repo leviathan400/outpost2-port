@@ -15,6 +15,7 @@
 #include "game/player.h"
 #include "game/unit.h"
 #include "game/tethys_game.h"
+#include "game/pathfinder.h"
 #include "app/tapp.h"
 #include "app/game_state.h"
 
@@ -299,6 +300,70 @@ static int runMoveCap(const std::string& mapName, const std::string& prefix) {
     return 0;
 }
 
+// --colltest <map>: verifica colisao com terreno impassavel (pathfinder + passo).
+static int runCollTest(const std::string& mapName) {
+    if (!op2::g_ResManager.init(".")) return 2;
+    auto ms = op2::g_ResManager.openStream(mapName);
+    if (!ms || !op2::g_gameMap.load(ms->data(), ms->size())) return 3;
+    int W = op2::g_gameMap.width(), H = op2::g_gameMap.height(), mask = W - 1;
+
+    // 1) Conta celulas impassaveis e amostra os cellTypes.
+    int imp = 0, pass = 0;
+    for (int y = 0; y < H; ++y) for (int x = 0; x < W; ++x)
+        (op2::g_gameMap.isPassable(op2::LOCATION{x, y}) ? pass : imp)++;
+    std::cout << "[COLL] mapa " << W << "x" << H << ": passaveis=" << pass
+              << " impassaveis=" << imp << std::endl;
+
+    // 2) pfCanEnter deve ser 0 em TODA celula impassavel e !=0 em passavel.
+    op2::resetUnits();
+    op2::Unit u; op2::TethysGame::CreateUnit(u, 1, op2::LOCATION{0, 0}, 0);  // veiculo dummy
+    op2::pfSetContext(u.id());
+    int badBlock = 0, badPass = 0;
+    for (int y = 0; y < H; ++y) for (int x = 0; x < W; ++x) {
+        bool p = op2::g_gameMap.isPassable(op2::LOCATION{x, y});
+        int ce = op2::pfCanEnter(x, y);
+        if (p && ce == 0) ++badPass;        // passavel mas canEnter diz nao (ex.: ocupada)
+        if (!p && ce != 0) ++badBlock;      // impassavel mas canEnter deixou entrar (ERRO)
+    }
+    std::cout << "[COLL] pfCanEnter: impassaveis-que-deixaram-entrar=" << badBlock
+              << " (deve ser 0)" << std::endl;
+
+    // 3) Acha um par de celulas passaveis com impassavel no caminho reto e roteia.
+    //    Procura uma impassavel, pega passaveis a oeste e leste dela na mesma linha.
+    int tested = 0, crossings = 0;
+    for (int y = 2; y < H - 2 && tested < 5; ++y) {
+        for (int x = 2; x < W - 6 && tested < 5; ++x) {
+            if (op2::g_gameMap.isPassable(op2::LOCATION{x, y})) continue;      // acha impassavel
+            // start a oeste, dest a leste da barreira, ambos passaveis
+            int sx = x - 2, ex = x + 3;
+            if (sx < 0 || ex >= W) continue;
+            if (!op2::g_gameMap.isPassable(op2::LOCATION{sx, y})) continue;
+            if (!op2::g_gameMap.isPassable(op2::LOCATION{ex, y})) continue;
+            ++tested;
+            op2::pfSetTarget(ex, y);
+            op2::SearchContext sc; sc.unitId = u.id();
+            sc.startX = sx; sc.startY = y; sc.destX = ex; sc.destY = y;
+            int dirs[600]; int reached = 0;
+            int n = op2::pfSearchRoute(sc, dirs, 600, &reached);
+            // re-executa e confere que NENHUMA celula da rota e impassavel
+            int cx = sx, cy = y; bool hitImp = false;
+            for (int i = 0; i < n; ++i) {
+                cx = (cx + op2::kDir8[dirs[i]].dx) & mask;
+                cy = cy + op2::kDir8[dirs[i]].dy;
+                if (!op2::g_gameMap.isPassable(op2::LOCATION{cx, cy})) { hitImp = true; break; }
+            }
+            std::cout << "[COLL] barreira em (" << x << "," << y << "): ("
+                      << sx << "," << y << ")->(" << ex << "," << y << ") rota=" << n
+                      << " reached=" << reached << " pisou-impassavel=" << (hitImp ? "SIM(ERRO)" : "nao")
+                      << std::endl;
+            if (!hitImp && n > 5) ++crossings;   // rota mais longa que a reta = desviou
+        }
+    }
+    std::cout << "[COLL] resultado: " << (badBlock == 0 ? "OK terreno bloqueia" : "FALHA")
+              << "; desvios validados=" << crossings << std::endl;
+    return 0;
+}
+
 int main(int argc, char* argv[]) {
     // Modos utilitários (sem o loop interativo).
     for (int i = 1; i < argc; ++i) {
@@ -322,6 +387,8 @@ int main(int argc, char* argv[]) {
         }
         if (std::strcmp(argv[i], "--movecap") == 0 && i + 2 < argc)
             return runMoveCap(argv[i + 1], argv[i + 2]);
+        if (std::strcmp(argv[i], "--colltest") == 0 && i + 1 < argc)
+            return runCollTest(argv[i + 1]);
     }
 
     // --play <map>: entra direto no jogo com o mapa (via o backbone TApp).
