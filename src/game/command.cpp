@@ -11,6 +11,9 @@ PathScratch g_pathScratch;
 static void resetUnitOrder(UnitRecord& u) {
     u.order.curWaypoint = 0;
     u.field3C = 0;
+    u.routeDirs.clear();          // invalida a rota antiga; o tick recomputa
+    u.routeIdx = 0;
+    u.sliding = false;
 }
 
 // sub_4230F0 @asm 57211 — aloca/preenche o bloco de ordem (unit+0x38) e, para a

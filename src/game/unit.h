@@ -61,6 +61,17 @@ struct UnitRecord {
     uint16_t field4E = 0x7FFF;     // +0x4E (usado por sub_44BD60; 0x7FFF = padrão)
     OrderBlock order;              // +0x38 (ponteiro no original; aqui embutido)
     bool hasOrder = false;         // order block alocado? (unit+0x38 != null)
+
+    // --- Execução de rota (consumo da rota do pathfinder) --------------------
+    // NB: executor sobre a rota REAL de pfSearchRoute; o integrador byte-exato
+    // (sub_44B650, com o modelo completo do objeto Unit/descritor) é refinamento.
+    std::vector<int> routeDirs;    // direções (0..7) da rota atual
+    int   routeIdx   = 0;          // próximo passo da rota
+    int   moveSpeed  = 6;          // pixels por tick do deslize (TODO: descritor vehicles.txt)
+    bool  sliding    = false;      // deslizando entre células?
+    int   slideDir   = 0;          // direção do deslize atual
+    int   slideProg  = 0;          // progresso 0..32 (px) dentro da célula
+    int   slideSX    = 0, slideSY = 0;  // pixel de origem do deslize
 };
 
 // Pool global de unidades (índice = id da unidade). O id 0 é "nenhuma unidade".

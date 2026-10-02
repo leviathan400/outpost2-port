@@ -15,6 +15,7 @@
 #include "../game/unit.h"
 #include "../game/command.h"
 #include "../game/pathfinder.h"
+#include "../game/movement.h"
 
 namespace op2 {
 
@@ -122,6 +123,24 @@ bool GameState::load(const std::string& mapName) {
                           << (allOk ? "OK" : "INVALIDO")
                           << (n > manh ? " [contorno]" : "") << std::endl;
             }
+
+            // Simulação de MOVIMENTO: emite um DoMove real e roda ticks.
+            LOCATION dmv = g_gameMap.findPassableNear(LOCATION{ (s.x + 20) & mask, s.y + 3 });
+            dmv.x &= mask;
+            Unit mu(startId);
+            mu.DoMove(dmv);
+            std::cout << "[MOVE] ordem (" << s.x << "," << s.y << ")->("
+                      << dmv.x << "," << dmv.y << ")" << std::endl;
+            for (int t = 1; t <= 300; ++t) {
+                tickMovement();
+                const UnitRecord& r = g_units[startId];
+                int ux = r.pixelX >> 5, uy = r.pixelY >> 5;
+                if (t % 30 == 0 || !r.hasOrder)
+                    std::cout << "  t=" << t << " pos(" << ux << "," << uy
+                              << ") sliding=" << r.sliding
+                              << " ordem=" << r.hasOrder << std::endl;
+                if (!r.hasOrder) { std::cout << "[MOVE] chegou em t=" << t << std::endl; break; }
+            }
         }
     }
 
@@ -156,8 +175,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     while (m_tickAccum >= kTickPeriod) {
         TethysGame::advanceTick();
         m_lastRand = TethysGame::getRand(100);  // 1 consumo determinístico por tick
-        // (O driver de movimento por tick entra quando a busca de rota real
-        // — sub_440550/sub_4401F0 — + o integrador sub_44B650 estiverem portados.)
+        tickMovement();                          // move as unidades pela rota do pathfinder
         m_tickAccum -= kTickPeriod;
     }
 

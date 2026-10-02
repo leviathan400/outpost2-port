@@ -36,6 +36,7 @@ add_executable(outpost2_modern
     src/game/terrain_cost.cpp
     src/game/command.cpp
     src/game/pathfinder.cpp
+    src/game/movement.cpp
     src/game/terrain_renderer.cpp
     src/game/game_rng.cpp
     src/game/tethys_game.cpp
