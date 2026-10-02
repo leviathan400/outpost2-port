@@ -1,10 +1,38 @@
 #include "command.h"
 
 #include "unit.h"
+#include "game_map.h"
+#include "pathfinder.h"
 
 namespace op2 {
 
 PathScratch g_pathScratch;
+
+// Avança a espiral global até a próxima célula enterável e devolve (x,y) nela
+// (porta a máquina de estado de sub_4230F0 @loc_4231FE): passo na direção atual
+// (E/N/O/S com y clampeado), perna cresce a cada 2 viradas, usa pfCanEnter com o
+// contexto da unidade que busca. Guard contra laço infinito (mapa sem célula livre).
+static bool spiralNext(int& outX, int& outY) {
+    int mask = g_gameMap.width() - 1;
+    int H = g_gameMap.height();
+    PathScratch& s = g_pathScratch;
+    for (int guard = 0; guard < 1 << 16; ++guard) {
+        switch (s.state & 3) {               // passo na direção atual
+            case 0: s.x += 1; break;                                   // Leste
+            case 1: s.y -= 1; if (s.y <= 0) s.y = 0; break;            // Norte (clamp >=0)
+            case 2: s.x -= 1; break;                                   // Oeste
+            case 3: s.y += 1; if (s.y >= H - 1) s.y = H - 1; break;    // Sul (clamp <=H-1)
+        }
+        if (--s.steps == 0) {                 // fim da perna
+            s.state = (s.state + 1) & 3;
+            if ((s.state & 1) == 0) ++s.leg;  // cresce a perna a cada 2 viradas (E/O)
+            s.steps = s.leg;
+        }
+        int wx = s.x & mask;                  // x com wrap
+        if (pfCanEnter(wx, s.y)) { outX = wx; outY = s.y; return true; }
+    }
+    return false;
+}
 
 // Reset do estado de movimento antes de aplicar nova ordem (porta sub_43A910,
 // chamado pelo dispatcher antes de sub_4230F0): limpa o progresso/ordem atual.
@@ -49,16 +77,23 @@ static void setUnitMoveOrder(UnitRecord& u, int count,
     }
 
     if (unitIndex == 0) {
-        // 1ª unidade: arma o scratch global com o DESTINO (último waypoint) e adia
-        // a busca. (loc_423191 do asm.)
+        // 1ª unidade: arma a espiral com o DESTINO (último waypoint); mantém a
+        // célula clicada como destino dela. (loc_423191 do asm.)
         g_pathScratch.state = 0;      // dword_5472EC = 0
-        g_pathScratch.active = 1;     // dword_5472E8 = 1
-        g_pathScratch.flag = 1;       // dword_5472F0 = 1
+        g_pathScratch.leg = 1;        // dword_5472E8 = 1
+        g_pathScratch.steps = 1;      // dword_5472F0 = 1
         uint32_t last = ob.waypoints.empty() ? 0u : ob.waypoints.back();
-        g_pathScratch.targetX = unpackLocX(last);  // dword_5472F4
-        g_pathScratch.targetY = unpackLocY(last);  // dword_5472F8
+        g_pathScratch.x = unpackLocX(last);  // dword_5472F4
+        g_pathScratch.y = unpackLocY(last);  // dword_5472F8
+    } else {
+        // Unidades seguintes: avançam a espiral até a próxima célula enterável e
+        // usam-na como destino (espalha o grupo). (máquina de estado loc_4231FE,
+        // que sobrescreve o destino do bloco de ordem com a célula achada.)
+        pfSetContext(u.id);
+        int sx, sy;
+        if (spiralNext(sx, sy) && !ob.waypoints.empty())
+            ob.waypoints.back() = packLocation(sx, sy);
     }
-    // unitIndex != 0: a busca imediata (sub_438180/sub_438260) entra no passo 4.
 }
 
 void processCommandPacket(int owner, const CommandPacket& pkt) {

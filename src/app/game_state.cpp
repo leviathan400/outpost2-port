@@ -252,12 +252,19 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
         renderer.screenToNative(e.button.x, e.button.y, nx, ny);
         int tileX = (m_camX + nx) / 32;
         int tileY = (m_camY + ny) / 32;
+        if (g_gameMap.ok()) tileX &= (g_gameMap.width() - 1);
         int me = TethysGame::localPlayer();
+        // UM CommandPacket com todos os veículos do jogador — assim recebem índices
+        // 0,1,2... e a espiral (sub_4230F0) os espalha ao redor do destino.
+        CommandPacket pkt;
+        pkt.type = CMD_MOVE;
+        pkt.waypoints.push_back(packLocation(tileX, tileY));
         for (int i = 1; i < static_cast<int>(g_units.size()); ++i) {
             Unit u(i);
             if (!u.IsLive() || u.OwnerID() != me || !u.IsVehicle()) continue;
-            u.DoMove(LOCATION{ tileX, tileY });
+            pkt.unitIds.push_back(i);
         }
+        if (!pkt.unitIds.empty()) processCommandPacket(me, pkt);
     }
 }
 

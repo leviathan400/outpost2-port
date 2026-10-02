@@ -5,6 +5,7 @@
 #include <fstream>
 #include <iostream>
 #include <vector>
+#include <set>
 #include "gfx/renderer.h"
 #include "shell/shell_menu.h"
 #include "core/config.h"
@@ -16,6 +17,7 @@
 #include "game/unit.h"
 #include "game/tethys_game.h"
 #include "game/pathfinder.h"
+#include "game/command.h"
 #include "app/tapp.h"
 #include "app/game_state.h"
 
@@ -396,6 +398,38 @@ static int runCollTest(const std::string& mapName) {
                   << "; veiculo atravessou (" << sc.startX << "->" << sc.destX << ",y" << by
                   << ") rota=" << n << " reached=" << reached
                   << " pisou-no-predio=" << (hitBld ? "SIM(ERRO)" : "nao") << std::endl;
+    }
+
+    // 5) ESPIRAL: grupo de veiculos -> 1 CommandPacket -> destinos distintos.
+    {
+        op2::resetUnits();
+        // acha area passavel p/ spawnar e p/ o alvo
+        int ax = -1, ay = -1;
+        for (int y = 6; y < H - 6 && ax < 0; ++y)
+            for (int x = 6; x < W - 6 && ax < 0; ++x)
+                if (op2::g_gameMap.isPassable(op2::LOCATION{x, y})) { ax = x; ay = y; }
+        op2::CommandPacket pkt; pkt.type = op2::CMD_MOVE;
+        pkt.waypoints.push_back(op2::packLocation(ax, ay));
+        for (int k = 0; k < 6; ++k) {
+            op2::Unit v;
+            op2::LOCATION sp = op2::g_gameMap.findPassableNear(op2::LOCATION{(ax + 8 + k) & mask, ay});
+            op2::TethysGame::CreateUnit(v, 1, sp, 0);
+            pkt.unitIds.push_back(v.id());
+        }
+        op2::processCommandPacket(0, pkt);
+        std::cout << "[COLL] espiral: " << pkt.unitIds.size() << " veiculos -> alvo (" << ax << "," << ay << "):";
+        std::set<int> cells; int enter = 0;
+        for (int id : pkt.unitIds) {
+            const op2::UnitRecord& r = op2::g_units[id];
+            uint32_t d = r.order.waypoints.empty() ? 0 : r.order.waypoints.back();
+            int dx = op2::unpackLocX(d), dy = op2::unpackLocY(d);
+            cells.insert(dy * 1000 + dx);
+            op2::pfSetContext(id);
+            if (op2::pfCanEnter(dx, dy)) ++enter;
+            std::cout << " (" << dx << "," << dy << ")";
+        }
+        std::cout << " | destinos-distintos=" << cells.size() << "/" << pkt.unitIds.size()
+                  << " enteraveis=" << enter << "/" << pkt.unitIds.size() << std::endl;
     }
 
     std::cout << "[COLL] resultado: " << (badBlock == 0 ? "OK terreno bloqueia" : "FALHA")

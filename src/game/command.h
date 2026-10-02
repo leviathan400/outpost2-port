@@ -40,14 +40,15 @@ struct CommandPacket {
     std::vector<uint32_t> waypoints;   // LOCATIONs empacotados (destino/rota)
 };
 
-// Scratch global do pathfinder (porta dword_5472E8/EC/F0/F4/F8) — setado por
-// sub_4230F0 para a 1ª unidade e consumido pela busca (passo 4) a cada tick.
+// Scratch global da busca em espiral (porta dword_5472E8/EC/F0/F4/F8) — setado por
+// sub_4230F0 p/ a 1ª unidade do grupo e avançado p/ cada unidade seguinte, que
+// recebe a próxima célula enterável da espiral (espalha o grupo ao redor do alvo).
 struct PathScratch {
-    int active  = 0;   // dword_5472E8 (=1)
-    int state   = 0;   // dword_5472EC (máquina de estado 0..3)
-    int flag    = 0;   // dword_5472F0 (=1)
-    int targetX = 0;   // dword_5472F4 (x do destino atual)
-    int targetY = 0;   // dword_5472F8 (y do destino atual)
+    int leg     = 1;   // dword_5472E8 — comprimento da perna atual (cresce)
+    int state   = 0;   // dword_5472EC — direção 0..3 (E, N, O, S)
+    int steps   = 1;   // dword_5472F0 — passos restantes na perna
+    int x       = 0;   // dword_5472F4 — x atual da espiral
+    int y       = 0;   // dword_5472F8 — y atual da espiral
 };
 extern PathScratch g_pathScratch;
 
