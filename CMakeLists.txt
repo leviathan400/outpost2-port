@@ -32,6 +32,7 @@ add_executable(outpost2_modern
     src/res/vol.cpp
     src/res/res_manager.cpp
     src/gfx/pbmp.cpp
+    src/gfx/artfile.cpp
     src/game/game_map.cpp
     src/game/terrain_cost.cpp
     src/game/command.cpp

@@ -18,6 +18,7 @@
 #include "game/tethys_game.h"
 #include "game/pathfinder.h"
 #include "game/command.h"
+#include "gfx/artfile.h"
 #include "app/tapp.h"
 #include "app/game_state.h"
 
@@ -437,6 +438,25 @@ static int runCollTest(const std::string& mapName) {
     return 0;
 }
 
+// --artdump <imgIndex> <out.bmp>: carrega op2_art e grava a imagem em BMP.
+static int runArtDump(int idx, const std::string& outPath) {
+    if (!op2::g_ResManager.init(".")) return 2;
+    if (!op2::g_art.load()) { std::cerr << "[ArtDump] falha ao carregar op2_art" << std::endl; return 3; }
+    std::cout << "[ArtDump] " << op2::g_art.numImages() << " imagens, "
+              << op2::g_art.numAnimations() << " animacoes" << std::endl;
+    if (idx < 0 || idx >= op2::g_art.numImages()) { std::cerr << "indice fora da faixa" << std::endl; return 4; }
+    const op2::ArtImage& m = op2::g_art.image(idx);
+    std::vector<uint32_t> px;
+    op2::g_art.decode(idx, px, /*transparent*/ false);
+    // fundo rosa p/ enxergar o recorte
+    std::vector<uint32_t> rgb(static_cast<size_t>(m.width) * m.height);
+    for (size_t k = 0; k < rgb.size(); ++k) rgb[k] = px[k] ? px[k] : 0xFFFF00FFu;
+    writeBmp32(outPath, rgb.data(), m.width, m.height);
+    std::cout << "[ArtDump] img " << idx << " " << m.width << "x" << m.height
+              << " pal=" << m.pal << " type=" << m.type << " -> " << outPath << std::endl;
+    return 0;
+}
+
 int main(int argc, char* argv[]) {
     // Modos utilitários (sem o loop interativo).
     for (int i = 1; i < argc; ++i) {
@@ -462,6 +482,8 @@ int main(int argc, char* argv[]) {
             return runMoveCap(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--colltest") == 0 && i + 1 < argc)
             return runCollTest(argv[i + 1]);
+        if (std::strcmp(argv[i], "--artdump") == 0 && i + 2 < argc)
+            return runArtDump(atoi(argv[i + 1]), argv[i + 2]);
     }
 
     // --play <map>: entra direto no jogo com o mapa (via o backbone TApp).
