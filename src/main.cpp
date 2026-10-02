@@ -5,6 +5,7 @@
 #include <fstream>
 #include <iostream>
 #include <vector>
+#include <algorithm>
 #include <set>
 #include "gfx/renderer.h"
 #include "shell/shell_menu.h"
@@ -457,6 +458,45 @@ static int runArtDump(int idx, const std::string& outPath) {
     return 0;
 }
 
+// --animdump <anim> <frame> <out.bmp>: compoe um frame de animacao (pilha de
+// pictures do atlas, posicionadas por x,y na ordem slot) e grava em BMP.
+static int runAnimDump(int ai, int fi, const std::string& outPath) {
+    if (!op2::g_ResManager.init(".")) return 2;
+    if (!op2::g_art.load()) return 3;
+    if (ai < 0 || ai >= op2::g_art.numAnimations()) { std::cerr << "anim fora da faixa\n"; return 4; }
+    const op2::ArtAnimation& an = op2::g_art.animation(ai);
+    if (fi < 0 || fi >= (int)an.frames.size()) { std::cerr << "frame fora da faixa\n"; return 5; }
+    const op2::ArtFrame& fr = an.frames[fi];
+    // bounding box das pictures
+    int minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+    for (const auto& p : fr.pics) {
+        const op2::ArtImage& m = op2::g_art.image(p.image);
+        minX = std::min(minX, (int)p.x); minY = std::min(minY, (int)p.y);
+        maxX = std::max(maxX, (int)p.x + (int)m.width); maxY = std::max(maxY, (int)p.y + (int)m.height);
+    }
+    if (fr.pics.empty()) { minX = minY = 0; maxX = maxY = 1; }
+    int W = maxX - minX, H = maxY - minY;
+    if (W < 1) W = 1; if (H < 1) H = 1;
+    std::vector<uint32_t> canvas((size_t)W * H, 0xFFFF00FFu);   // fundo rosa
+    // ordena por slot e blita
+    std::vector<op2::ArtPicture> pics = fr.pics;
+    std::sort(pics.begin(), pics.end(), [](const op2::ArtPicture& a, const op2::ArtPicture& b){ return a.slot < b.slot; });
+    for (const auto& p : pics) {
+        const op2::ArtImage& m = op2::g_art.image(p.image);
+        std::vector<uint32_t> px; op2::g_art.decode(p.image, px, /*transparent*/ true);
+        for (uint32_t y = 0; y < m.height; ++y) for (uint32_t x = 0; x < m.width; ++x) {
+            uint32_t c = px[y * m.width + x]; if (!(c >> 24)) continue;   // alpha 0 = pula
+            int cx = (p.x - minX) + (int)x, cy = (p.y - minY) + (int)y;
+            if (cx >= 0 && cx < W && cy >= 0 && cy < H) canvas[(size_t)cy * W + cx] = c | 0xFF000000u;
+        }
+    }
+    writeBmp32(outPath, canvas.data(), W, H);
+    std::cout << "[AnimDump] anim " << ai << " (" << an.frames.size() << " frames, hdr8="
+              << an.header[8] << ") frame " << fi << ": " << fr.pics.size() << " pics, "
+              << W << "x" << H << " -> " << outPath << std::endl;
+    return 0;
+}
+
 int main(int argc, char* argv[]) {
     // Modos utilitários (sem o loop interativo).
     for (int i = 1; i < argc; ++i) {
@@ -484,6 +524,8 @@ int main(int argc, char* argv[]) {
             return runCollTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--artdump") == 0 && i + 2 < argc)
             return runArtDump(atoi(argv[i + 1]), argv[i + 2]);
+        if (std::strcmp(argv[i], "--animdump") == 0 && i + 3 < argc)
+            return runAnimDump(atoi(argv[i + 1]), atoi(argv[i + 2]), argv[i + 3]);
     }
 
     // --play <map>: entra direto no jogo com o mapa (via o backbone TApp).
