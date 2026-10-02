@@ -70,7 +70,8 @@ bool GameState::load(const std::string& mapName) {
     // (evita montanhas/cânions). As posições reais virão da missão depois.
     auto place = [&](map_id type, int dx, int dy) {
         Unit u;
-        LOCATION loc = g_gameMap.findPassableNear(LOCATION{cx + dx, cy + dy});
+        // Célula livre (passável E desocupada) p/ não sobrepor footprint/unidades.
+        LOCATION loc = g_gameMap.findFreeNear(LOCATION{cx + dx, cy + dy});
         TethysGame::CreateUnit(u, type, loc, owner);
     };
     place(kFirstBuilding, 0, 0);   // prédio

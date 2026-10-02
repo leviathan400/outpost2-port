@@ -116,7 +116,23 @@ void Unit::SetCargo(map_id c) {
 
 void Unit::DoDeath() {
     UnitRecord* r = rec();
-    if (r) r->flags |= UNIT_DEAD;
+    if (!r) return;
+    // Libera a ocupação do grid (footprint do prédio ou tile do veículo), limpando
+    // só as células que ainda apontam p/ esta unidade (não apaga ocupação alheia).
+    if (g_gameMap.ok() && !(r->flags & UNIT_DEAD)) {
+        int cx = r->pixelX >> 5, cy = r->pixelY >> 5;
+        if (r->flags & UNIT_BUILDING) {
+            int w, h; buildingFootprint(r->type, w, h);
+            int tlx = cx - (w >> 1), tly = cy - (h >> 1);
+            for (int dy = 0; dy < h; ++dy)
+                for (int dx = 0; dx < w; ++dx)
+                    if (g_gameMap.cellOccupant(tlx + dx, tly + dy) == m_id)
+                        g_gameMap.clearUnitOccupancy(tlx + dx, tly + dy);
+        } else if (g_gameMap.cellOccupant(cx, cy) == m_id) {
+            g_gameMap.clearUnitOccupancy(cx, cy);
+        }
+    }
+    r->flags |= UNIT_DEAD;
 }
 
 void Unit::DoMove(LOCATION dest) {

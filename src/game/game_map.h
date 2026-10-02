@@ -52,6 +52,10 @@ public:
     // `start` se nada for achado dentro de maxRadius.
     LOCATION findPassableNear(LOCATION start, int maxRadius = 16) const;
 
+    // Como findPassableNear, mas também exige a célula DESOCUPADA (cellOccupant==0)
+    // — p/ colocar unidades sem sobrepor footprints de prédios / outras unidades.
+    LOCATION findFreeNear(LOCATION start, int maxRadius = 16) const;
+
     // ---- Célula runtime (grid de simulação) --------------------------------
     // No engine a célula é UMA u32 (dword_54F01C aponta para o grid): os bits
     // baixos vêm do disco (cellType 0..4, tileIndex 5..15) e os bits altos

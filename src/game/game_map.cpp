@@ -139,4 +139,22 @@ LOCATION GameMap::findPassableNear(LOCATION start, int maxRadius) const {
     return start;
 }
 
+LOCATION GameMap::findFreeNear(LOCATION start, int maxRadius) const {
+    auto free = [&](LOCATION c) {
+        return c.y >= 0 && c.y < m_height && isPassable(c) &&
+               cellOccupant(c.x, c.y) == 0;
+    };
+    if (free(start)) return start;
+    for (int r = 1; r <= maxRadius; ++r) {
+        for (int dy = -r; dy <= r; ++dy) {
+            for (int dx = -r; dx <= r; ++dx) {
+                if (std::abs(dx) != r && std::abs(dy) != r) continue;  // borda do anel
+                LOCATION c{ start.x + dx, start.y + dy };
+                if (free(c)) return c;
+            }
+        }
+    }
+    return start;
+}
+
 } // namespace op2
