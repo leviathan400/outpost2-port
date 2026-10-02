@@ -74,6 +74,11 @@ struct UnitRecord {
     int   slideSX    = 0, slideSY = 0;  // pixel de origem do deslize
 };
 
+// Footprint (tamanho em tiles) de um prédio — X-size × Y-size de building.txt
+// (popula o descritor off_4E1340[+0x248/+0x24A] no original). Devolve 1×1 p/
+// tipos fora da faixa de prédio. A LOCATION do prédio é o CENTRO do footprint.
+void buildingFootprint(map_id type, int& w, int& h);
+
 // Pool global de unidades (índice = id da unidade). O id 0 é "nenhuma unidade".
 extern std::vector<UnitRecord> g_units;
 void resetUnits();

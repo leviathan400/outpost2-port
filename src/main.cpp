@@ -359,6 +359,45 @@ static int runCollTest(const std::string& mapName) {
             if (!hitImp && n > 5) ++crossings;   // rota mais longa que a reta = desviou
         }
     }
+    // 4) PRÉDIO como obstáculo: coloca um prédio e roteia um veículo atravessando-o.
+    //    Acha uma área passável 6x6 para o prédio + rota.
+    int bx = -1, by = -1;
+    for (int y = 4; y < H - 4 && bx < 0; ++y)
+        for (int x = 6; x < W - 6 && bx < 0; ++x) {
+            bool clear = true;
+            for (int dy = -2; dy <= 2 && clear; ++dy)
+                for (int dx = -3; dx <= 3; ++dx)
+                    if (!op2::g_gameMap.isPassable(op2::LOCATION{x + dx, y + dy})) { clear = false; break; }
+            if (clear) { bx = x; by = y; }
+        }
+    if (bx >= 0) {
+        op2::Unit bld;
+        op2::TethysGame::CreateUnit(bld, op2::kFirstBuilding, op2::LOCATION{bx, by}, 0);  // COMMAND 3x2
+        int fw, fh; op2::buildingFootprint(op2::kFirstBuilding, fw, fh);
+        int tlx = bx - (fw >> 1), tly = by - (fh >> 1), occOK = 0, occTot = fw * fh;
+        for (int dy = 0; dy < fh; ++dy) for (int dx = 0; dx < fw; ++dx)
+            if (op2::g_gameMap.cellOccupant(tlx + dx, tly + dy) == bld.id()) ++occOK;
+        // veículo atravessando o prédio (oeste -> leste)
+        op2::Unit veh; op2::TethysGame::CreateUnit(veh, 1, op2::LOCATION{bx - 4, by}, 0);
+        op2::pfSetContext(veh.id());
+        op2::pfSetTarget((bx + 4) & mask, by);
+        op2::SearchContext sc; sc.unitId = veh.id();
+        sc.startX = (bx - 4) & mask; sc.startY = by; sc.destX = (bx + 4) & mask; sc.destY = by;
+        int dirs[600]; int reached = 0;
+        int n = op2::pfSearchRoute(sc, dirs, 600, &reached);
+        int cx = sc.startX, cy = sc.startY; bool hitBld = false;
+        for (int i = 0; i < n; ++i) {
+            cx = (cx + op2::kDir8[dirs[i]].dx) & mask; cy += op2::kDir8[dirs[i]].dy;
+            int occ = op2::g_gameMap.cellOccupant(cx, cy);
+            if (occ == bld.id()) { hitBld = true; break; }
+        }
+        std::cout << "[COLL] predio COMMAND " << fw << "x" << fh << " em (" << bx << "," << by
+                  << "): footprint-ocupado=" << occOK << "/" << occTot
+                  << "; veiculo atravessou (" << sc.startX << "->" << sc.destX << ",y" << by
+                  << ") rota=" << n << " reached=" << reached
+                  << " pisou-no-predio=" << (hitBld ? "SIM(ERRO)" : "nao") << std::endl;
+    }
+
     std::cout << "[COLL] resultado: " << (badBlock == 0 ? "OK terreno bloqueia" : "FALHA")
               << "; desvios validados=" << crossings << std::endl;
     return 0;

@@ -8,6 +8,57 @@ namespace op2 {
 // Pool global. Índice 0 reservado como "nenhuma unidade" (IsLive trata id 0).
 std::vector<UnitRecord> g_units;
 
+// Footprint por map_id (building.txt X-size/Y-size), id começando em 0x15.
+// Mesma fonte que popula off_4E1340[type]->[+0x248/+0x24A] no original.
+static const struct { int w, h; } kBuildingFootprint[] = {
+    { 3, 2 },  // 0x15 COMMAND
+    { 2, 2 },  // 0x16 TOKAMAK
+    { 2, 2 },  // 0x17 ASE
+    { 2, 1 },  // 0x18 GEOTHERMAL
+    { 3, 2 },  // 0x19 SOLAR
+    { 4, 3 },  // 0x1A FACT_STRUCTURE
+    { 1, 1 },  // 0x1B TOWER_GUARD
+    { 4, 3 },  // 0x1C SMELTER
+    { 1, 2 },  // 0x1D STORAGE_ORE
+    { 3, 3 },  // 0x1E LAB_ADV
+    { 3, 2 },  // 0x1F LAB_STANDARD
+    { 2, 2 },  // 0x20 LAB
+    { 4, 3 },  // 0x21 SMELTER_ADV
+    { 1, 2 },  // 0x22 STORAGE_RARE
+    { 4, 3 },  // 0x23 FACT_VEHICLE
+    { 2, 2 },  // 0x24 UNIVERSITY
+    { 2, 2 },  // 0x25 NURSERY
+    { 3, 2 },  // 0x26 AGRIDOME
+    { 2, 2 },  // 0x27 ROBOT_COMMAND
+    { 5, 4 },  // 0x28 SPACEPORT
+    { 2, 2 },  // 0x29 MED_CENTER
+    { 2, 2 },  // 0x2A FACT_ANDROID
+    { 3, 2 },  // 0x2B DIRT
+    { 3, 2 },  // 0x2C GARAGE
+    { 3, 2 },  // 0x2D GORF
+    { 3, 3 },  // 0x2E RESIDENCE_E
+    { 2, 2 },  // 0x2F RESIDENCE
+    { 3, 2 },  // 0x30 RESIDENCE_P
+    { 2, 2 },  // 0x31 OBSERVATORY
+    { 2, 2 },  // 0x32 METEOR_DEF
+    { 2, 2 },  // 0x33 RECREATION
+    { 3, 3 },  // 0x34 FACT_LUXURY
+    { 2, 2 },  // 0x35 FORUM
+    { 2, 2 },  // 0x36 TRADE
+    { 1, 1 },  // 0x37 TOWER_LIGHT
+    { 2, 1 },  // 0x38 MAGMA_WELL
+    { 2, 1 },  // 0x39 MINE
+    { 2, 1 },  // 0x3A MINE_ADV
+};
+
+void buildingFootprint(map_id type, int& w, int& h) {
+    w = 1; h = 1;
+    if (type >= kFirstBuilding && type <= kLastBuilding) {
+        const auto& f = kBuildingFootprint[type - kFirstBuilding];
+        w = f.w; h = f.h;
+    }
+}
+
 void resetUnits() {
     g_units.clear();
     g_units.emplace_back();   // slot 0 = nulo
@@ -120,12 +171,21 @@ bool createUnit(Unit& out, map_id type, LOCATION loc, int owner,
     r.rotation = static_cast<uint8_t>(rotation & 0xFF);
     r.flags  = mapIdIsBuilding(type) ? UNIT_BUILDING : UNIT_VEHICLE;
 
-    // Grava a ocupação do tile no grid runtime (bits 16-26), como o engine faz ao
-    // posicionar a unidade — é exatamente o que sub_4382C0/sub_438390 leem. Só
-    // para veículo (1 tile); o footprint multi-tile de prédio vem no passo de
-    // colocação de estruturas.
-    if (!mapIdIsBuilding(type) && g_gameMap.ok()) {
-        g_gameMap.setUnitOccupancy(r.pixelX >> 5, r.pixelY >> 5, slot);
+    // Grava a ocupação no grid runtime (bits 16-26), como o engine faz ao
+    // posicionar a unidade — é o que sub_4382C0/sub_438390 leem. Veículo = 1 tile;
+    // prédio = footprint W×H (building.txt), com a LOCATION no CENTRO (canto
+    // superior-esquerdo = loc - (w/2, h/2), como o render/placement do original).
+    if (g_gameMap.ok()) {
+        int cx = r.pixelX >> 5, cy = r.pixelY >> 5;
+        if (mapIdIsBuilding(type)) {
+            int w, h; buildingFootprint(type, w, h);
+            int tlx = cx - (w >> 1), tly = cy - (h >> 1);
+            for (int dy = 0; dy < h; ++dy)
+                for (int dx = 0; dx < w; ++dx)
+                    g_gameMap.setUnitOccupancy(tlx + dx, tly + dy, slot);
+        } else {
+            g_gameMap.setUnitOccupancy(cx, cy, slot);
+        }
     }
 
     out.SetId(slot);
