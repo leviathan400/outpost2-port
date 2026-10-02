@@ -80,8 +80,9 @@ int pfSmoothPath(int* dirs, int count);
 // de (x,y) e direção `dir`, rotaciona `dir` em passos de (8-turnSign) até a célula
 // vizinha ser enterável (pfCanEnter, com o contexto atual), anda para ela e ajusta
 // `dir` por turnSign (×2 se diagonal). Edita dir/x/y no lugar. Assume que existe ao
-// menos uma célula enterável (como o original garante antes de chamar).
-void pfWallFollow(int& dir, int& x, int& y, int turnSign);
+// menos uma célula enterável (como o original garante antes de chamar). Devolve a
+// direção do passo efetivamente dado (como sub_43FBB0 retorna em eax).
+int pfWallFollow(int& dir, int& x, int& y, int turnSign);
 
 // pfOctDistToTarget (sub_43FCD0 @106389): distância octogonal (max+min/2, ×65536)
 // de (x,y) ao destino do contexto atual (g_pf.targetX/Y), com wrap em X.

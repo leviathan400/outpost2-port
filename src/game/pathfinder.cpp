@@ -196,7 +196,7 @@ int pfSmoothPath(int* dirs, int count) {   // sub_43FC50 (ecx=dirs, edx=count)
     return edx + 1;
 }
 
-void pfWallFollow(int& dir, int& x, int& y, int turnSign) {  // sub_43FBB0
+int pfWallFollow(int& dir, int& x, int& y, int turnSign) {  // sub_43FBB0
     int rev = 8 - turnSign;                 // var_4: passo de rotação reverso
     int mask = g_gameMap.width() - 1;
     for (int guard = 0; guard < 8; ++guard) {   // no original é ilimitado; guard = 1 volta
@@ -207,10 +207,11 @@ void pfWallFollow(int& dir, int& x, int& y, int turnSign) {  // sub_43FBB0
             x = nx;
             y = ny;
             dir = (d + ((d & 1) ? turnSign * 2 : turnSign)) & 7;  // ajuste (×2 se diagonal)
-            return;
+            return d;                        // direção do passo (eax no asm)
         }
         dir = (d + rev) & 7;                 // rotaciona
     }
+    return dir & 7;
 }
 
 // Distância horizontal com wrap em X, mapeada p/ [-metade, +metade] (loc_43F609
@@ -234,40 +235,173 @@ int pfOctDistToTarget(int x, int y) {       // sub_43FCD0
     return mx + (mn >> 1);                           // max + min/2
 }
 
+// dword_4D0510: custo de passo cardinal (dir par) / diagonal (dir ímpar).
+static const int kStepCost[2] = { 0x20, 0x2D };
+
+// sub_43FF20 @106667 — avalia truncamentos do caminho no sentido FORWARD. Para
+// cada prefixo i, anexa dir[i] ao buffer suavizado (pfSmoothPath), acumula o custo
+// de passo e soma a distância octogonal de pos[i] ao alvo; guarda o (custo,índice)
+// mínimo. Para se a distância chega a 0 (alcançou o alvo).
+static void evalForward(const int* dir, int count, const int* px, const int* py,
+                        int& outCost, int& outIdx) {
+    outCost = 0x7FFFFFFF;
+    outIdx = 0;
+    static int sm[640];
+    static int cum[640];
+    int L = 0;
+    for (int i = 0; i < count; ++i) {
+        sm[L] = dir[i];
+        L = pfSmoothPath(sm, L + 1);         // sub_43FC50
+        int ebx = L - 1;
+        cum[ebx] = kStepCost[sm[ebx] & 1] + (ebx > 0 ? cum[ebx - 1] : 0);
+        int dist = pfOctDistToTarget(px[i], py[i]);   // sub_43FCD0
+        int total = cum[ebx] + dist;
+        if (total < outCost) { outCost = total; outIdx = i; }
+        if (dist == 0) break;
+    }
+}
+
+// sub_440080 @106817 — igual, mas no sentido REVERSE: percorre dir[] do fim para o
+// começo com cada direção invertida ((d+4)&7) e pos[] de trás para frente.
+static void evalReverse(const int* dir, int count, const int* px, const int* py,
+                        int& outCost, int& outIdx) {
+    outCost = 0x7FFFFFFF;
+    outIdx = 0;
+    static int sm[640];
+    static int cum[640];
+    int L = 0;
+    // edi = count-1 .. 1 ; pos indexado de [count-2] para trás (como o asm).
+    for (int i = count - 1, p = count - 2; i > 0; --i, --p) {
+        sm[L] = (dir[i] + 4) & 7;            // direção invertida
+        L = pfSmoothPath(sm, L + 1);
+        int ebx = L - 1;
+        cum[ebx] = kStepCost[sm[ebx] & 1] + (ebx > 0 ? cum[ebx - 1] : 0);
+        int dist = (p >= 0) ? pfOctDistToTarget(px[p], py[p]) : 0;
+        int total = cum[ebx] + dist;
+        if (total < outCost) { outCost = total; outIdx = i; }
+        if (dist == 0) break;
+    }
+}
+
+// Emenda os primeiros (idx+1) passos de um contorno à rota de saída, suavizando
+// (loc_43F9DC do asm). idx < 0 não emenda nada.
+static int appendContour(const int* dir, int idx, int* out, int pathLen, int maxDirs) {
+    if (idx < 0) return pathLen;
+    for (int k = 0; k <= idx; ++k) {
+        if (pathLen >= maxDirs) break;
+        out[pathLen++] = dir[k];
+        pathLen = pfSmoothPath(out, pathLen);
+    }
+    return pathLen;
+}
+
 int pfSearchRoute(const SearchContext& ctx, int* outDirs, int maxDirs, int* reached) {
-    // sub_43F5B0 — FASE A (reta rumo ao alvo). Anda célula a célula na direção do
-    // destino (pfDirFromDelta); se a próxima é enterável (pfCanEnter), acrescenta a
-    // direção e suaviza (pfSmoothPath); senão entra na fase de contorno (FASE B,
-    // em progresso — por ora encerra a rota sem alcançar).
+    // sub_43F5B0 — busca de rota (seguir-parede bidirecional).
     int curX = ctx.startX;
     int curY = ctx.startY;
     int pathLen = 0;
+    int failedOnce = 0;                                // var_3858
     int mask = g_gameMap.width() - 1;
+    const MAP_RECT& clip = g_gameMap.clipRect();
+    int cx1 = clip.x1, cy1 = clip.y1, cx2 = clip.x2, cy2 = clip.y2;  // 54EBD4/D8/DC/E0
+    static int dirA[640], posAx[640], posAy[640];
+    static int dirB[640], posBx[640], posBy[640];
 
-    for (;;) {                                        // loc_43F5EB
-        if (curX == ctx.destX && curY == ctx.destY) { // chegou
-            if (reached) *reached = 1;
-            return pathLen;
+    for (;;) {
+        // --- FASE A: reta rumo ao alvo (loc_43F5EB) ---
+        int blockedDir = 0;
+        bool blocked = false;
+        for (;;) {
+            if (curX == ctx.destX && curY == ctx.destY) {
+                if (reached) *reached = 1;
+                return pathLen;
+            }
+            if (pathLen >= maxDirs) {
+                if (reached) *reached = 0;
+                return pathLen;
+            }
+            int dx = pfWrapDX(ctx.destX - curX);
+            int dy = ctx.destY - curY;
+            int dir = pfDirFromDelta(dx, dy);           // sub_45C540
+            int nx = (curX + kDir8[dir].dx) & mask;
+            int ny = curY + kDir8[dir].dy;
+            if (pfCanEnter(nx, ny)) {                     // passo reto possível
+                outDirs[pathLen++] = dir;
+                pathLen = pfSmoothPath(outDirs, pathLen); // sub_43FC50
+                curX = nx; curY = ny;
+                continue;
+            }
+            blocked = true; blockedDir = dir; break;      // obstáculo → FASE B
         }
-        if (pathLen >= maxDirs) {                      // buffer cheio
+        (void)blocked;
+
+        // --- FASE B: contorno de obstáculo (loc_43F6C6) ---
+        if (failedOnce) {                                 // só um desvio por chamada
             if (reached) *reached = 0;
             return pathLen;
         }
-        int dx = pfWrapDX(ctx.destX - curX);
-        int dy = ctx.destY - curY;
-        int dir = pfDirFromDelta(dx, dy);              // sub_45C540
-        int nx = (curX + kDir8[dir].dx) & mask;
-        int ny = curY + kDir8[dir].dy;
-        if (pfCanEnter(nx, ny)) {                       // passo reto possível
-            outDirs[pathLen++] = dir;
-            pathLen = pfSmoothPath(outDirs, pathLen);   // sub_43FC50
-            curX = nx;
-            curY = ny;
-            continue;
+        int budget = maxDirs - pathLen;                   // var_3884
+
+        // Contorno A (turnSign = 7): entrada contada antes do teste de clip.
+        int cntA = 0;
+        { int wd = (blockedDir + 1) & 7, wx = curX, wy = curY;
+          while (!(budget < cntA)) {                       // cntA <= budget
+              int sd = pfWallFollow(wd, wx, wy, 7);
+              dirA[cntA] = sd; posAx[cntA] = wx; posAy[cntA] = wy; ++cntA;
+              if (wy == cy1 && wd == 7) break;
+              if (wy == cy2 && wd == 3) break;
+              if (wx == cx1 && wd == 5) break;
+              if (wx == cx2 && wd == 1) break;
+          }
         }
-        // FASE B (contorno de obstáculo / seguir-parede bidirecional): a portar.
-        if (reached) *reached = 0;
-        return pathLen;
+        int useA = (budget < cntA) ? budget : cntA;        // min(budget, cntA)
+
+        // Contorno B (turnSign = 1): dir gravado antes do teste; só conta se não quebrar.
+        int cntB = 0;
+        if (budget > 0) { int wd = (blockedDir - 1) & 7, wx = curX, wy = curY;
+          while (cntB < budget) {
+              int sd = pfWallFollow(wd, wx, wy, 1);
+              dirB[cntB] = sd;
+              if (wy == cy1 && wd == 5) break;
+              if (wy == cy2 && wd == 1) break;
+              if (wx == cx1 && wd == 3) break;
+              if (wx == cx2 && wd == 7) break;
+              posBx[cntB] = wx; posBy[cntB] = wy; ++cntB;
+          }
+        }
+
+        // Avalia os dois contornos e a distância direta.
+        int costA, idxA, costB, idxB;
+        evalForward(dirA, useA, posAx, posAy, costA, idxA);   // sub_43FF20
+        evalForward(dirB, cntB, posBx, posBy, costB, idxB);
+        int distDirect = pfOctDistToTarget(curX, curY);       // sub_43FCD0
+
+        // Seleção: menor custo; empate → prefere A se idxA < idxB.
+        bool chooseB;
+        if (costB > costA) chooseB = false;
+        else if (costB < costA) chooseB = true;
+        else chooseB = !(idxA < idxB);
+
+        int endX = curX, endY = curY;
+        if (chooseB) {
+            if (distDirect > costB) {                          // usa contorno B
+                endX = posBx[idxB]; endY = posBy[idxB];
+                pathLen = appendContour(dirB, idxB, outDirs, pathLen, maxDirs);
+            }
+        } else {
+            if (distDirect > costA) {                          // usa contorno A
+                endX = posAx[idxA]; endY = posAy[idxA];
+                pathLen = appendContour(dirA, idxA, outDirs, pathLen, maxDirs);
+            }
+        }
+
+        // loc_43FB2E: sem progresso → encerra; senão marca failedOnce e segue.
+        if (curX == endX && curY == endY) {
+            if (reached) *reached = (curX == ctx.destX && curY == ctx.destY) ? 1 : 0;
+            return pathLen;
+        }
+        failedOnce = 1;                                        // desvio normal (eax==0)
+        curX = endX; curY = endY;
     }
 }
 

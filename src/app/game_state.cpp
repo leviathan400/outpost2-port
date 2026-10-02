@@ -91,25 +91,37 @@ bool GameState::load(const std::string& mapName) {
             if (g_units[i].id != -1 && (g_units[i].flags & UNIT_VEHICLE)) { startId = i; break; }
         if (startId) {
             LOCATION s{ g_units[startId].pixelX >> 5, g_units[startId].pixelY >> 5 };
-            LOCATION d = g_gameMap.findPassableNear(LOCATION{ s.x + 18, s.y + 6 });
             pfSetContext(startId);
-            pfSetTarget(d.x, d.y);
-            SearchContext sc; sc.unitId = startId;
-            sc.startX = s.x; sc.startY = s.y; sc.destX = d.x; sc.destY = d.y;
-            int dirs[600]; int reached = 0;
-            int n = pfSearchRoute(sc, dirs, 600, &reached);
-            // Re-executa e valida.
-            int cx = s.x, cy = s.y; bool allOk = true; int mask = g_gameMap.width() - 1;
-            for (int i = 0; i < n; ++i) {
-                int nx = (cx + kDir8[dirs[i]].dx) & mask;
-                int ny = cy + kDir8[dirs[i]].dy;
-                if (!pfCanEnter(nx, ny)) { allOk = false; break; }
-                cx = nx; cy = ny;
+            int mask = g_gameMap.width() - 1;
+            // Vários destinos radiais; alguns devem exigir contorno (Fase B).
+            const int offs[][2] = { {18,6}, {0,25}, {-20,10}, {12,-18},
+                                    {25,25}, {-15,-15}, {30,0}, {0,-28} };
+            int H = g_gameMap.height();
+            for (auto& o : offs) {
+                // Destino VÁLIDO (como o jogo): x com wrap no mapa, y clampeado.
+                int tx = (s.x + o[0]) & mask;
+                int ty = s.y + o[1]; if (ty < 0) ty = 0; if (ty >= H) ty = H - 1;
+                LOCATION d = g_gameMap.findPassableNear(LOCATION{ tx, ty });
+                d.x &= mask; if (d.y < 0) d.y = 0; if (d.y >= H) d.y = H - 1;
+                pfSetTarget(d.x, d.y);
+                SearchContext sc; sc.unitId = startId;
+                sc.startX = s.x; sc.startY = s.y; sc.destX = d.x; sc.destY = d.y;
+                int dirs[600]; int reached = 0;
+                int n = pfSearchRoute(sc, dirs, 600, &reached);
+                int cx = s.x, cy = s.y; bool allOk = true;
+                for (int i = 0; i < n; ++i) {
+                    int nx = (cx + kDir8[dirs[i]].dx) & mask;
+                    int ny = cy + kDir8[dirs[i]].dy;
+                    if (!pfCanEnter(nx, ny)) { allOk = false; break; }
+                    cx = nx; cy = ny;
+                }
+                int manh = std::abs(d.x - s.x) + std::abs(d.y - s.y);
+                std::cout << "[PF] (" << s.x << "," << s.y << ")->(" << d.x << "," << d.y
+                          << ") rota=" << n << " reached=" << reached
+                          << " fim(" << cx << "," << cy << ") "
+                          << (allOk ? "OK" : "INVALIDO")
+                          << (n > manh ? " [contorno]" : "") << std::endl;
             }
-            std::cout << "[PF self-test] start(" << s.x << "," << s.y << ") dest("
-                      << d.x << "," << d.y << ") rota=" << n << " dirs, reached="
-                      << reached << " fim(" << cx << "," << cy << ") passos_validos="
-                      << (allOk ? "OK" : "FALHOU") << std::endl;
         }
     }
 
