@@ -83,67 +83,6 @@ bool GameState::load(const std::string& mapName) {
     m_camY = cy * 32 - Renderer::NATIVE_HEIGHT / 2;
     clampCamera();
 
-    // --- Self-test do pathfinder (Fase A) no mapa real ---------------------
-    // Escolhe um veículo como start e um tile passável ~18 células a leste como
-    // dest, roda a busca de rota e re-executa as direções validando cada passo.
-    {
-        int startId = 0;
-        for (int i = 1; i < static_cast<int>(g_units.size()); ++i)
-            if (g_units[i].id != -1 && (g_units[i].flags & UNIT_VEHICLE)) { startId = i; break; }
-        if (startId) {
-            LOCATION s{ g_units[startId].pixelX >> 5, g_units[startId].pixelY >> 5 };
-            pfSetContext(startId);
-            int mask = g_gameMap.width() - 1;
-            // Vários destinos radiais; alguns devem exigir contorno (Fase B).
-            const int offs[][2] = { {18,6}, {0,25}, {-20,10}, {12,-18},
-                                    {25,25}, {-15,-15}, {30,0}, {0,-28} };
-            int H = g_gameMap.height();
-            for (auto& o : offs) {
-                // Destino VÁLIDO (como o jogo): x com wrap no mapa, y clampeado.
-                int tx = (s.x + o[0]) & mask;
-                int ty = s.y + o[1]; if (ty < 0) ty = 0; if (ty >= H) ty = H - 1;
-                LOCATION d = g_gameMap.findPassableNear(LOCATION{ tx, ty });
-                d.x &= mask; if (d.y < 0) d.y = 0; if (d.y >= H) d.y = H - 1;
-                pfSetTarget(d.x, d.y);
-                SearchContext sc; sc.unitId = startId;
-                sc.startX = s.x; sc.startY = s.y; sc.destX = d.x; sc.destY = d.y;
-                int dirs[600]; int reached = 0;
-                int n = pfSearchRoute(sc, dirs, 600, &reached);
-                int cx = s.x, cy = s.y; bool allOk = true;
-                for (int i = 0; i < n; ++i) {
-                    int nx = (cx + kDir8[dirs[i]].dx) & mask;
-                    int ny = cy + kDir8[dirs[i]].dy;
-                    if (!pfCanEnter(nx, ny)) { allOk = false; break; }
-                    cx = nx; cy = ny;
-                }
-                int manh = std::abs(d.x - s.x) + std::abs(d.y - s.y);
-                std::cout << "[PF] (" << s.x << "," << s.y << ")->(" << d.x << "," << d.y
-                          << ") rota=" << n << " reached=" << reached
-                          << " fim(" << cx << "," << cy << ") "
-                          << (allOk ? "OK" : "INVALIDO")
-                          << (n > manh ? " [contorno]" : "") << std::endl;
-            }
-
-            // Simulação de MOVIMENTO: emite um DoMove real e roda ticks.
-            LOCATION dmv = g_gameMap.findPassableNear(LOCATION{ (s.x + 20) & mask, s.y + 3 });
-            dmv.x &= mask;
-            Unit mu(startId);
-            mu.DoMove(dmv);
-            std::cout << "[MOVE] ordem (" << s.x << "," << s.y << ")->("
-                      << dmv.x << "," << dmv.y << ")" << std::endl;
-            for (int t = 1; t <= 300; ++t) {
-                tickMovement();
-                const UnitRecord& r = g_units[startId];
-                int ux = r.pixelX >> 5, uy = r.pixelY >> 5;
-                if (t % 30 == 0 || !r.hasOrder)
-                    std::cout << "  t=" << t << " pos(" << ux << "," << uy
-                              << ") sliding=" << r.sliding
-                              << " ordem=" << r.hasOrder << std::endl;
-                if (!r.hasOrder) { std::cout << "[MOVE] chegou em t=" << t << std::endl; break; }
-            }
-        }
-    }
-
     std::cout << "[GameState] mapa " << mapName << " carregado ("
               << g_gameMap.width() << "x" << g_gameMap.height() << " tiles)" << std::endl;
     return true;

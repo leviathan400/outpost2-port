@@ -255,6 +255,50 @@ static int runPlayShot(const std::string& mapName, const std::string& outPath, b
     return ok ? 0 : 1;
 }
 
+// --movecap <map> <prefix>: carrega o jogo, manda os veículos do jogador moverem
+// e salva frames (prefix_NN.bmp) durante o movimento, para inspeção visual.
+static int runMoveCap(const std::string& mapName, const std::string& prefix) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) { std::cerr << "SDL_Init: " << SDL_GetError() << std::endl; return 1; }
+    op2::g_ResManager.init(".");
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 movecap", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+
+    // Destino ~12 células a leste do 1º veículo; manda todos os veículos p/ lá.
+    int mask = op2::g_gameMap.width() - 1;
+    int refX = 0, refY = 0, found = 0;
+    for (int i = 1; i < (int)op2::g_units.size(); ++i)
+        if (op2::g_units[i].id != -1 && (op2::g_units[i].flags & op2::UNIT_VEHICLE)) {
+            refX = op2::g_units[i].pixelX >> 5; refY = op2::g_units[i].pixelY >> 5; found = 1; break;
+        }
+    if (found) {
+        op2::LOCATION dst = op2::g_gameMap.findPassableNear(op2::LOCATION{ (refX + 12) & mask, refY + 4 });
+        dst.x &= mask;
+        for (int i = 1; i < (int)op2::g_units.size(); ++i) {
+            op2::UnitRecord& r = op2::g_units[i];
+            if (r.id == -1 || !(r.flags & op2::UNIT_VEHICLE)) continue;
+            op2::Unit(i).DoMove(dst);
+        }
+        std::cout << "[MoveCap] destino (" << dst.x << "," << dst.y << ")" << std::endl;
+    }
+
+    for (int f = 0; f <= 80; ++f) {
+        gs.onIdle(renderer, 0.1f);     // 1 tick + render por frame
+        if (f == 0 || f == 20 || f == 40 || f == 60 || f == 80) {
+            char path[256];
+            std::snprintf(path, sizeof(path), "%s_%02d.bmp", prefix.c_str(), f);
+            writeBmp32(path, renderer.getFramebuffer(),
+                       op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+            std::cout << "[MoveCap] frame " << f << " -> " << path << std::endl;
+        }
+    }
+    renderer.shutdown();
+    SDL_Quit();
+    return 0;
+}
+
 int main(int argc, char* argv[]) {
     // Modos utilitários (sem o loop interativo).
     for (int i = 1; i < argc; ++i) {
@@ -276,6 +320,8 @@ int main(int argc, char* argv[]) {
             bool pass = (i + 3 < argc && std::strcmp(argv[i + 3], "pass") == 0);
             return runPlayShot(argv[i + 1], argv[i + 2], pass);
         }
+        if (std::strcmp(argv[i], "--movecap") == 0 && i + 2 < argc)
+            return runMoveCap(argv[i + 1], argv[i + 2]);
     }
 
     // --play <map>: entra direto no jogo com o mapa (via o backbone TApp).
