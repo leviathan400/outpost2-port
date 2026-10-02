@@ -497,6 +497,51 @@ static int runAnimDump(int ai, int fi, const std::string& outPath) {
     return 0;
 }
 
+// --contactsheet <start> <count> <out.bmp>: grade com o frame 0 de varias animacoes
+// (celula 80x80), p/ identificar visualmente unidades/estruturas e seus indices.
+static int runContactSheet(int start, int count, const std::string& outPath) {
+    if (!op2::g_ResManager.init(".")) return 2;
+    if (!op2::g_art.load()) return 3;
+    const int CELL = 80, COLS = 8;
+    int rows = (count + COLS - 1) / COLS;
+    int W = COLS * CELL, H = rows * CELL;
+    std::vector<uint32_t> cv((size_t)W * H, 0xFF202020u);
+    for (int k = 0; k < count; ++k) {
+        int ai = start + k;
+        if (ai < 0 || ai >= op2::g_art.numAnimations()) continue;
+        const op2::ArtAnimation& an = op2::g_art.animation(ai);
+        if (an.frames.empty()) continue;
+        const op2::ArtFrame& fr = an.frames[0];
+        // bbox
+        int minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+        for (const auto& p : fr.pics) {
+            const op2::ArtImage& m = op2::g_art.image(p.image);
+            minX = std::min(minX, (int)p.x); minY = std::min(minY, (int)p.y);
+            maxX = std::max(maxX, (int)p.x + (int)m.width); maxY = std::max(maxY, (int)p.y + (int)m.height);
+        }
+        if (fr.pics.empty()) continue;
+        int bw = maxX - minX, bh = maxY - minY;
+        int cellX = (k % COLS) * CELL, cellY = (k / COLS) * CELL;
+        int ox = cellX + (CELL - bw) / 2 - minX, oy = cellY + (CELL - bh) / 2 - minY;
+        std::vector<op2::ArtPicture> pics = fr.pics;
+        std::sort(pics.begin(), pics.end(), [](const op2::ArtPicture& a, const op2::ArtPicture& b){ return a.slot < b.slot; });
+        for (const auto& p : pics) {
+            const op2::ArtImage& m = op2::g_art.image(p.image);
+            std::vector<uint32_t> px; op2::g_art.decode(p.image, px, true);
+            for (uint32_t y = 0; y < m.height; ++y) for (uint32_t x = 0; x < m.width; ++x) {
+                uint32_t c = px[y * m.width + x]; if (!(c >> 24)) continue;
+                int X = ox + p.x + (int)x, Y = oy + p.y + (int)y;
+                if (X >= cellX && X < cellX + CELL && Y >= cellY && Y < cellY + CELL && X < W && Y < H)
+                    cv[(size_t)Y * W + X] = c | 0xFF000000u;
+            }
+        }
+    }
+    writeBmp32(outPath, cv.data(), W, H);
+    std::cout << "[Sheet] anims " << start << ".." << (start + count - 1) << " ("
+              << COLS << " por linha) -> " << outPath << std::endl;
+    return 0;
+}
+
 int main(int argc, char* argv[]) {
     // Modos utilitários (sem o loop interativo).
     for (int i = 1; i < argc; ++i) {
@@ -526,6 +571,8 @@ int main(int argc, char* argv[]) {
             return runArtDump(atoi(argv[i + 1]), argv[i + 2]);
         if (std::strcmp(argv[i], "--animdump") == 0 && i + 3 < argc)
             return runAnimDump(atoi(argv[i + 1]), atoi(argv[i + 2]), argv[i + 3]);
+        if (std::strcmp(argv[i], "--contactsheet") == 0 && i + 3 < argc)
+            return runContactSheet(atoi(argv[i + 1]), atoi(argv[i + 2]), argv[i + 3]);
     }
 
     // --play <map>: entra direto no jogo com o mapa (via o backbone TApp).
