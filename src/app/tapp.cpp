@@ -7,6 +7,7 @@
 #include "shell_state.h"
 #include "game_state.h"
 #include "../gfx/renderer.h"
+#include "../gfx/artfile.h"
 #include "../core/config.h"
 #include "../res/res_manager.h"
 
@@ -28,6 +29,13 @@ bool TApp::init() {
 
     // Gateway de assets (g_ResManager).
     g_ResManager.init(".");
+
+    // Carrega os sprites op2_art (como TApp::Init -> sub_404360("op2_art")).
+    if (!g_art.load())
+        std::cerr << "[TApp] aviso: op2_art nao carregou (sprites indisponiveis)." << std::endl;
+    else
+        std::cout << "[TApp] op2_art: " << g_art.numImages() << " imagens, "
+                  << g_art.numAnimations() << " animacoes." << std::endl;
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER) != 0) {
         std::cerr << "SDL_Init falhou: " << SDL_GetError() << std::endl;
