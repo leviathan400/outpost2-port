@@ -38,6 +38,7 @@ add_executable(outpost2_modern
     src/game/command.cpp
     src/game/pathfinder.cpp
     src/game/movement.cpp
+    src/game/vehicle_anim.cpp
     src/game/terrain_renderer.cpp
     src/game/game_rng.cpp
     src/game/tethys_game.cpp

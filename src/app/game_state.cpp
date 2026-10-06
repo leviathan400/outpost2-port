@@ -16,6 +16,8 @@
 #include "../game/command.h"
 #include "../game/pathfinder.h"
 #include "../game/movement.h"
+#include "../game/vehicle_anim.h"
+#include "../gfx/artfile.h"
 
 namespace op2 {
 
@@ -74,10 +76,12 @@ bool GameState::load(const std::string& mapName) {
         LOCATION loc = g_gameMap.findFreeNear(LOCATION{cx + dx, cy + dy});
         TethysGame::CreateUnit(u, type, loc, owner);
     };
-    place(kFirstBuilding, 0, 0);   // prédio
-    place(1, 2, 0);                // veículos
-    place(1, -2, 1);
-    place(2, 1, -2);
+    place(kFirstBuilding, 0, 0);   // prédio (marcador por ora)
+    place(7, 2, 0);    // CON_TRUCK
+    place(3, -2, 1);   // BIG_TANK
+    place(13, 1, -2);  // SCOUT
+    place(2, -3, -2);  // MINER
+    place(6, 3, 2);    // LIGHT_TANK
 
     // Centraliza a câmera na base inicial (como CenterViewOn do jogo).
     m_camX = cx * 32 - Renderer::NATIVE_WIDTH / 2;
@@ -199,17 +203,61 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         }
     }
 
+    // Blit de um frame de animação do op2_art (g_art) na posição de referência da
+    // unidade na tela (pictures posicionadas por x,y; índice 0 transparente).
+    auto drawSprite = [&](int animIdx, int frameIdx, int refX, int refY) {
+        if (!g_art.ok() || animIdx < 0 || animIdx >= g_art.numAnimations()) return false;
+        const ArtAnimation& an = g_art.animation(animIdx);
+        if (an.frames.empty()) return false;
+        if (frameIdx < 0 || frameIdx >= (int)an.frames.size()) frameIdx %= (int)an.frames.size();
+        uint32_t* fb = renderer.getFramebuffer();
+        const int VW = Renderer::NATIVE_WIDTH, VH = Renderer::NATIVE_HEIGHT;
+        std::vector<ArtPicture> pics = an.frames[frameIdx].pics;
+        std::sort(pics.begin(), pics.end(),
+                  [](const ArtPicture& a, const ArtPicture& b){ return a.slot < b.slot; });
+        std::vector<uint32_t> px;
+        for (const auto& p : pics) {
+            const ArtImage& m = g_art.image(p.image);
+            g_art.decode(p.image, px, /*transparent*/ true);
+            for (uint32_t y = 0; y < m.height; ++y) {
+                int py = refY + p.y + (int)y;
+                if (py < 0 || py >= VH) continue;
+                for (uint32_t x = 0; x < m.width; ++x) {
+                    uint32_t c = px[y * m.width + x];
+                    if (!(c >> 24)) continue;
+                    int pxs = refX + p.x + (int)x;
+                    if (pxs < 0 || pxs >= VW) continue;
+                    fb[py * VW + pxs] = c | 0xFF000000u;
+                }
+            }
+        }
+        return true;
+    };
+
     for (size_t i = 1; i < g_units.size(); ++i) {
-        Unit un(static_cast<int>(i));
-        if (!un.IsLive()) continue;
-        LOCATION l = un.Location();
-        int sx = l.x * 32 - m_camX;
-        int sy = l.y * 32 - m_camY;
-        uint32_t col = kOwnerColor[un.OwnerID() % 7];
-        int sz = un.IsBuilding() ? 26 : 16;
-        int off = (32 - sz) / 2;
-        renderer.fillRect(sx + off, sy + off, sz, sz, col);
-        renderer.drawRect(sx + off, sy + off, sz, sz, 0xFF101010);
+        const UnitRecord& r = g_units[i];
+        if (r.id == -1 || (r.flags & UNIT_DEAD)) continue;
+        int refX = (r.pixelX) + 16 - m_camX;    // centro do tile (pixelX = tile*32)
+        int refY = (r.pixelY) + 16 - m_camY;
+
+        bool drew = false;
+        if ((r.flags & UNIT_VEHICLE) && hasVehicleAnim(r.type)) {
+            int anim = vehicleAnimIndex(r.type, r.rotation);   // resolver fiel
+            if (anim >= 0) {
+                int nf = g_art.ok() && anim < g_art.numAnimations()
+                         ? (int)g_art.animation(anim).frames.size() : 1;
+                int frame = nf > 0 ? (TethysGame::tick() + (int)i) % nf : 0;
+                drew = drawSprite(anim, frame, refX, refY);
+            }
+        }
+        if (!drew) {
+            // Fallback: marcador colorido (prédios/tipos sem sprite ainda).
+            int sx = (r.pixelX >> 5) * 32 - m_camX, sy = (r.pixelY >> 5) * 32 - m_camY;
+            uint32_t col = kOwnerColor[(r.owner & 0x0F) % 7];
+            int sz = (r.flags & UNIT_BUILDING) ? 26 : 16, off = (32 - sz) / 2;
+            renderer.fillRect(sx + off, sy + off, sz, sz, col);
+            renderer.drawRect(sx + off, sy + off, sz, sz, 0xFF101010);
+        }
     }
 
     // Overlay: relógio (Tick/Time) + uma amostra do RNG — prova visível de que o

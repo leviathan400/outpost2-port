@@ -245,6 +245,7 @@ static int runScreenshot(int argc, char* argv[], const std::string& outPath) {
 static int runPlayShot(const std::string& mapName, const std::string& outPath, bool passOverlay) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) { std::cerr << "SDL_Init: " << SDL_GetError() << std::endl; return 1; }
     op2::g_ResManager.init(".");
+    op2::g_art.load();   // sprites (como TApp::init)
     op2::Renderer renderer;
     if (!renderer.init("OP2 playshot", 1280, 960, false)) { SDL_Quit(); return 1; }
     op2::GameState gs;
@@ -542,6 +543,35 @@ static int runContactSheet(int start, int count, const std::string& outPath) {
     return 0;
 }
 
+// --animlist "i1,i2,..." <out.bmp>: grade com o frame 0 das animacoes da lista.
+static int runAnimList(const std::string& list, const std::string& outPath) {
+    if (!op2::g_ResManager.init(".")) return 2;
+    if (!op2::g_art.load()) return 3;
+    std::vector<int> idx; { std::string t; for (char c : list) { if (c==',') { idx.push_back(atoi(t.c_str())); t.clear(); } else t+=c; } if(!t.empty()) idx.push_back(atoi(t.c_str())); }
+    const int CELL = 90, COLS = 6;
+    int rows = ((int)idx.size() + COLS - 1) / COLS;
+    int W = COLS * CELL, H = rows * CELL;
+    std::vector<uint32_t> cv((size_t)W * H, 0xFF202020u);
+    for (size_t k = 0; k < idx.size(); ++k) {
+        int ai = idx[k];
+        if (ai < 0 || ai >= op2::g_art.numAnimations()) continue;
+        const op2::ArtAnimation& an = op2::g_art.animation(ai);
+        if (an.frames.empty()) continue;
+        const op2::ArtFrame& fr = an.frames[0];
+        int minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
+        for (auto&p:fr.pics){const auto&m=op2::g_art.image(p.image);minX=std::min(minX,(int)p.x);minY=std::min(minY,(int)p.y);maxX=std::max(maxX,(int)p.x+(int)m.width);maxY=std::max(maxY,(int)p.y+(int)m.height);}
+        if (fr.pics.empty()) continue;
+        int bw=maxX-minX,bh=maxY-minY,cx=((int)k%COLS)*CELL,cy=((int)k/COLS)*CELL;
+        int ox=cx+(CELL-bw)/2-minX,oy=cy+(CELL-bh)/2-minY;
+        std::vector<op2::ArtPicture> pics=fr.pics; std::sort(pics.begin(),pics.end(),[](const op2::ArtPicture&a,const op2::ArtPicture&b){return a.slot<b.slot;});
+        for (auto&p:pics){const auto&m=op2::g_art.image(p.image);std::vector<uint32_t> px;op2::g_art.decode(p.image,px,true);
+            for(uint32_t y=0;y<m.height;++y)for(uint32_t x=0;x<m.width;++x){uint32_t c=px[y*m.width+x];if(!(c>>24))continue;int X=ox+p.x+(int)x,Y=oy+p.y+(int)y;if(X>=cx&&X<cx+CELL&&Y>=cy&&Y<cy+CELL&&X<W&&Y<H)cv[(size_t)Y*W+X]=c|0xFF000000u;}}
+    }
+    writeBmp32(outPath, cv.data(), W, H);
+    std::cout << "[AnimList] " << idx.size() << " anims (" << COLS << "/linha) -> " << outPath << std::endl;
+    return 0;
+}
+
 int main(int argc, char* argv[]) {
     // Modos utilitários (sem o loop interativo).
     for (int i = 1; i < argc; ++i) {
@@ -573,6 +603,8 @@ int main(int argc, char* argv[]) {
             return runAnimDump(atoi(argv[i + 1]), atoi(argv[i + 2]), argv[i + 3]);
         if (std::strcmp(argv[i], "--contactsheet") == 0 && i + 3 < argc)
             return runContactSheet(atoi(argv[i + 1]), atoi(argv[i + 2]), argv[i + 3]);
+        if (std::strcmp(argv[i], "--animlist") == 0 && i + 2 < argc)
+            return runAnimList(argv[i + 1], argv[i + 2]);
     }
 
     // --play <map>: entra direto no jogo com o mapa (via o backbone TApp).
