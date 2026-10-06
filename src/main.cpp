@@ -503,7 +503,9 @@ static int runAnimDump(int ai, int fi, const std::string& outPath) {
         const op2::ArtImage& m = op2::g_art.image(p.image);
         std::cout << "   pic img=" << p.image << " type=0x" << std::hex << m.type
                   << std::dec << " pal=" << m.pal << " (type&1="
-                  << (m.type & 1) << ") " << m.width << "x" << m.height
+                  << (m.type & 1) << " shadow=" << (int)m.isShadow() << ") "
+                  << m.width << "x" << m.height
+                  << " stride=" << m.stride << " rowBytes=" << m.rowBytes()
                   << " slot=" << (int)p.slot << " @(" << p.x << "," << p.y << ")" << std::endl;
     }
     return 0;

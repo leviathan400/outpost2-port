@@ -35,7 +35,28 @@ bool ArtFile::load(const std::string& prtName, const std::string& bmpPath) {
     m_atlas.assign(bmp.begin() + pixOff, bmp.end());
 
     parsePrt();
+    loadColorPalette();
     return m_ok;
+}
+
+// sub_4A8D70: carrega o recurso "COLOR" (color.bmp, no MAPS.VOL) e monta a tabela
+// de remap. O arquivo é um BMP 1x1 de 8 bits — o que importa é só a PALETA de 256
+// cores, em grupos de 24 (uma rampa por colorNumber de jogador).
+void ArtFile::loadColorPalette() {
+    auto stream = g_ResManager.openStream("color.bmp");
+    if (!stream || stream->size() < 54 + 1024) {
+        std::cerr << "[Art] color.bmp nao encontrado — sem remap de cor" << std::endl;
+        return;
+    }
+    const uint8_t* d = stream->data();
+    const size_t hdr = 14 + rdU32(d, 14);        // 14 (file hdr) + BITMAPINFOHEADER
+    if (hdr + 1024 > stream->size()) return;
+    for (int i = 0; i < 256; ++i) {               // quads BGRA
+        m_colorPal[i][0] = d[hdr + i * 4 + 2];    // r
+        m_colorPal[i][1] = d[hdr + i * 4 + 1];    // g
+        m_colorPal[i][2] = d[hdr + i * 4 + 0];    // b
+    }
+    m_hasColorPal = true;
 }
 
 void ArtFile::parsePrt() {
@@ -110,16 +131,21 @@ void ArtFile::parseAnimations(size_t startOff) {
             if (b1 & 0x80) o += 2;   // u16 extra
             if (b2 & 0x80) o += 2;   // u16 extra
             ArtFrame frame;
-            frame.pics.reserve(npic);
+            // O byte +3 de cada registro é o ÍNDICE de destino, não um campo
+            // qualquer: o loader original grava `pictures[slot]` (loc_404B0A,
+            // `eax = slot; [edx + slot*6 + 4] = imageIndex`). A ordem de leitura
+            // != ordem de desenho, e o blit percorre o array em ordem de slot —
+            // é o que põe a sombra embaixo e o overlay de cor em cima.
+            frame.pics.assign(npic, ArtPicture{});
             for (int pi = 0; pi < npic; ++pi) {
-                if (o + 6 > n) return;
+                if (o + 8 > n) return;
                 ArtPicture pc;
                 pc.image = rdU16(d, o);
                 pc.flag  = d[o + 2];
                 pc.slot  = d[o + 3];
                 pc.x = static_cast<int16_t>(rdU16(d, o + 4));
                 pc.y = static_cast<int16_t>(rdU16(d, o + 6));
-                frame.pics.push_back(pc);
+                if (pc.slot < npic) frame.pics[pc.slot] = pc;
                 o += 8;
             }
             anim.frames.push_back(std::move(frame));
@@ -138,18 +164,52 @@ uint32_t ArtFile::palColor(int p, int c) const {
                        |  static_cast<uint32_t>(m_pal[p][c][2]);
 }
 
-void ArtFile::decode(int i, std::vector<uint32_t>& out, bool transparent, int palOverride) const {
+void ArtFile::decode(int i, std::vector<uint32_t>& out, bool transparent, int palOverride,
+                     int playerColor) const {
     out.clear();
     if (i < 0 || i >= static_cast<int>(m_images.size())) return;
     const ArtImage& m = m_images[i];
-    int p = (palOverride >= 0) ? palOverride : m.pal;
     out.assign(static_cast<size_t>(m.width) * m.height, 0u);
+
+    // Sombra: 1 bit por pixel. O blit do original (modo 3) lê o bit
+    // `pix[y*rowBytes + (x>>3)] & (x&7)` e escurece o destino; aqui marcamos o
+    // pixel como preto opaco e quem desenha aplica o escurecimento.
+    if (m.isShadow()) {
+        const uint32_t rb = m.rowBytes();
+        for (uint32_t y = 0; y < m.height; ++y) {
+            size_t src = m.offset + static_cast<size_t>(y) * rb;
+            if (src + rb > m_atlas.size()) break;
+            for (uint32_t x = 0; x < m.width; ++x) {
+                uint8_t b = m_atlas[src + (x >> 3)];
+                if (b & (0x80u >> (x & 7)))
+                    out[static_cast<size_t>(y) * m.width + x] = 0xFF000000u;
+            }
+        }
+        return;
+    }
+
+    int p = (palOverride >= 0) ? palOverride : m.pal;
+
+    // Remap de cor do dono: só vale para imagens marcadas com type&1 (sub_403E00
+    // passa a cor do jogador apenas nesse caso; senão passa 0xFF).
+    const bool remap = m_hasColorPal && playerColor >= 0 && (m.type & 1) != 0;
+    uint32_t ramp[kPlayerRamp];
+    if (remap) {
+        const int base = playerColor * kPlayerRamp;
+        for (int k = 0; k < kPlayerRamp; ++k) {
+            int c = (base + k) & 0xFF;
+            ramp[k] = 0xFF000000u | (static_cast<uint32_t>(m_colorPal[c][0]) << 16)
+                                  | (static_cast<uint32_t>(m_colorPal[c][1]) << 8)
+                                  |  static_cast<uint32_t>(m_colorPal[c][2]);
+        }
+    }
+
     for (uint32_t y = 0; y < m.height; ++y) {
         size_t src = m.offset + static_cast<size_t>(y) * m.stride;
         if (src + m.width > m_atlas.size()) break;
         for (uint32_t x = 0; x < m.width; ++x) {
             uint8_t idx = m_atlas[src + x];
-            uint32_t rgba = palColor(p, idx);
+            uint32_t rgba = (remap && idx < kPlayerRamp) ? ramp[idx] : palColor(p, idx);
             if (transparent && idx == 0) rgba = 0u;   // índice 0 = transparente
             out[static_cast<size_t>(y) * m.width + x] = rgba;
         }

@@ -58,7 +58,7 @@ static void stepUnit(int id) {
         int n = pfSearchRoute(sc, dirs, 600, &reached);
         u.routeDirs.assign(dirs, dirs + n);
         u.routeIdx = 0;
-        if (n == 0) return;                               // sem rota: espera próximo tick
+        if (n == 0) { u.field22 = 0; return; }            // sem rota: parado, não anima
     }
 
     int dir = u.routeDirs[u.routeIdx] & 7;
@@ -67,7 +67,7 @@ static void stepUnit(int id) {
     // Checa dinamicamente (outra unidade pode ter ocupado): recomputa se bloqueado.
     pfSetContext(id);
     pfSetTarget(destX, destY);
-    if (!pfCanEnter(nx, ny)) { u.routeDirs.clear(); u.routeIdx = 0; return; }
+    if (!pfCanEnter(nx, ny)) { u.routeDirs.clear(); u.routeIdx = 0; u.field22 = 0; return; }
 
     // Inicia o deslize: reserva a próxima célula, libera a atual.
     g_gameMap.clearUnitOccupancy(curX, curY);
@@ -79,6 +79,10 @@ static void stepUnit(int id) {
     u.sliding = true;
     u.curDir = static_cast<uint8_t>(dir);
     u.rotation = static_cast<uint8_t>((dir << 5) & 0xFF);
+    // Estado "em movimento" — é o que faz o sprite animar. A máquina de ações do
+    // original (sub_43ACA0) põe [+0x22]=1 e [+0x20]=0 ao executar um passo de
+    // movimento (loc_43AD6A / loc_43ADAD) e zera os dois ao parar (loc_43AD5D).
+    u.field22 = 1;
 }
 
 void tickMovement() {

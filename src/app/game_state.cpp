@@ -222,7 +222,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     // na tela. As pictures são posicionadas por (x,y) menos o HOTSPOT da animação
     // (header[5],header[6] = centro do bbox header[1..4]) — como o original faz
     // (`sub eax, dword_50B368[...]` em sub_403E00). Índice 0 = transparente.
-    auto drawSprite = [&](int animIdx, int frameIdx, int cx, int cy) {
+    auto drawSprite = [&](int animIdx, int frameIdx, int cx, int cy, int playerColor) {
         if (!g_art.ok() || animIdx < 0 || animIdx >= g_art.numAnimations()) return false;
         const ArtAnimation& an = g_art.animation(animIdx);
         if (an.frames.empty()) return false;
@@ -231,14 +231,14 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         const int refY = cy - static_cast<int>(an.header[6]);   // hotspot Y
         uint32_t* fb = renderer.getFramebuffer();
         const int VW = Renderer::NATIVE_WIDTH, VH = Renderer::NATIVE_HEIGHT;
-        std::vector<ArtPicture> pics = an.frames[frameIdx].pics;
-        std::sort(pics.begin(), pics.end(),
-                  [](const ArtPicture& a, const ArtPicture& b){ return a.slot < b.slot; });
+        // As pictures já vêm na ordem de desenho: o loader grava `pictures[slot]`
+        // (loc_404B0A), então o índice do vetor É a camada (sombra, corpo, ...).
+        const std::vector<ArtPicture>& pics = an.frames[frameIdx].pics;
         std::vector<uint32_t> px;
         for (const auto& p : pics) {
             const ArtImage& m = g_art.image(p.image);
-            bool shadow = (m.type & 4) != 0;    // imagem de sombra (type&4, ex. 0x5)
-            g_art.decode(p.image, px, /*transparent*/ true);
+            bool shadow = m.isShadow();         // type&4: máscara de 1 bit por pixel
+            g_art.decode(p.image, px, /*transparent*/ true, /*palOverride*/ -1, playerColor);
             for (uint32_t y = 0; y < m.height; ++y) {
                 int py = refY + p.y + (int)y;
                 if (py < 0 || py >= VH) continue;
@@ -287,7 +287,10 @@ void GameState::onIdle(Renderer& renderer, float dt) {
                     int t = (TethysGame::tick() >> shift) + (int)i;   // [unit+0x10] = id
                     frame = ((t % nf) + nf) % nf;
                 }
-                drew = drawSprite(anim, frame, ucx, ucy);
+                // Cor do dono: campo +0x30 do registro do jogador (colorNumber),
+                // que indexa as rampas de 24 cores de color.bmp (sub_4A8D70).
+                int pc = (ow >= 0 && ow < kMaxPlayers) ? g_playerData[ow].colorNumber : 0;
+                drew = drawSprite(anim, frame, ucx, ucy, pc);
             }
         }
         if (!drew) {
