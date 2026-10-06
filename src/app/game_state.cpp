@@ -79,12 +79,12 @@ bool GameState::load(const std::string& mapName) {
         LOCATION loc = g_gameMap.findFreeNear(LOCATION{cx + dx, cy + dy});
         TethysGame::CreateUnit(u, type, loc, owner);
     };
-    place(kFirstBuilding, 0, 0);   // prédio (marcador por ora)
-    place(7, 2, 0);    // CON_TRUCK (Eden/azul)
-    place(3, -2, 1);   // BIG_TANK
-    place(13, 1, -2);  // SCOUT
-    place(2, -3, -2);  // MINER
-    place(6, 3, 2);    // LIGHT_TANK
+    place(mapCommandCenter, 0, 0);
+    place(mapConVec, 2, 0);
+    place(mapTiger, -2, 1);
+    place(mapScout, 1, -2);
+    place(mapRoboMiner, -3, -2);
+    place(mapLynx, 3, 2);
 
     // Inimigo Plymouth (player 1) p/ ver a facção (sprites verdes) + distinção.
     if (TethysGame::noPlayers() >= 2) {
@@ -94,9 +94,9 @@ bool GameState::load(const std::string& mapName) {
             LOCATION loc = g_gameMap.findFreeNear(LOCATION{(cx + dx) & (g_gameMap.width()-1), cy + dy});
             TethysGame::CreateUnit(u, type, loc, 1);
         };
-        placeE(3, 8, 0);   // BIG_TANK Plymouth
-        placeE(6, 9, 2);   // LIGHT_TANK Plymouth
-        placeE(13, 8, -2); // SCOUT Plymouth
+        placeE(mapTiger, 8, 0);
+        placeE(mapLynx, 9, 2);
+        placeE(mapScout, 8, -2);
     }
 
     // Centraliza a câmera na base inicial (como CenterViewOn do jogo).
@@ -476,22 +476,22 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
 //   GEO_METRO    Owner=E   -> GeoCon ("available only to Eden")
 //   SCORPION     Track=L,P -> Scorpion (legged, Plymouth)
 static const char* vehName(int type) {
-    switch (type) {
-        case 1:  return "GeoCon";            // GEO_METRO
-        case 2:  return "Robo-Miner";        // MINER
-        case 3:  return "Tiger";             // BIG_TANK    (chassi pesado)
-        case 4:  return "Cargo Truck";       // BIG_TRUCK
-        case 5:  return "Panther";           // MED_TANK    (chassi medio)
-        case 6:  return "Lynx";              // LIGHT_TANK  (chassi leve)
-        case 7:  return "ConVec";            // CON_TRUCK
-        case 8:  return "Earthworker";       // WALL_TRUCK
-        case 9:  return "Repair Vehicle";    // REPAIR_TRUCK
-        case 10: return "Robo-Dozer";        // BULL_DOZER
-        case 11: return "Evacuation Transport"; // MOBILE_HOME
-        case 12: return "Robo-Surveyor";     // SURVEYOR
-        case 13: return "Scout";             // SCOUT
-        case 14: case 15: return "Scorpion"; // SCORPION / _PACK
-        case 16: case 17: return "Spider";   // SPIDER / _PACK
+    switch (type) {                          // map_id REAL (off_4E1340 = SDK)
+        case mapCargoTruck:          return "Cargo Truck";          // BIG_TRUCK
+        case mapConVec:              return "ConVec";               // CON_TRUCK
+        case mapSpider:              return "Spider";
+        case mapScorpion:            return "Scorpion";
+        case mapLynx:                return "Lynx";                 // LIGHT_TANK (chassi leve)
+        case mapPanther:             return "Panther";              // MED_TANK   (chassi medio)
+        case mapTiger:               return "Tiger";                // BIG_TANK   (chassi pesado)
+        case mapRoboSurveyor:        return "Robo-Surveyor";        // SURVEYOR
+        case mapRoboMiner:           return "Robo-Miner";           // MINER
+        case mapGeoCon:              return "GeoCon";               // GEO_METRO
+        case mapScout:               return "Scout";
+        case mapRoboDozer:           return "Robo-Dozer";           // BULL_DOZER
+        case mapEvacuationTransport: return "Evacuation Transport"; // MOBILE_HOME
+        case mapRepairVehicle:       return "Repair Vehicle";       // REPAIR_TRUCK
+        case mapEarthworker:         return "Earthworker";          // WALL_TRUCK
         default: return "Unidade";
     }
 }
@@ -501,7 +501,7 @@ static const char* vehName(int type) {
 // "Weapon enabled = Y" no vehicles.txt. Enquanto as torres nao estao portadas,
 // mostramos so o chassi.
 static bool vehIsCombatChassis(int type) {
-    return type == 3 || type == 5 || type == 6;
+    return type == mapLynx || type == mapPanther || type == mapTiger;
 }
 
 // Numero de serie mostrado pelo jogo: "#<jogador>-<NN>", contado por DONO e por

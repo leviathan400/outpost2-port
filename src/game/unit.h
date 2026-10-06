@@ -7,12 +7,41 @@
 
 namespace op2 {
 
-// map_id — enum de tipos de unidade do OP2. A fronteira prédio/veículo é
-// confirmada no CreateUnit (@195141): tipos 0x15..0x3A (21..58) são PRÉDIOS;
-// os demais (>=1) são veículos. O enum completo (nomes) virá com as tabelas de
-// dados (building.txt/vehicles.txt, [[op2-sheets-format]]); por ora usamos o id.
+// map_id — tipo de unidade do OP2. É o ÍNDICE da tabela de descritores
+// `off_4E1340[map_id]` do engine (CreateUnit @195141, sub_43ACA0 etc.) e bate 1:1
+// com o enum do SDK. NÃO é a ordem das linhas das planilhas .txt. Resolvido pela
+// cadeia real descritor→fábrica→ctor→getter (tools/extract_anim_tables.py --mapids).
+// Fronteira confirmada no CreateUnit: 0x15..0x3A são PRÉDIOS.
 using map_id = int;
 constexpr int kMapIdNone = 0;
+enum MapId : int {
+    mapCargoTruck = 0x01,          // BIG_TRUCK
+    mapConVec = 0x02,              // CON_TRUCK
+    mapSpider = 0x03,
+    mapScorpion = 0x04,
+    mapLynx = 0x05,                // LIGHT_TANK
+    mapPanther = 0x06,             // MED_TANK
+    mapTiger = 0x07,               // BIG_TANK
+    mapRoboSurveyor = 0x08,        // SURVEYOR
+    mapRoboMiner = 0x09,           // MINER
+    mapGeoCon = 0x0A,              // GEO_METRO
+    mapScout = 0x0B,
+    mapRoboDozer = 0x0C,           // BULL_DOZER
+    mapEvacuationTransport = 0x0D, // MOBILE_HOME
+    mapRepairVehicle = 0x0E,       // REPAIR_TRUCK
+    mapEarthworker = 0x0F,         // WALL_TRUCK
+    mapSmallCapacityAirTransport = 0x10, // SCAT
+    mapCommonOreMine = 0x15,       // MINE
+    mapCommandCenter = 0x1C,       // COMMAND
+    mapStructureFactory = 0x2F,    // FACT_STRUCTURE
+    mapVehicleFactory = 0x30,      // FACT_VEHICLE
+    mapTokamak = 0x3A,             // TOKAMAK
+    mapEMPBlast = 0x4A,            // EMP_BIG
+    mapSmallBuildingExplosion = 0x55,  // BLD_EXPL_SML
+    mapMediumBuildingExplosion = 0x56, // BLD_EXPL_MED
+    mapLargeBuildingExplosion = 0x57,  // BLD_EXPL_BIG
+    mapAmbientAnim = 0x72,         // AMBIENT_ANIM (unidade-efeito: toca uma animação)
+};
 constexpr int kFirstBuilding = 0x15;  // 21
 constexpr int kLastBuilding  = 0x3A;  // 58
 inline bool mapIdIsBuilding(map_id t) { return t >= kFirstBuilding && t <= kLastBuilding; }

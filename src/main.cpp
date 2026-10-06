@@ -27,7 +27,7 @@
 static int runUnitTest() {
     op2::resetUnits();
     op2::Unit b, v;
-    op2::TethysGame::CreateUnit(b, op2::kFirstBuilding, op2::LOCATION{10, 10}, 0);
+    op2::TethysGame::CreateUnit(b, op2::mapCommandCenter, op2::LOCATION{10, 10}, 0);
     op2::TethysGame::CreateUnit(v, 1, op2::LOCATION{12, 10}, 1);
     auto show = [](const char* nm, op2::Unit& u) {
         op2::LOCATION l = u.Location();
@@ -377,8 +377,8 @@ static int runCollTest(const std::string& mapName) {
         }
     if (bx >= 0) {
         op2::Unit bld;
-        op2::TethysGame::CreateUnit(bld, op2::kFirstBuilding, op2::LOCATION{bx, by}, 0);  // COMMAND 3x2
-        int fw, fh; op2::buildingFootprint(op2::kFirstBuilding, fw, fh);
+        op2::TethysGame::CreateUnit(bld, op2::mapCommandCenter, op2::LOCATION{bx, by}, 0);  // 3x2
+        int fw, fh; op2::buildingFootprint(op2::mapCommandCenter, fw, fh);
         int tlx = bx - (fw >> 1), tly = by - (fh >> 1), occOK = 0, occTot = fw * fh;
         for (int dy = 0; dy < fh; ++dy) for (int dx = 0; dx < fw; ++dx)
             if (op2::g_gameMap.cellOccupant(tlx + dx, tly + dy) == bld.id()) ++occOK;

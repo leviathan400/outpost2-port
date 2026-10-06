@@ -8,47 +8,48 @@ namespace op2 {
 // Pool global. Índice 0 reservado como "nenhuma unidade" (IsLive trata id 0).
 std::vector<UnitRecord> g_units;
 
-// Footprint por map_id (building.txt X-size/Y-size), id começando em 0x15.
+// Footprint por map_id REAL (building.txt X-size/Y-size), id começando em 0x15.
+// Ordem = off_4E1340 (enum do SDK), NÃO a ordem das linhas da planilha.
 // Mesma fonte que popula off_4E1340[type]->[+0x248/+0x24A] no original.
 static const struct { int w, h; } kBuildingFootprint[] = {
-    { 3, 2 },  // 0x15 COMMAND
-    { 2, 2 },  // 0x16 TOKAMAK
-    { 2, 2 },  // 0x17 ASE
-    { 2, 1 },  // 0x18 GEOTHERMAL
-    { 3, 2 },  // 0x19 SOLAR
-    { 4, 3 },  // 0x1A FACT_STRUCTURE
-    { 1, 1 },  // 0x1B TOWER_GUARD
-    { 4, 3 },  // 0x1C SMELTER
-    { 1, 2 },  // 0x1D STORAGE_ORE
-    { 3, 3 },  // 0x1E LAB_ADV
-    { 3, 2 },  // 0x1F LAB_STANDARD
-    { 2, 2 },  // 0x20 LAB
-    { 4, 3 },  // 0x21 SMELTER_ADV
-    { 1, 2 },  // 0x22 STORAGE_RARE
-    { 4, 3 },  // 0x23 FACT_VEHICLE
-    { 2, 2 },  // 0x24 UNIVERSITY
-    { 2, 2 },  // 0x25 NURSERY
-    { 3, 2 },  // 0x26 AGRIDOME
-    { 2, 2 },  // 0x27 ROBOT_COMMAND
-    { 5, 4 },  // 0x28 SPACEPORT
-    { 2, 2 },  // 0x29 MED_CENTER
-    { 2, 2 },  // 0x2A FACT_ANDROID
-    { 3, 2 },  // 0x2B DIRT
-    { 3, 2 },  // 0x2C GARAGE
-    { 3, 2 },  // 0x2D GORF
-    { 3, 3 },  // 0x2E RESIDENCE_E
-    { 2, 2 },  // 0x2F RESIDENCE
-    { 3, 2 },  // 0x30 RESIDENCE_P
-    { 2, 2 },  // 0x31 OBSERVATORY
-    { 2, 2 },  // 0x32 METEOR_DEF
-    { 2, 2 },  // 0x33 RECREATION
-    { 3, 3 },  // 0x34 FACT_LUXURY
-    { 2, 2 },  // 0x35 FORUM
-    { 2, 2 },  // 0x36 TRADE
-    { 1, 1 },  // 0x37 TOWER_LIGHT
-    { 2, 1 },  // 0x38 MAGMA_WELL
-    { 2, 1 },  // 0x39 MINE
-    { 2, 1 },  // 0x3A MINE_ADV
+    { 2, 1 },  // 0x15 MINE
+    { 2, 1 },  // 0x16 MINE_ADV
+    { 1, 1 },  // 0x17 TOWER_GUARD
+    { 1, 1 },  // 0x18 TOWER_LIGHT
+    { 1, 2 },  // 0x19 STORAGE_ORE
+    { 1, 2 },  // 0x1A STORAGE_RARE
+    { 2, 2 },  // 0x1B FORUM
+    { 3, 2 },  // 0x1C COMMAND
+    { 2, 2 },  // 0x1D ASE
+    { 2, 2 },  // 0x1E RESIDENCE
+    { 2, 2 },  // 0x1F ROBOT_COMMAND
+    { 2, 2 },  // 0x20 TRADE
+    { 2, 2 },  // 0x21 LAB
+    { 2, 2 },  // 0x22 MED_CENTER
+    { 2, 2 },  // 0x23 NURSERY
+    { 3, 2 },  // 0x24 SOLAR
+    { 2, 2 },  // 0x25 RECREATION
+    { 2, 2 },  // 0x26 UNIVERSITY
+    { 3, 2 },  // 0x27 AGRIDOME
+    { 3, 2 },  // 0x28 DIRT
+    { 3, 2 },  // 0x29 GARAGE
+    { 2, 1 },  // 0x2A MAGMA_WELL
+    { 2, 2 },  // 0x2B METEOR_DEF
+    { 2, 1 },  // 0x2C GEOTHERMAL
+    { 2, 2 },  // 0x2D FACT_ANDROID
+    { 3, 3 },  // 0x2E FACT_LUXURY
+    { 4, 3 },  // 0x2F FACT_STRUCTURE
+    { 4, 3 },  // 0x30 FACT_VEHICLE
+    { 3, 2 },  // 0x31 LAB_STANDARD
+    { 3, 3 },  // 0x32 LAB_ADV
+    { 2, 2 },  // 0x33 OBSERVATORY
+    { 3, 2 },  // 0x34 RESIDENCE_P
+    { 3, 3 },  // 0x35 RESIDENCE_E
+    { 4, 3 },  // 0x36 SMELTER
+    { 5, 4 },  // 0x37 SPACEPORT
+    { 4, 3 },  // 0x38 SMELTER_ADV
+    { 3, 2 },  // 0x39 GORF
+    { 2, 2 },  // 0x3A TOKAMAK
 };
 
 void buildingFootprint(map_id type, int& w, int& h) {
