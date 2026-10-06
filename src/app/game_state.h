@@ -1,10 +1,12 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "ui_state.h"
 #include "../game/game_map.h"
 #include "../game/terrain_renderer.h"
+#include "location.h"
 
 namespace op2 {
 
@@ -25,6 +27,9 @@ public:
 
     void setShowPassability(bool v) { m_showPassability = v; }
 
+    // Largura do painel de comando (à direita); viewport = resto da tela.
+    static constexpr int kPanelW = 144;
+
 private:
     std::string m_mapName;
     TerrainRenderer m_terrain;   // desenha sobre o g_gameMap (singleton do engine)
@@ -33,7 +38,18 @@ private:
     float m_tickAccum = 0.0f;     // acumulador p/ avançar o tick de simulação
     int m_lastRand = 0;           // última amostra do RNG (1 por tick), p/ o HUD
     bool m_showPassability = false; // overlay de debug (tecla G)
+
+    // --- Seleção / interação (a "MAINE" / command pane) ---
+    std::vector<int> m_selected;   // ids de unidades selecionadas
+    bool m_dragging = false;       // arrastando caixa de seleção?
+    int  m_dragSX = 0, m_dragSY = 0;   // início da caixa (coords nativas)
+    int  m_mouseNX = 0, m_mouseNY = 0; // mouse atual (coords nativas)
+
+    int viewportW() const;         // largura da área de jogo (tela - painel)
     void clampCamera();
+    void selectAt(int nx, int ny, bool additive);
+    void selectBox(int x0, int y0, int x1, int y1);
+    void renderPanel(Renderer& renderer);
 };
 
 } // namespace op2
