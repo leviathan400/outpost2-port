@@ -16,4 +16,7 @@ enum StructAnimState {
 // tableA = flags & 0x1000 (mesma convencao dos veiculos: A = Eden).
 int structureAnimIndex(int type, int state, bool tableA);
 
+// Code_Name do descritor (ex. "COMMAND") p/ map_id 0x15..0x3A, ou nullptr.
+const char* structureCodeName(int type);
+
 } // namespace op2

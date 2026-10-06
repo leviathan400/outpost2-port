@@ -46,11 +46,29 @@ constexpr int kFirstBuilding = 0x15;  // 21
 constexpr int kLastBuilding  = 0x3A;  // 58
 inline bool mapIdIsBuilding(map_id t) { return t >= kFirstBuilding && t <= kLastBuilding; }
 
+inline bool mapIdIsVehicle(map_id t) { return t >= mapCargoTruck && t <= mapSmallCapacityAirTransport; }
+
 // Flags do registro de unidade (+0x44 no original).
 enum UnitFlags : uint32_t {
     UNIT_VEHICLE  = 1u << 1,   // bit1
     UNIT_BUILDING = 1u << 2,   // bit2
+    UNIT_EFFECT_COLOR = 0x4000u,   // efeito usa a cor [+0x60] (sub_405160)
     UNIT_DEAD     = 1u << 17,  // bit17 (morta/armazenada; IsLive testa isto)
+    UNIT_DISMANTLED = 0x400000u,   // desmontado (case 0x22): sem explosão (sub_4831A0)
+    UNIT_EFFECT_HIDDEN = 0x10000000u, // efeito não desenhado (sub_405000 arg_C)
+};
+
+// Ações ([+0x21]) usadas pelas estruturas — switch de sub_43ACA0.
+enum UnitAction : uint8_t {
+    ACT_BUILD     = 0x21,   // construção (case 33)
+    ACT_DISMANTLE = 0x22,   // desmontagem (case 34)
+    ACT_DIE       = 0x2F,   // morte (case 47) — Kill/sub_43A890
+};
+// Sub-estados ([+0x22]) — switch de sub_43DE50.
+enum UnitSubState : uint8_t {
+    SUB_IDLE   = 0,
+    SUB_WAIT   = 6,     // espera [+0x3C] ticks (cases 6/9)
+    SUB_REMOVE = 0x0B,  // sub_43DE50 retorna 1 → o laço remove a unidade
 };
 
 // Bloco de ordem — porta o bloco alocado em unit+0x38 por sub_4230F0 (@asm 57211;
@@ -88,6 +106,14 @@ struct UnitRecord {
                                    // índice na tabela de custo; vem do descritor do tipo)
     uint8_t  curDir = 0;           // direção atual (0..7; no original rotation>>5, +0x1C)
     uint16_t field4E = 0x7FFF;     // +0x4E (usado por sub_44BD60; 0x7FFF = padrão)
+    int16_t  damage = 0;           // +0x1E dano acumulado (HP atual = máx - dano)
+    uint8_t  field23 = 0;          // +0x23 sub-estado anterior
+    uint32_t state34 = 0;          // +0x34 PRÉDIO: (estado<<16)|contador (sub_408930)
+    int      builderId = 0;        // +0x48 ConVec que está construindo
+    int      buildTime = 0;        // +0x5C duração total da construção (ticks)
+    uint32_t effectAnim = 0;       // +0x54 EFEITO: (divisor<<24)|anim (sub_405000)
+    int      effectStart = 0;      // +0x58 EFEITO: tick inicial (clock + atraso)
+    int      effectColor = -1;     // +0x60 EFEITO: cor (se UNIT_EFFECT_COLOR)
     OrderBlock order;              // +0x38 (ponteiro no original; aqui embutido)
     bool hasOrder = false;         // order block alocado? (unit+0x38 != null)
 

@@ -94,7 +94,25 @@ public:
     bool cellHardBlocked(int x, int y) const { return (rawCell(x, y) & CELL_HARDBLOCK) != 0; }
     bool cellHasStruct(int x, int y) const { return (rawCell(x, y) & CELL_WALLBITS) != 0; }
 
+    // ---- Tipos de terreno (seção "TILE SET" do .map, sub_48B410) ------------
+    // Registro de 0x108 bytes; campos usados: +0 início e +2 fim da faixa de
+    // tiles, +4 tile "terraplanado", +6 base do entulho (4 comuns + 4 raros).
+    struct TerrainType {
+        uint8_t raw[0x108] = {};
+        int word(int off) const;
+    };
+    static constexpr int kMaxTerrainTypes = 12;   // objeto 0x40: 12 ponteiros em +0x10
+    const std::vector<TerrainType>& terrainTypes() const { return m_terrainTypes; }
+    int bulldozedTile(int tile) const;                  // sub_48B6A0
+    int commonRubbleTile(int tile, int rnd4) const;     // sub_48B7A0 (rnd4 = GetRand(4))
+    int rareRubbleTile(int tile, int rnd4) const;       // sub_48B800
+    // cellType 0x15 = terraplanado, 0x16 = entulho (escritos por sub_4831A0).
+    static constexpr int CELLTYPE_DOZED  = 0x15;
+    static constexpr int CELLTYPE_RUBBLE = 0x16;
+    void setTileAndCellType(int x, int y, int tile, int cellType);
+
 private:
+    std::vector<TerrainType> m_terrainTypes;
     bool m_ok = false;
     int m_width = 0;
     int m_height = 0;

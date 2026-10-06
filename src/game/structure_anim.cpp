@@ -94,4 +94,52 @@ int structureAnimIndex(int type, int state, bool tableA) {
     return kStructAnim[type - 0x15][tableA ? 0 : 1][state];
 }
 
+// Code_Name (GetName = vt[1] do descritor) por map_id 0x15..0x3A. E por este
+// nome que o parser do BUILDING.TXT (sub_445070) acha o descritor da linha.
+static const char* const kStructCodeName[38] = {
+    "MINE",  // 0x15
+    "MINE_ADV",  // 0x16
+    "TOWER_GUARD",  // 0x17
+    "TOWER_LIGHT",  // 0x18
+    "STORAGE_ORE",  // 0x19
+    "STORAGE_RARE",  // 0x1A
+    "FORUM",  // 0x1B
+    "COMMAND",  // 0x1C
+    "ASE",  // 0x1D
+    "RESIDENCE",  // 0x1E
+    "ROBOT_COMMAND",  // 0x1F
+    "TRADE",  // 0x20
+    "LAB",  // 0x21
+    "MED_CENTER",  // 0x22
+    "NURSERY",  // 0x23
+    "SOLAR",  // 0x24
+    "RECREATION",  // 0x25
+    "UNIVERSITY",  // 0x26
+    "AGRIDOME",  // 0x27
+    "DIRT",  // 0x28
+    "GARAGE",  // 0x29
+    "MAGMA_WELL",  // 0x2A
+    "METEOR_DEF",  // 0x2B
+    "GEOTHERMAL",  // 0x2C
+    "FACT_ANDROID",  // 0x2D
+    "FACT_LUXURY",  // 0x2E
+    "FACT_STRUCTURE",  // 0x2F
+    "FACT_VEHICLE",  // 0x30
+    "LAB_STANDARD",  // 0x31
+    "LAB_ADV",  // 0x32
+    "OBSERVATORY",  // 0x33
+    "RESIDENCE_P",  // 0x34
+    "RESIDENCE_E",  // 0x35
+    "SMELTER",  // 0x36
+    "SPACEPORT",  // 0x37
+    "SMELTER_ADV",  // 0x38
+    "GORF",  // 0x39
+    "TOKAMAK",  // 0x3A
+};
+
+const char* structureCodeName(int type) {
+    if (type < 0x15 || type > 0x3A) return nullptr;
+    return kStructCodeName[type - 0x15];
+}
+
 } // namespace op2

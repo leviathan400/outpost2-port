@@ -18,4 +18,7 @@ int vehicleAnimIndex(int type, int rotation, bool isEden);
 // Nº de direções válido? (tem tabela)
 bool hasVehicleAnim(int type);
 
+// Code_Name do descritor (ex. "CON_TRUCK") p/ map_id 0x01..0x10, ou nullptr.
+const char* vehicleCodeName(int type);
+
 } // namespace op2

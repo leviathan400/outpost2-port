@@ -57,21 +57,92 @@ bool GameMap::load(const uint8_t* d, size_t size) {
     m_clip.y2 = i32(o + 12);
     o += 16;
 
-    // Tabela de tilesets: { u32 nameLen; char name[]; u32 numTiles } enquanto
-    // nameLen for plausível.
-    while (o + 4 <= size) {
-        uint32_t nameLen = u32(o);
-        if (nameLen < 1 || nameLen > 16) break;
-        if (o + 4 + nameLen + 4 > size) break;
+    // Tabela de tilesets (sub_435CC0 @90244): são EXATAMENTE `numTilesets` slots
+    // (header @16, ex. 512). Cada slot = string (sub_49DAF0: u32 len + chars); se
+    // len != 0, segue u32 numTiles. Slots vazios são só o u32 0.
+    for (uint32_t slot = 0; slot < m_numTileMappings; ++slot) {
+        if (o + 4 > size) return false;
+        uint32_t nameLen = u32(o); o += 4;
+        if (nameLen == 0) continue;
+        if (o + nameLen + 4 > size) return false;
         Tileset ts;
-        ts.name.assign(reinterpret_cast<const char*>(d + o + 4), nameLen);
-        ts.numTiles = static_cast<int>(u32(o + 4 + nameLen));
+        ts.name.assign(reinterpret_cast<const char*>(d + o), nameLen);
+        ts.numTiles = static_cast<int>(u32(o + nameLen));
         m_tilesets.push_back(std::move(ts));
-        o += 8 + nameLen;
+        o += nameLen + 4;
+    }
+
+    // Seção "TILE SET" (sub_48B410 @227950): tag de 10 bytes "TILE SET\x1A\0",
+    // u32 numMappings + registros de 8 bytes, u32 numTerrainTypes + registros de
+    // 0x108 bytes. O objeto do engine (0x40 bytes, sub_48B270) guarda até 12
+    // ponteiros de tipo de terreno em +0x10.
+    m_terrainTypes.clear();
+    static const char kTag[10] = {'T','I','L','E',' ','S','E','T','\x1A','\0'};
+    if (o + 10 + 4 <= size && std::memcmp(d + o, kTag, 10) == 0) {
+        o += 10;
+        uint32_t numMappings = u32(o); o += 4;
+        o += static_cast<size_t>(numMappings) * 8;   // mapeamentos (animação de tile)
+        if (o + 4 <= size) {
+            uint32_t numTypes = u32(o); o += 4;
+            for (uint32_t t = 0; t < numTypes && t < kMaxTerrainTypes; ++t) {
+                if (o + 0x108 > size) break;
+                TerrainType tt;
+                std::memcpy(tt.raw, d + o, 0x108);
+                // Pós-processo do loader: se a lista em +0xBC está vazia e +8 != 0,
+                // preenche +0xBC..+0xDA com (+8)+0..15.
+                uint16_t w8, wBC;
+                std::memcpy(&w8, tt.raw + 8, 2);
+                std::memcpy(&wBC, tt.raw + 0xBC, 2);
+                if (wBC == 0 && w8 != 0)
+                    for (int k = 0; k < 16; ++k) {
+                        uint16_t v = static_cast<uint16_t>(w8 + k);
+                        std::memcpy(tt.raw + 0xBC + k * 2, &v, 2);
+                    }
+                m_terrainTypes.push_back(tt);
+                o += 0x108;
+            }
+        }
     }
 
     m_ok = true;
     return true;
+}
+
+int GameMap::TerrainType::word(int off) const {
+    int16_t v; std::memcpy(&v, raw + off, 2); return v;
+}
+
+// sub_48B6A0: tipo de terreno cuja faixa [+0,+2] contém o tile → tile
+// "terraplanado" (+4). Sem tipo: 0x0A.
+int GameMap::bulldozedTile(int tile) const {
+    for (const auto& t : m_terrainTypes)
+        if (t.word(0) <= tile && t.word(2) >= tile) return t.word(4);
+    return 0x0A;
+}
+
+// sub_48B7A0: entulho COMUM = (+6) + rand(4). O sorteio vem ANTES da busca (o
+// RNG avança mesmo sem tipo); sem tipo: 0x35.
+int GameMap::commonRubbleTile(int tile, int rnd4) const {
+    for (const auto& t : m_terrainTypes)
+        if (t.word(0) <= tile && t.word(2) >= tile) return t.word(6) + rnd4;
+    return 0x35;
+}
+
+// sub_48B800: entulho RARO = (+6) + rand(4) + 4; sem tipo: 0x35.
+int GameMap::rareRubbleTile(int tile, int rnd4) const {
+    for (const auto& t : m_terrainTypes)
+        if (t.word(0) <= tile && t.word(2) >= tile) return t.word(6) + rnd4 + 4;
+    return 0x35;
+}
+
+void GameMap::setTileAndCellType(int x, int y, int tile, int cellType) {
+    size_t idx = cellIndex(x, y);
+    if (idx == static_cast<size_t>(-1)) return;
+    // Mesma escrita do sub_4831A0: mantém os bits altos (0xFFFF0000), troca o
+    // tileIndex (bits 5..15) e o cellType (bits 0..4).
+    m_tiles[idx] = (m_tiles[idx] & 0xFFFF0000u)
+                 | ((static_cast<uint32_t>(tile) << 5) & 0xFFE0u)
+                 | (static_cast<uint32_t>(cellType) & 0x1Fu);
 }
 
 size_t GameMap::cellIndex(int x, int y) const {

@@ -300,7 +300,10 @@ def emit():
         fmt = lambda r: "{" + ", ".join(f"{v:4d}" for v in r) + " }" if any(r) else "{0}"
         rowsA.append(f"    {lab} {fmt(A)},")
         rowsB.append(f"    {lab} {fmt(B)},")
-    veh = VEH_TMPL.replace("@A@", "\n".join(rowsA)).replace("@B@", "\n".join(rowsB))
+    vnames = "\n".join(f'    "{byid[t]}",  // 0x{t:02X}' if t in byid else f"    nullptr,  // 0x{t:02X}"
+                       for t in range(0x11))
+    veh = (VEH_TMPL.replace("@A@", "\n".join(rowsA)).replace("@B@", "\n".join(rowsB))
+           .replace("@NAMES@", vnames))
     open("src/game/vehicle_anim.cpp", "w", encoding="utf-8", newline="\n").write(veh)
     # ---- estruturas (map_id 0x15..0x3A), SEM o vies
     rows = []
@@ -311,7 +314,8 @@ def emit():
         r = lambda tb: "{ " + ", ".join(f"{(v - BIAS) if v else -1:4d}" for v in tb) + " }"
         rows.append(f"    /* 0x{t:02X} {n:<14} {p} */ {{ {r(A)},\n"
                     f"    {'':38}  {r(B)} }},")
-    st = STR_TMPL.replace("@ROWS@", "\n".join(rows))
+    names = "\n".join(f'    "{byid[t]}",  // 0x{t:02X}' for t in range(0x15, 0x3B))
+    st = STR_TMPL.replace("@ROWS@", "\n".join(rows)).replace("@NAMES@", names)
     open("src/game/structure_anim.cpp", "w", encoding="utf-8", newline="\n").write(st)
     print("[*] gerados src/game/vehicle_anim.cpp e src/game/structure_anim.cpp")
 
@@ -352,6 +356,16 @@ int vehicleAnimIndex(int type, int rotation, bool isEden) {
     return idx >= 0 ? idx : -1;
 }
 
+// Code_Name (GetName = vt[1] do descritor) por map_id 0x00..0x10.
+static const char* const kVehicleCodeName[0x11] = {
+@NAMES@
+};
+
+const char* vehicleCodeName(int type) {
+    if (type < 0 || type > 0x10) return nullptr;
+    return kVehicleCodeName[type];
+}
+
 } // namespace op2
 """
 
@@ -374,6 +388,17 @@ static const int kStructAnim[38][2][10] = {
 int structureAnimIndex(int type, int state, bool tableA) {
     if (type < 0x15 || type > 0x3A || state < 0 || state > 9) return -1;
     return kStructAnim[type - 0x15][tableA ? 0 : 1][state];
+}
+
+// Code_Name (GetName = vt[1] do descritor) por map_id 0x15..0x3A. E por este
+// nome que o parser do BUILDING.TXT (sub_445070) acha o descritor da linha.
+static const char* const kStructCodeName[38] = {
+@NAMES@
+};
+
+const char* structureCodeName(int type) {
+    if (type < 0x15 || type > 0x3A) return nullptr;
+    return kStructCodeName[type - 0x15];
 }
 
 } // namespace op2

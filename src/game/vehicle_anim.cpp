@@ -67,4 +67,30 @@ int vehicleAnimIndex(int type, int rotation, bool isEden) {
     return idx >= 0 ? idx : -1;
 }
 
+// Code_Name (GetName = vt[1] do descritor) por map_id 0x00..0x10.
+static const char* const kVehicleCodeName[0x11] = {
+    nullptr,  // 0x00
+    "BIG_TRUCK",  // 0x01
+    "CON_TRUCK",  // 0x02
+    "SPIDER",  // 0x03
+    "SCORPION",  // 0x04
+    "LIGHT_TANK",  // 0x05
+    "MED_TANK",  // 0x06
+    "BIG_TANK",  // 0x07
+    "SURVEYOR",  // 0x08
+    "MINER",  // 0x09
+    "GEO_METRO",  // 0x0A
+    "SCOUT",  // 0x0B
+    "BULL_DOZER",  // 0x0C
+    "MOBILE_HOME",  // 0x0D
+    "REPAIR_TRUCK",  // 0x0E
+    "WALL_TRUCK",  // 0x0F
+    "SCAT",  // 0x10
+};
+
+const char* vehicleCodeName(int type) {
+    if (type < 0 || type > 0x10) return nullptr;
+    return kVehicleCodeName[type];
+}
+
 } // namespace op2

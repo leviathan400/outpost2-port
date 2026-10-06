@@ -2,6 +2,7 @@
 
 #include "game_map.h"
 #include "command.h"
+#include "structure.h"
 
 namespace op2 {
 
@@ -117,21 +118,16 @@ void Unit::SetCargo(map_id c) {
 
 void Unit::DoDeath() {
     UnitRecord* r = rec();
-    if (!r) return;
-    // Libera a ocupação do grid (footprint do prédio ou tile do veículo), limpando
-    // só as células que ainda apontam p/ esta unidade (não apaga ocupação alheia).
+    if (!r || r->id == -1) return;
+    // Unit::DoDeath @191271 = sub_43A890(1): só agenda a morte (ação 0x2F); a
+    // máquina de estados faz o resto (prédio: animação de destruição, entulho,
+    // remoção — src/game/structure.cpp).
+    if (!(r->flags & UNIT_VEHICLE)) { killUnit(m_id, 1); return; }
+    // Veículo: o caminho de morte de veículo (loc_43D8B3: destroços, explosão)
+    // ainda não foi portado — por ora libera a célula e marca como morto.
     if (g_gameMap.ok() && !(r->flags & UNIT_DEAD)) {
         int cx = r->pixelX >> 5, cy = r->pixelY >> 5;
-        if (r->flags & UNIT_BUILDING) {
-            int w, h; buildingFootprint(r->type, w, h);
-            int tlx = cx - (w >> 1), tly = cy - (h >> 1);
-            for (int dy = 0; dy < h; ++dy)
-                for (int dx = 0; dx < w; ++dx)
-                    if (g_gameMap.cellOccupant(tlx + dx, tly + dy) == m_id)
-                        g_gameMap.clearUnitOccupancy(tlx + dx, tly + dy);
-        } else if (g_gameMap.cellOccupant(cx, cy) == m_id) {
-            g_gameMap.clearUnitOccupancy(cx, cy);
-        }
+        if (g_gameMap.cellOccupant(cx, cy) == m_id) g_gameMap.clearUnitOccupancy(cx, cy);
     }
     r->flags |= UNIT_DEAD;
 }
@@ -186,7 +182,10 @@ bool createUnit(Unit& out, map_id type, LOCATION loc, int owner,
     r.owner  = static_cast<uint8_t>(owner & 0x0F);
     r.cargo  = static_cast<uint16_t>(cargo);
     r.rotation = static_cast<uint8_t>(rotation & 0xFF);
-    r.flags  = mapIdIsBuilding(type) ? UNIT_BUILDING : UNIT_VEHICLE;
+    // Classe pela faixa do map_id: prédio (0x15..0x3A), veículo (0x01..0x10) ou
+    // nenhuma das duas (efeitos/armas, ex. AMBIENT_ANIM 0x72 — sem ocupação).
+    r.flags  = mapIdIsBuilding(type) ? UNIT_BUILDING
+             : mapIdIsVehicle(type)  ? UNIT_VEHICLE : 0u;
 
     // Grava a ocupação no grid runtime (bits 16-26), como o engine faz ao
     // posicionar a unidade — é o que sub_4382C0/sub_438390 leem. Veículo = 1 tile;
@@ -200,7 +199,7 @@ bool createUnit(Unit& out, map_id type, LOCATION loc, int owner,
             for (int dy = 0; dy < h; ++dy)
                 for (int dx = 0; dx < w; ++dx)
                     g_gameMap.setUnitOccupancy(tlx + dx, tly + dy, slot);
-        } else {
+        } else if (mapIdIsVehicle(type)) {
             g_gameMap.setUnitOccupancy(cx, cy, slot);
         }
     }

@@ -18,6 +18,8 @@
 #include "../game/movement.h"
 #include "../game/vehicle_anim.h"
 #include "../game/structure_anim.h"
+#include "../game/structure.h"
+#include "../game/building_sheet.h"
 #include "../gfx/artfile.h"
 
 namespace op2 {
@@ -65,6 +67,9 @@ bool GameState::load(const std::string& mapName) {
 
     // Cria algumas unidades iniciais (como o InitProc/CreateUnit de uma missão),
     // centradas na área jogável — prova o pool de unidades + CreateUnit + render.
+    // Planilhas de unidades (sub_445070): HP, Build Points, entulho, explosao...
+    loadBuildingSheet();
+    loadVehicleSheet();
     resetUnits();
     // Centro do demo: meio do mapa (o centro do clipRect da eden01 cai na emenda
     // do wrap horizontal, o que espalha a base pelas duas bordas da tela).
@@ -136,6 +141,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         TethysGame::advanceTick();
         m_lastRand = TethysGame::getRand(100);  // 1 consumo determinístico por tick
         tickMovement();                          // move as unidades pela rota do pathfinder
+        tickUnits();                             // predios + efeitos (sub_43AC30)
         m_tickAccum -= kTickPeriod;
     }
 
@@ -262,13 +268,15 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         return true;
     };
 
-    // Dois passes: ESTRUTURAS primeiro (ficam por baixo), depois veiculos.
-    for (int pass = 0; pass < 2; ++pass)
+    // Tres passes: ESTRUTURAS primeiro (ficam por baixo), depois veiculos e por
+    // fim as unidades-efeito (explosoes) por cima.
+    for (int pass = 0; pass < 3; ++pass)
     for (size_t i = 1; i < g_units.size(); ++i) {
         const UnitRecord& r = g_units[i];
         if (r.id == -1 || (r.flags & UNIT_DEAD)) continue;
         const bool isBld = (r.flags & UNIT_BUILDING) != 0;
-        if ((pass == 0) != isBld) continue;
+        const bool isEffect = !(r.flags & (UNIT_BUILDING | UNIT_VEHICLE));
+        if (pass != (isBld ? 0 : isEffect ? 2 : 1)) continue;
         // Centro da unidade na tela (pixelX/Y é o canto do tile; +16 = centro).
         // Usa a posição INTERPOLADA (não o tile), p/ casar com o deslize.
         int ucx = screenXOf(r.pixelX) + 16;   // wrap horizontal do mapa
@@ -299,19 +307,25 @@ void GameState::onIdle(Renderer& renderer, float dt) {
             }
         }
         if (isBld) {
-            // Estrutura -- porta sub_408BE0 + sub_4835A0/sub_483720/sub_409220:
-            //   anim  = desc[(flags&0x1000 ? 0x250 : 0x278) + estado*4] - 0x65
-            //   estado 0 (intacta) -> frame = nFrames-1: o ULTIMO frame da
-            //   animacao de construcao e o predio pronto (sub_409220, sub==0).
-            // Dano/estados 1-3 e animacoes ambiente (5+) entram com o combate.
+            // Estrutura -- porta sub_408BE0: anim = tabela[estado] (sub_4835A0/
+            // sub_483720), frame = sub_409220. Estado 0 com contador 0 = ultimo
+            // frame (predio pronto); construcao, dano (1/2) e destruicao (3) vem
+            // da maquina de estados (src/game/structure.cpp).
             int ow = r.owner & 0x0F;
-            bool eden = (ow >= 0 && ow < kMaxPlayers) ? (g_playerData[ow].isEden != 0) : true;
-            int anim = structureAnimIndex(r.type, STRUCT_INTACT, eden);
+            int anim = structureCurAnim(r);
             if (anim >= 0 && g_art.ok() && anim < g_art.numAnimations()) {
-                int nf = (int)g_art.animation(anim).frames.size();
                 int pc = (ow >= 0 && ow < kMaxPlayers) ? g_playerData[ow].colorNumber : 0;
-                drew = drawSprite(anim, nf > 0 ? nf - 1 : 0, ucx, ucy, pc);
+                drew = drawSprite(anim, structureFrame(r), ucx, ucy, pc);
             }
+        }
+        if (isEffect) {
+            // Unidade-efeito AMBIENT_ANIM (sub_405160): sem remap de cor salvo
+            // UNIT_EFFECT_COLOR; invisivel antes do atraso.
+            int anim, frame;
+            if (effectAnimFrame(r, anim, frame) && g_art.ok() && anim < g_art.numAnimations())
+                drawSprite(anim, frame, ucx, ucy,
+                           (r.flags & UNIT_EFFECT_COLOR) ? r.effectColor : -1);
+            continue;   // efeitos nao tem marcador nem barrinha
         }
         if (!drew) {
             // Fallback: marcador colorido (prédios/tipos sem sprite ainda).
@@ -422,6 +436,27 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
     if (e.type == SDL_KEYDOWN) {
         if (e.key.keysym.sym == SDLK_ESCAPE) gTApp.activateShell();
         if (e.key.keysym.sym == SDLK_g) m_showPassability = !m_showPassability;
+        // DEPURACAO dos estados de predio (ainda nao ha armas/ConVec construindo):
+        //   D = +10% do HP max de dano   H = repara (dano 0)
+        //   K = Unit::DoDeath (Kill(1))  B = reinicia a construcao (sub_43DE50)
+        const SDL_Keycode k = e.key.keysym.sym;
+        if (k == SDLK_d || k == SDLK_h || k == SDLK_k || k == SDLK_b) {
+            for (int id : std::vector<int>(m_selected)) {
+                if (id <= 0 || id >= (int)g_units.size()) continue;
+                UnitRecord& r = g_units[id];
+                if (r.id == -1 || !(r.flags & UNIT_BUILDING)) continue;
+                if (k == SDLK_d) {
+                    int hp = structureMaxHP(r);
+                    r.damage = static_cast<int16_t>(std::min(hp, r.damage + hp / 10));
+                } else if (k == SDLK_h) {
+                    r.damage = 0;
+                } else if (k == SDLK_k) {
+                    Unit(id).DoDeath();
+                } else if (k == SDLK_b && r.action != ACT_DIE) {
+                    structureStartBuild(id, 0);
+                }
+            }
+        }
         if (e.key.keysym.sym == SDLK_s) {   // Stop: cancela a ordem dos selecionados
             for (int id : m_selected) {
                 if (id > 0 && id < (int)g_units.size()) {

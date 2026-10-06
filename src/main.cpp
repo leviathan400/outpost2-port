@@ -19,6 +19,7 @@
 #include "game/tethys_game.h"
 #include "game/pathfinder.h"
 #include "game/command.h"
+#include "game/structure.h"
 #include "gfx/artfile.h"
 #include "app/tapp.h"
 #include "app/game_state.h"
@@ -259,6 +260,55 @@ static int runPlayShot(const std::string& mapName, const std::string& outPath, b
     renderer.shutdown();
     SDL_Quit();
     return ok ? 0 : 1;
+}
+
+// --structtest <map> <prefix>: conduz o 1º prédio pelos estados (construção,
+// dano 1/2, reparo, destruição + entulho) e salva quadros prefix_<fase>.bmp.
+static int runStructTest(const std::string& mapName, const std::string& prefix) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) { std::cerr << "SDL_Init: " << SDL_GetError() << std::endl; return 1; }
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 structtest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    int bid = -1;
+    for (int i = 1; i < (int)op2::g_units.size(); ++i)
+        if (op2::g_units[i].id != -1 && (op2::g_units[i].flags & op2::UNIT_BUILDING)) { bid = i; break; }
+    if (bid < 0) { std::cerr << "sem predio" << std::endl; return 3; }
+    auto snap = [&](const char* tag) {
+        const op2::UnitRecord& r = op2::g_units[bid];
+        char path[256];
+        std::snprintf(path, sizeof(path), "%s_%s.bmp", prefix.c_str(), tag);
+        writeBmp32(path, renderer.getFramebuffer(),
+                   op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        std::printf("[Struct] %-10s tick=%d id=%d estado=%u sub=%u dano=%d/%d anim=%d frame=%d acao=0x%X\n",
+                    tag, op2::TethysGame::tick(), r.id, (r.state34 >> 16) & 0xFFFF,
+                    r.state34 & 0xFFFF, r.damage, op2::structureMaxHP(r),
+                    r.id == -1 ? -1 : op2::structureCurAnim(r),
+                    r.id == -1 ? -1 : op2::structureFrame(r), r.action);
+    };
+    auto run = [&](int ticks) { for (int t = 0; t < ticks; ++t) gs.onIdle(renderer, 0.1f); };
+    run(2); snap("intacto");
+    op2::structureStartBuild(bid, 0);
+    const int dur = op2::g_units[bid].buildTime;
+    std::printf("[Struct] construcao: duracao=%d ticks\n", dur);
+    run(dur / 4); snap("const25");
+    run(dur / 2); snap("const75");
+    run(dur / 4 + 12); snap("pronto");
+    const int hp = op2::structureMaxHP(op2::g_units[bid]);
+    op2::g_units[bid].damage = static_cast<int16_t>(hp * 35 / 100); run(2); snap("dano35");
+    op2::g_units[bid].damage = static_cast<int16_t>(hp * 65 / 100); run(2); snap("dano65");
+    op2::g_units[bid].damage = 0; run(2); snap("reparado");
+    op2::Unit(bid).DoDeath();
+    run(4); snap("morte04");
+    run(8); snap("morte12");
+    run(14); snap("morte26");
+    run(40); snap("entulho");
+    renderer.shutdown();
+    SDL_Quit();
+    return 0;
 }
 
 // --movecap <map> <prefix>: carrega o jogo, manda os veículos do jogador moverem
@@ -606,6 +656,8 @@ int main(int argc, char* argv[]) {
             bool pass = (i + 3 < argc && std::strcmp(argv[i + 3], "pass") == 0);
             return runPlayShot(argv[i + 1], argv[i + 2], pass);
         }
+        if (std::strcmp(argv[i], "--structtest") == 0 && i + 2 < argc)
+            return runStructTest(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--movecap") == 0 && i + 2 < argc)
             return runMoveCap(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--colltest") == 0 && i + 1 < argc)
