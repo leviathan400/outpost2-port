@@ -43,7 +43,7 @@ bool GameState::load(const std::string& mapName) {
 
     // Inicia o núcleo de simulação (relógio zerado + RNG semeado). O seed virá da
     // missão/netgame nos próximos slices; por ora um valor fixo p/ determinismo.
-    TethysGame::reset(/*seed*/ 0x12345678u, /*numPlayers*/ 1, /*localPlayer*/ 0);
+    TethysGame::reset(/*seed*/ 0x12345678u, /*numPlayers*/ 2, /*localPlayer*/ 0);
     m_tickAccum = 0.0f;
 
     // Semeia o jogador local como uma missão faria no InitProc (via Set*). A
@@ -77,11 +77,24 @@ bool GameState::load(const std::string& mapName) {
         TethysGame::CreateUnit(u, type, loc, owner);
     };
     place(kFirstBuilding, 0, 0);   // prédio (marcador por ora)
-    place(7, 2, 0);    // CON_TRUCK
+    place(7, 2, 0);    // CON_TRUCK (Eden/azul)
     place(3, -2, 1);   // BIG_TANK
     place(13, 1, -2);  // SCOUT
     place(2, -3, -2);  // MINER
     place(6, 3, 2);    // LIGHT_TANK
+
+    // Inimigo Plymouth (player 1) p/ ver a facção (sprites verdes) + distinção.
+    if (TethysGame::noPlayers() >= 2) {
+        Player[1].GoPlymouth(); Player[1].GoAI();
+        auto placeE = [&](map_id type, int dx, int dy) {
+            Unit u;
+            LOCATION loc = g_gameMap.findFreeNear(LOCATION{(cx + dx) & (g_gameMap.width()-1), cy + dy});
+            TethysGame::CreateUnit(u, type, loc, 1);
+        };
+        placeE(3, 8, 0);   // BIG_TANK Plymouth
+        placeE(6, 9, 2);   // LIGHT_TANK Plymouth
+        placeE(13, 8, -2); // SCOUT Plymouth
+    }
 
     // Centraliza a câmera na base inicial (como CenterViewOn do jogo).
     m_camX = cx * 32 - Renderer::NATIVE_WIDTH / 2;
@@ -259,6 +272,11 @@ void GameState::onIdle(Renderer& renderer, float dt) {
             int sz = (r.flags & UNIT_BUILDING) ? 26 : 16, off = (32 - sz) / 2;
             renderer.fillRect(sx + off, sy + off, sz, sz, col);
             renderer.drawRect(sx + off, sy + off, sz, sz, 0xFF101010);
+        }
+        // Acento de cor do dono (barrinha acima do tile) — distingue jogador.
+        if (drew) {
+            int bx = (r.pixelX >> 5) * 32 - m_camX + 10, by = (r.pixelY >> 5) * 32 - m_camY + 2;
+            renderer.fillRect(bx, by, 12, 2, kOwnerColor[(r.owner & 0x0F) % 7]);
         }
     }
 
