@@ -231,6 +231,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         std::vector<uint32_t> px;
         for (const auto& p : pics) {
             const ArtImage& m = g_art.image(p.image);
+            bool shadow = (m.type & 4) != 0;    // imagem de sombra (type&4, ex. 0x5)
             g_art.decode(p.image, px, /*transparent*/ true);
             for (uint32_t y = 0; y < m.height; ++y) {
                 int py = refY + p.y + (int)y;
@@ -240,7 +241,14 @@ void GameState::onIdle(Renderer& renderer, float dt) {
                     if (!(c >> 24)) continue;
                     int pxs = refX + p.x + (int)x;
                     if (pxs < 0 || pxs >= VW) continue;
-                    fb[py * VW + pxs] = c | 0xFF000000u;
+                    if (shadow) {
+                        // Sombra: escurece o fundo (~50%), não desenha a cor.
+                        uint32_t b = fb[py * VW + pxs];
+                        uint32_t rr = ((b >> 16) & 0xFF) / 2, gg = ((b >> 8) & 0xFF) / 2, bb = (b & 0xFF) / 2;
+                        fb[py * VW + pxs] = 0xFF000000u | (rr << 16) | (gg << 8) | bb;
+                    } else {
+                        fb[py * VW + pxs] = c | 0xFF000000u;
+                    }
                 }
             }
         }
