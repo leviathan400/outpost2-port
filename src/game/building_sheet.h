@@ -50,12 +50,14 @@ bool loadBuildingSheet();
 const StructSheetDesc* structSheet(int type);
 
 // Parte de VEÍCULOS de sub_445070 (VEHICLES.TXT), só as colunas usadas até
-// aqui: col 4 Hit Points → bloco+0x00, col 10 Build Time → bloco+0x14,
-// col 17 Production Rate → bloco+0x2C (desc+0x34; multiplicador /128 da
-// duração de construção em sub_43DE50).
+// aqui: col 4 Hit Points → bloco+0x00, col 6 Move Points → +0x24 (Move_Speed),
+// col 7 Turn Rate → +0x28, col 10 Build Time → +0x14, col 17 Production Rate
+// → +0x2C (desc+0x34; multiplicador /128 da duração de construção).
 struct VehPlayerStats {
     int hitPoints = 0;        // +0x00
     int buildTime = 0;        // +0x14
+    int moveSpeed = 0;        // +0x24 (sub_44B650: duração do passo)
+    int turnRate = 0;         // +0x28 (sub_44B650: giro por tick)
     int productionRate = 0;   // +0x2C
 };
 bool loadVehicleSheet();

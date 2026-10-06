@@ -41,7 +41,7 @@ static void resetUnitOrder(UnitRecord& u) {
     u.field3C = 0;
     u.routeDirs.clear();          // invalida a rota antiga; o tick recomputa
     u.routeIdx = 0;
-    u.sliding = false;
+    // sub_43A910 NÃO mexe no passo em curso ([st+0x64]): ele termina normalmente.
 }
 
 // sub_4230F0 @asm 57211 — aloca/preenche o bloco de ordem (unit+0x38) e, para a

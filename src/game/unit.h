@@ -122,11 +122,14 @@ struct UnitRecord {
     // (sub_44B650, com o modelo completo do objeto Unit/descritor) é refinamento.
     std::vector<int> routeDirs;    // direções (0..7) da rota atual
     int   routeIdx   = 0;          // próximo passo da rota
-    int   moveSpeed  = 6;          // pixels por tick do deslize (TODO: descritor vehicles.txt)
-    bool  sliding    = false;      // deslizando entre células?
-    int   slideDir   = 0;          // direção do deslize atual
-    int   slideProg  = 0;          // progresso 0..32 (px) dentro da célula
-    int   slideSX    = 0, slideSY = 0;  // pixel de origem do deslize
+    // Passo em curso — estado de movimento [unit+0x34] do original (sub_44B650
+    // monta, sub_44C0B0 aplica 1x por tick):
+    int      stepTicks = 0;        // [st+0x64] ticks restantes do passo
+    int      velX = 0, velY = 0;   // [st+0x58]/[st+0x5C] velocidade 16.16 (px/tick)
+    uint16_t fracX = 0, fracY = 0; // [st+0x44]/[st+0x46] fração 16 bits da posição
+    int      turnTicks = 0;        // [st+0x68] ticks de giro restantes
+    int8_t   turnStep = 0;         // [st+0x60] giro por tick (com sinal)
+    int      stepDestX = 0, stepDestY = 0;  // [st+0x48]/[st+0x4C] pixel do destino
 };
 
 // Footprint (tamanho em tiles) de um prédio — X-size × Y-size de building.txt

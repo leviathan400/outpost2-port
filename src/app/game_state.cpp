@@ -10,6 +10,7 @@
 #include "../gfx/renderer.h"
 #include "../gfx/font.h"
 #include "../res/res_manager.h"
+#include "../core/config.h"
 #include "../game/tethys_game.h"
 #include "../game/player.h"
 #include "../game/unit.h"
@@ -25,6 +26,20 @@
 namespace op2 {
 
 bool GameState::load(const std::string& mapName) {
+    // Cadência do tick (sub_489160 relê "GameSpeed" do INI ao iniciar a partida;
+    // sub_49BF80: intervalo = 1000 / clamp(GameSpeed*4, 4, 40) ms).
+    {
+        Config config("OUTPOST2.INI");
+        GameSettings gs;
+        if (config.load()) gs.loadFrom(config);
+        int speed = gs.gameSpeed;
+        if (speed > 10) speed = 10;
+        if (speed < 1) speed = 1;
+        int tps = speed * 4;
+        if (tps < 4) tps = 4;
+        if (tps > 40) tps = 40;
+        m_tickPeriod = 1.0f / static_cast<float>(tps);
+    }
     m_mapName = mapName;
     auto stream = g_ResManager.openStream(mapName);
     if (!stream || !g_gameMap.load(stream->data(), stream->size())) {
@@ -134,8 +149,8 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     if (ks[SDL_SCANCODE_DOWN])  m_camY += speed;
     clampCamera();
 
-    // Avança o relógio de simulação a uma cadência fixa (~10 ticks/s por ora).
-    const float kTickPeriod = 0.1f;
+    // Avança o relógio de simulação na cadência do GameSpeed (m_tickPeriod).
+    const float kTickPeriod = m_tickPeriod;
     m_tickAccum += dt;
     while (m_tickAccum >= kTickPeriod) {
         TethysGame::advanceTick();
@@ -462,7 +477,7 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
                 if (id > 0 && id < (int)g_units.size()) {
                     UnitRecord& r = g_units[id];
                     r.field20 = 0; r.action = 0; r.hasOrder = false;
-                    r.order = OrderBlock{}; r.routeDirs.clear(); r.sliding = false;
+                    r.order = OrderBlock{}; r.routeDirs.clear();   // o passo em curso termina
                 }
             }
         }

@@ -19,6 +19,7 @@
 #include "game/tethys_game.h"
 #include "game/pathfinder.h"
 #include "game/command.h"
+#include "game/movement.h"
 #include "game/structure.h"
 #include "gfx/artfile.h"
 #include "app/tapp.h"
@@ -289,7 +290,7 @@ static int runStructTest(const std::string& mapName, const std::string& prefix) 
                     r.id == -1 ? -1 : op2::structureCurAnim(r),
                     r.id == -1 ? -1 : op2::structureFrame(r), r.action);
     };
-    auto run = [&](int ticks) { for (int t = 0; t < ticks; ++t) gs.onIdle(renderer, 0.1f); };
+    auto run = [&](int ticks) { for (int t = 0; t < ticks; ++t) gs.onIdle(renderer, 0.05f); };  // 1 tick (GameSpeed 5)
     run(2); snap("intacto");
     op2::structureStartBuild(bid, 0);
     const int dur = op2::g_units[bid].buildTime;
@@ -308,6 +309,43 @@ static int runStructTest(const std::string& mapName, const std::string& prefix) 
     run(40); snap("entulho");
     renderer.shutdown();
     SDL_Quit();
+    return 0;
+}
+
+// --movelog <map>: manda o 1º veículo andar ~10 células e imprime o
+// deslocamento (px) por tick — prova que o deslize é contínuo (sem tick parado).
+static int runMoveLog(const std::string& mapName) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 movelog", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    int vid = -1;
+    for (int i = 1; i < (int)op2::g_units.size(); ++i)
+        if (op2::g_units[i].id != -1 && (op2::g_units[i].flags & op2::UNIT_VEHICLE)) { vid = i; break; }
+    if (vid < 0) return 3;
+    op2::UnitRecord& r = op2::g_units[vid];
+    int mask = op2::g_gameMap.width() - 1;
+    op2::LOCATION dst = op2::g_gameMap.findPassableNear(
+        op2::LOCATION{((r.pixelX >> 5) + 10) & mask, r.pixelY >> 5});
+    op2::Unit(vid).DoMove(dst);
+    std::printf("[MoveLog] veiculo %d tipo %d -> (%d,%d)\n", vid, r.type, dst.x, dst.y);
+    int px = r.pixelX, py = r.pixelY;
+    std::string line;
+    for (int t = 0; t < 400 && op2::g_units[vid].hasOrder; ++t) {
+        op2::tickMovement();
+        op2::TethysGame::advanceTick();
+        const op2::UnitRecord& u = op2::g_units[vid];
+        int dx = u.pixelX - px, dy = u.pixelY - py;
+        if (dx > 1000) dx -= op2::g_gameMap.width() * 32;
+        if (dx < -1000) dx += op2::g_gameMap.width() * 32;
+        char b[32]; std::snprintf(b, sizeof(b), "%d,%d r%d ", dx, dy, u.rotation);
+        line += b;
+        px = u.pixelX; py = u.pixelY;
+    }
+    std::printf("[MoveLog] dx,dy por tick: %s\n", line.c_str());
+    renderer.shutdown(); SDL_Quit();
     return 0;
 }
 
@@ -658,6 +696,8 @@ int main(int argc, char* argv[]) {
         }
         if (std::strcmp(argv[i], "--structtest") == 0 && i + 2 < argc)
             return runStructTest(argv[i + 1], argv[i + 2]);
+        if (std::strcmp(argv[i], "--movelog") == 0 && i + 1 < argc)
+            return runMoveLog(argv[i + 1]);
         if (std::strcmp(argv[i], "--movecap") == 0 && i + 2 < argc)
             return runMoveCap(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--colltest") == 0 && i + 1 < argc)

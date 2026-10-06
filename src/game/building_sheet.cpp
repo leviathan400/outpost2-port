@@ -90,6 +90,8 @@ bool loadVehicleSheet() {
         if (type < 0) continue;   // ex. SCORPION_PACK: sem descritor próprio
         VehPlayerStats& s = s_veh[type][0];
         s.hitPoints = c[4].value;        // +0x00
+        s.moveSpeed = c[6].value;        // +0x24 (desc+0x2C)
+        s.turnRate = c[7].value;         // +0x28 (desc+0x30)
         s.buildTime = c[10].value;       // +0x14 (desc+0x1C)
         s.productionRate = c[17].value;  // +0x2C (desc+0x34)
     }

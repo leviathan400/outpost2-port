@@ -36,6 +36,7 @@ private:
     int m_camX = 0, m_camY = 0;
     int m_maxX = 0, m_maxY = 0;
     float m_tickAccum = 0.0f;     // acumulador p/ avançar o tick de simulação
+    float m_tickPeriod = 0.05f;   // s/tick: 1/clamp(GameSpeed*4, 4, 40) (sub_49BF80)
     int m_lastRand = 0;           // última amostra do RNG (1 por tick), p/ o HUD
     bool m_showPassability = false; // overlay de debug (tecla G)
 
