@@ -276,8 +276,17 @@ void GameState::onIdle(Renderer& renderer, float dt) {
             int anim = vehicleAnimIndex(r.type, r.rotation, eden);   // resolver fiel (facção)
             if (anim >= 0) {
                 int nf = g_art.ok() && anim < g_art.numAnimations()
-                         ? (int)g_art.animation(anim).frames.size() : 1;
-                int frame = nf > 0 ? (TethysGame::tick() + (int)i) % nf : 0;
+                         ? (int)g_art.animation(anim).frames.size() : 0;
+                // Frame — porta sub_44C5C0: fica em 0 (parado) a menos que a
+                // unidade esteja em MOVIMENTO ([+0x22]==1) ou em acao 0x1C/0x1D;
+                // ai cicla com o relogio: ((clock >> flag) + [unit+0x10]) % nFrames.
+                int frame = 0;
+                bool animating = (r.field22 == 1) || (r.action == 0x1D) || (r.action == 0x1C);
+                if (animating && nf > 0) {
+                    int shift = (r.flags & 0x10000) ? 1 : 0;
+                    int t = (TethysGame::tick() >> shift) + (int)i;   // [unit+0x10] = id
+                    frame = ((t % nf) + nf) % nf;
+                }
                 drew = drawSprite(anim, frame, ucx, ucy);
             }
         }

@@ -50,6 +50,10 @@ static const int kVehicleAnimB[18][16] = {
     /* 17 SPIDER_PACK*/ {0},
 };
 
+// Viés entre o valor guardado no descritor/[unit+0x40] e o índice real no array
+// de animação (sub_403E00 faz `lea eax, [ecx-65h]`).
+static const int kAnimIndexBias = 0x65;
+
 bool hasVehicleAnim(int type) {
     return type >= 1 && type <= 17 && kVehicleAnim[type][0] != 0;
 }
@@ -60,7 +64,11 @@ int vehicleAnimIndex(int type, int rotation, bool isEden) {
     if (dir < 0 || dir > 15) dir = 0;
     int a = isEden ? kVehicleAnim[type][dir] : kVehicleAnimB[type][dir];
     if (!a) a = kVehicleAnim[type][dir];       // fallback p/ tabela A (sprite compartilhado)
-    return a ? a : -1;
+    if (!a) return -1;
+    // O descritor guarda (índice + 0x65); o blit indexa o array de animação com
+    // (valor - 0x65)  —  sub_403E00: `lea eax, [ecx-65h]` antes de dword_50B378.
+    int idx = a - kAnimIndexBias;
+    return idx >= 0 ? idx : -1;
 }
 
 } // namespace op2
