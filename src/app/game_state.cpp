@@ -445,15 +445,55 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
 }
 
 // Nome curto por map_id de veículo (p/ o painel).
+// Nomes de exibicao das unidades, do MANUAL do jogo (seccao "Unit Reference",
+// Vehicles). O Code_Name interno do vehicles.txt NAO e o nome mostrado ao
+// jogador; a coluna "Unit Name" da planilha e so um indice de letra (a..q).
+// A correspondencia foi confirmada pelos dados do proprio vehicles.txt:
+//   MOBILE_HOME  Cargo=25  -> Evacuation Transport ("carry up to 25 Colonists")
+//   BIG_TANK     Cargo=2   -> Tiger (chassi pesado, torres DUPLAS, tracked)
+//   WALL_TRUCK   Track=T   -> Earthworker (tracked; constroi Tubes/Walls)
+//   REPAIR_TRUCK Owner=E   -> Repair Vehicle ("available only to Eden")
+//   GEO_METRO    Owner=E   -> GeoCon ("available only to Eden")
+//   SCORPION     Track=L,P -> Scorpion (legged, Plymouth)
 static const char* vehName(int type) {
     switch (type) {
-        case 1: return "Geo Metro"; case 2: return "Miner"; case 3: return "Tiger (Big)";
-        case 4: return "Cargo Truck"; case 5: return "Panther (Med)"; case 6: return "Lynx (Light)";
-        case 7: return "ConVec"; case 8: return "Wall Truck"; case 9: return "Repair";
-        case 10: return "Dozer"; case 11: return "Earthworker"; case 12: return "Surveyor";
-        case 13: return "Scout"; case 14: return "Scorpion"; case 16: return "Spider";
+        case 1:  return "GeoCon";            // GEO_METRO
+        case 2:  return "Robo-Miner";        // MINER
+        case 3:  return "Tiger";             // BIG_TANK    (chassi pesado)
+        case 4:  return "Cargo Truck";       // BIG_TRUCK
+        case 5:  return "Panther";           // MED_TANK    (chassi medio)
+        case 6:  return "Lynx";              // LIGHT_TANK  (chassi leve)
+        case 7:  return "ConVec";            // CON_TRUCK
+        case 8:  return "Earthworker";       // WALL_TRUCK
+        case 9:  return "Repair Vehicle";    // REPAIR_TRUCK
+        case 10: return "Robo-Dozer";        // BULL_DOZER
+        case 11: return "Evacuation Transport"; // MOBILE_HOME
+        case 12: return "Robo-Surveyor";     // SURVEYOR
+        case 13: return "Scout";             // SCOUT
+        case 14: case 15: return "Scorpion"; // SCORPION / _PACK
+        case 16: case 17: return "Spider";   // SPIDER / _PACK
         default: return "Unidade";
     }
+}
+
+// Lynx/Panther/Tiger sao CHASSIS: o nome exibido e composto com a torre
+// ("Laser Lynx #1-01", "EMP Lynx" -- Tutorial 4 do manual). So esses tres tem
+// "Weapon enabled = Y" no vehicles.txt. Enquanto as torres nao estao portadas,
+// mostramos so o chassi.
+static bool vehIsCombatChassis(int type) {
+    return type == 3 || type == 5 || type == 6;
+}
+
+// Numero de serie mostrado pelo jogo: "#<jogador>-<NN>", contado por DONO e por
+// TIPO (o manual mostra "Agridome #1-02", "Cargo Truck #1-03", "Lynx #1-01").
+static int vehSerial(const UnitRecord& r, size_t idx) {
+    int n = 1;
+    for (size_t k = 1; k < idx && k < g_units.size(); ++k) {
+        const UnitRecord& o = g_units[k];
+        if (o.id == -1) continue;
+        if (o.owner == r.owner && o.type == r.type) ++n;
+    }
+    return n;
 }
 
 void GameState::renderPanel(Renderer& renderer) {
@@ -506,8 +546,15 @@ void GameState::renderPanel(Renderer& renderer) {
         Font::drawText(fb, VW, VH, "Nada selecionado", px0 + 8, iy, 0xFF8090A0, true);
     } else if (m_selected.size() == 1) {
         const UnitRecord& r = g_units[m_selected[0]];
-        Font::drawText(fb, VW, VH, vehName(r.type), px0 + 8, iy, 0xFFFFE060, true);
-        std::snprintf(buf, sizeof(buf), "%s", (r.owner & 0x0F) == 0 ? "EDEN" : "inimigo");
+        // "<Nome> #<jogador>-<NN>", como o jogo original exibe (ver manual,
+        // Tutorial 2/4: "Cargo Truck #1-01", "Laser Lynx #1-01").
+        std::snprintf(buf, sizeof(buf), "%s #%d-%02d", vehName(r.type),
+                      (r.owner & 0x0F) + 1,
+                      vehSerial(r, static_cast<size_t>(m_selected[0])));
+        Font::drawText(fb, VW, VH, buf, px0 + 8, iy, 0xFFFFE060, true);
+        std::snprintf(buf, sizeof(buf), "%s%s",
+                      (r.owner & 0x0F) == 0 ? "EDEN" : "inimigo",
+                      vehIsCombatChassis(r.type) ? "  (chassi)" : "");
         Font::drawText(fb, VW, VH, buf, px0 + 8, iy + 12, 0xFF80E0A0, true);
     } else {
         std::snprintf(buf, sizeof(buf), "%d unidades", (int)m_selected.size());
