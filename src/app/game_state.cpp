@@ -17,6 +17,7 @@
 #include "../game/pathfinder.h"
 #include "../game/movement.h"
 #include "../game/vehicle_anim.h"
+#include "../game/structure_anim.h"
 #include "../gfx/artfile.h"
 
 namespace op2 {
@@ -261,9 +262,13 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         return true;
     };
 
+    // Dois passes: ESTRUTURAS primeiro (ficam por baixo), depois veiculos.
+    for (int pass = 0; pass < 2; ++pass)
     for (size_t i = 1; i < g_units.size(); ++i) {
         const UnitRecord& r = g_units[i];
         if (r.id == -1 || (r.flags & UNIT_DEAD)) continue;
+        const bool isBld = (r.flags & UNIT_BUILDING) != 0;
+        if ((pass == 0) != isBld) continue;
         // Centro da unidade na tela (pixelX/Y é o canto do tile; +16 = centro).
         // Usa a posição INTERPOLADA (não o tile), p/ casar com o deslize.
         int ucx = screenXOf(r.pixelX) + 16;   // wrap horizontal do mapa
@@ -291,6 +296,21 @@ void GameState::onIdle(Renderer& renderer, float dt) {
                 // que indexa as rampas de 24 cores de color.bmp (sub_4A8D70).
                 int pc = (ow >= 0 && ow < kMaxPlayers) ? g_playerData[ow].colorNumber : 0;
                 drew = drawSprite(anim, frame, ucx, ucy, pc);
+            }
+        }
+        if (isBld) {
+            // Estrutura -- porta sub_408BE0 + sub_4835A0/sub_483720/sub_409220:
+            //   anim  = desc[(flags&0x1000 ? 0x250 : 0x278) + estado*4] - 0x65
+            //   estado 0 (intacta) -> frame = nFrames-1: o ULTIMO frame da
+            //   animacao de construcao e o predio pronto (sub_409220, sub==0).
+            // Dano/estados 1-3 e animacoes ambiente (5+) entram com o combate.
+            int ow = r.owner & 0x0F;
+            bool eden = (ow >= 0 && ow < kMaxPlayers) ? (g_playerData[ow].isEden != 0) : true;
+            int anim = structureAnimIndex(r.type, STRUCT_INTACT, eden);
+            if (anim >= 0 && g_art.ok() && anim < g_art.numAnimations()) {
+                int nf = (int)g_art.animation(anim).frames.size();
+                int pc = (ow >= 0 && ow < kMaxPlayers) ? g_playerData[ow].colorNumber : 0;
+                drew = drawSprite(anim, nf > 0 ? nf - 1 : 0, ucx, ucy, pc);
             }
         }
         if (!drew) {

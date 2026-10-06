@@ -83,5 +83,58 @@ def main():
         if nB: print(f"   B(real) = {fmt(B)}")
     return 0
 
-if __name__ == "__main__":
+if __name__ == "__main__" and not (len(sys.argv) > 1 and sys.argv[1] == "--structures"):
     sys.exit(main())
+
+
+# ---------------------------------------------------------------------------
+# ESTRUTURAS.  Nao usam a tabela direcional +0x24C: tem DUAS tabelas de 10
+# ESTADOS, preenchidas por um init em [ecx+...]:
+#     +0x250 + estado*4   tabela A (flags & 0x1000)
+#     +0x278 + estado*4   tabela B
+# Resolvidas por sub_483720 (vt+0x90); estado = [unit+0x34] >> 16, escolhido
+# por sub_408930 pelo dano: 0 intacto, 1 >=30%, 2 >=60%, 3 destruicao, 5+ ambiente.
+# Estado 0 mostra o ULTIMO frame (a animacao de construcao terminada).
+# O init vem colado num thunk `mov eax, offset aXXX ; "CODE_NAME"`.
+# ---------------------------------------------------------------------------
+def structures():
+    lines = open(ASM, encoding="latin-1").read().split("\n")
+    STR = re.compile(r'^mov\s+eax, offset a\w+\s*;\s*"([A-Z0-9_]+)"')
+    MI  = re.compile(r'^mov\s+dword ptr \[ecx\+([0-9A-F]+)h\], ([0-9A-F]+)h?(?:\s*;.*)?$')
+    RI  = re.compile(r'^mov\s+(e[a-z][a-z]), ([0-9A-F]+)h?(?:\s*;.*)?$')
+    MR  = re.compile(r'^mov\s+\[ecx\+([0-9A-F]+)h\], (e[a-z][a-z])$')
+    out = []; lastname = None; cur = None; f = {}; regs = {}
+    for raw in lines:
+        s = raw.strip()
+        m = PROC.match(s)
+        if m: cur = m.group(1); f = {}; regs = {}; continue
+        if ENDP.match(s):
+            if cur and (0x250 in f or 0x278 in f) and lastname:
+                out.append((lastname, cur, dict(f)))
+            cur = None; continue
+        if cur is None: continue
+        m = STR.match(s)
+        if m: lastname = m.group(1); continue
+        m = RI.match(s)
+        if m:
+            v = parse_imm(m.group(2))
+            if v is not None: regs[m.group(1)] = v
+            continue
+        m = MI.match(s)
+        if m:
+            o, v = parse_imm(m.group(1)), parse_imm(m.group(2))
+            if o is not None and v is not None: f[o] = v
+            continue
+        m = MR.match(s)
+        if m:
+            o = parse_imm(m.group(1))
+            if o is not None and m.group(2) in regs: f[o] = regs[m.group(2)]
+    return out
+
+if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "--structures":
+    BIAS = 0x65
+    for name, proc, f in structures():
+        A = [f.get(0x250 + i*4, 0) for i in range(10)]
+        B = [f.get(0x278 + i*4, 0) for i in range(10)]
+        r = lambda t: [v - BIAS if v else -1 for v in t]
+        print(f"{name:24} {proc}  A={r(A)}  B={r(B)}")
