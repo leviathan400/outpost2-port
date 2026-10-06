@@ -495,6 +495,13 @@ static int runAnimDump(int ai, int fi, const std::string& outPath) {
     std::cout << "[AnimDump] anim " << ai << " (" << an.frames.size() << " frames, hdr8="
               << an.header[8] << ") frame " << fi << ": " << fr.pics.size() << " pics, "
               << W << "x" << H << " -> " << outPath << std::endl;
+    for (const auto& p : fr.pics) {
+        const op2::ArtImage& m = op2::g_art.image(p.image);
+        std::cout << "   pic img=" << p.image << " type=0x" << std::hex << m.type
+                  << std::dec << " pal=" << m.pal << " (type&1="
+                  << (m.type & 1) << ") " << m.width << "x" << m.height
+                  << " slot=" << (int)p.slot << " @(" << p.x << "," << p.y << ")" << std::endl;
+    }
     return 0;
 }
 

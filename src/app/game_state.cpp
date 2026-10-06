@@ -242,7 +242,9 @@ void GameState::onIdle(Renderer& renderer, float dt) {
 
         bool drew = false;
         if ((r.flags & UNIT_VEHICLE) && hasVehicleAnim(r.type)) {
-            int anim = vehicleAnimIndex(r.type, r.rotation);   // resolver fiel
+            int ow = r.owner & 0x0F;
+            bool eden = (ow >= 0 && ow < kMaxPlayers) ? (g_playerData[ow].isEden != 0) : true;
+            int anim = vehicleAnimIndex(r.type, r.rotation, eden);   // resolver fiel (facção)
             if (anim >= 0) {
                 int nf = g_art.ok() && anim < g_art.numAnimations()
                          ? (int)g_art.animation(anim).frames.size() : 1;
