@@ -495,6 +495,10 @@ static int runAnimDump(int ai, int fi, const std::string& outPath) {
     std::cout << "[AnimDump] anim " << ai << " (" << an.frames.size() << " frames, hdr8="
               << an.header[8] << ") frame " << fi << ": " << fr.pics.size() << " pics, "
               << W << "x" << H << " -> " << outPath << std::endl;
+    std::cout << "   header[0..8] =";
+    for (int k = 0; k < 9; ++k) std::cout << " " << (int32_t)an.header[k];
+    std::cout << "   bbox(pics)=(" << minX << "," << minY << ")..(" << maxX << "," << maxY << ")"
+              << std::endl;
     for (const auto& p : fr.pics) {
         const op2::ArtImage& m = op2::g_art.image(p.image);
         std::cout << "   pic img=" << p.image << " type=0x" << std::hex << m.type

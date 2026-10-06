@@ -65,8 +65,10 @@ bool GameState::load(const std::string& mapName) {
     // Cria algumas unidades iniciais (como o InitProc/CreateUnit de uma missão),
     // centradas na área jogável — prova o pool de unidades + CreateUnit + render.
     resetUnits();
-    int cx = (g_gameMap.clipRect().x1 + g_gameMap.clipRect().x2) / 2;
-    int cy = (g_gameMap.clipRect().y1 + g_gameMap.clipRect().y2) / 2;
+    // Centro do demo: meio do mapa (o centro do clipRect da eden01 cai na emenda
+    // do wrap horizontal, o que espalha a base pelas duas bordas da tela).
+    int cx = (g_gameMap.width() / 2) & (g_gameMap.width() - 1);
+    int cy = g_gameMap.height() / 2;
     int owner = TethysGame::localPlayer();
     // Posiciona cada unidade na célula passável mais próxima do ponto desejado
     // (evita montanhas/cânions). As posições reais virão da missão depois.
@@ -202,9 +204,9 @@ void GameState::onIdle(Renderer& renderer, float dt) {
             if (!r.hasOrder || r.action != CMD_MOVE || r.order.waypoints.empty()) continue;
             uint32_t dest = r.order.waypoints.back();
             int dxt = unpackLocX(dest), dyt = unpackLocY(dest);
-            int ux = (r.pixelX >> 5) * 32 + 16 - m_camX;
-            int uy = (r.pixelY >> 5) * 32 + 16 - m_camY;
-            int dsx = dxt * 32 + 16 - m_camX;
+            int ux = screenXOf(r.pixelX) + 16;
+            int uy = r.pixelY + 16 - m_camY;
+            int dsx = screenXOf(dxt * 32) + 16;
             int dsy = dyt * 32 + 16 - m_camY;
             uint32_t col = kOwnerColor[(r.owner & 0x0F) % 7];
             drawLine(ux, uy, dsx, dsy, col);
@@ -216,13 +218,17 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         }
     }
 
-    // Blit de um frame de animação do op2_art (g_art) na posição de referência da
-    // unidade na tela (pictures posicionadas por x,y; índice 0 transparente).
-    auto drawSprite = [&](int animIdx, int frameIdx, int refX, int refY) {
+    // Blit de um frame de animação do op2_art (g_art) CENTRADO no ponto da unidade
+    // na tela. As pictures são posicionadas por (x,y) menos o HOTSPOT da animação
+    // (header[5],header[6] = centro do bbox header[1..4]) — como o original faz
+    // (`sub eax, dword_50B368[...]` em sub_403E00). Índice 0 = transparente.
+    auto drawSprite = [&](int animIdx, int frameIdx, int cx, int cy) {
         if (!g_art.ok() || animIdx < 0 || animIdx >= g_art.numAnimations()) return false;
         const ArtAnimation& an = g_art.animation(animIdx);
         if (an.frames.empty()) return false;
         if (frameIdx < 0 || frameIdx >= (int)an.frames.size()) frameIdx %= (int)an.frames.size();
+        const int refX = cx - static_cast<int>(an.header[5]);   // hotspot X
+        const int refY = cy - static_cast<int>(an.header[6]);   // hotspot Y
         uint32_t* fb = renderer.getFramebuffer();
         const int VW = Renderer::NATIVE_WIDTH, VH = Renderer::NATIVE_HEIGHT;
         std::vector<ArtPicture> pics = an.frames[frameIdx].pics;
@@ -258,8 +264,10 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     for (size_t i = 1; i < g_units.size(); ++i) {
         const UnitRecord& r = g_units[i];
         if (r.id == -1 || (r.flags & UNIT_DEAD)) continue;
-        int refX = (r.pixelX) + 16 - m_camX;    // centro do tile (pixelX = tile*32)
-        int refY = (r.pixelY) + 16 - m_camY;
+        // Centro da unidade na tela (pixelX/Y é o canto do tile; +16 = centro).
+        // Usa a posição INTERPOLADA (não o tile), p/ casar com o deslize.
+        int ucx = screenXOf(r.pixelX) + 16;   // wrap horizontal do mapa
+        int ucy = r.pixelY + 16 - m_camY;
 
         bool drew = false;
         if ((r.flags & UNIT_VEHICLE) && hasVehicleAnim(r.type)) {
@@ -270,22 +278,19 @@ void GameState::onIdle(Renderer& renderer, float dt) {
                 int nf = g_art.ok() && anim < g_art.numAnimations()
                          ? (int)g_art.animation(anim).frames.size() : 1;
                 int frame = nf > 0 ? (TethysGame::tick() + (int)i) % nf : 0;
-                drew = drawSprite(anim, frame, refX, refY);
+                drew = drawSprite(anim, frame, ucx, ucy);
             }
         }
         if (!drew) {
             // Fallback: marcador colorido (prédios/tipos sem sprite ainda).
-            int sx = (r.pixelX >> 5) * 32 - m_camX, sy = (r.pixelY >> 5) * 32 - m_camY;
             uint32_t col = kOwnerColor[(r.owner & 0x0F) % 7];
-            int sz = (r.flags & UNIT_BUILDING) ? 26 : 16, off = (32 - sz) / 2;
-            renderer.fillRect(sx + off, sy + off, sz, sz, col);
-            renderer.drawRect(sx + off, sy + off, sz, sz, 0xFF101010);
+            int sz = (r.flags & UNIT_BUILDING) ? 26 : 16;
+            renderer.fillRect(ucx - sz / 2, ucy - sz / 2, sz, sz, col);
+            renderer.drawRect(ucx - sz / 2, ucy - sz / 2, sz, sz, 0xFF101010);
         }
-        // Acento de cor do dono (barrinha acima do tile) — distingue jogador.
-        if (drew) {
-            int bx = (r.pixelX >> 5) * 32 - m_camX + 10, by = (r.pixelY >> 5) * 32 - m_camY + 2;
-            renderer.fillRect(bx, by, 12, 2, kOwnerColor[(r.owner & 0x0F) % 7]);
-        }
+        // Acento de cor do dono (barrinha acima da unidade) — distingue jogador.
+        if (drew)
+            renderer.fillRect(ucx - 6, ucy - 18, 12, 2, kOwnerColor[(r.owner & 0x0F) % 7]);
     }
 
     // Caixas de seleção ao redor das unidades selecionadas.
@@ -293,9 +298,11 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         if (id <= 0 || id >= (int)g_units.size()) continue;
         const UnitRecord& r = g_units[id];
         if (r.id == -1 || (r.flags & UNIT_DEAD)) continue;
-        int sx = (r.pixelX >> 5) * 32 - m_camX, sy = (r.pixelY >> 5) * 32 - m_camY;
-        if (sx < -32 || sx > viewportW() || sy < -32 || sy > Renderer::NATIVE_HEIGHT) continue;
-        renderer.drawRect(sx + 1, sy + 1, 30, 30, 0xFF40FF40);   // verde (selecionado)
+        // Centrada na posição INTERPOLADA (casa com o sprite durante o deslize).
+        int ucx = screenXOf(r.pixelX) + 16, ucy = r.pixelY + 16 - m_camY;
+        if (ucx < -16 || ucx > viewportW() + 16 || ucy < -16 || ucy > Renderer::NATIVE_HEIGHT + 16)
+            continue;
+        renderer.drawRect(ucx - 15, ucy - 15, 30, 30, 0xFF40FF40);   // verde (selecionado)
     }
     // Caixa de arrasto (multi-seleção).
     if (m_dragging) {
@@ -335,34 +342,46 @@ void GameState::onIdle(Renderer& renderer, float dt) {
 
 int GameState::viewportW() const { return Renderer::NATIVE_WIDTH - kPanelW; }
 
+int GameState::screenXOf(int worldPixelX) const {
+    int sx = worldPixelX - m_camX;
+    if (!g_gameMap.ok()) return sx;
+    const int worldW = g_gameMap.width() * 32;       // largura do mapa em pixels
+    if (worldW <= 0) return sx;
+    sx = ((sx % worldW) + worldW) % worldW;           // [0, worldW)
+    if (sx > worldW / 2) sx -= worldW;                // → [-worldW/2, worldW/2)
+    return sx;
+}
+
 void GameState::selectAt(int nx, int ny, bool additive) {
-    // Seleciona a unidade do jogador local cujo tile contém o clique (viewport).
-    int tileX = (m_camX + nx) / 32, tileY = (m_camY + ny) / 32;
-    if (g_gameMap.ok()) tileX &= (g_gameMap.width() - 1);
+    // Seleciona a unidade do jogador mais próxima do clique (em coords de tela,
+    // então o wrap horizontal já está resolvido), dentro de um raio.
     int me = TethysGame::localPlayer();
     if (!additive) m_selected.clear();
-    int best = 0;
+    int best = 0, bestD2 = 20 * 20;   // raio de tolerância
     for (int i = 1; i < static_cast<int>(g_units.size()); ++i) {
         const UnitRecord& r = g_units[i];
         if (r.id == -1 || (r.flags & UNIT_DEAD)) continue;
         if ((r.owner & 0x0F) != me) continue;
-        if ((r.pixelX >> 5) == tileX && (r.pixelY >> 5) == tileY) { best = i; break; }
+        int ucx = screenXOf(r.pixelX) + 16, ucy = r.pixelY + 16 - m_camY;
+        int dx = ucx - nx, dy = ucy - ny, d2 = dx * dx + dy * dy;
+        if (d2 < bestD2) { bestD2 = d2; best = i; }
     }
     if (best) m_selected.push_back(best);
 }
 
 void GameState::selectBox(int x0, int y0, int x1, int y1) {
-    // Seleciona todos os veículos do jogador dentro da caixa (coords de mundo).
-    int wx0 = m_camX + std::min(x0, x1), wy0 = m_camY + std::min(y0, y1);
-    int wx1 = m_camX + std::max(x0, x1), wy1 = m_camY + std::max(y0, y1);
+    // Seleciona os veículos do jogador cujo CENTRO na tela cai na caixa.
+    // (coords de tela → o wrap horizontal já está resolvido por screenXOf.)
+    int bx0 = std::min(x0, x1), by0 = std::min(y0, y1);
+    int bx1 = std::max(x0, x1), by1 = std::max(y0, y1);
     int me = TethysGame::localPlayer();
     m_selected.clear();
     for (int i = 1; i < static_cast<int>(g_units.size()); ++i) {
         const UnitRecord& r = g_units[i];
         if (r.id == -1 || (r.flags & UNIT_DEAD)) continue;
         if ((r.owner & 0x0F) != me || !(r.flags & UNIT_VEHICLE)) continue;
-        int px = r.pixelX, py = r.pixelY;   // tile corner em pixels de mundo
-        if (px + 32 >= wx0 && px <= wx1 && py + 32 >= wy0 && py <= wy1)
+        int ucx = screenXOf(r.pixelX) + 16, ucy = r.pixelY + 16 - m_camY;
+        if (ucx >= bx0 && ucx <= bx1 && ucy >= by0 && ucy <= by1)
             m_selected.push_back(i);
     }
 }

@@ -46,6 +46,10 @@ private:
     int  m_mouseNX = 0, m_mouseNY = 0; // mouse atual (coords nativas)
 
     int viewportW() const;         // largura da área de jogo (tela - painel)
+    // X de tela de um pixel de mundo, tratando o WRAP horizontal do mapa
+    // (o engine faz o mapa dar a volta em X; unidades do outro lado da emenda
+    // precisam aparecer no lado certo da câmera).
+    int screenXOf(int worldPixelX) const;
     void clampCamera();
     void selectAt(int nx, int ny, bool additive);
     void selectBox(int x0, int y0, int x1, int y1);
