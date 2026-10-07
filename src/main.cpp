@@ -429,6 +429,14 @@ static int runColonyTest(const std::string& mapName) {
         std::printf("[Colony]   ciclo %2d: moral valor=%d nivel=%d tendencia=%+d  eventos=%d lotacao=%d comida=%d deslig=%d\n",
                     k + 1, m.moraleValue, pd.morale, m.moraleTrend, m.moraleEvents, m.crowding, m.foodState, m.disabledPct);
     }
+    {   // Moral forcada (fiel, com o XOR do original): Good sozinho vale Great.
+        op2::TethysGame::ForceMoraleGood(0);
+        for (int t = 0; t < 256; ++t) { op2::TethysGame::advanceTick(); op2::tickColony(); }
+        std::printf("[Colony] ForceMoraleGood: valor=%d nivel=%d\n", op2::g_colony[0].moraleValue, pd.morale);
+        op2::TethysGame::FreeMoraleLevel(0);
+        for (int t = 0; t < 256; ++t) { op2::TethysGame::advanceTick(); op2::tickColony(); }
+        std::printf("[Colony] FreeMoraleLevel:  valor=%d nivel=%d\n", op2::g_colony[0].moraleValue, pd.morale);
+    }
     const op2::ColonyState& c = op2::g_colony[0];
     std::printf("[Colony] 10 ciclos: comida=%d (produz %d, come %d, saldo %d)  trab=%d cient=%d criancas=%d\n",
                 pd.foodStored, c.foodProduced, c.foodEaten, c.foodNet, pd.workers, pd.scientists, pd.kids);

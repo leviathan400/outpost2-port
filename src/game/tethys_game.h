@@ -40,6 +40,13 @@ public:
         }
     }
     static void SetDaylightMoves(int on)      { s_daylightMoves = on; }
+    // Moral forçada (CommandPacket 0x2B → colony.cpp). player -1 = todos.
+    static void ForceMoraleGreat(int player);
+    static void ForceMoraleGood(int player);
+    static void ForceMoraleOK(int player);
+    static void ForceMoralePoor(int player);
+    static void ForceMoraleRotten(int player);
+    static void FreeMoraleLevel(int player);
     static void SetDaylightEverywhere(int on) { s_daylightEverywhere = on; }
     static int  daylightPos()        { return s_daylightPos; }
     static int  daylightEverywhere() { return s_daylightEverywhere; }

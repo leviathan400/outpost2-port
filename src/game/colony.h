@@ -122,6 +122,15 @@ bool structureCanIdle(const UnitRecord& r);         // sub_43AAF0
 void structureDoIdle(int id);                       // case 18
 bool structureDoActivate(int id);                   // case 19 (false se faltar recurso)
 
+// Moral forçada das missões — TethysGame::ForceMorale{Great,Good,OK,Poor,
+// Rotten} / FreeMoraleLevel → CommandPacket 0x2B sub-ids 0x15..0x19 / 0x20
+// (sub_4229F0). Cinco bitmasks (dword_56DEAC..BC → 99/75/50/25/0). player
+// -1 = todos. Fiel ao original, INCLUSIVE o XOR: forçar um nível alterna o
+// bit do jogador nas CINCO máscaras antes de ligá-lo na escolhida (então um
+// 1º ForceMoraleGood deixa todas ligadas e vale o Great, checado primeiro).
+void colonyForceMorale(int player, int level);      // level 0=Great .. 4=Rotten
+void colonyFreeMorale(int player);
+
 // Turno: sub_471F30 p/ cada jogador.
 void tickColony();
 

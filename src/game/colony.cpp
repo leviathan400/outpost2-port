@@ -692,6 +692,29 @@ static int dirtCoverage(int p) {
 }
 
 // ---- sub_44E550: moral (slot de 32 ticks do jogador) --------------------------
+static uint32_t s_forceMask[5] = {};   // dword_56DEAC/B0/B4/B8/BC
+
+static void dirtyAll() { for (int i = 0; i < kMaxPlayers; ++i) g_colony[i].dirty = 1; }
+
+void colonyForceMorale(int player, int level) {      // sub_4229F0 cases 21..25
+    if (level < 0 || level > 4) return;
+    if (player < 0) {
+        for (auto& m : s_forceMask) m = 0;
+        s_forceMask[level] = 0xFFFF;
+    } else {
+        const uint32_t bit = 1u << player;
+        for (auto& m : s_forceMask) m ^= bit;
+        s_forceMask[level] |= bit;
+    }
+    dirtyAll();
+}
+
+void colonyFreeMorale(int player) {                   // sub_4229F0 case 32
+    if (player < 0) { for (auto& m : s_forceMask) m = 0; }
+    else { for (auto& m : s_forceMask) m &= ~(1u << player); }
+    dirtyAll();
+}
+
 static void moraleTick(int p) {
     const int tick = TethysGame::tick();
     const int slot = (tick & 0x1F) ? 7 : ((tick / 32) & 7);
@@ -807,7 +830,12 @@ static void moraleTick(int p) {
     score = (score * s_me[(pd.isEden ? ME_DIFF_EASY : ME_DIFF_EASY_PLY) + diff]) >> 8;
     if (score > prevValue + 5) score = prevValue + 5;          // ±5 por ciclo
     else if (score < prevValue - 5) score = prevValue - 5;
-    // (ForceMorale* das missões — bitmasks dword_56DEAC..BC: 99/75/50/25/0.)
+    // ForceMorale* (bitmasks dword_56DEAC..BC), checadas nesta ordem.
+    {
+        static const int kForced[5] = {0x63, 0x4B, 0x32, 0x19, 0};
+        for (int k = 0; k < 5; ++k)
+            if (s_forceMask[k] & (1u << p)) { score = kForced[k]; break; }
+    }
     int level = 0;
     while (level < 4 && moraleRow(level).points > score) ++level;
     pd.morale = level;

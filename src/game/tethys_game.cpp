@@ -1,4 +1,5 @@
 #include "tethys_game.h"
+#include "colony.h"
 
 namespace op2 {
 
@@ -18,5 +19,12 @@ void TethysGame::reset(uint32_t seed, int numPlayers, int localPlayer) {
     s_localPlayer = localPlayer;
     s_rng.setSeed(seed);
 }
+
+void TethysGame::ForceMoraleGreat(int p)  { colonyForceMorale(p, 0); }
+void TethysGame::ForceMoraleGood(int p)   { colonyForceMorale(p, 1); }
+void TethysGame::ForceMoraleOK(int p)     { colonyForceMorale(p, 2); }
+void TethysGame::ForceMoralePoor(int p)   { colonyForceMorale(p, 3); }
+void TethysGame::ForceMoraleRotten(int p) { colonyForceMorale(p, 4); }
+void TethysGame::FreeMoraleLevel(int p)   { colonyFreeMorale(p); }
 
 } // namespace op2
