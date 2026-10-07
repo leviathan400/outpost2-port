@@ -21,6 +21,7 @@
 #include "../game/structure_anim.h"
 #include "../game/structure.h"
 #include "../game/building_sheet.h"
+#include "../game/colony.h"
 #include "../gfx/artfile.h"
 
 namespace op2 {
@@ -86,6 +87,7 @@ bool GameState::load(const std::string& mapName) {
     // Planilhas de unidades (sub_445070): HP, Build Points, entulho, explosao...
     loadBuildingSheet();
     loadVehicleSheet();
+    loadMoraleSheet();
     resetUnits();
     // Centro do demo: meio do mapa (o centro do clipRect da eden01 cai na emenda
     // do wrap horizontal, o que espalha a base pelas duas bordas da tela).
@@ -156,6 +158,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     while (m_tickAccum >= kTickPeriod) {
         TethysGame::advanceTick();
         m_lastRand = TethysGame::getRand(100);  // 1 consumo determinístico por tick
+        tickColony();                            // economia de cada jogador (sub_471F30)
         tickMovement();                          // move as unidades pela rota do pathfinder
         tickUnits();                             // predios + efeitos (sub_43AC30)
         m_tickAccum -= kTickPeriod;
@@ -395,9 +398,17 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     char l3[128];
     std::snprintf(l3, sizeof(l3), "%s   Units %d   (setas rolar | btn-dir mover | G passab | ESC menu)",
                   m_mapName.c_str(), liveUnits);
+    // Economia (sub_471F30): energia gerada/exigida, mão de obra sobrando e
+    // prédios operando/total do jogador local.
+    const ColonyState& cs = g_colony[TethysGame::localPlayer()];
+    char l4[128];
+    std::snprintf(l4, sizeof(l4), "Energia %d/%d (sobra %d)   Trab sobra %d  Cient sobra %d   Operando %d/%d",
+                  cs.powerGenerated, cs.powerRequired, cs.powerLeft,
+                  cs.workersLeft, cs.scientistsLeft, cs.activeCount, cs.structCount);
     Font::drawText(fb, VW, VH, l1, 8, 8, 0xFFFFE060, true);
     Font::drawText(fb, VW, VH, l2, 8, 20, 0xFF80E0A0, true);
     Font::drawText(fb, VW, VH, l3, 8, 32, 0xFFB0C4DE, true);
+    Font::drawText(fb, VW, VH, l4, 8, 44, 0xFFE0C080, true);
 
     renderer.present();
 }

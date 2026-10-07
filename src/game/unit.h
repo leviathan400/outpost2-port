@@ -52,11 +52,14 @@ inline bool mapIdIsVehicle(map_id t) { return t >= mapCargoTruck && t <= mapSmal
 enum UnitFlags : uint32_t {
     UNIT_VEHICLE  = 1u << 1,   // bit1
     UNIT_BUILDING = 1u << 2,   // bit2
-    UNIT_LIGHTS   = 1u << 0,   // bit0 (ligado junto com ENABLED; vai p/ [+0x40] bit31)
-    UNIT_ENABLED  = 0x2000u,   // prédio habilitado   (sub_483940 / sub_483980)
-    UNIT_STAFFED  = 0x4000u,   // prédio com trabalhadores (sub_4838B0 / sub_483910)
+    UNIT_LIGHTS   = 1u << 0,   // bit0 (ligado junto com POWERED; vai p/ [+0x40] bit31)
+    // Recursos alocados ao prédio pela economia (sub_471F30): energia via
+    // vt+0xF0 (liga 0x2000|1), trabalhadores via vt+0xF4, cientistas via vt+0xF8.
+    UNIT_POWERED  = 0x2000u,   // com energia        (vt+0xB8 sub_483940 / vt+0xBC sub_483980)
+    UNIT_WORKERS  = 0x4000u,   // com trabalhadores  (vt+0xAC sub_4838B0 / vt+0xA8 sub_483910)
     UNIT_EFFECT_COLOR = 0x4000u,   // (efeito) usa a cor [+0x60] (sub_405160)
-    UNIT_POWERED  = 0x8000u,   // prédio com energia   (sub_483880 / sub_4838E0)
+    UNIT_SCIENTISTS = 0x8000u, // com cientistas     (vt+0xB4 sub_483880 / vt+0xB0 sub_4838E0)
+    UNIT_SOLAR_IDLE = 0x10000u,// Solar Array sem satélite (sub_46E7F0)
     UNIT_DISABLED_TIMERS = 0xC0000u, // 0x40000/0x80000: contadores de EMP etc. (sub_43DE50)
     UNIT_DEAD     = 1u << 17,  // bit17 (morta/armazenada; IsLive testa isto)
     UNIT_DISMANTLED = 0x400000u,   // desmontado (case 0x22): sem explosão (sub_4831A0)
@@ -117,6 +120,8 @@ struct UnitRecord {
     int      builderId = 0;        // +0x48 ConVec que está construindo
     int      buildTime = 0;        // +0x5C duração total da construção (ticks)
     uint16_t ambientCursor = 0;    // +0x54 PRÉDIO: (contagem<<8)|índice em byte_4E4138
+    int      extraWorkers = 0;     // +0x60 PRÉDIO: trabalhadores extras (University: alunos)
+    int8_t   extraScientists = 0;  // +0x64 PRÉDIO: cientistas extras (labs: pesquisa)
     uint32_t effectAnim = 0;       // +0x54 EFEITO: (divisor<<24)|anim (sub_405000)
     int      effectStart = 0;      // +0x58 EFEITO: tick inicial (clock + atraso)
     int      effectColor = -1;     // +0x60 EFEITO: cor (se UNIT_EFFECT_COLOR)

@@ -21,6 +21,8 @@
 #include "game/command.h"
 #include "game/movement.h"
 #include "game/structure.h"
+#include "game/colony.h"
+#include "game/structure_anim.h"
 #include "gfx/artfile.h"
 #include "app/tapp.h"
 #include "app/game_state.h"
@@ -325,6 +327,62 @@ static int runStructTest(const std::string& mapName, const std::string& prefix) 
     run(40); snap("entulho");
     renderer.shutdown();
     SDL_Quit();
+    return 0;
+}
+
+// --colonytest <map>: base mínima (CC + Tokamak e Agridome encostados + Lab
+// isolado) → economia (sub_471F30) → liga o Lab por tubos (cellType 0x1A).
+static int runColonyTest(const std::string& mapName) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 colonytest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    op2::resetUnits();
+    const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
+    int bx = -1, by = -1;
+    for (int y = 3; y < H - 6 && bx < 0; ++y)
+        for (int x = 3; x < W - 16 && bx < 0; ++x) {
+            bool ok = true;
+            for (int dy = -1; dy <= 3 && ok; ++dy)
+                for (int dx = -2; dx <= 13 && ok; ++dx)
+                    if (!op2::g_gameMap.isPassable(op2::LOCATION{x + dx, y + dy})) ok = false;
+            if (ok) { bx = x; by = y; }
+        }
+    if (bx < 0) { std::printf("[Colony] sem area livre\n"); return 3; }
+    op2::Unit cc, tok, agr, lab;
+    op2::TethysGame::CreateUnit(cc, op2::mapCommandCenter, op2::LOCATION{bx, by}, 0);
+    op2::TethysGame::CreateUnit(tok, op2::mapTokamak, op2::LOCATION{bx + 3, by}, 0);
+    op2::TethysGame::CreateUnit(agr, 0x27 /*AGRIDOME*/, op2::LOCATION{bx, by + 2}, 0);
+    op2::TethysGame::CreateUnit(lab, 0x31 /*LAB_STANDARD*/, op2::LOCATION{bx + 10, by}, 0);
+    auto dump = [&](const char* fase) {
+        const op2::ColonyState& c = op2::g_colony[0];
+        std::printf("[Colony] %s: energia ger=%d exig=%d sobra=%d  trab sobra=%d cient sobra=%d  operando=%d/%d\n",
+                    fase, c.powerGenerated, c.powerRequired, c.powerLeft,
+                    c.workersLeft, c.scientistsLeft, c.activeCount, c.structCount);
+        const char* nm[] = {"CC", "Tokamak", "Agridome", "Lab"};
+        op2::Unit* us[] = {&cc, &tok, &agr, &lab};
+        for (int i = 0; i < 4; ++i) {
+            const op2::UnitRecord& r = op2::g_units[us[i]->id()];
+            std::printf("    %-9s energia=%d trab=%d cient=%d operando=%d\n", nm[i],
+                        (r.flags & op2::UNIT_POWERED) != 0, (r.flags & op2::UNIT_WORKERS) != 0,
+                        (r.flags & op2::UNIT_SCIENTISTS) != 0, op2::structureOperational(r));
+        }
+    };
+    std::printf("[Colony] ordem da lista (prioridade):");
+    for (int id : op2::colonyStructures(0))
+        std::printf(" %s", op2::structureCodeName(op2::g_units[id].type));
+    std::printf("\n");
+    for (int t = 0; t < 40; ++t) { op2::TethysGame::advanceTick(); op2::tickColony(); }
+    dump("sem tubo");
+    // Tubos ligando o Tokamak (x bx+2..bx+3) ao Lab (x bx+9..bx+11) na linha by.
+    for (int x = bx + 4; x <= bx + 8; ++x)
+        op2::g_gameMap.setTileAndCellType(x, by, op2::g_gameMap.getTile(op2::LOCATION{x, by}), 0x1A);
+    op2::colonyMarkDirty(0);
+    for (int t = 0; t < 2; ++t) { op2::TethysGame::advanceTick(); op2::tickColony(); }
+    dump("com tubo");
+    renderer.shutdown(); SDL_Quit();
     return 0;
 }
 
@@ -690,6 +748,9 @@ static int runAnimList(const std::string& list, const std::string& outPath) {
 }
 
 int main(int argc, char* argv[]) {
+    // Saída sem buffer: os modos de teste rodam com stdout em pipe e um crash
+    // não pode engolir o log.
+    std::setvbuf(stdout, nullptr, _IONBF, 0);
     // Modos utilitários (sem o loop interativo).
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--extract") == 0 && i + 2 < argc)
@@ -712,6 +773,8 @@ int main(int argc, char* argv[]) {
         }
         if (std::strcmp(argv[i], "--structtest") == 0 && i + 2 < argc)
             return runStructTest(argv[i + 1], argv[i + 2]);
+        if (std::strcmp(argv[i], "--colonytest") == 0 && i + 1 < argc)
+            return runColonyTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--movelog") == 0 && i + 1 < argc)
             return runMoveLog(argv[i + 1]);
         if (std::strcmp(argv[i], "--movecap") == 0 && i + 2 < argc)

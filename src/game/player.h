@@ -10,8 +10,10 @@ constexpr int kMaxPlayers = 7;   // OP2 suporta até 7 jogadores
 // Status de comida (enum FoodStatus) e moral (enum MoraleLevels) do original —
 // armazenados como int no registro do jogador (lidos por FoodSupply/MoraleLevel).
 enum FoodStatus   { FOOD_RISING = 0, FOOD_STABLE = 1, FOOD_FALLING = 2 };
-enum MoraleLevels { MORALE_ROTTEN = 0, MORALE_POOR = 1, MORALE_OK = 2,
-                    MORALE_GOOD = 3, MORALE_GREAT = 4 };
+// MoraleLevel (+0x34) = índice da linha de MORALE.TXT (UTOPIA..WAYBAD), na
+// ordem do enum do SDK: 0 = excelente ... 4 = péssimo.
+enum MoraleLevels { MORALE_EXCELLENT = 0, MORALE_GOOD = 1, MORALE_FAIR = 2,
+                    MORALE_POOR = 3, MORALE_TERRIBLE = 4 };
 
 // Dados por jogador. No original isto é um array global (base 0x56E2DC, stride
 // 777 dwords por jogador); o _Player é só um wrapper do índice (this+0 = índice).
@@ -25,7 +27,7 @@ struct PlayerData {
     int rareOre     = 0;   // +0x24 rare ore
     int foodStored  = 0;   // +0x10
     int foodSupply  = FOOD_STABLE;  // +0x4C
-    int morale      = MORALE_OK;    // +0x34
+    int morale      = MORALE_FAIR;  // +0x34 (linha OKAYFINE)
     int isHuman     = 1;   // +0x28 (1=humano, 0=IA)
     int isEden      = 1;   // +0x2C (1=Eden, 0=Plymouth)
     int colorNumber = 0;   // +0x30

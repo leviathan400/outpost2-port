@@ -46,11 +46,10 @@ void tickUnits();
 void removeUnit(int id);
 
 // Animações ambiente (estados 5..9) — sub_4835C0. Exigem o prédio OPERANDO
-// (sub_483750: habilitado + energia + trabalhadores, dano < 75%), estado que
-// no original vem da economia da colônia (rede de tubos/energia/trabalhadores,
-// dword_547350 — ainda não portada).
+// (sub_483750: energia + trabalhadores + cientistas, dano < 75%), estado que
+// vem da economia da colônia (src/game/colony.cpp, sub_471F30).
 bool structureIsOperational(const UnitRecord& r);
-// sub_483810: liga trabalhadores, energia e habilitação (o que a economia faz).
+// sub_483810: liga trabalhadores, cientistas e energia de uma vez.
 void structureTurnOn(UnitRecord& r);
 // Opção "Ambient" do OUTPOST2.INI (dword_575628).
 void setAmbientAnimations(bool on);

@@ -1,6 +1,7 @@
 #include "structure.h"
 
 #include "building_sheet.h"
+#include "colony.h"
 #include "game_map.h"
 #include "player.h"
 #include "structure_anim.h"
@@ -235,24 +236,23 @@ static const uint8_t kAmbientTable[11][5] = {
 };
 
 // sub_483750 (vt+0xA0): o prédio está operando? Fora de construção/desmontagem,
-// dano < 75% do HP, habilitado + com trabalhadores + com energia, sem EMP.
+// dano < 75% do HP, com energia + trabalhadores + cientistas, sem EMP.
 bool structureIsOperational(const UnitRecord& r) {
     if (r.action == ACT_BUILD || r.action == ACT_DISMANTLE) return false;
     if ((structureMaxHP(r) * 3 >> 2) <= r.damage) return false;
-    const uint32_t need = UNIT_ENABLED | UNIT_POWERED | UNIT_STAFFED;
+    const uint32_t need = UNIT_POWERED | UNIT_WORKERS | UNIT_SCIENTISTS;
     if ((r.flags & need) != need) return false;
     return (r.flags & UNIT_DISABLED_TIMERS) == 0;
 }
 
-// sub_483810 (vt+0x88): liga trabalhadores (vt+0xAC), energia (vt+0xB4) e
-// habilitação (vt+0xB8, que também liga o bit 0). Cada um marca a economia do
-// dono p/ recálculo (dword_56E37C) — a economia ainda não foi portada.
+// sub_483810 (vt+0x88): liga trabalhadores (vt+0xAC), cientistas (vt+0xB4) e
+// energia (vt+0xB8, que também liga o bit 0).
 void structureTurnOn(UnitRecord& r) {
-    if (!(r.flags & UNIT_POWERED)) {
-        r.flags |= UNIT_STAFFED;
-        if (!(r.flags & UNIT_POWERED)) r.flags |= UNIT_POWERED;
+    if (!(r.flags & UNIT_SCIENTISTS)) {
+        r.flags |= UNIT_WORKERS;                                 // vt+0xAC
+        if (!(r.flags & UNIT_SCIENTISTS)) r.flags |= UNIT_SCIENTISTS;  // vt+0xB4
     }
-    if (!(r.flags & UNIT_ENABLED)) r.flags |= UNIT_LIGHTS | UNIT_ENABLED;
+    if (!(r.flags & UNIT_POWERED)) r.flags |= UNIT_LIGHTS | UNIT_POWERED;  // vt+0xB8
 }
 
 // sub_4835C0 (vt+0x94): chamado a cada tick com o prédio intacto e parado no
@@ -262,7 +262,7 @@ void structureTurnOn(UnitRecord& r) {
 static void structureAmbientTick(int id) {
     UnitRecord& r = g_units[id];
     if (!s_optAmbient) return;
-    if (!structureIsOperational(r)) return;
+    if (!structureOperational(r)) return;                       // vt+0xA0 da classe
     const int variant = static_cast<int8_t>(structureAmbientVariant(r.type, isEdenTable(r)));
     if (variant == 0) return;
     // [+0x14]/[+0x18] no original = centro do tile (no port pixel é o canto).
@@ -348,9 +348,11 @@ static void actionTick(int id) {
                 r.field22 = SUB_WAIT;
                 r.field3C = 4;
             } else {
-                // Pronto: [+0x21]=0, vt+0x8C (OnBuilt), estatísticas do jogador e a
-                // mensagem "%s completed" (sub_438F70) — subsistemas ainda não portados.
+                // Pronto: [+0x21]=0 e vt+0x8C (sub_483850: marca a economia do dono
+                // p/ recálculo). Estatísticas e a mensagem "%s completed"
+                // (sub_438F70) — ainda não portadas.
                 r.action = 0;
+                colonyMarkDirty(r.owner & 0x0F);
             }
             break;
         }
@@ -393,6 +395,7 @@ static bool updateTick(int id) {
 
 void removeUnit(int id) {
     UnitRecord& r = g_units[id];
+    if (r.flags & UNIT_BUILDING) colonyStructureRemoved(id);    // sub_439C00
     if (g_gameMap.ok()) {
         int cx = r.pixelX >> 5, cy = r.pixelY >> 5;
         if (r.flags & UNIT_BUILDING) {

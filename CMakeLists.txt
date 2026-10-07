@@ -42,6 +42,7 @@ add_executable(outpost2_modern
     src/game/structure_anim.cpp
     src/game/structure.cpp
     src/game/building_sheet.cpp
+    src/game/colony.cpp
     src/game/terrain_renderer.cpp
     src/game/game_rng.cpp
     src/game/tethys_game.cpp

@@ -3,6 +3,7 @@
 #include "game_map.h"
 #include "command.h"
 #include "structure.h"
+#include "colony.h"
 
 namespace op2 {
 
@@ -62,6 +63,7 @@ void buildingFootprint(map_id type, int& w, int& h) {
 }
 
 void resetUnits() {
+    colonyReset();
     g_units.clear();
     g_units.emplace_back();   // slot 0 = nulo
 }
@@ -203,6 +205,9 @@ bool createUnit(Unit& out, map_id type, LOCATION loc, int owner,
             g_gameMap.setUnitOccupancy(cx, cy, slot);
         }
     }
+
+    // sub_439FE0: prédio entra na lista do dono, ordenada por prioridade.
+    if (r.flags & UNIT_BUILDING) colonyStructureAdded(slot);
 
     out.SetId(slot);
     return true;
