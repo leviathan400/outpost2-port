@@ -61,6 +61,72 @@ void colonyStructureRemoved(int id) {
         if (L[i] == id) { L.erase(L.begin() + static_cast<long>(i)); break; }
 }
 
+// ---- MORALE.TXT: eventos e condições (tabela @0x4E1F08, 67 x {nome, valor,
+// flag %}). sub_44E180 exige todas; flag 1 → valor convertido p/ /256.
+enum MoraleEntry {
+    ME_KID_DIES, ME_ADULT_DIES, ME_KID_BORN, ME_GOOD_BUILD_DIES, ME_REG_BUILD_DIES,
+    ME_NEW_TECH_BORN, ME_DISASTER_NO_WARN, ME_DISASTER_WARNED, ME_CONSUMER_GOODS_1,
+    ME_CONSUMER_GOODS_2, ME_CONSUMER_GOODS_3, ME_ENEMY_GOOD_DIES, ME_ENEMY_BAD_DIES,
+    ME_ENEMY_VEH_DIES, ME_TECH_SCHOOL, ME_PHD_TRAINED, ME_CC_BORN, ME_EVENT_DEC_RATE,
+    ME_CROWDED_NOT, ME_CROWDED_LOW, ME_CROWDED_MED, ME_CROWDED_HIGH, ME_CROWDED_MAX,
+    ME_FOOD_SURPLUS, ME_FOOD_DEFICIT_BIGSUPPLY, ME_FOOD_DEFICIT, ME_FOOD_STARVING,
+    ME_DIS_BLD_LOW, ME_DIS_BLD_MED, ME_DIS_BLD_HIGH, ME_DIS_BLD_MAX,
+    ME_REC_UT_LOW, ME_REC_UT_MED, ME_REC_UT_HIGH, ME_REC_UT_MAX,
+    ME_FORUM_UT_LOW, ME_FORUM_UT_MED, ME_FORUM_UT_HIGH, ME_FORUM_UT_MAX,
+    ME_MED_UT_LOW, ME_MED_UT_MED, ME_MED_UT_HIGH, ME_MED_UT_MAX,
+    ME_NURSERY_ON, ME_UNIV_ON, ME_DIS_MET_ON, ME_DIS_VOL_ON, ME_DIS_SAND_ON,
+    ME_DIS_QUAKE_ON, ME_DIS_ELEC_ON, ME_DIRT_LOW, ME_DIRT_MED, ME_DIRT_HIGH, ME_DIRT_MAX,
+    ME_UNOC_LOW, ME_UNOC_MED, ME_UNOC_HIGH, ME_PHD_WHINE_LOW, ME_PHD_WHINE_MED,
+    ME_PHD_WHINE_HIGH, ME_PHD_WHINE_MAX, ME_DIFF_EASY, ME_DIFF_MED, ME_DIFF_HARD,
+    ME_DIFF_EASY_PLY, ME_DIFF_MED_PLY, ME_DIFF_HARD_PLY, ME_COUNT
+};
+static const char* const kMoraleEntryName[ME_COUNT] = {
+    "KID_DIES", "ADULT_DIES", "KID_BORN", "GOOD_BUILD_DIES", "REG_BUILD_DIES",
+    "NEW_TECH_BORN", "DISASTER_NO_WARN", "DISASTER_WARNED", "CONSUMER_GOODS_1",
+    "CONSUMER_GOODS_2", "CONSUMER_GOODS_3", "ENEMY_GOOD_DIES", "ENEMY_BAD_DIES",
+    "ENEMY_VEH_DIES", "TECH_SCHOOL", "PHD_TRAINED", "CC_BORN", "EVENT_DEC_RATE",
+    "CROWDED_NOT", "CROWDED_LOW", "CROWDED_MED", "CROWDED_HIGH", "CROWDED_MAX",
+    "FOOD_SURPLUS", "FOOD_DEFICIT_BIGSUPPLY", "FOOD_DEFICIT", "FOOD_STARVING",
+    "DIS_BLD_LOW", "DIS_BLD_MED", "DIS_BLD_HIGH", "DIS_BLD_MAX",
+    "REC_UT_LOW", "REC_UT_MED", "REC_UT_HIGH", "REC_UT_MAX",
+    "FORUM_UT_LOW", "FORUM_UT_MED", "FORUM_UT_HIGH", "FORUM_UT_MAX",
+    "MED_UT_LOW", "MED_UT_MED", "MED_UT_HIGH", "MED_UT_MAX",
+    "NURSERY_ON", "UNIV_ON", "DIS_MET_ON", "DIS_VOL_ON", "DIS_SAND_ON",
+    "DIS_QUAKE_ON", "DIS_ELEC_ON", "DIRT_LOW", "DIRT_MED", "DIRT_HIGH", "DIRT_MAX",
+    "UNOC_LOW", "UNOC_MED", "UNOC_HIGH", "PHD_WHINE_LOW", "PHD_WHINE_MED",
+    "PHD_WHINE_HIGH", "PHD_WHINE_MAX", "DIFF_EASY", "DIFF_MED", "DIFF_HARD",
+    "DIFF_EASY_PLY", "DIFF_MED_PLY", "DIFF_HARD_PLY",
+};
+static int s_me[ME_COUNT];
+static bool isPctEntry(int i) { return i == ME_EVENT_DEC_RATE || i >= ME_DIFF_EASY; }
+// Somas pré-calculadas pelo loader (objeto de moral +0xF0..+0x104).
+static int s_meBaseMax = 0, s_meMedSum = 0, s_meRecSum = 0, s_meDirtSum = 0;
+static const int kMoraleScale = 100;            // +0x104
+
+static void parseMoraleEntries(const std::string& text) {
+    size_t p = 0;
+    while (p < text.size()) {
+        size_t q = text.find('\n', p);
+        std::string line = text.substr(p, q == std::string::npos ? std::string::npos : q - p);
+        p = (q == std::string::npos) ? text.size() : q + 1;
+        size_t t1 = line.find('\t');
+        if (t1 == std::string::npos || t1 == 0) continue;
+        std::string name = line.substr(0, t1);
+        for (int i = 0; i < ME_COUNT; ++i) {
+            if (name != kMoraleEntryName[i]) continue;
+            // coluna 1 vazia; coluna 2 = valor (sub_4112F0 duas vezes)
+            size_t t2 = line.find('\t', t1 + 1);
+            int v = (t2 == std::string::npos) ? 0 : std::atoi(line.c_str() + t2 + 1);
+            s_me[i] = isPctEntry(i) ? (v * 256 + 50) / 100 : v;
+            break;
+        }
+    }
+    s_meBaseMax = s_me[ME_DIS_BLD_LOW] + s_me[ME_FOOD_SURPLUS] + s_me[ME_CROWDED_NOT];
+    s_meMedSum = s_me[ME_MED_UT_LOW] + s_me[ME_MED_UT_MED] + s_me[ME_MED_UT_HIGH] + s_me[ME_MED_UT_MAX];
+    s_meRecSum = s_me[ME_REC_UT_LOW] + s_me[ME_REC_UT_MED] + s_me[ME_REC_UT_HIGH] + s_me[ME_REC_UT_MAX];
+    s_meDirtSum = s_me[ME_DIRT_LOW] + s_me[ME_DIRT_MED] + s_me[ME_DIRT_HIGH] + s_me[ME_DIRT_MAX];
+}
+
 // ---- MORALE.TXT ------------------------------------------------------------
 static MoraleRow s_morale[5];
 
@@ -87,6 +153,7 @@ bool loadMoraleSheet() {
         m.factBonus = pct(v[3]); m.foodBonus = pct(v[4]);
         m.defectRate = v[5]; m.fertRate = v[6]; m.dieRate = v[7];
     }
+    parseMoraleEntries(text);
     return true;
 }
 
@@ -285,10 +352,38 @@ static void statsTick(ColonyState& c, const UnitRecord& r, bool inactive) {
     }
 }
 
-// ---- Ganchos de moral (sub_44F120 / sub_44F410 / sub_44F520) — etapa B2 ----
-static void moraleDeaths(int, int, int, int) {}
-static void moraleBirths(int, int) {}
-static void moraleGrewUp(int, int) {}
+// ---- Eventos de moral (somam em +0x38) -------------------------------------
+static int colonists(const PlayerData& pd) { return pd.workers + pd.scientists + pd.kids; }
+
+// sub_44F120: KID_DIES por criança + ADULT_DIES por adulto.
+static void moraleDeaths(int p, int kids, int sci, int workers) {
+    if (kids + sci + workers == 0) return;
+    g_colony[p].moraleEvents += kids * s_me[ME_KID_DIES] + (sci + workers) * s_me[ME_ADULT_DIES];
+}
+// sub_44F410: KID_BORN por criança (com pop >= 125, só +1 cada).
+static void moraleBirths(int p, int n) {
+    g_colony[p].moraleEvents += colonists(g_playerData[p]) < 0x7D ? n * s_me[ME_KID_BORN] : n;
+}
+// sub_44F520: TECH_SCHOOL por trabalhador formado (com pop >= 125, +1 cada).
+static void moraleGrewUp(int p, int n) {
+    g_colony[p].moraleEvents += colonists(g_playerData[p]) < 0x7D ? n * s_me[ME_TECH_SCHOOL] : n;
+}
+static bool isGoodBuilding(int t) {   // Nursery, Medical, residências
+    return t == 0x23 || t == 0x22 || t == 0x1E || t == 0x35 || t == 0x34;
+}
+void moraleStructureLost(int player, int type) {             // sub_44F6C0
+    if (player < 0 || player >= kMaxPlayers) return;
+    g_colony[player].moraleEvents += s_me[isGoodBuilding(type) ? ME_GOOD_BUILD_DIES : ME_REG_BUILD_DIES];
+}
+void moraleEnemyStructureKilled(int player, int type) {      // sub_44FBE0
+    if (player < 0 || player >= kMaxPlayers) return;
+    if (isGoodBuilding(type)) g_colony[player].moraleEvents += s_me[ME_ENEMY_GOOD_DIES];
+    else if (type == 0x32) g_colony[player].moraleEvents += s_me[ME_ENEMY_BAD_DIES];
+}
+void moraleStructureBuilt(int player, int type) {            // sub_44F790
+    if (player < 0 || player >= kMaxPlayers) return;
+    if (type == mapCommandCenter) g_colony[player].moraleEvents += s_me[ME_CC_BORN];
+}
 
 // ---- sub_471BD0: mata `n` colonos em rodízio ([+0x1EC]: 0,4 criança;
 // 1,2 cientista; 3 trabalhador). quiet=true não avisa a moral.
@@ -431,6 +526,8 @@ static void allocate(int p) {
     std::vector<int> comp;
     computeComponents(p, comp);
     std::vector<uint8_t> compConnected(L.size() + 1, 0);  // sub_42FF60: tudo desligado
+    c.components.assign(L.size(), ColonyState::NetComponent{});
+    for (int id : L) if (comp[id] >= 0) ++c.components[comp[id]].structures;
 
     for (int id : L) {
         UnitRecord& r = g_units[id];
@@ -496,6 +593,16 @@ static void allocate(int p) {
             }
         }
         statsTick(c, r, inactive);                          // vt+0x9C
+        if (comp[id] >= 0) {
+            ColonyState::NetComponent& k = c.components[comp[id]];
+            if (r.type == mapCommandCenter) {               // sub_40C140: nó
+                ++k.ccs;
+                if (structureOperational(r)) { compConnected[comp[id]] = 1; }
+            }
+            if (r.type == 0x28 && structureOperational(r) && compConnected[comp[id]])
+                ++k.dirts;                                  // sub_411F40
+            k.connected = compConnected[comp[id]];
+        }
         if (r.type == mapCommandCenter && structureOperational(r)) {
             const int e = powerProduced(r);
             c.powerGenerated += e;
@@ -527,6 +634,150 @@ static void allocate(int p) {
     // ("Common/Rare Metals Storage Needed" — B3; moral sub_44E550 — B2.)
 }
 
+// ---- sub_42FE40: cobertura de DIRT (média dos componentes com CC) -----------
+static int dirtCoverage(int p) {
+    const ColonyState& c = g_colony[p];
+    const StructSheetDesc* dirt = structSheet(0x28);
+    int sum = 0, n = 0;
+    for (const auto& k : c.components) {
+        if (!k.ccs) continue;
+        ++n;
+        if (!k.dirts) continue;
+        const int cap = dirt ? dirt->player[p].productionCapacity : 0;
+        if (cap == 0) continue;
+        const int ratio = ((k.structures - k.dirts) / k.dirts) * 100 / cap;
+        sum += ratio <= 100 ? 0x9C4 : ratio <= 200 ? 0x6EF : ratio <= 300 ? 0x4E2 : 0x271;
+    }
+    return n ? sum / n : 0;
+}
+
+// ---- sub_44E550: moral (slot de 32 ticks do jogador) --------------------------
+static void moraleTick(int p) {
+    const int tick = TethysGame::tick();
+    const int slot = (tick & 0x1F) ? 7 : ((tick / 32) & 7);
+    if (slot != p) return;
+    ColonyState& c = g_colony[p];
+    PlayerData& pd = g_playerData[p];
+    if (!pd.isHuman) {                      // IA: zera +0x34..+0x7B e nível 2
+        c.moraleEvents = c.moraleValue = c.moraleTrend = 0;
+        c.crowding = c.foodState = c.disabledPct = c.recreationLoad = c.medicalLoad = 0;
+        c.hasNursery = c.hasUniversity = c.disasterTechs = c.dirtCoverage = 0;
+        c.idlePct = c.phdPct = c.hasGorf = 0;
+        pd.morale = 2;
+        return;
+    }
+    const int prevValue = c.moraleValue;
+    const int events = c.moraleEvents;
+    c.moraleEvents = (s_me[ME_EVENT_DEC_RATE] * events + ((events * s_me[ME_EVENT_DEC_RATE]) >> 31 & 0xFF)) >> 8;
+    const int pop = pd.kids + pd.workers + pd.scientists;
+    if (pop == 0) return;
+    // Condições.
+    const int resCap = c.stat(ST_RES_CAP);
+    c.crowding = resCap ? pop * 100 / resCap : 10000;
+    if (c.foodEaten < c.foodProduced) c.foodState = 0;
+    else if (c.foodDeficit) c.foodState = 3;
+    else c.foodState = (pop * 15 > pd.foodStored) ? 2 : 1;
+    if (c.activeCount) {
+        c.disabledPct = (c.structCount - c.inactiveCount - c.activeCount) * 100 / c.structCount;
+    } else {
+        c.disabledPct = (c.structCount == c.inactiveCount) ? 0 : 10000;
+    }
+    const int recCap = c.stat(ST_REC_CAP) + c.stat(ST_FORUM_CAP);
+    c.recreationLoad = recCap ? pop * 100 / recCap : 10000;
+    const int medCap = c.stat(ST_MED_CAP);
+    c.medicalLoad = medCap ? pop * 100 / medCap : 10000;
+    c.hasNursery = c.stat(ST_NURSERY) ? 1 : 0;
+    c.hasUniversity = c.stat(ST_UNIVERSITY) ? 1 : 0;
+    c.hasGorf = c.stat(ST_GORF_GRP + 4) ? 1 : 0;
+    c.dirtCoverage = dirtCoverage(p);
+    c.idlePct = (pop == pd.kids) ? 0 : (c.workersLeft + c.scientistsLeft) * 100 / (pop - pd.kids);
+    c.phdPct = pd.scientists ? c.scientistsAsWorkers * 100 / pd.scientists : 0;
+
+    // Pontos por faixa.
+    int pts = 0;
+    {   int v = 0;                                            // lotação
+        if (c.crowding <= 100) v = s_me[ME_CROWDED_NOT];
+        if (c.crowding > 100) v += s_me[ME_CROWDED_LOW];
+        if (c.crowding > 0x85) v += s_me[ME_CROWDED_MED];
+        if (c.crowding > 0xA6) v += s_me[ME_CROWDED_HIGH];
+        if (c.crowding > 0xC8) v += s_me[ME_CROWDED_MAX];
+        pts += v; }
+    pts += s_me[ME_FOOD_SURPLUS + c.foodState];               // comida
+    {   int v = 0, d = c.disabledPct;                         // prédios desligados
+        if (d == 0) v = s_me[ME_DIS_BLD_LOW];
+        if (d > 0) v += s_me[ME_DIS_BLD_MED];
+        if (d > 0x21) v += s_me[ME_DIS_BLD_HIGH];
+        if (d > 0x42) v += s_me[ME_DIS_BLD_MAX];
+        if (d == 10000) v = s_me[ME_DIS_BLD_LOW];
+        pts += v; }
+    auto loadPts = [&](int load, int base) {                  // REC_UT_* / MED_UT_*
+        int v = 0;
+        if (load <= 100) v = s_me[base];
+        if (load <= 0x96) v += s_me[base + 1];
+        if (load <= 0xC8) v += s_me[base + 2];
+        else v += s_me[base + 3];
+        if (load == 10000) v = 0;
+        return v;
+    };
+    pts += loadPts(c.recreationLoad, ME_REC_UT_LOW);
+    pts += loadPts(c.medicalLoad, ME_MED_UT_LOW);
+    if (c.hasNursery) pts += s_me[ME_NURSERY_ON];
+    if (c.hasUniversity) pts += s_me[ME_UNIV_ON];
+    if (c.hasGorf) pts += 2;
+    // Avisos de desastre (técnicas pesquisadas) — contam nos pontos E no teto.
+    const _Player& pl = Player[p];
+    int maxPts = s_meBaseMax, disPts = 0;
+    c.disasterTechs = 0;
+    static const struct { const char* name; int entry; } kDis[5] = {
+        {"EARTHQUAKE", ME_DIS_QUAKE_ON}, {"LIGHTNING", ME_DIS_ELEC_ON},
+        {"TORNADO", ME_DIS_SAND_ON}, {"ERUPTION", ME_DIS_VOL_ON}, {"METEOR", ME_DIS_MET_ON},
+    };
+    for (const auto& d : kDis)
+        if (pl.HasTechnology(weaponResearchTopic(d.name))) { ++c.disasterTechs; disPts += s_me[d.entry]; }
+    maxPts += disPts;
+    pts += disPts;
+    {   int v = 0, k = c.dirtCoverage;                        // DIRT
+        if (k > 0) v = s_me[ME_DIRT_LOW];
+        if (k >= 0x271) v += s_me[ME_DIRT_MED];
+        if (k >= 0x4E2) v += s_me[ME_DIRT_HIGH];
+        if (k >= 0x6EF) v += s_me[ME_DIRT_MAX];
+        pts += v; }
+    {   int v = 0, k = c.idlePct;                             // ociosos
+        if (k >= 10) v = s_me[ME_UNOC_LOW];
+        if (k >= 0x1E) v += s_me[ME_UNOC_MED];
+        if (k >= 0x32) v += s_me[ME_UNOC_HIGH];
+        pts += v; }
+    {   int v = 0, k = c.phdPct;                              // cientistas na enxada
+        if (k >= 5) v = s_me[ME_PHD_WHINE_LOW];
+        if (k >= 0x14) v += s_me[ME_PHD_WHINE_MED];
+        if (k >= 0x28) v += s_me[ME_PHD_WHINE_HIGH];
+        if (k >= 0x41) v += s_me[ME_PHD_WHINE_MAX];
+        pts += v; }
+    // Teto possível: técnicas que liberam os prédios de bem-estar.
+    auto topic = [](int type) { const StructSheetDesc* d = structSheet(type); return d ? d->researchTopic : -1; };
+    if (pl.HasTechnology(topic(0x22))) maxPts += s_meMedSum;
+    if (pl.HasTechnology(topic(0x23))) maxPts += s_me[ME_NURSERY_ON];
+    if (pl.HasTechnology(topic(0x26))) maxPts += s_me[ME_UNIV_ON];
+    if (pl.HasTechnology(topic(0x39))) maxPts += 2;
+    if (pl.HasTechnology(topic(0x25))) maxPts += s_meRecSum;
+    if (pl.HasTechnology(topic(0x28))) maxPts += s_meDirtSum;
+
+    int score = events + (maxPts ? kMoraleScale * pts / maxPts : 0);
+    const int diff = pd.difficulty < 0 ? 0 : pd.difficulty > 2 ? 2 : pd.difficulty;
+    score = (score * s_me[(pd.isEden ? ME_DIFF_EASY : ME_DIFF_EASY_PLY) + diff]) >> 8;
+    if (score > prevValue + 5) score = prevValue + 5;          // ±5 por ciclo
+    else if (score < prevValue - 5) score = prevValue - 5;
+    // (ForceMorale* das missões — bitmasks dword_56DEAC..BC: 99/75/50/25/0.)
+    int level = 0;
+    while (level < 4 && moraleRow(level).points > score) ++level;
+    pd.morale = level;
+    if (score < 0) score = 0;
+    if (score > 0x63) score = 0x63;
+    c.moraleValue = score;
+    c.moraleTrend = score > prevValue ? 1 : score < prevValue ? -1 : 0;
+    // ("Morale Level: %s" p/ o jogador local e o MORALE.LOG — mensagens/B3.)
+}
+
 static void colonyPlayerTick(int p) {
     ColonyState& c = g_colony[p];
     PlayerData& pd = g_playerData[p];
@@ -540,6 +791,7 @@ static void colonyPlayerTick(int p) {
         c.dirty = 1;
     }
     if (c.dirty) allocate(p);
+    moraleTick(p);                                         // sub_44E550 (fim de sub_471F30)
 }
 
 void tickColony() {

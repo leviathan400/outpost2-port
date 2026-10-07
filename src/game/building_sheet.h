@@ -64,4 +64,7 @@ bool loadVehicleSheet();
 // Bloco do jogador `player` do veículo `type` (0x01..0x10) ou nullptr.
 const VehPlayerStats* vehicleSheet(int type, int player);
 
+// WEAPONS.TXT col 13 (Research Topic, desc+0x1E4) pelo Code_Name; 0 se não houver.
+int weaponResearchTopic(const char* codeName);
+
 } // namespace op2

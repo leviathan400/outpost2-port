@@ -382,11 +382,22 @@ static int runColonyTest(const std::string& mapName) {
     op2::colonyMarkDirty(0);
     for (int t = 0; t < 2; ++t) { op2::TethysGame::advanceTick(); op2::tickColony(); }
     dump("com tubo");
-    // Comida/populacao (slot de 32 ticks do jogador 0): 10 ciclos.
+    // Comida/populacao/moral (vez do jogador 0 a cada 256 ticks): 10 ciclos.
     op2::PlayerData& pd = op2::g_playerData[0];
     std::printf("[Colony] antes: comida=%d  trab=%d cient=%d criancas=%d  minerio=%d (cap %d)\n",
                 pd.foodStored, pd.workers, pd.scientists, pd.kids, pd.ore, op2::g_colony[0].oreCapacity);
-    for (int t = 0; t < 32 * 10; ++t) { op2::TethysGame::advanceTick(); op2::tickColony(); }
+    for (int k = 0; k < 10; ++k) {
+        // A vez de cada jogador (comida/moral) vem a cada 8 slots de 32 = 256 ticks.
+        for (int t = 0; t < 256; ++t) { op2::TethysGame::advanceTick(); op2::tickColony(); }
+        if (k == 4) {   // a partir do 5o ciclo: residencia encostada no Agridome
+            op2::Unit res;
+            op2::TethysGame::CreateUnit(res, 0x1E /*RESIDENCE*/, op2::LOCATION{bx + 3, by + 2}, 0);
+            std::printf("[Colony]   + Residence\n");
+        }
+        const op2::ColonyState& m = op2::g_colony[0];
+        std::printf("[Colony]   ciclo %2d: moral valor=%d nivel=%d tendencia=%+d  eventos=%d lotacao=%d comida=%d deslig=%d\n",
+                    k + 1, m.moraleValue, pd.morale, m.moraleTrend, m.moraleEvents, m.crowding, m.foodState, m.disabledPct);
+    }
     const op2::ColonyState& c = op2::g_colony[0];
     std::printf("[Colony] 10 ciclos: comida=%d (produz %d, come %d, saldo %d)  trab=%d cient=%d criancas=%d\n",
                 pd.foodStored, c.foodProduced, c.foodEaten, c.foodNet, pd.workers, pd.scientists, pd.kids);

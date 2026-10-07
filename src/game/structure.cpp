@@ -353,6 +353,7 @@ static void actionTick(int id) {
                 // (sub_438F70) — ainda não portadas.
                 r.action = 0;
                 colonyMarkDirty(r.owner & 0x0F);
+                moraleStructureBuilt(r.owner & 0x0F, r.type);   // sub_44F790 (CC_BORN)
             }
             break;
         }
@@ -367,6 +368,9 @@ static void actionTick(int id) {
                 } else {
                     r.field22 = SUB_REMOVE;
                     structureRemoveFromMap(r, true);            // vt+0x80(1)
+                    // loc_43D81C: moral do dono (sub_44F6C0). O crédito ao atacante
+                    // ([+0x26], sub_44FBE0) entra com o sistema de armas.
+                    moraleStructureLost(r.owner & 0x0F, r.type);
                 }
             } else if (!(r.flags & UNIT_VEHICLE)) {
                 r.field22 = SUB_REMOVE;                         // loc_43DB49

@@ -51,6 +51,27 @@ struct ColonyState {
     int starveRotor = 0;         // +0x1EC
     int oreCapacity = 0;         // +0x18 capacidade de minério comum
     int rareCapacity = 0;        // +0x1C capacidade de minério raro
+    // Moral (sub_44E550) — campos +0x38..+0x78 do registro do jogador. O
+    // nível em si fica em PlayerData::morale (+0x34).
+    int moraleEvents = 0;        // +0x38 pontos de evento (decaem por EVENT_DEC_RATE)
+    int moraleValue = 0;         // +0x40 valor 0..99 (varia no máx. ±5 por ciclo)
+    int moraleTrend = 0;         // +0x44 +1 / 0 / -1
+    int crowding = 0;            // +0x48 pop*100 / capacidade das residências
+    int foodState = 0;           // +0x4C 0 sobra, 1 déficit c/ estoque, 2 déficit, 3 fome
+    int disabledPct = 0;         // +0x50 % de prédios desligados
+    int recreationLoad = 0;      // +0x54 pop*100 / (Recreation + Forum)
+    int medicalLoad = 0;         // +0x5C pop*100 / Medical Center
+    int hasNursery = 0;          // +0x60
+    int hasUniversity = 0;       // +0x64
+    int disasterTechs = 0;       // +0x68
+    int dirtCoverage = 0;        // +0x6C sub_42FE40
+    int idlePct = 0;             // +0x70 ociosos (trabalhadores+cientistas sobrando)
+    int phdPct = 0;              // +0x74 cientistas usados como trabalhadores
+    int hasGorf = 0;             // +0x78
+    // Componentes de rede da última alocação (campos dos nós de dword_547350):
+    // nº de prédios (+0x18), CCs (+0x0C), conectado (+0x10), DIRTs (+0x14).
+    struct NetComponent { int structures = 0, ccs = 0, connected = 0, dirts = 0; };
+    std::vector<NetComponent> components;
 };
 
 // Offsets (relativos a +0xF0) do vetor de estatísticas — vt+0x9C das classes.
@@ -86,6 +107,12 @@ const MoraleRow& moraleRow(int level);
 // vt+0xA0 por classe (sub_483750 base; sub_40C1B0 CC; sub_46E6D0 geradores;
 // sub_46E880 Solar; sub_44AD60 minas/Magma Well).
 bool structureOperational(const UnitRecord& r);
+
+// Eventos de moral (somam em +0x38): prédio do jogador destruído (sub_44F6C0),
+// prédio inimigo destruído pelo jogador (sub_44FBE0), CC concluído (sub_44F790).
+void moraleStructureLost(int player, int type);
+void moraleEnemyStructureKilled(int player, int type);
+void moraleStructureBuilt(int player, int type);
 
 // Turno: sub_471F30 p/ cada jogador.
 void tickColony();

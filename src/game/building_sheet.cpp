@@ -160,3 +160,27 @@ bool loadBuildingSheet() {
 }
 
 } // namespace op2
+
+namespace op2 {
+
+// WEAPONS.TXT (parte de armas de sub_445070) — por ora só a coluna 13
+// "Research Topic" → desc+0x1E4, usada pela moral (técnicas de aviso de
+// desastre: LIGHTNING/TORNADO/EARTHQUAKE/ERUPTION/METEOR).
+int weaponResearchTopic(const char* codeName) {
+    static std::vector<std::pair<std::string, int>> s_topics;
+    static bool loaded = false;
+    if (!loaded) {
+        loaded = true;
+        std::vector<std::string> lines;
+        if (readSheetLines("weapons.txt", lines))
+            for (size_t li = 2; li < lines.size(); ++li) {
+                std::vector<SheetCol> c = splitRow(lines[li]);
+                if (c.size() >= 14 && !c[0].text.empty())
+                    s_topics.emplace_back(c[0].text, c[13].value);
+            }
+    }
+    for (const auto& t : s_topics) if (t.first == codeName) return t.second;
+    return 0;
+}
+
+} // namespace op2
