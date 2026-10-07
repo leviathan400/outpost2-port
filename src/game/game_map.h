@@ -107,12 +107,33 @@ public:
     int commonRubbleTile(int tile, int rnd4) const;     // sub_48B7A0 (rnd4 = GetRand(4))
     int rareRubbleTile(int tile, int rnd4) const;       // sub_48B800
     // cellType 0x15 = terraplanado, 0x16 = entulho (escritos por sub_4831A0).
+    // ---- Largura INTERNA do engine e curva de luz ---------------------------
+    // sub_4353F0: mapas com lgWidth < 9 são guardados com a largura DOBRADA e o
+    // mapa real a partir da coluna 32 (x+32); a curva de luz cobre a largura
+    // interna: escuridão 0 (claro) .. 31 por coluna (byte_54EC14 = obj+0x5C) e
+    // uma 2ª curva (obj+0x25C).
+    int internalWidth() const { return m_internalWidth; }
+    int internalXOffset() const { return m_internalXOff; }
+    int lightDarkness(int internalX) const { return m_light[internalX & (m_internalWidth - 1)]; }
+    // Registro de mapeamento de tile (seção "TILE SET", 8 bytes): +0 tileset
+    // (slot), +2 tile dentro do tileset. O tileIndex da célula indexa estes.
+    struct TileMapping { int16_t tileset = 0, tile = 0; };
+    const std::vector<TileMapping>& tileMappings() const { return m_mappings; }
+    // Slot de tileset (0..numTilesets-1) → índice em tilesets() (-1 se vazio).
+    int tilesetOfSlot(int slot) const {
+        return (slot >= 0 && slot < static_cast<int>(m_slotToTileset.size())) ? m_slotToTileset[slot] : -1;
+    }
+
     static constexpr int CELLTYPE_DOZED  = 0x15;
     static constexpr int CELLTYPE_RUBBLE = 0x16;
     void setTileAndCellType(int x, int y, int tile, int cellType);
 
 private:
     std::vector<TerrainType> m_terrainTypes;
+    std::vector<TileMapping> m_mappings;
+    std::vector<int> m_slotToTileset;
+    int m_internalWidth = 0, m_internalXOff = 0;
+    std::vector<uint8_t> m_light, m_light2;
     bool m_ok = false;
     int m_width = 0;
     int m_height = 0;

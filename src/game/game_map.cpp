@@ -60,10 +60,12 @@ bool GameMap::load(const uint8_t* d, size_t size) {
     // Tabela de tilesets (sub_435CC0 @90244): são EXATAMENTE `numTilesets` slots
     // (header @16, ex. 512). Cada slot = string (sub_49DAF0: u32 len + chars); se
     // len != 0, segue u32 numTiles. Slots vazios são só o u32 0.
+    m_slotToTileset.assign(m_numTileMappings, -1);
     for (uint32_t slot = 0; slot < m_numTileMappings; ++slot) {
         if (o + 4 > size) return false;
         uint32_t nameLen = u32(o); o += 4;
         if (nameLen == 0) continue;
+        m_slotToTileset[slot] = static_cast<int>(m_tilesets.size());
         if (o + nameLen + 4 > size) return false;
         Tileset ts;
         ts.name.assign(reinterpret_cast<const char*>(d + o), nameLen);
@@ -81,7 +83,13 @@ bool GameMap::load(const uint8_t* d, size_t size) {
     if (o + 10 + 4 <= size && std::memcmp(d + o, kTag, 10) == 0) {
         o += 10;
         uint32_t numMappings = u32(o); o += 4;
-        o += static_cast<size_t>(numMappings) * 8;   // mapeamentos (animação de tile)
+        m_mappings.clear();
+        for (uint32_t k = 0; k < numMappings && o + 8 <= size; ++k, o += 8) {
+            TileMapping tm;
+            std::memcpy(&tm.tileset, d + o, 2);
+            std::memcpy(&tm.tile, d + o + 2, 2);
+            m_mappings.push_back(tm);        // (+4..+7: animação do tile)
+        }
         if (o + 4 <= size) {
             uint32_t numTypes = u32(o); o += 4;
             for (uint32_t t = 0; t < numTypes && t < kMaxTerrainTypes; ++t) {
@@ -102,6 +110,23 @@ bool GameMap::load(const uint8_t* d, size_t size) {
                 o += 0x108;
             }
         }
+    }
+
+    // Largura interna + curva de luz (sub_4353F0 @89229 / loop @loc_435634).
+    if (m_lgWidth < 9) { m_internalWidth = m_width * 2; m_internalXOff = 32; }
+    else { m_internalWidth = m_width; m_internalXOff = 0; }
+    m_light.assign(m_internalWidth, 0);
+    m_light2.assign(m_internalWidth, 0);
+    for (int x = 0; x < m_internalWidth; ++x) {
+        const int v = static_cast<int>((static_cast<int64_t>(x) << 16) / m_internalWidth);
+        if (v >= 0x4000 && v <= 0xC000) { m_light[x] = 0x1F; m_light2[x] = 0x16; continue; }
+        int a = static_cast<int16_t>(v);
+        if (a < 0) a = -a;
+        a = (a & 0x3E00) >> 9;
+        if (a > 30) a = 30;
+        if (a < 0) a = 0;
+        m_light[x] = static_cast<uint8_t>(a);
+        m_light2[x] = static_cast<uint8_t>(a - 9 > 0 ? a - 9 : 0);
     }
 
     m_ok = true;

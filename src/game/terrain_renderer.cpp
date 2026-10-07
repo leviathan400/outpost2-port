@@ -92,4 +92,27 @@ void TerrainRenderer::render(uint32_t* dst, int dstW, int dstH, int camX, int ca
     }
 }
 
+uint16_t TerrainRenderer::minimapColor(int mappingIndex) const {
+    if (m_minimapColors.empty() && m_map) {
+        auto& mc = const_cast<std::vector<uint16_t>&>(m_minimapColors);
+        const auto& maps = m_map->tileMappings();
+        mc.assign(maps.size(), 0);
+        std::vector<uint32_t> buf(32 * 32);
+        for (size_t i = 0; i < maps.size(); ++i) {
+            const int ts = m_map->tilesetOfSlot(maps[i].tileset);
+            if (ts < 0 || ts >= static_cast<int>(m_tilesets.size()) || !m_tilesets[ts]) continue;
+            if (!m_tilesets[ts]->blitTile(maps[i].tile, buf.data(), 32)) continue;
+            // Soma em 5 bits por canal (paleta RGB555 do tileset) e média /1024.
+            int r = 0, g = 0, b = 0;
+            for (uint32_t c : buf) {
+                r += (c >> 16) & 0xF8; g += (c >> 8) & 0xF8; b += c & 0xF8;
+            }
+            r = (r >> 10) & 0xF8; g = (g >> 10) & 0xF8; b = (b >> 10) & 0xF8;
+            mc[i] = static_cast<uint16_t>((r << 7) | (g << 2) | (b >> 3));
+        }
+    }
+    return (mappingIndex >= 0 && mappingIndex < static_cast<int>(m_minimapColors.size()))
+               ? m_minimapColors[mappingIndex] : 0;
+}
+
 } // namespace op2

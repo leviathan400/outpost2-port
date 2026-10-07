@@ -30,6 +30,10 @@ public:
     // Faz wrap horizontal (como o engine). Células sem tile no pool ficam pretas.
     void render(uint32_t* dst, int dstW, int dstH, int camX, int camY) const;
 
+    // Cor do minimapa de um tile (RGB555): média dos 1024 pixels do tile do
+    // mapeamento, em 5 bits por canal — sub_48B320 (tabela [obj+0x46C]->[+8]).
+    uint16_t minimapColor(int mappingIndex) const;
+
 private:
     struct PoolEntry { int tileset; int local; };
 
@@ -37,6 +41,7 @@ private:
     std::vector<std::unique_ptr<Pbmp>> m_tilesets;
     std::vector<PoolEntry> m_pool;                 // globalIndex -> (tileset, local)
     mutable std::unordered_map<int, std::vector<uint32_t>> m_cache; // tile 32x32 ARGB
+    std::vector<uint16_t> m_minimapColors;         // por mapeamento (sub_48B2E0)
     bool m_ok = false;
 
     const std::vector<uint32_t>* tilePixels(int globalIndex) const;

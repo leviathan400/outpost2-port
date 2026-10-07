@@ -26,6 +26,24 @@ public:
     // Avança um tick de simulação (o jogo incrementa dword_56DEDC por passo).
     static void advanceTick() { ++s_tick; }
 
+    // ---- Dia/noite (turno sub_489DD0) ---------------------------------------
+    // Fase de 16 bits (dword_5472A0) avança 4 por turno se a luz se move
+    // ([obj+0x48] = dword_56DEA0); posição da faixa de luz em colunas INTERNAS
+    // do mapa: dword_54729C = larguraInterna * fase >> 16. "Luz em toda parte"
+    // (dword_56DEA4) desliga o escurecimento. As missões ligam/desligam via
+    // SetDaylightMoves / SetDaylightEverywhere (CommandPacket 0x2B, sub-ids
+    // 0x12/0x13 → sub_4229F0).
+    static void advanceDaylight(int internalWidth) {
+        if (s_daylightMoves) {
+            s_daylightPhase = (s_daylightPhase + 4) & 0xFFFF;
+            s_daylightPos = (internalWidth * s_daylightPhase) >> 16;
+        }
+    }
+    static void SetDaylightMoves(int on)      { s_daylightMoves = on; }
+    static void SetDaylightEverywhere(int on) { s_daylightEverywhere = on; }
+    static int  daylightPos()        { return s_daylightPos; }
+    static int  daylightEverywhere() { return s_daylightEverywhere; }
+
     static void setSeed(uint32_t seed) { s_rng.setSeed(seed); }
     static int  getRand(int n)         { return s_rng.getRand(n); }
     static GameRNG& rng()              { return s_rng; }
@@ -38,6 +56,10 @@ public:
 
 private:
     static uint32_t s_tick;        // dword_56DEDC
+    static int      s_daylightPhase;      // dword_5472A0
+    static int      s_daylightPos;        // dword_54729C
+    static int      s_daylightMoves;      // dword_56DEA0 ([obj+0x48])
+    static int      s_daylightEverywhere; // dword_56DEA4 ([obj+0x4C])
     static int      s_numPlayers;  // dword_56DEC0
     static int      s_localPlayer; // dword_56DEE8
     static GameRNG  s_rng;         // unk_56B1E0

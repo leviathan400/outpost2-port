@@ -332,7 +332,7 @@ static int runStructTest(const std::string& mapName, const std::string& prefix) 
 
 // --paneshot <map> <out.bmp>: Tokamak ao lado do CC da cena, selecionado, e
 // a tela com o quadro de informação (painel direito) p/ comparar com o original.
-static int runPaneShot(const std::string& mapName, const std::string& outPath) {
+static int runPaneShot(const std::string& mapName, const std::string& outPath, int extraLight) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
     op2::g_ResManager.init(".");
     op2::g_art.load();
@@ -350,6 +350,7 @@ static int runPaneShot(const std::string& mapName, const std::string& outPath) {
         op2::LOCATION l{(op2::g_units[cc].pixelX >> 5) + 3, op2::g_units[cc].pixelY >> 5};
         if (op2::TethysGame::CreateUnit(tok, op2::mapTokamak, l, op2::g_units[cc].owner & 0x0F)) sel = tok.id();
     }
+    for (int k = 0; k < extraLight; ++k) op2::TethysGame::advanceDaylight(op2::g_gameMap.internalWidth());
     gs.setSelection({sel});
     gs.setMouse(200, 150);
     for (int i = 0; i < 40; ++i) gs.onIdle(renderer, 0.05f);
@@ -823,7 +824,7 @@ int main(int argc, char* argv[]) {
         if (std::strcmp(argv[i], "--structtest") == 0 && i + 2 < argc)
             return runStructTest(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--paneshot") == 0 && i + 2 < argc)
-            return runPaneShot(argv[i + 1], argv[i + 2]);
+            return runPaneShot(argv[i + 1], argv[i + 2], i + 3 < argc ? atoi(argv[i + 3]) : 0);
         if (std::strcmp(argv[i], "--colonytest") == 0 && i + 1 < argc)
             return runColonyTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--movelog") == 0 && i + 1 < argc)

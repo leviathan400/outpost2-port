@@ -90,6 +90,10 @@ bool GameState::load(const std::string& mapName) {
     loadVehicleSheet();
     loadMoraleSheet();
     resetUnits();
+    // Dia/noite como as missões de colônia configuram (SetDaylightMoves(1) /
+    // SetDaylightEverywhere(0)); as missões reais definem isso no InitProc.
+    TethysGame::SetDaylightMoves(1);
+    TethysGame::SetDaylightEverywhere(0);
     // Centro do demo: meio do mapa (o centro do clipRect da eden01 cai na emenda
     // do wrap horizontal, o que espalha a base pelas duas bordas da tela).
     int cx = (g_gameMap.width() / 2) & (g_gameMap.width() - 1);
@@ -158,6 +162,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     m_tickAccum += dt;
     while (m_tickAccum >= kTickPeriod) {
         TethysGame::advanceTick();
+        TethysGame::advanceDaylight(g_gameMap.internalWidth());   // início do turno (sub_489DD0)
         m_lastRand = TethysGame::getRand(100);  // 1 consumo determinístico por tick
         tickColony();                            // economia de cada jogador (sub_471F30)
         tickMovement();                          // move as unidades pela rota do pathfinder
@@ -611,29 +616,56 @@ void GameState::renderPanel(Renderer& renderer) {
     }
 
     // --- Minimapa (y 0..kMiniMapH) ---
+    // Cores reais do terreno (média de cada tile, sub_48B320) escurecidas por
+    // coluna pela faixa de luz (sub_48EC70 + tabelas de sub_586193), como o
+    // original. Prédios de todos os jogadores; veículos inimigos só na luz.
     const int mmX0 = px0 + 6, mmY0 = 2, mmW = kPanelW - 12, mmH = kMiniMapH - 4;
     int mw = g_gameMap.ok() ? g_gameMap.width() : 64;
     int mh = g_gameMap.ok() ? g_gameMap.height() : 64;
-    // Escala inteira que caiba (o original mostra o mapa inteiro no quadro).
     int sc = std::max(1, std::min(mmW / mw, mmH / mh));
     int mmW2 = mw * sc, mmH2 = mh * sc;
     int mmX = mmX0 + (mmW - mmW2) / 2, mmY = mmY0 + (mmH - mmH2) / 2;
     renderer.fillRect(mmX0, mmY0, mmW, mmH, 0xFF000000);
-    for (int y = 0; y < mmH2; ++y) {
-        int ty = y / sc;
-        for (int x = 0; x < mmW2; ++x) {
-            int tx = x / sc;
-            bool pass = g_gameMap.ok() && g_gameMap.isPassable(LOCATION{tx, ty});
-            fb[(mmY + y) * VW + (mmX + x)] = pass ? 0xFF6E6658 : 0xFF2E1C12;
-        }
+    const bool shade = g_gameMap.ok() && !TethysGame::daylightEverywhere();
+    // Brilho 0..31 da coluna do port (x interna = x + deslocamento).
+    auto brightness = [&](int tx) {
+        return 0x1F - g_gameMap.lightDarkness(tx + g_gameMap.internalXOffset() - TethysGame::daylightPos());
+    };
+    // Escurecimento de um canal de 5 bits (tabelas byte_585000/585400/585C00).
+    auto shade5 = [](int c5, int b) {
+        if (c5 == 31) return 31;
+        const int m = std::min(b + 8, 33);
+        return (c5 * m) >> 5;
+    };
+    if (g_gameMap.ok()) {
+        for (int ty = 0; ty < mh; ++ty)
+            for (int tx = 0; tx < mw; ++tx) {
+                uint16_t c = m_terrain.minimapColor(g_gameMap.getTile(LOCATION{tx, ty}));
+                int r5 = (c >> 10) & 31, g5 = (c >> 5) & 31, b5 = c & 31;
+                if (shade) {
+                    const int b = brightness(tx);
+                    r5 = shade5(r5, b); g5 = shade5(g5, b); b5 = shade5(b5, b);
+                }
+                renderer.fillRect(mmX + tx * sc, mmY + ty * sc, sc, sc,
+                                  0xFF000000u | (uint32_t(r5 << 3) << 16) | (uint32_t(g5 << 3) << 8) | uint32_t(b5 << 3));
+            }
     }
     static const uint32_t kOC[7] = { 0xFF4060FF,0xFFFF5040,0xFF40D070,0xFFFFD040,
                                      0xFFC060FF,0xFF40E0E0,0xFFFF9030 };
     for (int i = 1; i < (int)g_units.size(); ++i) {
         const UnitRecord& r = g_units[i];
         if (r.id == -1 || (r.flags & UNIT_DEAD) || !(r.flags & (UNIT_VEHICLE | UNIT_BUILDING))) continue;
+        const int ow = r.owner & 0x0F;
+        if ((r.flags & UNIT_VEHICLE) && ow != me && shade) {
+            // sub_48CCD0: veículo de quem não é aliado só aparece com a escuridão
+            // da coluna < 16 (ou com os faróis acesos, flag 1).
+            const bool ally = (g_playerData[me].allyMask >> ow) & 1;
+            if (!ally && !(r.flags & 1) &&
+                g_gameMap.lightDarkness((r.pixelX >> 5) + g_gameMap.internalXOffset() - TethysGame::daylightPos()) >= 16)
+                continue;
+        }
         int mx = mmX + (r.pixelX >> 5) * sc, my = mmY + (r.pixelY >> 5) * sc;
-        renderer.fillRect(mx, my, sc, sc, kOC[(r.owner & 0x0F) % 7]);
+        renderer.fillRect(mx, my, sc, sc, kOC[ow % 7]);
     }
     {
         int vx = mmX + (m_camX / 32) * sc, vy = mmY + (m_camY / 32) * sc;
