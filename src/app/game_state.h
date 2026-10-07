@@ -10,6 +10,8 @@
 
 namespace op2 {
 
+struct WeaponDrawOp;
+
 // UIState do jogo — equivale à UIState estática do engine (dword_574A80, criada
 // uma vez em TApp::CreateFrames). Por enquanto desenha o terreno da missão e rola
 // com as setas; a simulação (TethysGame/Unit) entra nos próximos slices.
@@ -28,6 +30,7 @@ public:
     void setShowPassability(bool v) { m_showPassability = v; }
     void setSelection(const std::vector<int>& ids) { m_selected = ids; }
     void setMouse(int nx, int ny) { m_mouseNX = nx; m_mouseNY = ny; }
+    void setCamera(int x, int y) { m_camX = x; m_camY = y; }
 
     // Painel de comando à direita (216 px, medido na tela original 640x480):
     // minimapa (y 0..134), linha de 6 abas (135..180) e o quadro de informação
@@ -61,6 +64,7 @@ private:
     // (o engine faz o mapa dar a volta em X; unidades do outro lado da emenda
     // precisam aparecer no lado certo da câmera).
     int screenXOf(int worldPixelX) const;
+    void drawBeam(Renderer& renderer, const WeaponDrawOp& op);
     void clampCamera();
     void selectAt(int nx, int ny, bool additive);
     void selectBox(int x0, int y0, int x1, int y1);

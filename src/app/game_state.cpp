@@ -24,6 +24,7 @@
 #include "../game/building_sheet.h"
 #include "../game/colony.h"
 #include "../game/messages.h"
+#include "../game/weapon.h"
 #include "../gfx/artfile.h"
 #include "../gfx/art_blit.h"
 
@@ -92,6 +93,7 @@ bool GameState::load(const std::string& mapName) {
     // Planilhas de unidades (sub_445070): HP, Build Points, entulho, explosao...
     loadBuildingSheet();
     loadVehicleSheet();
+    loadWeaponSheet();
     loadMoraleSheet();
     resetMessages();
     resetUnits();
@@ -106,29 +108,31 @@ bool GameState::load(const std::string& mapName) {
     int owner = TethysGame::localPlayer();
     // Posiciona cada unidade na célula passável mais próxima do ponto desejado
     // (evita montanhas/cânions). As posições reais virão da missão depois.
-    auto place = [&](map_id type, int dx, int dy) {
+    auto place = [&](map_id type, int dx, int dy, map_id cargo = kMapIdNone) {
         Unit u;
         // Célula livre (passável E desocupada) p/ não sobrepor footprint/unidades.
         LOCATION loc = g_gameMap.findFreeNear(LOCATION{cx + dx, cy + dy});
-        TethysGame::CreateUnit(u, type, loc, owner);
+        TethysGame::CreateUnit(u, type, loc, owner, cargo);
     };
+    // Tanques armados (cargo = arma, map_id): Eden usa Laser / Rail Gun.
     place(mapCommandCenter, 0, 0);
     place(mapConVec, 2, 0);
-    place(mapTiger, -2, 1);
+    place(mapTiger, -2, 1, 0x3F);       // Rail Gun Tiger
     place(mapScout, 1, -2);
     place(mapRoboMiner, -3, -2);
-    place(mapLynx, 3, 2);
+    place(mapLynx, 3, 2, 0x3D);         // Laser Lynx
 
     // Inimigo Plymouth (player 1) p/ ver a facção (sprites verdes) + distinção.
     if (TethysGame::noPlayers() >= 2) {
         Player[1].GoPlymouth(); Player[1].GoAI();
-        auto placeE = [&](map_id type, int dx, int dy) {
+        auto placeE = [&](map_id type, int dx, int dy, map_id cargo = kMapIdNone) {
             Unit u;
             LOCATION loc = g_gameMap.findFreeNear(LOCATION{(cx + dx) & (g_gameMap.width()-1), cy + dy});
-            TethysGame::CreateUnit(u, type, loc, 1);
+            TethysGame::CreateUnit(u, type, loc, 1, cargo);
         };
-        placeE(mapTiger, 8, 0);
-        placeE(mapLynx, 9, 2);
+        // Plymouth: RPG / Microwave.
+        placeE(mapTiger, 8, 0, 0x40);   // RPG Tiger
+        placeE(mapLynx, 9, 2, 0x3E);    // Microwave Lynx
         placeE(mapScout, 8, -2);
     }
 
@@ -174,6 +178,14 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         tickUnits();                             // predios + efeitos (sub_43AC30)
         m_tickAccum -= kTickPeriod;
     }
+
+    // Seleção: tira unidades que morreram (o slot pode ter sido reusado por
+    // um projétil/efeito — sub_439910 reaproveita slots livres).
+    m_selected.erase(std::remove_if(m_selected.begin(), m_selected.end(), [](int id) {
+        if (id <= 0 || id >= (int)g_units.size()) return true;
+        const UnitRecord& r = g_units[id];
+        return r.id == -1 || (r.flags & UNIT_DEAD) || !(r.flags & (UNIT_VEHICLE | UNIT_BUILDING));
+    }), m_selected.end());
 
     renderer.clear(0xFF000000);
     m_terrain.render(renderer.getFramebuffer(), Renderer::NATIVE_WIDTH,
@@ -293,16 +305,27 @@ void GameState::onIdle(Renderer& renderer, float dt) {
                 // unidade esteja em MOVIMENTO ([+0x22]==1) ou em acao 0x1C/0x1D;
                 // ai cicla com o relogio: ((clock >> flag) + [unit+0x10]) % nFrames.
                 int frame = 0;
-                bool animating = (r.field22 == 1) || (r.action == 0x1D) || (r.action == 0x1C);
-                if (animating && nf > 0) {
-                    int shift = (r.flags & 0x10000) ? 1 : 0;
-                    int t = (TethysGame::tick() >> shift) + (int)i;   // [unit+0x10] = id
-                    frame = ((t % nf) + nf) % nf;
+                if (isTankChassis(r.type)) {
+                    // sub_484A90 (tanques): só em movimento; (id + tick/2) % nF.
+                    if (r.field22 == 1 && nf > 0) frame = (((int)i + (int)(TethysGame::tick() >> 1)) % nf + nf) % nf;
+                } else {
+                    bool animating = (r.field22 == 1) || (r.action == 0x1D) || (r.action == 0x1C);
+                    if (animating && nf > 0) {
+                        int shift = (r.flags & 0x10000) ? 1 : 0;
+                        int t = (TethysGame::tick() >> shift) + (int)i;   // [unit+0x10] = id
+                        frame = ((t % nf) + nf) % nf;
+                    }
                 }
                 // Cor do dono: campo +0x30 do registro do jogador (colorNumber),
                 // que indexa as rampas de 24 cores de color.bmp (sub_4A8D70).
                 int pc = (ow >= 0 && ow < kMaxPlayers) ? g_playerData[ow].colorNumber : 0;
                 drew = drawSprite(anim, frame, ucx, ucy, pc);
+                // Torre (sub_484CF0): anim da arma p/ a direção da torre [+0x2D],
+                // frame 0, no ponto de encaixe do frame atual do chassi.
+                int tAnim, tx, ty;
+                if (drew && tankTurret(r, anim, frame, tAnim, tx, ty) && tAnim >= 0 &&
+                    tAnim < g_art.numAnimations())
+                    drawSprite(tAnim, 0, ucx + tx, ucy + ty, pc);
             }
         }
         if (isBld) {
@@ -316,6 +339,21 @@ void GameState::onIdle(Renderer& renderer, float dt) {
                 int pc = (ow >= 0 && ow < kMaxPlayers) ? g_playerData[ow].colorNumber : 0;
                 drew = drawSprite(anim, structureFrame(r), ucx, ucy, pc);
             }
+        }
+        if (isEffect && isWeaponProjectile(r.type)) {
+            // Projétil/explosão de arma (vt[6]: sub_4A3420 / sub_4A3000 /
+            // sub_4A2A00 / sub_4A2D50) em coordenadas de mundo do original.
+            std::vector<WeaponDrawOp> ops;
+            weaponDrawOps((int)i, ops);
+            for (const WeaponDrawOp& op : ops) {
+                if (op.kind == WeaponDrawOp::SPRITE) {
+                    if (op.anim >= 0 && g_art.ok() && op.anim < g_art.numAnimations())
+                        drawSprite(op.anim, op.frame, screenXOf(op.x), op.y - m_camY, -1);
+                } else {
+                    drawBeam(renderer, op);
+                }
+            }
+            continue;
         }
         if (isEffect) {
             // Unidade-efeito AMBIENT_ANIM (sub_405160): sem remap de cor salvo
@@ -396,6 +434,52 @@ void GameState::onIdle(Renderer& renderer, float dt) {
 }
 
 int GameState::viewportW() const { return Renderer::NATIVE_WIDTH - kPanelW; }
+
+// Feixes das armas instantâneas: Bresenham com bloco 2x2 por ponto, como
+// sub_41E8F0 (laser: OR 0x7C00 = vermelho máximo em RGB555) e loc_41ECE0
+// (microwave: padrão 0xFE1FC3F8 girado pela fase; cor 0xD69FD69E que perde
+// 0x30003 a cada ponto aceso e volta ao início a cada falha do padrão).
+void GameState::drawBeam(Renderer& renderer, const WeaponDrawOp& op) {
+    uint32_t* fb = renderer.getFramebuffer();
+    const int VW = Renderer::NATIVE_WIDTH, clipW = viewportW(), clipH = Renderer::NATIVE_HEIGHT - kStatusBarH;
+    auto c555 = [](uint32_t w) {
+        const uint32_t r = (w >> 10) & 31, g = (w >> 5) & 31, b = w & 31;
+        return 0xFF000000u | (((r << 3) | (r >> 2)) << 16) | (((g << 3) | (g >> 2)) << 8) | ((b << 3) | (b >> 2));
+    };
+    auto put = [&](int x, int y, uint32_t argb, bool orRed) {
+        if (x < 0 || x >= clipW || y < 0 || y >= clipH) return;
+        uint32_t& px = fb[y * VW + x];
+        px = orRed ? (px | 0x00FF0000u) : argb;
+    };
+    int x0 = screenXOf(op.x), y0 = op.y - m_camY;
+    int x1 = x0 + (screenXOf(op.x2) - screenXOf(op.x)), y1 = op.y2 - m_camY;
+    const bool laser = op.kind == WeaponDrawOp::LASER_LINE;
+    uint32_t pat = 0xFE1FC3F8u;
+    if (op.phase & 31) pat = (pat << (op.phase & 31)) | (pat >> (32 - (op.phase & 31)));
+    const uint32_t start = 0xD69FD69Eu;
+    uint32_t col = start;
+    const int dx = std::abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+    const int dy = -std::abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+    int err = dx + dy;
+    for (;;) {
+        if (laser) {
+            put(x0, y0, 0, true); put(x0 + 1, y0, 0, true);
+            put(x0, y0 + 1, 0, true); put(x0 + 1, y0 + 1, 0, true);
+        } else if (pat & 1) {
+            const uint32_t lo = c555(col & 0xFFFF), hi = c555(col >> 16);
+            put(x0, y0, lo, false); put(x0 + 1, y0, hi, false);
+            put(x0, y0 + 1, lo, false); put(x0 + 1, y0 + 1, hi, false);
+            col -= 0x30003u;
+        } else {
+            col = start;
+        }
+        if (x0 == x1 && y0 == y1) break;
+        pat = (pat << 1) | (pat >> 31);
+        const int e2 = 2 * err;
+        if (e2 >= dy) { err += dy; x0 += sx; }
+        if (e2 <= dx) { err += dx; y0 += sy; }
+    }
+}
 
 int GameState::screenXOf(int worldPixelX) const {
     int sx = worldPixelX - m_camX;

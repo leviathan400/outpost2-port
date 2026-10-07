@@ -21,6 +21,8 @@
 #include "game/command.h"
 #include "game/movement.h"
 #include "game/structure.h"
+#include "game/weapon.h"
+#include "game/building_sheet.h"
 #include "game/colony.h"
 #include "game/structure_anim.h"
 #include "gfx/artfile.h"
@@ -444,6 +446,90 @@ static int runColonyTest(const std::string& mapName) {
     return 0;
 }
 
+// --combattest <map> <prefix>: Laser Lynx + Rail Gun Tiger (jogador 0) contra
+// Microwave Lynx + RPG Tiger (jogador 1, IA) a 3 tiles; roda o laço real e
+// registra alvos, disparos, dano e mortes; grava quadros <prefix>_tNNN.bmp.
+static int runCombatTest(const std::string& mapName, const std::string& prefix) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 combattest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    op2::resetUnits();
+    const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
+    for (int y = 0; y < H; ++y)                      // tira a ocupação da cena demo
+        for (int x = 0; x < W; ++x) op2::g_gameMap.clearUnitOccupancy(x, y);
+    int bx = -1, by = -1;
+    for (int y = H / 2; y < H - 6 && bx < 0; ++y)
+        for (int x = W / 2; x < W - 8 && bx < 0; ++x) {
+            bool ok = true;
+            for (int dy = -1; dy <= 3 && ok; ++dy)
+                for (int dx = -1; dx <= 5 && ok; ++dx)
+                    if (!op2::g_gameMap.isPassable(op2::LOCATION{x + dx, y + dy})) ok = false;
+            if (ok) { bx = x; by = y; }
+        }
+    if (bx < 0) { std::printf("[Combat] sem area livre\n"); return 3; }
+    op2::Unit a, b, c, d;
+    op2::TethysGame::CreateUnit(a, op2::mapLynx, op2::LOCATION{bx, by}, 0, 0x3D);
+    op2::TethysGame::CreateUnit(b, op2::mapTiger, op2::LOCATION{bx, by + 2}, 0, 0x3F);
+    op2::TethysGame::CreateUnit(c, op2::mapLynx, op2::LOCATION{bx + 3, by}, 1, 0x3E);
+    op2::TethysGame::CreateUnit(d, op2::mapTiger, op2::LOCATION{bx + 3, by + 2}, 1, 0x40);
+    const int ids[4] = {a.id(), b.id(), c.id(), d.id()};
+    for (int id : ids)
+        std::printf("[Combat] %d: %s  HP=%d\n", id, op2::unitTitle(op2::g_units[id]).c_str(),
+                    op2::vehicleSheet(op2::g_units[id].type, 0)->hitPoints);
+    gs.setMouse(200, 150);
+    gs.setCamera(bx * 32 - 200 + 48, by * 32 - 240 + 48);
+    gs.setSelection({ids[0], ids[1]});
+    int lastDmg[4] = {0, 0, 0, 0}, lastTgt[4] = {0x7FFF, 0x7FFF, 0x7FFF, 0x7FFF};
+    int shots = 0;
+    for (int t = 1; t <= 600; ++t) {
+        op2::TethysGame::advanceTick();
+        op2::TethysGame::advanceDaylight(op2::g_gameMap.internalWidth());
+        op2::TethysGame::getRand(100);
+        op2::tickColony();
+        op2::tickMovement();
+        const size_t before = op2::g_units.size();
+        int projBefore = 0;
+        for (size_t i = 1; i < before; ++i)
+            if (op2::g_units[i].id != -1 && op2::isWeaponProjectile(op2::g_units[i].type) &&
+                op2::g_units[i].field22 == 0x12) ++projBefore;
+        op2::tickUnits();
+        for (int k = 0; k < 4; ++k) {
+            const op2::UnitRecord& r = op2::g_units[ids[k]];
+            if (r.id == -1) { if (lastDmg[k] >= 0) std::printf("[Combat] t=%d  %d removido\n", t, ids[k]); lastDmg[k] = -1; continue; }
+            const int tg = r.hasTarget() ? r.target4C : 0x7FFF;
+            if (tg != lastTgt[k]) {
+                std::printf("[Combat] t=%d  %d alvo -> %d (torre %d)\n", t, ids[k], tg == 0x7FFF ? -1 : tg, r.turretDir);
+                lastTgt[k] = tg;
+            }
+            if (r.damage != lastDmg[k] && lastDmg[k] >= 0) {
+                std::printf("[Combat] t=%d  %d dano %d -> %d%s\n", t, ids[k], lastDmg[k], r.damage,
+                            (r.flags & op2::UNIT_DEAD) ? " (MORTO)" : "");
+                lastDmg[k] = r.damage;
+            }
+        }
+        int projNow = 0;
+        for (size_t i = 1; i < op2::g_units.size(); ++i)
+            if (op2::g_units[i].id != -1 && op2::isWeaponProjectile(op2::g_units[i].type)) ++projNow;
+        (void)projBefore;
+        static int lastProj = 0;
+        if (projNow > lastProj) shots += projNow - lastProj;
+        lastProj = projNow;
+        if (t == 8 || t == 12 || t == 18 || t == 40 || t == 60 || t == 120 || t == 136 || t == 200 || t == 400) {
+            gs.onIdle(renderer, 0.0f);
+            char fn[256]; std::snprintf(fn, sizeof(fn), "%s_t%03d.bmp", prefix.c_str(), t);
+            writeBmp32(fn, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        }
+    }
+    std::printf("[Combat] projeteis criados (aprox.): %d\n", shots);
+    renderer.shutdown(); SDL_Quit();
+    return 0;
+}
+
 // --movelog <map>: manda o 1º veículo andar ~10 células e imprime o
 // deslocamento (px) por tick — prova que o deslize é contínuo (sem tick parado).
 static int runMoveLog(const std::string& mapName) {
@@ -833,6 +919,8 @@ int main(int argc, char* argv[]) {
             return runStructTest(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--paneshot") == 0 && i + 2 < argc)
             return runPaneShot(argv[i + 1], argv[i + 2], i + 3 < argc ? atoi(argv[i + 3]) : 0);
+        if (std::strcmp(argv[i], "--combattest") == 0 && i + 2 < argc)
+            return runCombatTest(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--colonytest") == 0 && i + 1 < argc)
             return runColonyTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--movelog") == 0 && i + 1 < argc)

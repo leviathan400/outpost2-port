@@ -47,6 +47,13 @@ struct StructSheetDesc {
 
 // Carrega o BUILDING.TXT (idempotente). Retorna false se a planilha não abriu.
 bool loadBuildingSheet();
+// dword_4E1510: classe de blindagem (coluna Armor) → valor que o engine guarda no
+// bloco do descritor (+0x08) e usa no dano: (valor * Concussion >> 8) + Penetration.
+inline int armorValue(int armorClass) {
+    static const int k[6] = {256, 180, 130, 90, 60, 40};
+    return (armorClass >= 0 && armorClass < 6) ? k[armorClass] : 256;
+}
+
 // Descritor da estrutura (map_id 0x15..0x3A) ou nullptr.
 const StructSheetDesc* structSheet(int type);
 
@@ -58,6 +65,7 @@ struct VehPlayerStats {
     int hitPoints = 0;        // +0x00
     int armor = 0;            // +0x08 (classe; o engine guarda dword_4E1510[classe])
     int buildTime = 0;        // +0x14
+    int sight = 0;            // +0x18 col 14 Sight range (tiles)
     int moveSpeed = 0;        // +0x24 (sub_44B650: duração do passo)
     int turnRate = 0;         // +0x28 (sub_44B650: giro por tick)
     int productionRate = 0;   // +0x2C
@@ -67,6 +75,27 @@ const char* vehicleDisplayName(int type);
 bool loadVehicleSheet();
 // Bloco do jogador `player` do veículo `type` (0x01..0x10) ou nullptr.
 const VehPlayerStats* vehicleSheet(int type, int player);
+
+// Parte de ARMAS de sub_445070 (WEAPONS.TXT). Colunas → descritor: 2 Damage
+// Radius → +0x248, 3 Pixels Skipped → +0x24C, 4 Weapon Range → bloco+0x18,
+// 5 Turret Turn Rate (1..16) → +0x24, 6 Owner → +0x1F4, 7 Concussion → +0x28,
+// 8 Penetration → +0x2C, 9/10 Ore → +0x0C/+0x10, 11 Build Time → +0x14,
+// 12 Reload → +0x30, 13 Research → desc+0x1E4. Bloco 0 copiado p/ 1..6.
+struct WeapPlayerStats {
+    int range = 0, turnRate = 0, concussion = 0, penetration = 0, reload = 0;
+    int commonOre = 0, rareOre = 0, buildTime = 0;
+};
+struct WeaponSheetDesc {
+    bool loaded = false;
+    int radius = 0;               // +0x248 (pixels)
+    int skipped = 0;              // +0x24C pixels pulados ao disparar (alcance mínimo)
+    uint32_t ownerFlags = 0;      // +0x1F4
+    int researchTopic = 0;        // +0x1E4
+    const char* displayName = ""; // +0x1F8 (tabela fixa @off_4E9590 pela linha casada)
+    WeapPlayerStats player[7];
+};
+bool loadWeaponSheet();
+const WeaponSheetDesc* weaponSheet(int type);
 
 // WEAPONS.TXT col 13 (Research Topic, desc+0x1E4) pelo Code_Name; 0 se não houver.
 int weaponResearchTopic(const char* codeName);

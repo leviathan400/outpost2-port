@@ -448,14 +448,19 @@ recursos que o port lê em runtime).
 | Menu principal (shell) com arte original | ✅ Funcional |
 | Sub-diálogos (Campaign/Colony/Tutorials/Prefs/About) | 🟡 Placeholder/mock |
 | Disassembly de referência (IDA) | ✅ Disponível (não convertido) |
-| **Motor de jogo (RTS, simulação, mapas, IA, unidades)** | ❌ Não iniciado |
+| **Motor de jogo (RTS, simulação, mapas, IA, unidades)** | 🟡 Em porte (ver linhas abaixo) |
 | Leitura de `.VOL`/LZHUF no port (`ResManager`) | ✅ Funcional (byte-exato) |
 | `GameMap` + render de terreno no port (in-engine) | ✅ Funcional (pixel-exato) |
 | Backbone `TApp`/`UIState` (loop + troca shell↔jogo) | ✅ Funcional |
 | Núcleo de simulação `TethysGame` (clock + RNG determinístico) | ✅ Funcional (RNG bit-exato) |
 | `_Player` (modelo de jogador/economia + API) | ✅ Funcional (offsets reais) |
 | `Unit` (pool + CreateUnit + render de unidades) | ✅ Funcional (desenho fiel) |
-| Sprites de unidade (op2_art) + economia per-tick | ⬜ Próximo passo |
+| Sprites de unidade (op2_art), movimento fiel (sub_44B650) | ✅ Funcional |
+| Estruturas: construção, dano, destruição, entulho, ambiente | ✅ Funcional (`structure.cpp`) |
+| Economia da colônia: energia/trabalhadores/cientistas, comida, população, moral (+ moral forçada das missões) | ✅ Funcional (`colony.cpp`) |
+| HUD: painel direito, quadro da unidade, minimapa com dia/noite, mensagens | 🟡 Parcial (moldura 3D e arte das abas pendentes) |
+| Combate: Laser, Microwave, Rail Gun e RPG em Lynx/Panther/Tiger — busca de alvo (linha de visada), torre, projétil, dano em área com armadura, morte do veículo | ✅ Funcional (`weapon.cpp`; `--combattest`) |
+| Combate pendente: Guard Post, EMP/ESG/Stickyfoam/Acid/Thor/Starflare/Supernova, paredes, ordem de ataque (retaliação/perseguição), sons | ⬜ Próximo passo |
 | Áudio / música / vídeos | ❌ Não iniciado |
 | Multiplayer / rede | ❌ Não iniciado |
 

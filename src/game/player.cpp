@@ -13,8 +13,12 @@ _Player Player[kMaxPlayers] = {
 
 void resetPlayers(int numPlayers) {
     (void)numPlayers;
-    for (int i = 0; i < kMaxPlayers; ++i)
+    for (int i = 0; i < kMaxPlayers; ++i) {
         g_playerData[i] = PlayerData{};   // volta aos defaults
+        // sub_490190: [+4] = (1 << jogador) | 0x40 — aliado de si mesmo e do
+        // jogador 6 (gaia, dono dos projéteis/efeitos).
+        g_playerData[i].allyMask = (1u << i) | 0x40u;
+    }
 }
 
 } // namespace op2

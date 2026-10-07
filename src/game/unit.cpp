@@ -1,6 +1,11 @@
 #include "unit.h"
 
+#include <climits>
+#include <deque>
+
 #include "game_map.h"
+#include "building_sheet.h"
+#include "tethys_game.h"
 #include "command.h"
 #include "structure.h"
 #include "colony.h"
@@ -62,10 +67,84 @@ void buildingFootprint(map_id type, int& w, int& h) {
     }
 }
 
+// Slots liberados (anel dword_54EC04, cabeça dword_54EC00 / cauda dword_54EBFC):
+// sub_439B90 empurra o slot com [+0x08] = tick; sub_439910 reusa o 1º que foi
+// liberado há mais de 0x80 ticks e não tem referências ([+0x32] == 0).
+static std::deque<int> s_freeRing;
+
 void resetUnits() {
     colonyReset();
     g_units.clear();
-    g_units.emplace_back();   // slot 0 = nulo
+    g_units.emplace_back();   // slot 0 = nulo / sentinela da lista por Y
+    g_units[0].lnext = g_units[0].lprev = 0;
+    s_freeRing.clear();
+}
+
+// ---- Lista por Y (dword_54EC0C) --------------------------------------------
+// O original tem sentinelas de y mínimo (início) e máximo (fim); aqui o slot 0
+// faz as duas vezes: andando p/ frente vale +inf, p/ trás vale -inf.
+static int listYFwd(int id)  { return id == 0 ? INT_MAX : unitOY(g_units[id]); }
+static int listYBack(int id) { return id == 0 ? INT_MIN : unitOY(g_units[id]); }
+
+void unitListInsert(int id) {          // sub_439910 @439A46
+    const int y = unitOY(g_units[id]);
+    int at = g_units[0].lnext;
+    while (listYFwd(at) < y) at = g_units[at].lnext;
+    UnitRecord& r = g_units[id];
+    r.lnext = at;
+    r.lprev = g_units[at].lprev;
+    g_units[r.lprev].lnext = id;
+    g_units[at].lprev = id;
+}
+
+void unitListRemove(int id) {          // sub_439B90
+    UnitRecord& r = g_units[id];
+    g_units[r.lprev].lnext = r.lnext;
+    g_units[r.lnext].lprev = r.lprev;
+    r.lnext = r.lprev = 0;
+}
+
+int unitListFirst() { return g_units.empty() ? 0 : g_units[0].lnext; }
+int unitListNext(int id) { return g_units[id].lnext; }
+
+// sub_43E7E0: passadas de inserção até a lista ficar ordenada por [+0x18].
+void unitListSort() {
+    if (g_units.empty()) return;
+    bool moved;
+    do {
+        moved = false;
+        int c = 0;
+        while (g_units[c].lnext != 0) {
+            c = g_units[c].lnext;
+            const int nx = g_units[c].lnext, pv = g_units[c].lprev;
+            const int y = unitOY(g_units[c]);
+            if (listYFwd(nx) < y) {
+                // anda p/ frente até o 1º com y >= y(c) e insere antes dele
+                int at = nx;
+                while (listYFwd(at) < y) at = g_units[at].lnext;
+                g_units[pv].lnext = nx; g_units[nx].lprev = pv;
+                g_units[c].lnext = at; g_units[c].lprev = g_units[at].lprev;
+                g_units[g_units[at].lprev].lnext = c; g_units[at].lprev = c;
+                moved = true;
+            } else if (listYBack(pv) > y) {
+                // anda p/ trás até o 1º com y <= y(c) e insere depois dele
+                int at = pv;
+                while (listYBack(at) > y) at = g_units[at].lprev;
+                g_units[pv].lnext = nx; g_units[nx].lprev = pv;
+                g_units[c].lprev = at; g_units[c].lnext = g_units[at].lnext;
+                g_units[g_units[at].lnext].lprev = c; g_units[at].lnext = c;
+                moved = true;
+            }
+        }
+    } while (moved);
+}
+
+void unitFreeSlot(int id) {            // sub_439B90 (parte do slot)
+    const uint8_t refs = g_units[id].refCount;   // [+0x32] sobrevive à liberação
+    g_units[id] = UnitRecord{};                  // [+0x04] = -1
+    g_units[id].refCount = refs;
+    g_units[id].freeTick = TethysGame::tick();
+    s_freeRing.push_back(id);
 }
 
 UnitRecord* Unit::rec() const {
@@ -124,14 +203,9 @@ void Unit::DoDeath() {
     // Unit::DoDeath @191271 = sub_43A890(1): só agenda a morte (ação 0x2F); a
     // máquina de estados faz o resto (prédio: animação de destruição, entulho,
     // remoção — src/game/structure.cpp).
-    if (!(r->flags & UNIT_VEHICLE)) { killUnit(m_id, 1); return; }
-    // Veículo: o caminho de morte de veículo (loc_43D8B3: destroços, explosão)
-    // ainda não foi portado — por ora libera a célula e marca como morto.
-    if (g_gameMap.ok() && !(r->flags & UNIT_DEAD)) {
-        int cx = r->pixelX >> 5, cy = r->pixelY >> 5;
-        if (g_gameMap.cellOccupant(cx, cy) == m_id) g_gameMap.clearUnitOccupancy(cx, cy);
-    }
-    r->flags |= UNIT_DEAD;
+    // Veículo: case 47 (loc_43D8A3) — sem explosão nem destroços, pois o dano
+    // não chegou ao máximo (src/game/weapon.cpp, vehicleDeath).
+    killUnit(m_id, 1);
 }
 
 void Unit::DoMove(LOCATION dest) {
@@ -165,10 +239,14 @@ bool createUnit(Unit& out, map_id type, LOCATION loc, int owner,
         if (loc.y >= h) loc.y = h - 1;
     }
 
-    // Aloca um slot: reusa um livre (id==-1) ou cresce o pool.
+    // Aloca um slot (sub_439910): o 1º do anel de livres liberado há mais de
+    // 0x80 ticks e sem referências; senão um slot novo.
     int slot = -1;
-    for (int i = 1; i < static_cast<int>(g_units.size()); ++i) {
-        if (g_units[i].id == -1) { slot = i; break; }
+    for (auto it = s_freeRing.begin(); it != s_freeRing.end(); ++it) {
+        const UnitRecord& f = g_units[*it];
+        if (f.freeTick + 0x80 < TethysGame::tick() && f.refCount == 0) {
+            slot = *it; s_freeRing.erase(it); break;
+        }
     }
     if (slot < 0) {
         slot = static_cast<int>(g_units.size());
@@ -181,13 +259,30 @@ bool createUnit(Unit& out, map_id type, LOCATION loc, int owner,
     r.id     = slot;
     r.pixelX = loc.x << 5;                       // tile<<5 (como +0x14/+0x18)
     r.pixelY = loc.y << 5;
-    r.owner  = static_cast<uint8_t>(owner & 0x0F);
+    // sub_439F90: [+0x1D] = dono | (dono << 4) — o nibble alto é o jogador cujas
+    // estatísticas (bloco do descritor) valem p/ a unidade.
+    r.owner  = static_cast<uint8_t>((owner & 0x0F) | ((owner & 0x0F) << 4));
     r.cargo  = static_cast<uint16_t>(cargo);
     r.rotation = static_cast<uint8_t>(rotation & 0xFF);
     // Classe pela faixa do map_id: prédio (0x15..0x3A), veículo (0x01..0x10) ou
     // nenhuma das duas (efeitos/armas, ex. AMBIENT_ANIM 0x72 — sem ocupação).
     r.flags  = mapIdIsBuilding(type) ? UNIT_BUILDING
              : mapIdIsVehicle(type)  ? UNIT_VEHICLE : 0u;
+    if (r.flags & UNIT_VEHICLE) {
+        r.flags |= UNIT_DAMAGEABLE;                              // sub_44B440
+        if (type == mapScorpion || type == mapLynx || type == mapPanther || type == mapTiger)
+            r.flags |= UNIT_AUTO_TARGET | UNIT_ARMED;            // off_4D0650
+        else if (type == mapSmallCapacityAirTransport)
+            r.flags |= UNIT_ARMED;                               // SCAT
+    }
+    if (r.flags & UNIT_BUILDING) {
+        r.flags |= 0x20000000u | UNIT_DAMAGEABLE;                // sub_482F30
+        if (type == 0x17) r.flags |= UNIT_TURRET_BLD;            // Guard Post (sub_42CD90)
+        // sub_4466B0: bit 0x800000 = bit6 de desc+0x24C (AutoTargeted).
+        const StructSheetDesc* d = structSheet(type);
+        if (d && (d->flags24C & 0x40)) r.flags |= UNIT_AUTO_TARGET;
+        else r.flags &= ~UNIT_AUTO_TARGET;
+    }
 
     // Grava a ocupação no grid runtime (bits 16-26), como o engine faz ao
     // posicionar a unidade — é o que sub_4382C0/sub_438390 leem. Veículo = 1 tile;
@@ -215,6 +310,7 @@ bool createUnit(Unit& out, map_id type, LOCATION loc, int owner,
                 (g_units[i].owner & 0x0F) == (owner & 0x0F)) ++n;
         r.serial = static_cast<uint8_t>(n + 1);
     }
+    unitListInsert(slot);                        // lista por Y (sub_439910)
     // sub_439FE0: prédio entra na lista do dono, ordenada por prioridade.
     if (r.flags & UNIT_BUILDING) colonyStructureAdded(slot);
 

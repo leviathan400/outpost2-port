@@ -121,6 +121,7 @@ bool loadVehicleSheet() {
         s.moveSpeed = c[6].value;        // +0x24 (desc+0x2C)
         s.turnRate = c[7].value;         // +0x28 (desc+0x30)
         s.buildTime = c[10].value;       // +0x14 (desc+0x1C)
+        s.sight = c[14].value;           // +0x18 (desc+0x20)
         s.productionRate = c[17].value;  // +0x2C (desc+0x34)
     }
     for (int t = 1; t <= 0x10; ++t)
@@ -194,6 +195,72 @@ bool loadBuildingSheet() {
 } // namespace op2
 
 namespace op2 {
+
+// Code_Name dos descritores de arma com map_id confirmado (GetName = vt[1],
+// tools/extract_anim_tables.py --mapids). A linha "EMP" não casa com nenhum
+// descritor (loc_445CA1) e não consome nome da tabela fixa.
+static const struct { int type; const char* code; } kWeaponCodes[] = {
+    {0x3B, "ACID"}, {0x3D, "LASER"}, {0x3E, "MICROWAVE"}, {0x3F, "RAIL_GUN"},
+    {0x40, "CANNON"}, {0x46, "SPAM"}, {0x47, "FOAM"}, {0x48, "THORS_HAMMER"},
+    {0x49, "SCORPION_WEAPON"}, {0x4A, "EMP_BIG"},
+    {0x55, "BLD_EXPL_SML"}, {0x56, "BLD_EXPL_MED"}, {0x57, "BLD_EXPL_BIG"},
+};
+// Nomes de exibição: off_4E9590 avança 1 por linha CASADA (LASER, MICROWAVE,
+// FOAM, RAIL_GUN, [EMP não casa], CANNON, ...). Só os 5 primeiros casamentos
+// estão confirmados aqui; os demais ficam sem nome até mapear todos os
+// descritores da faixa 0x41..0x45.
+static const struct { const char* code; const char* name; } kWeaponNames[] = {
+    {"LASER", "Laser"}, {"MICROWAVE", "Microwave"}, {"FOAM", "Stickyfoam"},
+    {"RAIL_GUN", "Rail Gun"}, {"CANNON", "RPG"},
+};
+static WeaponSheetDesc s_weap[0x60];
+static bool s_weapLoaded = false;
+
+const WeaponSheetDesc* weaponSheet(int type) {
+    if (type < 0 || type >= 0x60 || !s_weap[type].loaded) return nullptr;
+    return &s_weap[type];
+}
+
+bool loadWeaponSheet() {
+    if (s_weapLoaded) return true;
+    std::vector<std::string> lines;
+    if (!readSheetLines("weapons.txt", lines)) return false;
+    for (size_t li = 2; li < lines.size(); ++li) {
+        std::vector<SheetCol> c = splitRow(lines[li]);
+        if (c.size() < 14 || c[0].text.empty()) continue;
+        int type = -1;
+        for (const auto& w : kWeaponCodes) if (c[0].text == w.code) { type = w.type; break; }
+        if (type < 0) continue;
+        WeaponSheetDesc& d = s_weap[type];
+        for (const auto& n : kWeaponNames) if (c[0].text == n.code) d.displayName = n.name;
+        WeapPlayerStats& s = d.player[0];
+        d.radius = c[2].value;                                     // +0x248
+        d.skipped = c[3].value;                                    // +0x24C
+        s.range = c[4].value;                                      // +0x20 (bloco+0x18)
+        int tr = c[5].value;                                       // clamp 1..16
+        if (tr <= 1) tr = 1;
+        if (tr >= 0x10) tr = 0x10;
+        s.turnRate = tr;                                           // +0x2C (bloco+0x24)
+        switch (c[6].text.empty() ? 0 : c[6].text[0]) {           // +0x1F4
+            case 'B': case 'b': d.ownerFlags |= 0x800 | 0x1000; break;
+            case 'E': case 'e': d.ownerFlags |= 0x1000; break;
+            case 'P': case 'p': d.ownerFlags |= 0x800; break;
+            default: break;
+        }
+        s.concussion = c[7].value;                                 // +0x30 (bloco+0x28)
+        s.penetration = c[8].value;                                // +0x34 (bloco+0x2C)
+        s.commonOre = c[9].value;                                  // +0x14
+        s.rareOre = c[10].value;                                   // +0x18
+        s.buildTime = c[11].value;                                 // +0x1C
+        s.reload = c[12].value;                                    // +0x38 (bloco+0x30)
+        d.researchTopic = c[13].value;                             // +0x1E4
+        d.loaded = true;
+    }
+    for (auto& d : s_weap)
+        for (int pl = 1; pl < 7; ++pl) d.player[pl] = d.player[0];
+    s_weapLoaded = true;
+    return true;
+}
 
 // WEAPONS.TXT (parte de armas de sub_445070) — por ora só a coluna 13
 // "Research Topic" → desc+0x1E4, usada pela moral (técnicas de aviso de

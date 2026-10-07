@@ -64,6 +64,18 @@ enum UnitFlags : uint32_t {
     UNIT_DEAD     = 1u << 17,  // bit17 (morta/armazenada; IsLive testa isto)
     UNIT_DISMANTLED = 0x400000u,   // desmontado (case 0x22): sem explosão (sub_4831A0)
     UNIT_EFFECT_HIDDEN = 0x10000000u, // efeito não desenhado (sub_405000 arg_C)
+    // Combate (ctors: veículo sub_44B440 |= 2|0x400; prédio sub_482F30 |=
+    // 0x20000000|4|0x400; veículo armado off_4D0650 |= 0x800000|0x10; Guard Post
+    // sub_42CD90 |= 0x800000|0x80).
+    UNIT_ARMED      = 0x10u,       // veículo com arma (Lynx/Panther/Tiger/Scorpion, SCAT)
+    UNIT_TURRET_BLD = 0x80u,       // prédio com arma (Guard Post); no projétil: +1 alcance, dano x1.5
+    UNIT_DAMAGEABLE = 0x400u,      // alvo de dano/armas (veículos e prédios)
+    UNIT_FIRE_GROUND = 0x2000u,    // (veículo) ordem de atirar no chão
+    UNIT_ALT_BARREL = 0x4000u,     // (veículo) alterna o cano a cada tiro (Tiger)
+    UNIT_HIT_FLASH  = 0x100000u,   // atingido por ESG ([+0x58] ticks)
+    UNIT_AUTO_TARGET = 0x800000u,  // alvo automático (prédio: AutoTargeted; veículo armado)
+    UNIT_IN_FLIGHT  = 0x800000u,   // (projétil) voo balístico (sub_4A3A90)
+    UNIT_EMP        = 0x80000u,    // paralisado por EMP
 };
 
 // Ações ([+0x21]) usadas pelas estruturas — switch de sub_43ACA0.
@@ -124,6 +136,7 @@ struct UnitRecord {
     int8_t   extraScientists = 0;  // +0x64 PRÉDIO: cientistas extras (labs: pesquisa)
     int      mineYield = 0;        // +0x70 MINA: variante do veio (0/1/2) p/ estatísticas
     uint8_t  netConnected = 0;     // [+0x38]->+0x10: componente de rede ligado a um CC operando
+    int      netComp = -1;         // [+0x38]: componente de rede (índice em ColonyState::components)
     uint8_t  serial = 0;           // +0x2C nº de série exibido ("# 1-NN")
     uint32_t effectAnim = 0;       // +0x54 EFEITO: (divisor<<24)|anim (sub_405000)
     int      effectStart = 0;      // +0x58 EFEITO: tick inicial (clock + atraso)
@@ -144,7 +157,53 @@ struct UnitRecord {
     int      turnTicks = 0;        // [st+0x68] ticks de giro restantes
     int8_t   turnStep = 0;         // [st+0x60] giro por tick (com sinal)
     int      stepDestX = 0, stepDestY = 0;  // [st+0x48]/[st+0x4C] pixel do destino
+
+    // --- Combate (src/game/weapon.cpp) ---------------------------------------
+    int16_t  lastAttacker = 0;     // +0x26 último atacante (crédito; expira em 700 ticks)
+    int      lastAttackTick = 0;   // +0x28 tick do último ataque
+    uint8_t  turretDir = 0;        // +0x2D direção da torre (0..255)
+    int16_t  reload = 0;           // +0x2E recarga restante (ticks)
+    uint8_t  refCount = 0;         // +0x32 referências (alvos/projéteis); slot não é reusado
+    int16_t  field4A = 0x7FFF;     // +0x4A
+    int16_t  target4C = 0;         // +0x4C alvo: id da unidade ou x do tile
+                                   // (+0x4E field4E: 0xFFFF = unidade, y do tile, 0x7FFF = nenhum)
+    // Projétil (unidades de arma 0x3B..0x57):
+    int      sourceId = 0;         // +0x48 atirador (vt[37] sub_4A27E0)
+    int      impactX = 0, impactY = 0; // +0x34/+0x38 ponto de impacto (pixel)
+    int      exploded = 0;         // +0x54
+    int16_t  flightTicks = 0;      // +0x58 duração do voo
+    int      vecX = 0, vecY = 0;   // +0x5C/+0x60 impacto - origem
+    int      velQX = 0, velQY = 0; // +0x64/+0x68 vec*4/duração (rastro)
+    bool     rawPixel = false;     // pixelX/Y já no sentido do original (centro, sem +16)
+
+    // --- Lista por Y (dword_54EC0C; [+0x04]/[+0x08]) e slot livre -------------
+    int      lnext = 0, lprev = 0;
+    int      freeTick = 0;         // [+0x08] tick em que o slot foi liberado
+
+    // Alvo como o dword [+0x4C]: bit31 = unidade.
+    uint32_t target() const { return (static_cast<uint32_t>(field4E) << 16) | static_cast<uint16_t>(target4C); }
+    bool hasTarget() const { return field4E != 0x7FFF; }
+    bool targetIsUnit() const { return (field4E & 0x8000) != 0; }
 };
+
+// Posição no sentido do original ([+0x14]/[+0x18] = centro): o port guarda o
+// canto do tile p/ veículos/prédios/efeitos (+16 = centro); projéteis já guardam
+// o pixel do original.
+inline int unitOX(const UnitRecord& r) { return r.rawPixel ? r.pixelX : r.pixelX + 16; }
+inline int unitOY(const UnitRecord& r) { return r.rawPixel ? r.pixelY : r.pixelY + 16; }
+
+// Lista de unidades ordenada por Y — dword_54EC0C. Slot 0 é a sentinela.
+// Inserção (sub_439910 @439A46): antes do 1º nó com y >= y novo. Reordenação
+// após o laço de tick: sub_43E7E0. O laço de tick (sub_43AC30) e a busca de
+// alvo (sub_4A6DD0/sub_4A6AA0) percorrem esta lista.
+void unitListInsert(int id);
+void unitListRemove(int id);
+void unitListSort();
+int  unitListFirst();          // 1º da lista (0 = vazia)
+int  unitListNext(int id);     // próximo (0 = fim)
+// sub_439B90 (parte do slot): libera o registro ([+0x04] = -1, [+0x08] = tick),
+// preservando [+0x32], e põe o slot no anel de livres.
+void unitFreeSlot(int id);
 
 // Footprint (tamanho em tiles) de um prédio — X-size × Y-size de building.txt
 // (popula o descritor off_4E1340[+0x248/+0x24A] no original). Devolve 1×1 p/

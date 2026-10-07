@@ -36,6 +36,10 @@ int structureMaxHP(const UnitRecord& r);
 int structureCurAnim(const UnitRecord& r);
 int structureFrame(const UnitRecord& r);
 
+// Cria uma unidade-efeito AMBIENT_ANIM (sub_4466B0(0x72) + sub_405000) que toca
+// `animRaw` (com viés 0x65) e morre ao fim. pixelX/Y = canto do tile (port).
+int createAmbientAnim(int pixelX, int pixelY, int animRaw, int div, int delay);
+
 // Animação/frame de uma unidade-efeito AMBIENT_ANIM (sub_405160). Retorna false
 // se não deve ser desenhada (antes do atraso, ou escondida).
 bool effectAnimFrame(const UnitRecord& r, int& anim, int& frame);

@@ -131,6 +131,11 @@ bool structureDoActivate(int id);                   // case 19 (false se faltar 
 void colonyForceMorale(int player, int level);      // level 0=Great .. 4=Rotten
 void colonyFreeMorale(int player);
 
+// sub_42FF00: redução de dano do DIRT (0, 625..2500 de 10000) p/ o prédio.
+int colonyDirtProtection(const UnitRecord& r);
+// Crédito de moral ao matar veículo inimigo (sub_44FD40: ENEMY_VEH_DIES).
+void moraleEnemyVehicleKilled(int player);
+
 // Turno: sub_471F30 p/ cada jogador.
 void tickColony();
 

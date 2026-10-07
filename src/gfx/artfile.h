@@ -43,12 +43,14 @@ struct ArtPicture {
 // Um frame = pilha de pictures.
 struct ArtFrame {
     std::vector<ArtPicture> pics;
+    int8_t off[4] = {0, 0, 0, 0};   // offsets x1,y1,x2,y2 (byte 0..3 do dword de sub_404DF0)
 };
 
 // Uma animação = header[9] + frames.
 struct ArtAnimation {
     uint32_t header[9] = {0};
     std::vector<ArtFrame> frames;
+    bool hasOffsets = false;        // base dos extras != 0xFFFF (algum frame com offsets)
 };
 
 class ArtFile {

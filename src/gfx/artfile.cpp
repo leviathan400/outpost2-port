@@ -128,9 +128,15 @@ void ArtFile::parseAnimations(size_t startOff) {
             if (o + 2 > n) return;
             uint8_t b1 = d[o]; uint8_t b2 = d[o + 1]; o += 2;
             int npic = b1 & 0x7F;
-            if (b1 & 0x80) o += 2;   // u16 extra
-            if (b2 & 0x80) o += 2;   // u16 extra
             ArtFrame frame;
+            // Offsets opcionais do frame (loc_404A45..loc_404AF6): com b1&0x80 o
+            // loader lê 2 bytes p/ os bytes 0,1 do dword extras[base+frame]; com
+            // b2&0x80, 2 bytes p/ os bytes 2,3. É o que sub_404DF0 devolve (ponto
+            // de encaixe da torre / boca da arma, em int8 x,y).
+            if (o + (b1 & 0x80 ? 2 : 0) + (b2 & 0x80 ? 2 : 0) > n) return;
+            if (b1 & 0x80) { frame.off[0] = static_cast<int8_t>(d[o]); frame.off[1] = static_cast<int8_t>(d[o + 1]); o += 2; }
+            if (b2 & 0x80) { frame.off[2] = static_cast<int8_t>(d[o]); frame.off[3] = static_cast<int8_t>(d[o + 1]); o += 2; }
+            if (b1 & 0x80 || b2 & 0x80) anim.hasOffsets = true;
             // O byte +3 de cada registro é o ÍNDICE de destino, não um campo
             // qualquer: o loader original grava `pictures[slot]` (loc_404B0A,
             // `eax = slot; [edx + slot*6 + 4] = imageIndex`). A ordem de leitura

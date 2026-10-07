@@ -382,6 +382,10 @@ void moraleEnemyStructureKilled(int player, int type) {      // sub_44FBE0
     if (isGoodBuilding(type)) g_colony[player].moraleEvents += s_me[ME_ENEMY_GOOD_DIES];
     else if (type == 0x32) g_colony[player].moraleEvents += s_me[ME_ENEMY_BAD_DIES];
 }
+void moraleEnemyVehicleKilled(int player) {                 // sub_44FD40
+    if (player < 0 || player >= kMaxPlayers) return;
+    g_colony[player].moraleEvents += s_me[ME_ENEMY_VEH_DIES];  // dword_4E1FA8 (entrada 13)
+}
 void moraleStructureBuilt(int player, int type) {            // sub_44F790
     if (player < 0 || player >= kMaxPlayers) return;
     if (type == mapCommandCenter) g_colony[player].moraleEvents += s_me[ME_CC_BORN];
@@ -643,6 +647,7 @@ static void allocate(int p) {
     for (int id : L) {                                    // [+0x38]->+0x10 p/ o painel
         UnitRecord& r = g_units[id];
         r.netConnected = (comp[id] >= 0 && compConnected[comp[id]]) ? 1 : 0;
+        r.netComp = comp[id];
     }
     c.powerLeft = powerAvail;
     c.workersLeft = workers;
@@ -689,6 +694,21 @@ static int dirtCoverage(int p) {
         sum += ratio <= 100 ? 0x9C4 : ratio <= 200 ? 0x6EF : ratio <= 300 ? 0x4E2 : 0x271;
     }
     return n ? sum / n : 0;
+}
+
+// sub_42FF00: proteção do DIRT ao prédio (nó de rede [+0x38]: +0x08 dono,
+// +0x14 DIRTs, +0x18 prédios) — mesma escala de sub_42FE40, por componente.
+int colonyDirtProtection(const UnitRecord& r) {
+    const int p = ownerOf(r);
+    const ColonyState& c = g_colony[p];
+    if (r.netComp < 0 || r.netComp >= static_cast<int>(c.components.size())) return 0;
+    const auto& k = c.components[r.netComp];
+    if (!k.dirts) return 0;
+    const StructSheetDesc* dirt = structSheet(0x28);
+    const int cap = dirt ? dirt->player[p].productionCapacity : 0;
+    if (cap == 0) return 0;
+    const int ratio = ((k.structures - k.dirts) / k.dirts) * 100 / cap;
+    return ratio <= 100 ? 0x9C4 : ratio <= 200 ? 0x6EF : ratio <= 300 ? 0x4E2 : 0x271;
 }
 
 // ---- sub_44E550: moral (slot de 32 ticks do jogador) --------------------------

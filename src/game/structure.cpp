@@ -8,6 +8,7 @@
 #include "player.h"
 #include "structure_anim.h"
 #include "tethys_game.h"
+#include "weapon.h"
 #include "../gfx/artfile.h"
 
 namespace op2 {
@@ -95,7 +96,7 @@ int structureFrame(const UnitRecord& r) {
 
 // sub_4466B0(0x72, x, y, 6, 0, 0, 1) + sub_405000(anim, div, delay, 0, 0):
 // unidade-efeito que toca uma animação e morre sozinha.
-static int createAmbientAnim(int pixelX, int pixelY, int animRaw, int div, int delay) {
+int createAmbientAnim(int pixelX, int pixelY, int animRaw, int div, int delay) {
     Unit u;
     if (!createUnit(u, mapAmbientAnim, LOCATION{pixelX >> 5, pixelY >> 5}, 6)) return 0;
     UnitRecord& e = g_units[u.id()];
@@ -375,8 +376,12 @@ static void actionTick(int id) {
                 } else {
                     r.field22 = SUB_REMOVE;
                     structureRemoveFromMap(r, true);            // vt+0x80(1)
-                    // loc_43D81C: moral do dono (sub_44F6C0). O crédito ao atacante
-                    // ([+0x26], sub_44FBE0) entra com o sistema de armas.
+                    // loc_43D764: crédito ao atacante de outro dono ([+0x26],
+                    // sub_44FBE0) — estatísticas 0x1CC/0x1C4 do jogador pendentes.
+                    if (r.lastAttacker > 0 && r.lastAttacker < static_cast<int>(g_units.size()) &&
+                        ((g_units[r.lastAttacker].owner ^ r.owner) & 0x0F))
+                        moraleEnemyStructureKilled(g_units[r.lastAttacker].owner & 0x0F, r.type);
+                    // loc_43D81C: moral do dono (sub_44F6C0).
                     moraleStructureLost(r.owner & 0x0F, r.type);
                     if ((r.owner & 0x0F) == TethysGame::localPlayer()) { // "%s destroyed"
                         char msg[100];
@@ -384,9 +389,14 @@ static void actionTick(int id) {
                         postMessage(r.pixelX + 16, r.pixelY + 16, msg, 0x67);
                     }
                 }
-            } else if (!(r.flags & UNIT_VEHICLE)) {
+            } else if ((r.flags & UNIT_VEHICLE) || (r.flags & 0x40)) {
+                vehicleDeath(id);                               // loc_43D8B3
+            } else {
                 r.field22 = SUB_REMOVE;                         // loc_43DB49
             }
+            break;
+        case 0x36:                                              // case 54: projétil
+            weaponProjectileAction(id);
             break;
         default: break;
     }
@@ -397,6 +407,8 @@ static void actionTick(int id) {
 static bool updateTick(int id) {
     UnitRecord& r = g_units[id];
     if ((r.flags & UNIT_BUILDING) && r.action != ACT_BUILD) structureUpdateState(id);
+    unitPeriodicTick(id);                 // prólogo de sub_43DE50 (1x a cada 8 ticks)
+    if (weaponProjectileSubstate(id)) return false;   // cases 15/18/19 (projétil)
     UnitRecord& u = g_units[id];          // (structureUpdateState pode criar unidades)
     switch (u.field22) {
         case SUB_WAIT: case 9:            // loc_43E2B3
@@ -412,7 +424,12 @@ static bool updateTick(int id) {
 void removeUnit(int id) {
     UnitRecord& r = g_units[id];
     if (r.flags & UNIT_BUILDING) colonyStructureRemoved(id);    // sub_439C00
-    if (g_gameMap.ok()) {
+    // sub_439CE0: veículo no meio de um passo libera a célula de DESTINO (o
+    // estado de movimento [+0x34] guarda o destino); senão a própria célula.
+    if (g_gameMap.ok() && (r.flags & UNIT_VEHICLE) && r.stepTicks > 0 && (r.velX || r.velY)) {
+        const int dx = r.stepDestX >> 5, dy = r.stepDestY >> 5;
+        if (g_gameMap.cellOccupant(dx, dy) == id) g_gameMap.clearUnitOccupancy(dx, dy);
+    } else if (g_gameMap.ok()) {
         int cx = r.pixelX >> 5, cy = r.pixelY >> 5;
         if (r.flags & UNIT_BUILDING) {
             int w, h; buildingFootprint(r.type, w, h);
@@ -425,17 +442,59 @@ void removeUnit(int id) {
             if (g_gameMap.cellOccupant(cx, cy) == id) g_gameMap.clearUnitOccupancy(cx, cy);
         }
     }
-    r = UnitRecord{};    // id = -1: slot livre
+    weaponUnitRemoved(id);   // vt[19] do projétil: solta a referência ao atirador
+    unitListRemove(id);
+    unitFreeSlot(id);
+}
+
+// Veículo no laço (vt[1] + vt[2]): o movimento (sub-estado 1) fica em
+// tickMovement(); aqui entram a morte (ação 0x2F), a cauda de sub_43ACA0 (tick
+// da arma) e o prólogo/sub-estados 6/0xB de sub_43DE50.
+static bool vehicleTick(int id) {
+    UnitRecord& r = g_units[id];
+    if (r.action == ACT_DIE) {
+        if (r.field20) {                                        // ramo [+0x20] (case 47)
+            if (r.field3C <= 0 || r.field3C > 10000) r.field3C = 10;
+            r.field22 = SUB_WAIT; r.field20 = 0;
+        } else if (r.field22 == 0) {
+            vehicleDeath(id);                                   // loc_43D8A3
+        }
+    }
+    {   // def_43B312: armado (0x10 xor 0x80), sem 0x20000/0x80000 → vt[5] da arma.
+        UnitRecord& u = g_units[id];
+        if ((((u.flags << 24) ^ (u.flags << 27)) & 0x80000000u) && !(u.flags & 0xA0000u))
+            weaponTick(id);
+    }
+    unitPeriodicTick(id);
+    UnitRecord& u = g_units[id];
+    switch (u.field22) {
+        case SUB_WAIT: case 9:
+            if (--u.field3C == 0) { u.field23 = u.field22; u.field22 = 0; }
+            return false;
+        case SUB_REMOVE:
+            return true;
+        default:
+            return false;
+    }
 }
 
 void tickUnits() {
-    // Itera por id (no original, a lista encadeada dword_54EC0C). Unidades
-    // criadas durante o laço entram no fim e já rodam neste tick, como na lista.
-    for (int id = 1; id < static_cast<int>(g_units.size()); ++id) {
-        if (g_units[id].id == -1 || (g_units[id].flags & UNIT_VEHICLE)) continue;
-        actionTick(id);
-        if (updateTick(id)) removeUnit(id);
+    // sub_43AC30: percorre a lista por Y (dword_54EC0C); unidades criadas no
+    // laço entram na posição do seu Y (rodam neste tick se ficarem adiante).
+    // No fim, sub_43E7E0 reordena a lista.
+    for (int id = unitListFirst(); id != 0;) {
+        bool remove;
+        if (g_units[id].flags & UNIT_VEHICLE) {
+            remove = vehicleTick(id);
+        } else {
+            actionTick(id);
+            remove = updateTick(id);
+        }
+        const int next = unitListNext(id);
+        if (remove) removeUnit(id);
+        id = next;
     }
+    unitListSort();
 }
 
 std::string unitTitle(const UnitRecord& r) {
@@ -443,7 +502,13 @@ std::string unitTitle(const UnitRecord& r) {
     if (r.flags & UNIT_BUILDING) { if (const StructSheetDesc* d = structSheet(r.type)) nm = d->displayName; }
     else nm = vehicleDisplayName(r.type);
     char buf[96];
-    std::snprintf(buf, sizeof(buf), "%s # %d-%02d", nm, (r.owner & 0x0F) + 1, r.serial);
+    // sub_43A5E0: Guard Post / Tiger / Panther / Lynx levam o nome da arma antes.
+    if (r.type == 0x17 || r.type == mapTiger || r.type == mapPanther || r.type == mapLynx) {
+        std::snprintf(buf, sizeof(buf), "%s %s # %d-%02d", weaponDisplayName(static_cast<int16_t>(r.cargo)),
+                      nm, ((r.owner >> 4) & 0x0F) + 1, r.serial);
+        return buf;
+    }
+    std::snprintf(buf, sizeof(buf), "%s # %d-%02d", nm, ((r.owner >> 4) & 0x0F) + 1, r.serial);
     return buf;
 }
 

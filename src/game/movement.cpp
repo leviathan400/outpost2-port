@@ -6,6 +6,7 @@
 #include "command.h"
 #include "terrain_cost.h"
 #include "building_sheet.h"
+#include "structure.h"
 
 namespace op2 {
 
@@ -107,6 +108,8 @@ static void stepUnit(int id) {
     UnitRecord& u = g_units[id];
     if (u.id == -1 || (u.flags & UNIT_DEAD)) return;
     if (!(u.flags & UNIT_VEHICLE)) return;
+    // Morrendo (ação 0x2F, sub-estado 6): o movimento para onde está.
+    if (u.action == ACT_DIE) return;
 
     // sub_44C0B0: passo em curso? aplica 1 tick e sai (termina mesmo sem ordem).
     if (u.stepTicks > 0) { applyStepTick(u); return; }
