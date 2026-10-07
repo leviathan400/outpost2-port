@@ -52,7 +52,12 @@ inline bool mapIdIsVehicle(map_id t) { return t >= mapCargoTruck && t <= mapSmal
 enum UnitFlags : uint32_t {
     UNIT_VEHICLE  = 1u << 1,   // bit1
     UNIT_BUILDING = 1u << 2,   // bit2
-    UNIT_EFFECT_COLOR = 0x4000u,   // efeito usa a cor [+0x60] (sub_405160)
+    UNIT_LIGHTS   = 1u << 0,   // bit0 (ligado junto com ENABLED; vai p/ [+0x40] bit31)
+    UNIT_ENABLED  = 0x2000u,   // prédio habilitado   (sub_483940 / sub_483980)
+    UNIT_STAFFED  = 0x4000u,   // prédio com trabalhadores (sub_4838B0 / sub_483910)
+    UNIT_EFFECT_COLOR = 0x4000u,   // (efeito) usa a cor [+0x60] (sub_405160)
+    UNIT_POWERED  = 0x8000u,   // prédio com energia   (sub_483880 / sub_4838E0)
+    UNIT_DISABLED_TIMERS = 0xC0000u, // 0x40000/0x80000: contadores de EMP etc. (sub_43DE50)
     UNIT_DEAD     = 1u << 17,  // bit17 (morta/armazenada; IsLive testa isto)
     UNIT_DISMANTLED = 0x400000u,   // desmontado (case 0x22): sem explosão (sub_4831A0)
     UNIT_EFFECT_HIDDEN = 0x10000000u, // efeito não desenhado (sub_405000 arg_C)
@@ -111,6 +116,7 @@ struct UnitRecord {
     uint32_t state34 = 0;          // +0x34 PRÉDIO: (estado<<16)|contador (sub_408930)
     int      builderId = 0;        // +0x48 ConVec que está construindo
     int      buildTime = 0;        // +0x5C duração total da construção (ticks)
+    uint16_t ambientCursor = 0;    // +0x54 PRÉDIO: (contagem<<8)|índice em byte_4E4138
     uint32_t effectAnim = 0;       // +0x54 EFEITO: (divisor<<24)|anim (sub_405000)
     int      effectStart = 0;      // +0x58 EFEITO: tick inicial (clock + atraso)
     int      effectColor = -1;     // +0x60 EFEITO: cor (se UNIT_EFFECT_COLOR)

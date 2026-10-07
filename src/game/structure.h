@@ -45,4 +45,14 @@ void tickUnits();
 // Remove a unidade do pool (sub_439CE0 + destrutor): libera a ocupação e o slot.
 void removeUnit(int id);
 
+// Animações ambiente (estados 5..9) — sub_4835C0. Exigem o prédio OPERANDO
+// (sub_483750: habilitado + energia + trabalhadores, dano < 75%), estado que
+// no original vem da economia da colônia (rede de tubos/energia/trabalhadores,
+// dword_547350 — ainda não portada).
+bool structureIsOperational(const UnitRecord& r);
+// sub_483810: liga trabalhadores, energia e habilitação (o que a economia faz).
+void structureTurnOn(UnitRecord& r);
+// Opção "Ambient" do OUTPOST2.INI (dword_575628).
+void setAmbientAnimations(bool on);
+
 } // namespace op2

@@ -218,6 +218,71 @@ static void structureRemoveFromMap(UnitRecord& r, bool destroyed) {
     scatter(d->rareRubble, true, remaining);                     // byte desc+0x2A1
 }
 
+// ---- Animações ambiente --------------------------------------------------
+
+// dword_575628 = opção "Ambient" do [Game] do OUTPOST2.INI (padrão 1).
+static bool s_optAmbient = true;
+void setAmbientAnimations(bool on) { s_optAmbient = on; }
+
+// byte_4E4138: 11 registros de 5 bytes {contagem, ambiente das variantes 1..4};
+// 0xFF na contagem = sentinela (registros 0 e 10). Lido do OUTPOST2.EXE.
+static const uint8_t kAmbientTable[11][5] = {
+    {0xFF, 0, 0, 0, 0},
+    {2, 0, 0, 1, 2}, {1, 0, 1, 2, 0}, {3, 0, 1, 0, 1}, {1, 0, 0, 1, 3},
+    {0, 0, 1, 1, 2}, {2, 0, 0, 0, 3}, {3, 0, 1, 2, 1}, {1, 0, 1, 2, 0},
+    {0, 0, 0, 0, 2},
+    {0xFF, 0, 0, 0, 0},
+};
+
+// sub_483750 (vt+0xA0): o prédio está operando? Fora de construção/desmontagem,
+// dano < 75% do HP, habilitado + com trabalhadores + com energia, sem EMP.
+bool structureIsOperational(const UnitRecord& r) {
+    if (r.action == ACT_BUILD || r.action == ACT_DISMANTLE) return false;
+    if ((structureMaxHP(r) * 3 >> 2) <= r.damage) return false;
+    const uint32_t need = UNIT_ENABLED | UNIT_POWERED | UNIT_STAFFED;
+    if ((r.flags & need) != need) return false;
+    return (r.flags & UNIT_DISABLED_TIMERS) == 0;
+}
+
+// sub_483810 (vt+0x88): liga trabalhadores (vt+0xAC), energia (vt+0xB4) e
+// habilitação (vt+0xB8, que também liga o bit 0). Cada um marca a economia do
+// dono p/ recálculo (dword_56E37C) — a economia ainda não foi portada.
+void structureTurnOn(UnitRecord& r) {
+    if (!(r.flags & UNIT_POWERED)) {
+        r.flags |= UNIT_STAFFED;
+        if (!(r.flags & UNIT_POWERED)) r.flags |= UNIT_POWERED;
+    }
+    if (!(r.flags & UNIT_ENABLED)) r.flags |= UNIT_LIGHTS | UNIT_ENABLED;
+}
+
+// sub_4835C0 (vt+0x94): chamado a cada tick com o prédio intacto e parado no
+// estado 0. Age 1x a cada 100 ticks (defasado por y e id); [+0x54] guarda o
+// índice em byte_4E4138 e uma contagem regressiva; ao disparar, põe o estado
+// 5 + ambiente[índice][variante] (sub_408930 avança o frame até o fim e volta a 0).
+static void structureAmbientTick(int id) {
+    UnitRecord& r = g_units[id];
+    if (!s_optAmbient) return;
+    if (!structureIsOperational(r)) return;
+    const int variant = static_cast<int8_t>(structureAmbientVariant(r.type, isEdenTable(r)));
+    if (variant == 0) return;
+    // [+0x14]/[+0x18] no original = centro do tile (no port pixel é o canto).
+    const int cx = r.pixelX + 16, cy = r.pixelY + 16, k = id * 8;
+    if ((cy + k + TethysGame::tick()) % 100 != 0) return;
+    if (r.ambientCursor == 0) {
+        int i = (cx + k) % 11;
+        if (kAmbientTable[i][0] == 0xFF) i = 1;
+        r.ambientCursor = static_cast<uint16_t>(i & 0xFF);
+    }
+    uint8_t idx = static_cast<uint8_t>(r.ambientCursor & 0xFF);
+    uint8_t cd = static_cast<uint8_t>(r.ambientCursor >> 8);
+    if (cd) { r.ambientCursor = static_cast<uint16_t>(((cd - 1) << 8) | idx); return; }
+    const int amb = static_cast<int8_t>(kAmbientTable[idx][variant]);
+    ++idx;
+    if (kAmbientTable[idx][0] == 0xFF) idx = 1;
+    r.state34 = static_cast<uint32_t>((amb + 5) & 0xFFFF) << 16;
+    r.ambientCursor = static_cast<uint16_t>((kAmbientTable[idx][0] << 8) | idx);
+}
+
 // sub_408930 (vt+0xC4): estado do prédio pelo dano / início da destruição.
 static void structureUpdateState(int id) {
     UnitRecord& r = g_units[id];
@@ -240,10 +305,7 @@ static void structureUpdateState(int id) {
     if (hp * 3 / 10 <= dmg) { r.state34 = 0x10000; return; }  // dano >= 30%
     const uint32_t state = (r.state34 >> 16) & 0xFFFF;
     if (state == 1 || state == 2) { r.state34 = 0; return; }     // reparado
-    if (state == 0) {
-        // vt+0x94 = sub_4835C0: animações ambiente — próximo passo do porte.
-        return;
-    }
+    if (state == 0) { structureAmbientTick(id); return; }        // vt+0x94
     if (state < 5) return;
     uint32_t sub = (r.state34 & 0xFFFF) + 1;
     if (static_cast<uint32_t>(curLastFrame(r)) < sub) r.state34 = 0;

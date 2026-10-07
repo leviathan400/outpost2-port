@@ -39,6 +39,7 @@ bool GameState::load(const std::string& mapName) {
         if (tps < 4) tps = 4;
         if (tps > 40) tps = 40;
         m_tickPeriod = 1.0f / static_cast<float>(tps);
+        setAmbientAnimations(gs.ambient != 0);   // "Ambient" → dword_575628
     }
     m_mapName = mapName;
     auto stream = g_ResManager.openStream(mapName);
@@ -454,8 +455,9 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
         // DEPURACAO dos estados de predio (ainda nao ha armas/ConVec construindo):
         //   D = +10% do HP max de dano   H = repara (dano 0)
         //   K = Unit::DoDeath (Kill(1))  B = reinicia a construcao (sub_43DE50)
+        //   O = poe o predio OPERANDO (sub_483810 — o que a economia faria)
         const SDL_Keycode k = e.key.keysym.sym;
-        if (k == SDLK_d || k == SDLK_h || k == SDLK_k || k == SDLK_b) {
+        if (k == SDLK_d || k == SDLK_h || k == SDLK_k || k == SDLK_b || k == SDLK_o) {
             for (int id : std::vector<int>(m_selected)) {
                 if (id <= 0 || id >= (int)g_units.size()) continue;
                 UnitRecord& r = g_units[id];
@@ -469,6 +471,8 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
                     Unit(id).DoDeath();
                 } else if (k == SDLK_b && r.action != ACT_DIE) {
                     structureStartBuild(id, 0);
+                } else if (k == SDLK_o) {
+                    structureTurnOn(r);
                 }
             }
         }

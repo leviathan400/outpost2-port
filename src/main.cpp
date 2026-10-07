@@ -302,6 +302,22 @@ static int runStructTest(const std::string& mapName, const std::string& prefix) 
     op2::g_units[bid].damage = static_cast<int16_t>(hp * 35 / 100); run(2); snap("dano35");
     op2::g_units[bid].damage = static_cast<int16_t>(hp * 65 / 100); run(2); snap("dano65");
     op2::g_units[bid].damage = 0; run(2); snap("reparado");
+    // Animacao ambiente: predio operando (sub_483810) -> a cada 100 ticks
+    // sub_4835C0 pode por o estado 5+ (frame = contador ate o fim).
+    op2::structureTurnOn(op2::g_units[bid]);
+    {
+        int shots = 0;
+        for (int t = 0; t < 1200 && shots < 3; ++t) {
+            run(1);
+            const op2::UnitRecord& r = op2::g_units[bid];
+            int st = (r.state34 >> 16) & 0xFFFF, sub = r.state34 & 0xFFFF;
+            if (st >= 5 && sub == 3) {
+                char tag[16]; std::snprintf(tag, sizeof(tag), "amb%d", shots);
+                snap(tag); ++shots;
+            }
+        }
+        if (!shots) std::printf("[Struct] nenhuma animacao ambiente em 1200 ticks\n");
+    }
     op2::Unit(bid).DoDeath();
     run(4); snap("morte04");
     run(8); snap("morte12");

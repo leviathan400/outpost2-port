@@ -142,4 +142,52 @@ const char* structureCodeName(int type) {
     return kStructCodeName[type - 0x15];
 }
 
+// Variante da animacao ambiente: byte desc+0x2A6 (tabela A) / +0x2A7 (B) =
+// coluna 1..4 da tabela byte_4E4138 lida por sub_4835C0; 0 = sem ambiente.
+static const int kStructAmbientVariant[38][2] = {
+    { 1, 2 },  // 0x15 MINE
+    { 1, 1 },  // 0x16 MINE_ADV
+    { 0, 0 },  // 0x17 TOWER_GUARD
+    { 2, 0 },  // 0x18 TOWER_LIGHT
+    { 1, 1 },  // 0x19 STORAGE_ORE
+    { 1, 1 },  // 0x1A STORAGE_RARE
+    { 0, 1 },  // 0x1B FORUM
+    { 1, 1 },  // 0x1C COMMAND
+    { 0, 2 },  // 0x1D ASE
+    { 3, 3 },  // 0x1E RESIDENCE
+    { 4, 2 },  // 0x1F ROBOT_COMMAND
+    { 2, 2 },  // 0x20 TRADE
+    { 2, 1 },  // 0x21 LAB
+    { 2, 3 },  // 0x22 MED_CENTER
+    { 3, 3 },  // 0x23 NURSERY
+    { 1, 4 },  // 0x24 SOLAR
+    { 4, 4 },  // 0x25 RECREATION
+    { 3, 2 },  // 0x26 UNIVERSITY
+    { 1, 1 },  // 0x27 AGRIDOME
+    { 3, 1 },  // 0x28 DIRT
+    { 0, 0 },  // 0x29 GARAGE
+    { 1, 0 },  // 0x2A MAGMA_WELL
+    { 3, 0 },  // 0x2B METEOR_DEF
+    { 1, 0 },  // 0x2C GEOTHERMAL
+    { 0, 1 },  // 0x2D FACT_ANDROID
+    { 1, 0 },  // 0x2E FACT_LUXURY
+    { 1, 2 },  // 0x2F FACT_STRUCTURE
+    { 2, 1 },  // 0x30 FACT_VEHICLE
+    { 4, 3 },  // 0x31 LAB_STANDARD
+    { 3, 3 },  // 0x32 LAB_ADV
+    { 3, 0 },  // 0x33 OBSERVATORY
+    { 0, 3 },  // 0x34 RESIDENCE_P
+    { 3, 0 },  // 0x35 RESIDENCE_E
+    { 3, 2 },  // 0x36 SMELTER
+    { 3, 3 },  // 0x37 SPACEPORT
+    { 1, 2 },  // 0x38 SMELTER_ADV
+    { 4, 2 },  // 0x39 GORF
+    { 1, 3 },  // 0x3A TOKAMAK
+};
+
+int structureAmbientVariant(int type, bool tableA) {
+    if (type < 0x15 || type > 0x3A) return 0;
+    return kStructAmbientVariant[type - 0x15][tableA ? 0 : 1];
+}
+
 } // namespace op2

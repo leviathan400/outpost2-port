@@ -19,4 +19,7 @@ int structureAnimIndex(int type, int state, bool tableA);
 // Code_Name do descritor (ex. "COMMAND") p/ map_id 0x15..0x3A, ou nullptr.
 const char* structureCodeName(int type);
 
+// Variante da animação ambiente (desc+0x2A6 tabela A / +0x2A7 B); 0 = nenhuma.
+int structureAmbientVariant(int type, bool tableA);
+
 } // namespace op2

@@ -241,6 +241,9 @@ def init_fields_by_name():
     MI = re.compile(r"^mov\s+dword ptr \[(e[a-z][a-z])\+([0-9A-F]+)h\], ([0-9A-F]+)h?(?:\s*;.*)?$")
     RI = re.compile(r"^mov\s+(e[a-z][a-z]), ([0-9A-F]+)h?(?:\s*;.*)?$")
     MR = re.compile(r"^mov\s+\[(e[a-z][a-z])\+([0-9A-F]+)h\], (e[a-z][a-z])$")
+    # escritas de BYTE (ex. variante ambiente desc+0x2A6/0x2A7)
+    MB = re.compile(r"^mov\s+byte ptr \[(e[a-z][a-z])\+([0-9A-F]+)h\], ([0-9A-F]+)h?(?:\s*;.*)?$")
+    MR8 = re.compile(r"^mov\s+\[(e[a-z][a-z])\+([0-9A-F]+)h\], ([abcd])l$")
     body = {}; cur = None
     for l in lines:
         s = l.strip()
@@ -265,6 +268,16 @@ def init_fields_by_name():
             if m:
                 o = parse_imm(m.group(2))
                 if o is not None and m.group(3) in regs: f[o] = regs[m.group(3)]
+                continue
+            m = MB.match(s)
+            if m:
+                o, v = parse_imm(m.group(2)), parse_imm(m.group(3))
+                if o is not None and v is not None: f[o] = v & 0xFF
+                continue
+            m = MR8.match(s)
+            if m:
+                o = parse_imm(m.group(2)); r = "e" + m.group(3) + "x"
+                if o is not None and r in regs: f[o] = regs[r] & 0xFF
         return f
     out = {}
     vt = {}; curv = None
@@ -315,7 +328,10 @@ def emit():
         rows.append(f"    /* 0x{t:02X} {n:<14} {p} */ {{ {r(A)},\n"
                     f"    {'':38}  {r(B)} }},")
     names = "\n".join(f'    "{byid[t]}",  // 0x{t:02X}' for t in range(0x15, 0x3B))
-    st = STR_TMPL.replace("@ROWS@", "\n".join(rows)).replace("@NAMES@", names)
+    amb = "\n".join(f"    {{ {flds[byid[t]][1].get(0x2A6, 0)}, {flds[byid[t]][1].get(0x2A7, 0)} }},"
+                    f"  // 0x{t:02X} {byid[t]}" for t in range(0x15, 0x3B))
+    st = (STR_TMPL.replace("@ROWS@", "\n".join(rows)).replace("@NAMES@", names)
+          .replace("@AMB@", amb))
     open("src/game/structure_anim.cpp", "w", encoding="utf-8", newline="\n").write(st)
     print("[*] gerados src/game/vehicle_anim.cpp e src/game/structure_anim.cpp")
 
@@ -399,6 +415,17 @@ static const char* const kStructCodeName[38] = {
 const char* structureCodeName(int type) {
     if (type < 0x15 || type > 0x3A) return nullptr;
     return kStructCodeName[type - 0x15];
+}
+
+// Variante da animacao ambiente: byte desc+0x2A6 (tabela A) / +0x2A7 (B) =
+// coluna 1..4 da tabela byte_4E4138 lida por sub_4835C0; 0 = sem ambiente.
+static const int kStructAmbientVariant[38][2] = {
+@AMB@
+};
+
+int structureAmbientVariant(int type, bool tableA) {
+    if (type < 0x15 || type > 0x3A) return 0;
+    return kStructAmbientVariant[type - 0x15][tableA ? 0 : 1];
 }
 
 } // namespace op2
