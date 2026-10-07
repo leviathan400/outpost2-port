@@ -10,6 +10,11 @@ namespace op2 {
 // na ordem de slot, sombra (type&4) escurecendo o fundo, cor do dono via remap.
 // O clip é o retângulo [clipX0,clipX1) x [clipY0,clipY1) do framebuffer.
 // Retorna false se a animação não existe.
+// dword_575630: sombras (pictures type&4) desenhadas? O desenho de cada classe
+// copia a opção do INI antes de blitar — StationaryShadows (dword_575634) p/
+// prédios, MobileShadows (dword_575638) p/ veículos e efeitos (sub_405160).
+void setArtShadows(bool on);
+
 bool blitArtFrame(uint32_t* fb, int fbW, int fbH, int animIdx, int frameIdx,
                   int cx, int cy, int playerColor,
                   int clipX0, int clipY0, int clipX1, int clipY1);

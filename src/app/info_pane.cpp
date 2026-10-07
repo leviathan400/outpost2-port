@@ -212,6 +212,7 @@ void drawUnitInfoPane(uint32_t* fb, int fbW, int fbH, const PaneRect& pane,
     blitArtFrame(fb, fbW, fbH, 0x9B - 0x65, 0, L - 10, titleBottom - 3, -1,
                  pane.l, pane.t, pane.r, pane.b);
     if (numSelected > 1) return;
+    setArtShadows(true);
     // Ícone 44x44: prédio = animação do ESTADO 4 da tabela (vt+0x90(4)).
     const int iconTop = titleBottom + 4, iconL = L - 3;
     const int pc = g_playerData[localPlayer < kMaxPlayers ? localPlayer : 0].colorNumber;

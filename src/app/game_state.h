@@ -47,6 +47,8 @@ private:
     int m_lastRand = 0;           // última amostra do RNG (1 por tick), p/ o HUD
     bool m_showPassability = false; // overlay de debug (tecla G)
     bool m_showDebugHud = false;    // overlay de depuração (Tick/RNG/economia; tecla F3)
+    bool m_stationaryShadows = false; // INI StationaryShadows (dword_575634)
+    bool m_mobileShadows = false;     // INI MobileShadows (dword_575638)
 
     // --- Seleção / interação (a "MAINE" / command pane) ---
     std::vector<int> m_selected;   // ids de unidades selecionadas

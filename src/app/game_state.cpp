@@ -25,6 +25,7 @@
 #include "../game/colony.h"
 #include "../game/messages.h"
 #include "../gfx/artfile.h"
+#include "../gfx/art_blit.h"
 
 namespace op2 {
 
@@ -43,6 +44,8 @@ bool GameState::load(const std::string& mapName) {
         if (tps > 40) tps = 40;
         m_tickPeriod = 1.0f / static_cast<float>(tps);
         setAmbientAnimations(gs.ambient != 0);   // "Ambient" → dword_575628
+        m_stationaryShadows = gs.stationaryShadows != 0;   // dword_575634
+        m_mobileShadows = gs.mobileShadows != 0;           // dword_575638
     }
     m_mapName = mapName;
     auto stream = g_ResManager.openStream(mapName);
@@ -257,42 +260,9 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     // (header[5],header[6] = centro do bbox header[1..4]) — como o original faz
     // (`sub eax, dword_50B368[...]` em sub_403E00). Índice 0 = transparente.
     auto drawSprite = [&](int animIdx, int frameIdx, int cx, int cy, int playerColor) {
-        if (!g_art.ok() || animIdx < 0 || animIdx >= g_art.numAnimations()) return false;
-        const ArtAnimation& an = g_art.animation(animIdx);
-        if (an.frames.empty()) return false;
-        if (frameIdx < 0 || frameIdx >= (int)an.frames.size()) frameIdx %= (int)an.frames.size();
-        const int refX = cx - static_cast<int>(an.header[5]);   // hotspot X
-        const int refY = cy - static_cast<int>(an.header[6]);   // hotspot Y
-        uint32_t* fb = renderer.getFramebuffer();
-        const int VW = Renderer::NATIVE_WIDTH, VH = Renderer::NATIVE_HEIGHT;
-        // As pictures já vêm na ordem de desenho: o loader grava `pictures[slot]`
-        // (loc_404B0A), então o índice do vetor É a camada (sombra, corpo, ...).
-        const std::vector<ArtPicture>& pics = an.frames[frameIdx].pics;
-        std::vector<uint32_t> px;
-        for (const auto& p : pics) {
-            const ArtImage& m = g_art.image(p.image);
-            bool shadow = m.isShadow();         // type&4: máscara de 1 bit por pixel
-            g_art.decode(p.image, px, /*transparent*/ true, /*palOverride*/ -1, playerColor);
-            for (uint32_t y = 0; y < m.height; ++y) {
-                int py = refY + p.y + (int)y;
-                if (py < 0 || py >= VH) continue;
-                for (uint32_t x = 0; x < m.width; ++x) {
-                    uint32_t c = px[y * m.width + x];
-                    if (!(c >> 24)) continue;
-                    int pxs = refX + p.x + (int)x;
-                    if (pxs < 0 || pxs >= VW) continue;
-                    if (shadow) {
-                        // Sombra: escurece o fundo (~50%), não desenha a cor.
-                        uint32_t b = fb[py * VW + pxs];
-                        uint32_t rr = ((b >> 16) & 0xFF) / 2, gg = ((b >> 8) & 0xFF) / 2, bb = (b & 0xFF) / 2;
-                        fb[py * VW + pxs] = 0xFF000000u | (rr << 16) | (gg << 8) | bb;
-                    } else {
-                        fb[py * VW + pxs] = c | 0xFF000000u;
-                    }
-                }
-            }
-        }
-        return true;
+        return blitArtFrame(renderer.getFramebuffer(), Renderer::NATIVE_WIDTH, Renderer::NATIVE_HEIGHT,
+                            animIdx, frameIdx, cx, cy, playerColor,
+                            0, 0, viewportW(), Renderer::NATIVE_HEIGHT - kStatusBarH);
     };
 
     // Tres passes: ESTRUTURAS primeiro (ficam por baixo), depois veiculos e por
@@ -304,6 +274,8 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         const bool isBld = (r.flags & UNIT_BUILDING) != 0;
         const bool isEffect = !(r.flags & (UNIT_BUILDING | UNIT_VEHICLE));
         if (pass != (isBld ? 0 : isEffect ? 2 : 1)) continue;
+        // Sombras pela opção do INI da classe (dword_575634 / dword_575638).
+        setArtShadows(isBld ? m_stationaryShadows : m_mobileShadows);
         // Centro da unidade na tela (pixelX/Y é o canto do tile; +16 = centro).
         // Usa a posição INTERPOLADA (não o tile), p/ casar com o deslize.
         int ucx = screenXOf(r.pixelX) + 16;   // wrap horizontal do mapa

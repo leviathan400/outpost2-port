@@ -6,6 +6,9 @@
 
 namespace op2 {
 
+static bool s_shadows = true;   // dword_575630
+void setArtShadows(bool on) { s_shadows = on; }
+
 bool blitArtFrame(uint32_t* fb, int fbW, int fbH, int animIdx, int frameIdx,
                   int cx, int cy, int playerColor,
                   int clipX0, int clipY0, int clipX1, int clipY1) {
@@ -27,6 +30,7 @@ bool blitArtFrame(uint32_t* fb, int fbW, int fbH, int animIdx, int frameIdx,
     for (const auto& p : an.frames[frameIdx].pics) {
         const ArtImage& m = g_art.image(p.image);
         const bool shadow = m.isShadow();         // type&4: máscara de 1 bit por pixel
+        if (shadow && !s_shadows) continue;      // sub_403E00: pula a sombra
         g_art.decode(p.image, px, /*transparent*/ true, /*palOverride*/ -1, playerColor);
         for (uint32_t y = 0; y < m.height; ++y) {
             const int py = refY + p.y + static_cast<int>(y);
