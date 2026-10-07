@@ -382,6 +382,14 @@ static int runColonyTest(const std::string& mapName) {
     op2::colonyMarkDirty(0);
     for (int t = 0; t < 2; ++t) { op2::TethysGame::advanceTick(); op2::tickColony(); }
     dump("com tubo");
+    // Comida/populacao (slot de 32 ticks do jogador 0): 10 ciclos.
+    op2::PlayerData& pd = op2::g_playerData[0];
+    std::printf("[Colony] antes: comida=%d  trab=%d cient=%d criancas=%d  minerio=%d (cap %d)\n",
+                pd.foodStored, pd.workers, pd.scientists, pd.kids, pd.ore, op2::g_colony[0].oreCapacity);
+    for (int t = 0; t < 32 * 10; ++t) { op2::TethysGame::advanceTick(); op2::tickColony(); }
+    const op2::ColonyState& c = op2::g_colony[0];
+    std::printf("[Colony] 10 ciclos: comida=%d (produz %d, come %d, saldo %d)  trab=%d cient=%d criancas=%d\n",
+                pd.foodStored, c.foodProduced, c.foodEaten, c.foodNet, pd.workers, pd.scientists, pd.kids);
     renderer.shutdown(); SDL_Quit();
     return 0;
 }

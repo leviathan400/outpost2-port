@@ -33,7 +33,35 @@ struct ColonyState {
     int scientistsRequired = 0;  // +0xD0
     int scientistsAsWorkers = 0; // +0xD4 cientistas usados como trabalhadores
     int researchAssigned = 0;    // +0xD8 soma de vt+0xE4 (cientistas em pesquisa)
+    int foodProduced = 0;        // +0xDC comida dos prédios operando (vt+0xD8)
+    int foodEaten = 0;           // +0xE0
+    int foodDeficit = 0;         // +0xE4
+    int foodNet = 0;             // +0xE8 variação do estoque no último ciclo
     int solarSatellites = 0;     // +0xEC unidades 0x59 do jogador (sub_490800)
+    // +0xF0..+0x1B7: estatísticas por tipo (0x32 dwords), zeradas e refeitas
+    // pelo vt+0x9C de cada prédio a cada alocação. Índice = (offset-0xF0)/4.
+    int stats[0x32] = {};
+    int stat(int off) const { return stats[off / 4]; }
+    // População (sub_471CC0): acumuladores e rodízio da fome (sub_471BD0).
+    int accGrowUp = 0;           // +0x80 crianças → trabalhadores
+    int accBirth = 0;            // +0x84
+    int accKidDeath = 0;         // +0x88
+    int accSciDeath = 0;         // +0x8C
+    int accWorkerDeath = 0;      // +0x90
+    int starveRotor = 0;         // +0x1EC
+    int oreCapacity = 0;         // +0x18 capacidade de minério comum
+    int rareCapacity = 0;        // +0x1C capacidade de minério raro
+};
+
+// Offsets (relativos a +0xF0) do vetor de estatísticas — vt+0x9C das classes.
+enum ColonyStat {
+    ST_REC_CAP = 0x00, ST_FORUM_CAP = 0x04, ST_MED_CAP = 0x08, ST_RES_CAP = 0x0C,
+    ST_CC_OP = 0x10, ST_NURSERY = 0x14, ST_UNIVERSITY = 0x18, ST_OBSERVATORY = 0x1C,
+    ST_METEOR_DEF = 0x20, ST_TRADE = 0x24,
+    ST_POWER_GRP = 0x28,      // CC + geradores: total/operando/parado/inativo
+    ST_AGRI_GRP = 0x38, ST_SMELT_GRP = 0x48, ST_STORE_GRP = 0x58, ST_RSTORE_GRP = 0x68,
+    ST_RSMELT_GRP = 0x78, ST_GORF_GRP = 0x88, ST_MINE = 0x98, ST_RMINE = 0xA8,
+    ST_ROBOT_GRP = 0xB8,
 };
 extern ColonyState g_colony[kMaxPlayers];
 

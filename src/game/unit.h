@@ -122,6 +122,7 @@ struct UnitRecord {
     uint16_t ambientCursor = 0;    // +0x54 PRÉDIO: (contagem<<8)|índice em byte_4E4138
     int      extraWorkers = 0;     // +0x60 PRÉDIO: trabalhadores extras (University: alunos)
     int8_t   extraScientists = 0;  // +0x64 PRÉDIO: cientistas extras (labs: pesquisa)
+    int      mineYield = 0;        // +0x70 MINA: variante do veio (0/1/2) p/ estatísticas
     uint32_t effectAnim = 0;       // +0x54 EFEITO: (divisor<<24)|anim (sub_405000)
     int      effectStart = 0;      // +0x58 EFEITO: tick inicial (clock + atraso)
     int      effectColor = -1;     // +0x60 EFEITO: cor (se UNIT_EFFECT_COLOR)

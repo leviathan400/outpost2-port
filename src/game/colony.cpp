@@ -235,6 +235,170 @@ static void computeComponents(int player, std::vector<int>& comp) {
     }
 }
 
+// ---- vt+0x9C: estatísticas por classe ----------------------------------------
+// Grupo de 4 contadores (total / operando / parado / inativo) — sub_401CD0 e
+// cópias por classe (sub_446D40, sub_449530, sub_409A20...).
+static void statGroup(ColonyState& c, int off, const UnitRecord& r, bool inactive) {
+    ++c.stats[off / 4];
+    if (inactive) ++c.stats[(off + 0x0C) / 4];
+    else if (structureOperational(r)) ++c.stats[(off + 0x04) / 4];
+    else ++c.stats[(off + 0x08) / 4];
+}
+
+static int prodCap(const UnitRecord& r) {
+    const StructPlayerStats* s = stats(r); return s ? s->productionCapacity : 0;
+}
+
+static void statsTick(ColonyState& c, const UnitRecord& r, bool inactive) {
+    const bool op = structureOperational(r);
+    switch (r.type) {
+        case 0x27: statGroup(c, ST_AGRI_GRP, r, inactive); break;    // sub_401CD0 (base)
+        case 0x1C:                                                     // sub_40C140 (CC)
+        case 0x1D: case 0x24: case 0x2C: case 0x3A:                    // sub_446D40
+            statGroup(c, ST_POWER_GRP, r, inactive);
+            if (r.type == 0x1C && op) ++c.stats[ST_CC_OP / 4];
+            break;
+        case 0x1F: statGroup(c, ST_ROBOT_GRP, r, inactive); break;    // sub_40C270
+        case 0x36: statGroup(c, ST_SMELT_GRP, r, inactive); break;    // sub_449530
+        case 0x38: statGroup(c, ST_RSMELT_GRP, r, inactive); break;   // sub_449630
+        case 0x39: statGroup(c, ST_GORF_GRP, r, inactive); break;     // sub_449E40
+        case 0x19: statGroup(c, ST_STORE_GRP, r, inactive); break;    // sub_409A20
+        case 0x1A: statGroup(c, ST_RSTORE_GRP, r, inactive); break;   // sub_409A70
+        case 0x15: case 0x16: {                                        // sub_44B3B0 / sub_447E90
+            const int base = r.type == 0x15 ? ST_MINE : ST_RMINE;
+            ++c.stats[base / 4];
+            if (r.mineYield >= 0 && r.mineYield <= 2) ++c.stats[(base + 4 + r.mineYield * 4) / 4];
+            break;
+        }
+        case 0x25: if (op) c.stats[ST_REC_CAP / 4] += prodCap(r); break;      // sub_449330
+        case 0x1B: if (op) c.stats[ST_FORUM_CAP / 4] += prodCap(r); break;    // sub_448EF0
+        case 0x22: if (op) c.stats[ST_MED_CAP / 4] += prodCap(r); break;      // sub_449AB0
+        case 0x1E: case 0x34: case 0x35:                                       // residências
+            if (op) c.stats[ST_RES_CAP / 4] += prodCap(r);
+            break;
+        case 0x23: if (op) ++c.stats[ST_NURSERY / 4]; break;                  // sub_449BD0
+        case 0x26: if (op) ++c.stats[ST_UNIVERSITY / 4]; break;               // sub_448E30
+        case 0x33: if (op) ++c.stats[ST_OBSERVATORY / 4]; break;              // sub_4499C0
+        case 0x2B: if (op) ++c.stats[ST_METEOR_DEF / 4]; break;               // sub_44A130
+        case 0x20: if (op) ++c.stats[ST_TRADE / 4]; break;                    // sub_449440
+        default: break;   // nullsub_38 (torres, labs, fábricas, garagem...) e DIRT
+    }
+}
+
+// ---- Ganchos de moral (sub_44F120 / sub_44F410 / sub_44F520) — etapa B2 ----
+static void moraleDeaths(int, int, int, int) {}
+static void moraleBirths(int, int) {}
+static void moraleGrewUp(int, int) {}
+
+// ---- sub_471BD0: mata `n` colonos em rodízio ([+0x1EC]: 0,4 criança;
+// 1,2 cientista; 3 trabalhador). quiet=true não avisa a moral.
+static void killColonists(int p, int n, bool quiet) {
+    ColonyState& c = g_colony[p];
+    PlayerData& pd = g_playerData[p];
+    int total = pd.workers + pd.kids + pd.scientists;
+    if (n > total) n = total;
+    int dk = 0, dw = 0, ds = 0;
+    while (n) {
+        const int rot = c.starveRotor;
+        if (rot == 0 || rot == 4) { if (dk < pd.kids) { ++dk; --n; } }
+        else if (rot == 1 || rot == 2) { if (ds < pd.scientists) { ++ds; --n; } }
+        else if (rot == 3) { if (dw < pd.workers) { ++dw; --n; } }
+        c.starveRotor = (rot + 1) % 5;
+    }
+    pd.kids -= dk; pd.workers -= dw; pd.scientists -= ds;
+    if (!quiet) moraleDeaths(p, dk, ds, dw);
+}
+
+// ---- sub_471CC0: população ----------------------------------------------------
+static void populationTick(int p) {
+    ColonyState& c = g_colony[p];
+    PlayerData& pd = g_playerData[p];
+    const MoraleRow& m = moraleRow(pd.morale);
+    // Crianças viram trabalhadores (exige University operando).
+    if (pd.kids > 0 && c.stat(ST_UNIVERSITY)) {
+        c.accGrowUp += pd.kids;
+        int pop = pd.workers + pd.scientists + pd.kids;
+        if (pop <= 0xA0) pop = 0xA0;
+        const int denom = ((pop / 40) * 3 + 0x24) * 4;
+        const int n = c.accGrowUp / denom;
+        c.accGrowUp %= denom;
+        if (n) { moraleGrewUp(p, n); pd.workers += n; pd.kids -= n; }
+    }
+    // Nascimentos (exige Nursery operando e adultos > crianças).
+    if (c.stat(ST_NURSERY) && pd.scientists + pd.workers > pd.kids && m.fertRate) {
+        c.accBirth += (pd.scientists >> 2) + (pd.workers >> 1);
+        const int n = c.accBirth / m.fertRate;
+        c.accBirth %= m.fertRate;
+        if (n) { moraleBirths(p, n); pd.kids += n; }
+    }
+    int deadKids = 0, deadWorkers = 0, deadSci = 0;
+    // Mortes de crianças: DIE/2 + Nurseries*40 + capacidade dos Medical Centers.
+    if (pd.kids > 0) {
+        c.accKidDeath += pd.kids;
+        const int denom = (m.dieRate >> 1) + c.stat(ST_NURSERY) * 40 + c.stat(ST_MED_CAP);
+        if (denom > 0) {
+            deadKids = c.accKidDeath / denom;
+            c.accKidDeath %= denom;
+            pd.kids -= deadKids;
+            if (pd.kids == 0) { c.accKidDeath = 0; c.accGrowUp = 0; }
+        }
+    }
+    const int denomAdult = m.dieRate + c.stat(ST_MED_CAP);
+    if (pd.workers && denomAdult > 0) {
+        c.accWorkerDeath += pd.workers;
+        deadWorkers = c.accWorkerDeath / denomAdult;
+        c.accWorkerDeath %= denomAdult;
+        pd.workers -= deadWorkers;
+        if (pd.workers == 0) c.accWorkerDeath = 0;
+    }
+    if (pd.scientists && denomAdult > 0) {
+        c.accSciDeath += pd.scientists;
+        deadSci = c.accSciDeath / denomAdult;
+        c.accSciDeath %= denomAdult;
+        pd.scientists -= deadSci;
+        if (pd.scientists == 0) c.accSciDeath = 0;
+    }
+    if (deadKids || deadSci || deadWorkers) moraleDeaths(p, deadKids, deadSci, deadWorkers);
+}
+
+// ---- Trecho de comida de sub_471F30 (slot de 32 ticks do jogador) -------------
+static void foodTick(int p) {
+    ColonyState& c = g_colony[p];
+    PlayerData& pd = g_playerData[p];
+    populationTick(p);
+    c.foodProduced = 0;
+    for (int id : s_structList[p]) {
+        const UnitRecord& r = g_units[id];
+        int e = 0;
+        if (r.type == 0x27) {                                   // vt+0xD8 sub_483B30
+            const int cap = prodCap(r);
+            e = cap + ((moraleRow(pd.morale).foodBonus * cap + 0x7F) >> 8);
+        }
+        if (structureOperational(r)) c.foodProduced += e;
+    }
+    const int prevStored = pd.foodStored;
+    const int avail = pd.foodStored + c.foodProduced;
+    pd.foodStored = avail;
+    const int pop = pd.kids + pd.workers + pd.scientists;
+    const int consumption = ((pop > 9) ? 9 : 10) * pop / 10;
+    if (consumption > avail) {
+        c.foodEaten = avail;
+        c.foodDeficit = consumption - avail;
+        // "COLONISTS ARE STARVING TO DEATH" (jogador local) — mensagens: etapa B3.
+        if (pop < 4) killColonists(p, 1, false);
+        else {
+            const int d = consumption - c.foodEaten;
+            killColonists(p, (d - (d >> 31)) >> 1, false);
+        }
+    } else {
+        c.foodEaten = avail < pop ? avail : pop;
+        c.foodDeficit = 0;
+        // "Food Supply is Diminishing/Growing", "Food Stores are Plentiful" — B3.
+    }
+    pd.foodStored -= c.foodEaten;
+    c.foodNet = pd.foodStored - prevStored;
+}
+
 // ---- sub_471F30: alocação ----------------------------------------------------
 static void allocate(int p) {
     ColonyState& c = g_colony[p];
@@ -263,6 +427,7 @@ static void allocate(int p) {
     c.unpoweredCount = c.activeCount = c.structCount = 0;
     int workers = pd.workers, scientists = pd.scientists;
 
+    std::memset(c.stats, 0, sizeof(c.stats));               // [ebx+0xF0], 0x32 dwords
     std::vector<int> comp;
     computeComponents(p, comp);
     std::vector<uint8_t> compConnected(L.size() + 1, 0);  // sub_42FF60: tudo desligado
@@ -273,7 +438,8 @@ static void allocate(int p) {
         const int wrkReq = workersRequired(r);
         const int sciReq = scientistsRequired(r);
         ++c.structCount;
-        if (r.action == 0x12 || r.action == ACT_BUILD || r.action == ACT_DISMANTLE) {
+        const bool inactive = (r.action == 0x12 || r.action == ACT_BUILD || r.action == ACT_DISMANTLE);
+        if (inactive) {
             ++c.inactiveCount;                              // loc_4724E7
         } else {
             c.powerRequired += powReq;
@@ -329,8 +495,7 @@ static void allocate(int p) {
                 r.flags |= UNIT_SCIENTISTS;
             }
         }
-        // (vt+0x9C: estatísticas por tipo — usadas por armazenamento/relatórios,
-        //  Fase B.)
+        statsTick(c, r, inactive);                          // vt+0x9C
         if (r.type == mapCommandCenter && structureOperational(r)) {
             const int e = powerProduced(r);
             c.powerGenerated += e;
@@ -347,7 +512,19 @@ static void allocate(int p) {
     c.workersLeft = workers;
     c.scientistsLeft = scientists;
     c.dirty = 0;
-    // (Capacidade de armazenamento de minério e moral sub_44E550 — Fase B.)
+    // Capacidade de armazenamento (Smelters operando ou parados + Storages
+    // operando) e corte do estoque. (dword_56DE58 → 100000; fica em 0.)
+    auto storage = [&](int type) {
+        const StructSheetDesc* d = structSheet(type);
+        return d ? d->player[p].storageCapacity : 0;
+    };
+    c.oreCapacity = (c.stat(ST_SMELT_GRP + 4) + c.stat(ST_SMELT_GRP + 8)) * storage(0x36)
+                  + storage(0x19) * c.stat(ST_STORE_GRP + 4);
+    c.rareCapacity = (c.stat(ST_RSMELT_GRP + 4) + c.stat(ST_RSMELT_GRP + 8)) * storage(0x38)
+                   + storage(0x1A) * c.stat(ST_RSTORE_GRP + 4);
+    if (pd.ore > c.oreCapacity) pd.ore = c.oreCapacity;
+    if (pd.rareOre > c.rareCapacity) pd.rareOre = c.rareCapacity;
+    // ("Common/Rare Metals Storage Needed" — B3; moral sub_44E550 — B2.)
 }
 
 static void colonyPlayerTick(int p) {
@@ -359,8 +536,7 @@ static void colonyPlayerTick(int p) {
         pd.workers = 0x1000; pd.scientists = 0x1000; pd.kids = 0x100;
         c.dirty = (tick & 0x1F) ? (p == 7) : slot;
     } else if ((tick & 0x1F) ? (p == 7) : slot) {
-        // Comida/população (sub_471CC0, produção vt+0xD8, consumo, fome
-        // sub_471BD0) — Fase B. Ao fim do trecho o original força dirty=1.
+        foodTick(p);                                    // comida + população
         c.dirty = 1;
     }
     if (c.dirty) allocate(p);
