@@ -8,6 +8,8 @@
 #include "building_sheet.h"
 #include "game_map.h"
 #include "structure.h"
+#include "messages.h"
+#include <cstdio>
 #include "tethys_game.h"
 #include "../res/res_manager.h"
 
@@ -479,7 +481,8 @@ static void foodTick(int p) {
     if (consumption > avail) {
         c.foodEaten = avail;
         c.foodDeficit = consumption - avail;
-        // "COLONISTS ARE STARVING TO DEATH" (jogador local) — mensagens: etapa B3.
+        if (p == TethysGame::localPlayer())
+            postMessage(-1, -1, "COLONISTS ARE STARVING TO DEATH", 0x76);
         if (pop < 4) killColonists(p, 1, false);
         else {
             const int d = consumption - c.foodEaten;
@@ -488,7 +491,14 @@ static void foodTick(int p) {
     } else {
         c.foodEaten = avail < pop ? avail : pop;
         c.foodDeficit = 0;
-        // "Food Supply is Diminishing/Growing", "Food Stores are Plentiful" — B3.
+        if (p == TethysGame::localPlayer()) {
+            if (c.foodEaten > c.foodProduced)
+                postMessage(-1, -1, "Food Supply is Diminishing", 0x75);
+            else if (c.foodProduced * 20 / 19 > c.foodEaten)
+                postMessage(-1, -1, "Food Supply is Growing", 0x74);
+            else if (pop * 15 <= avail)
+                postMessage(-1, -1, "Food Stores are Plentiful", 0xB1);
+        }
     }
     pd.foodStored -= c.foodEaten;
     c.foodNet = pd.foodStored - prevStored;
@@ -521,6 +531,7 @@ static void allocate(int p) {
     c.scientistsRequired = c.scientistsAsWorkers = c.researchAssigned = 0;
     c.unpoweredCount = c.activeCount = c.structCount = 0;
     int workers = pd.workers, scientists = pd.scientists;
+    int firstDisabled = 0, buildingNotOp = 0;            // var_6C / var_68
 
     std::memset(c.stats, 0, sizeof(c.stats));               // [ebx+0xF0], 0x32 dwords
     std::vector<int> comp;
@@ -611,10 +622,24 @@ static void allocate(int p) {
             if (comp[id] >= 0) compConnected[comp[id]] = 1;
         }
         if (structureOperational(r)) { ++c.activeCount; r.flags |= UNIT_LIGHTS; }
-        else r.flags &= ~UNIT_LIGHTS;
+        else {
+            if (r.action == ACT_BUILD || r.action == ACT_DISMANTLE) ++buildingNotOp;
+            else if (firstDisabled == 0 && r.action != 0x12) firstDisabled = id;
+            r.flags &= ~UNIT_LIGHTS;
+        }
     }
-    // (Mensagens "%i Structures Disabled" e "Power Levels: Shortage/Marginal/
-    //  Optimal" p/ o jogador local — Fase B.)
+    const bool local = (p == TethysGame::localPlayer());
+    if (local) {
+        const int disabled = c.structCount - c.activeCount - c.inactiveCount;
+        const int dx = firstDisabled ? g_units[firstDisabled].pixelX + 16 : 0;
+        const int dy = firstDisabled ? g_units[firstDisabled].pixelY + 16 : 0;
+        if (disabled - buildingNotOp > 1) {
+            char msg[64]; std::snprintf(msg, sizeof(msg), "%i Structures Disabled", disabled);
+            postMessage(dx, dy, msg, 0xA1);
+        } else if (disabled == 1) {
+            postMessage(dx, dy, "1 Structure Disabled", 0x85);
+        }
+    }
     for (int id : L) {                                    // [+0x38]->+0x10 p/ o painel
         UnitRecord& r = g_units[id];
         r.netConnected = (comp[id] >= 0 && compConnected[comp[id]]) ? 1 : 0;
@@ -623,6 +648,11 @@ static void allocate(int p) {
     c.workersLeft = workers;
     c.scientistsLeft = scientists;
     c.dirty = 0;
+    if (local) {
+        if (c.powerGenerated < c.powerRequired) postMessage(-1, -1, "Power Levels: Shortage", 0x79);
+        else if (powerAvail < 0x32) postMessage(-1, -1, "Power Levels: Marginal", 0x78);
+        else postMessage(-1, -1, "Power Levels: Optimal", 0x77);
+    }
     // Capacidade de armazenamento (Smelters operando ou parados + Storages
     // operando) e corte do estoque. (dword_56DE58 → 100000; fica em 0.)
     auto storage = [&](int type) {
@@ -635,6 +665,12 @@ static void allocate(int p) {
                    + storage(0x1A) * c.stat(ST_RSTORE_GRP + 4);
     if (pd.ore > c.oreCapacity) pd.ore = c.oreCapacity;
     if (pd.rareOre > c.rareCapacity) pd.rareOre = c.rareCapacity;
+    if (local) {
+        if (pd.canAccumulateOre && c.oreCapacity - 0x12C <= pd.ore)
+            postMessage(-1, -1, "Common Metals Storage Needed", 0x81);
+        if (pd.canAccumulateRareOre && c.rareCapacity - 0x12C <= pd.rareOre)
+            postMessage(-1, -1, "Rare Metals Storage Needed", 0x82);
+    }
     // ("Common/Rare Metals Storage Needed" — B3; moral sub_44E550 — B2.)
 }
 
@@ -779,7 +815,12 @@ static void moraleTick(int p) {
     if (score > 0x63) score = 0x63;
     c.moraleValue = score;
     c.moraleTrend = score > prevValue ? 1 : score < prevValue ? -1 : 0;
-    // ("Morale Level: %s" p/ o jogador local e o MORALE.LOG — mensagens/B3.)
+    if (p == TethysGame::localPlayer()) {                 // "Morale Level: %s"
+        static const char* const kLevel[5] = {"Excellent", "Good", "Fair", "Poor", "Terrible"};
+        char msg[64];
+        std::snprintf(msg, sizeof(msg), "%s: %s", "Morale Level", kLevel[level]);
+        postMessage(-1, -1, msg, 0x6F + level);
+    }
 }
 
 int structurePowerOutput(const UnitRecord& r) { return powerProduced(r); }

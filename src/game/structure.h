@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 #include "unit.h"
 
 namespace op2 {
@@ -53,5 +55,10 @@ bool structureIsOperational(const UnitRecord& r);
 void structureTurnOn(UnitRecord& r);
 // Opção "Ambient" do OUTPOST2.INI (dword_575628).
 void setAmbientAnimations(bool on);
+
+// Nome exibido da unidade (vt+0x40 = sub_43A5E0): "%s # %i-%02i" com o nome
+// do descritor (+0x1F8), jogador+1 e o nº de série (+0x2C). Guard Post /
+// Lynx / Panther / Tiger levam o nome da arma antes (entra com as armas).
+std::string unitTitle(const UnitRecord& r);
 
 } // namespace op2

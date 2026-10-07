@@ -1,0 +1,100 @@
+#include "messages.h"
+
+#include <SDL.h>
+#include <cctype>
+#include <cstdio>
+#include <cstdlib>
+
+#include "game_map.h"
+#include "tethys_game.h"
+
+namespace op2 {
+
+static GameMessage s_ring[64];
+static int s_start = 0, s_count = 0;            // [obj+0] início, [obj+4] quantidade
+static std::string s_status;
+
+// Estado do filtro sub_439490 (campos +0x130C..+0x13FC do objeto de log).
+struct Recent { int x = 0, y = 0, id = 0; uint32_t time = 0; };
+static Recent s_recent[0x32];                   // +0x1330, 50 x 16 bytes
+static int s_lastPowerId = 0, s_lastMoraleId = 0, s_lastFoodId = 0;
+static uint32_t s_lastPowerT = 0, s_lastMoraleT = 0, s_lastFoodT = 0;
+static uint32_t s_lastCommonT = 0, s_lastRareT = 0, s_lastDisabledT = 0;
+
+void resetMessages() {
+    s_start = s_count = 0;
+    s_status.clear();
+    for (auto& r : s_recent) r = Recent{};
+    s_lastPowerId = s_lastMoraleId = s_lastFoodId = 0;
+    s_lastPowerT = s_lastMoraleT = s_lastFoodT = 0;
+    s_lastCommonT = s_lastRareT = s_lastDisabledT = 0;
+}
+
+// Grupo com "última mensagem": a mesma mensagem fica barrada por 2 min; outra
+// do grupo passa na hora.
+static bool groupAllow(int id, int& lastId, uint32_t& lastT, uint32_t now) {
+    if (lastId == 0 && lastT < now) { lastT = now; lastId = id; return true; }
+    if (lastId != 0 && lastId != id) { lastT = now; lastId = id; return true; }
+    if (lastT + 0x1D4C0 >= now) return false;
+    lastT = now; lastId = id;
+    return true;
+}
+static bool cooldownAllow(uint32_t& lastT, uint32_t span, uint32_t now) {
+    if (lastT + span >= now) return false;
+    lastT = now;
+    return true;
+}
+
+// sub_439490: retorna false p/ barrar a mensagem.
+static bool messageAllowed(int id, int x, int y) {
+    const uint32_t now = SDL_GetTicks();                     // timeGetTime
+    switch (id) {
+        case 0x60: case 0x61: case 0x67: case 0x68: case 0x6A: case 0x6B: case 0x6C: case 0x99: {
+            int freeSlot = -1;
+            const int mapW = g_gameMap.ok() ? g_gameMap.width() * 32 : 0;
+            for (int i = 0; i < 0x32; ++i) {
+                Recent& r = s_recent[i];
+                if (r.time < now - 0x61A8) r = Recent{};    // > 25 s: esquece
+                if (r.id == 0 && freeSlot < 0) freeSlot = i;
+                if (r.id != id) continue;
+                if (std::abs(r.y - y) >= 0x100) continue;
+                int dx = x - r.x;
+                if (mapW) { if (dx > mapW / 2) dx -= mapW; else if (dx < -mapW / 2) dx += mapW; }
+                if (std::abs(dx) < 0x100) return false;      // mesmo aviso ali perto
+            }
+            if (freeSlot >= 0) s_recent[freeSlot] = Recent{x, y, id, now};
+            return true;
+        }
+        case 0x6F: case 0x70: case 0x71: case 0x72: case 0x73:          // moral
+            return groupAllow(id, s_lastMoraleId, s_lastMoraleT, now);
+        case 0x74: case 0x75: case 0x76: case 0xB1:                     // comida
+            return groupAllow(id, s_lastFoodId, s_lastFoodT, now);
+        case 0x77: case 0x78: case 0x79:                                // energia
+            return groupAllow(id, s_lastPowerId, s_lastPowerT, now);
+        case 0x81: return cooldownAllow(s_lastCommonT, 0x1D4C0, now);   // armazenamento
+        case 0x82: return cooldownAllow(s_lastRareT, 0x1D4C0, now);
+        case 0x85: case 0xA1: return cooldownAllow(s_lastDisabledT, 0x7530, now);
+        default: return true;
+    }
+}
+
+void postMessage(int x, int y, const char* text, int soundId) {
+    if (soundId >= 0x5E && soundId < 0xE4 && !messageAllowed(soundId, x, y)) return;
+    // (som: sub_47F060 posicional p/ vozes / sub_47F020 — áudio não portado)
+    const int slot = (s_start + s_count) & 0x3F;
+    if (s_count == 0x40) s_start = (s_start + 1) & 0x3F; else ++s_count;
+    GameMessage& m = s_ring[slot];
+    m.x = x; m.y = y; m.soundId = soundId ? soundId : 0x5B;
+    char buf[0x40];
+    std::snprintf(buf, sizeof(buf), "%d: %s", TethysGame::tick() / 100, text);
+    m.text = buf;
+    // Barra de status: até 80 caracteres em maiúsculas.
+    s_status.assign(text ? text : "", 0, 0x50);
+    for (char& c : s_status) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+}
+
+int messageCount() { return s_count; }
+const GameMessage& messageAt(int i) { return s_ring[(s_start + i) & 0x3F]; }
+const std::string& statusBarText() { return s_status; }
+
+} // namespace op2

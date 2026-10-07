@@ -36,6 +36,8 @@ struct PlayerData {
     int workers     = 0;   // +0x94
     int scientists  = 0;   // +0x98
     int kids        = 0;   // +0x9C
+    int canAccumulateOre = 0;      // +0x188 (_Player::canAccumulateOre; liga c/ pesquisa)
+    int canAccumulateRareOre = 0;  // +0x198 (_Player::canAccumulateRareOre)
     int techLevel   = 0;   // gerido pelo subsistema de pesquisa (dword_56B5F0)
     std::set<int> research;  // tecnologias concluídas (MarkResearchComplete)
 };

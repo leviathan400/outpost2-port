@@ -2,6 +2,8 @@
 
 #include "building_sheet.h"
 #include "colony.h"
+#include "messages.h"
+#include <cstdio>
 #include "game_map.h"
 #include "player.h"
 #include "structure_anim.h"
@@ -353,6 +355,11 @@ static void actionTick(int id) {
                 // (sub_438F70) — ainda não portadas.
                 r.action = 0;
                 colonyMarkDirty(r.owner & 0x0F);
+                if ((r.owner & 0x0F) == TethysGame::localPlayer()) {     // "%s completed"
+                    char msg[100];
+                    std::snprintf(msg, sizeof(msg), "%s completed", unitTitle(r).c_str());
+                    postMessage(r.pixelX + 16, r.pixelY + 16, msg, 0x5E);
+                }
                 moraleStructureBuilt(r.owner & 0x0F, r.type);   // sub_44F790 (CC_BORN)
             }
             break;
@@ -371,6 +378,11 @@ static void actionTick(int id) {
                     // loc_43D81C: moral do dono (sub_44F6C0). O crédito ao atacante
                     // ([+0x26], sub_44FBE0) entra com o sistema de armas.
                     moraleStructureLost(r.owner & 0x0F, r.type);
+                    if ((r.owner & 0x0F) == TethysGame::localPlayer()) { // "%s destroyed"
+                        char msg[100];
+                        std::snprintf(msg, sizeof(msg), "%s destroyed", unitTitle(r).c_str());
+                        postMessage(r.pixelX + 16, r.pixelY + 16, msg, 0x67);
+                    }
                 }
             } else if (!(r.flags & UNIT_VEHICLE)) {
                 r.field22 = SUB_REMOVE;                         // loc_43DB49
@@ -424,6 +436,15 @@ void tickUnits() {
         actionTick(id);
         if (updateTick(id)) removeUnit(id);
     }
+}
+
+std::string unitTitle(const UnitRecord& r) {
+    const char* nm = "";
+    if (r.flags & UNIT_BUILDING) { if (const StructSheetDesc* d = structSheet(r.type)) nm = d->displayName; }
+    else nm = vehicleDisplayName(r.type);
+    char buf[96];
+    std::snprintf(buf, sizeof(buf), "%s # %d-%02d", nm, (r.owner & 0x0F) + 1, r.serial);
+    return buf;
 }
 
 } // namespace op2

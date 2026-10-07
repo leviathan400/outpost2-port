@@ -204,12 +204,7 @@ void drawUnitInfoPane(uint32_t* fb, int fbW, int fbH, const PaneRect& pane,
     if (numSelected > 1) {
         std::snprintf(title, sizeof(title), "%d %s", numSelected, "Vehicles");
     } else {
-        const char* nm = "";
-        if (isBld) { if (const StructSheetDesc* d = structSheet(r.type)) nm = d->displayName; }
-        else nm = vehicleDisplayName(r.type);
-        // "%s # %i-%02i" (sub_43A5E0). Guard Post / Lynx / Panther / Tiger levam o
-        // nome da arma antes ("%s %s # ...") — entra com as armas.
-        std::snprintf(title, sizeof(title), "%s # %d-%02d", nm, (r.owner & 0x0F) + 1, r.serial);
+        std::snprintf(title, sizeof(title), "%s", unitTitle(r).c_str());   // vt+0x40
     }
     PaneRect trc{L, titleTop, R, titleBottom};
     drawMarkupText(fb, fbW, fbH, trc, title, 0xFFFFFFFFu);

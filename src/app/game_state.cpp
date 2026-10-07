@@ -23,6 +23,7 @@
 #include "../game/structure.h"
 #include "../game/building_sheet.h"
 #include "../game/colony.h"
+#include "../game/messages.h"
 #include "../gfx/artfile.h"
 
 namespace op2 {
@@ -89,6 +90,7 @@ bool GameState::load(const std::string& mapName) {
     loadBuildingSheet();
     loadVehicleSheet();
     loadMoraleSheet();
+    resetMessages();
     resetUnits();
     // Dia/noite como as missões de colônia configuram (SetDaylightMoves(1) /
     // SetDaylightEverywhere(0)); as missões reais definem isso no InitProc.
@@ -716,10 +718,10 @@ void GameState::renderPanel(Renderer& renderer) {
             int tx = (m_camX + m_mouseNX) / 32, ty = (m_camY + m_mouseNY) / 32;
             if (g_gameMap.ok()) tx &= (g_gameMap.width() - 1);
             char c[32]; std::snprintf(c, sizeof(c), "%d,%d", tx + 1, ty + 1);
-            Font::drawText(fb, VW, VH, c, 4, sy + 4, 0xFFE0E0E0, false);
+            Font::drawText(fb, VW, VH, c, 4, sy + 2, 0xFFE0E0E0, false);
         }
-        // (Mensagens "POWER LEVELS: ..." etc. — próxima rodada, com o sistema
-        //  de mensagens sub_438F70.)
+        // Última mensagem (sub_49BF10: maiúsculas).
+        Font::drawText(fb, VW, VH, statusBarText(), 4, sy + 13, 0xFFE8E8E8, false);
     }
 }
 
