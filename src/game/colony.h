@@ -114,6 +114,14 @@ void moraleStructureLost(int player, int type);
 void moraleEnemyStructureKilled(int player, int type);
 void moraleStructureBuilt(int player, int type);
 
+// Produção exibida no painel (sub_45AEB0): energia (vt+0xD0) e comida (vt+0xD8).
+int structurePowerOutput(const UnitRecord& r);
+int structureFoodOutput(const UnitRecord& r);
+// Comandos do botão do painel (CommandPacket 0x12 / 0x13, sub_40E210):
+bool structureCanIdle(const UnitRecord& r);         // sub_43AAF0
+void structureDoIdle(int id);                       // case 18
+bool structureDoActivate(int id);                   // case 19 (false se faltar recurso)
+
 // Turno: sub_471F30 p/ cada jogador.
 void tickColony();
 

@@ -40,6 +40,7 @@ struct StructSheetDesc {
     uint8_t  dockLocE = 0, dockLocP = 0;  // +0x2A4 / +0x2A5
     uint8_t  resourcePriority = 0;        // +0x2A0
     int      researchTopic = 0;           // +0x1E4
+    const char* displayName = "";         // +0x1F8 (tabela fixa @0x4E9440 pela LINHA)
     StructPlayerStats player[7];          // desc+8 + p*0x44
     int explosionSize() const { return static_cast<int>((flags24C >> 7) & 3); }
 };
@@ -55,11 +56,14 @@ const StructSheetDesc* structSheet(int type);
 // → +0x2C (desc+0x34; multiplicador /128 da duração de construção).
 struct VehPlayerStats {
     int hitPoints = 0;        // +0x00
+    int armor = 0;            // +0x08 (classe; o engine guarda dword_4E1510[classe])
     int buildTime = 0;        // +0x14
     int moveSpeed = 0;        // +0x24 (sub_44B650: duração do passo)
     int turnRate = 0;         // +0x28 (sub_44B650: giro por tick)
     int productionRate = 0;   // +0x2C
 };
+// Nome de exibição do veículo (+0x1F8; tabela fixa @0x4E93FC pela linha do VEHICLES.TXT).
+const char* vehicleDisplayName(int type);
 bool loadVehicleSheet();
 // Bloco do jogador `player` do veículo `type` (0x01..0x10) ou nullptr.
 const VehPlayerStats* vehicleSheet(int type, int player);

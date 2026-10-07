@@ -13,6 +13,29 @@
 namespace op2 {
 
 static StructSheetDesc s_desc[0x3B];
+
+// Nomes de exibição: sub_445070 copia p/ desc+0x1F8 um nome de uma tabela FIXA
+// do EXE, avançando uma entrada por LINHA de dados da planilha (prédios:
+// [0x4E94E8 - 0xA8] = 0x4E9440; veículos: 0x4E93FC). Extraídas do OUTPOST2.EXE.
+static const char* const kBuildingRowNames[] = {
+    "Command Center", "Tokamak", "MHD Generator", "Geothermal Plant", "Solar Power Array",
+    "Structure Factory", "Guard Post", "Common Ore Smelter", "Common Storage", "Advanced Lab",
+    "Standard Lab", "Basic Lab", "Rare Ore Smelter", "Rare Storage", "Vehicle Factory",
+    "University", "Nursery", "Agridome", "Robot Command Center", "Spaceport",
+    "Medical Center", "Arachnid Factory", "DIRT", "Garage", "GORF",
+    "Advanced Residence", "Residence", "Reinforced Residence", "Observatory", "Meteor Defense",
+    "Recreation Facility", "Consumer Factory", "Forum", "Trade Center", "Light Tower",
+    "Magma Well", "Common Ore Mine", "Rare Ore Mine",
+};
+static const char* const kVehicleRowNames[] = {
+    "GeoCon", "Robo-Miner", "Tiger", "Cargo Truck", "Panther", "Lynx", "ConVec",
+    "Earthworker", "Repair Vehicle", "Robo-Dozer", "Evacuation Transport", "Robo-Surveyor",
+    "Scout", "Scorpion", "Scorpion 3-Pack", "Spider", "Spider 3-Pack",
+};
+static const char* s_vehName[0x11] = {};
+const char* vehicleDisplayName(int type) {
+    return (type >= 1 && type <= 0x10 && s_vehName[type]) ? s_vehName[type] : "";
+}
 static bool s_loaded = false;
 
 const StructSheetDesc* structSheet(int type) {
@@ -79,17 +102,22 @@ bool loadVehicleSheet() {
     if (s_vehLoaded) return true;
     std::vector<std::string> lines;
     if (!readSheetLines("vehicles.txt", lines)) return false;
+    size_t row = 0;
     for (size_t li = 2; li < lines.size(); ++li) {
         std::vector<SheetCol> c = splitRow(lines[li]);
         if (c.size() < 18 || c[0].text.empty()) continue;
+        const size_t thisRow = row++;
         int type = -1;
         for (int t = 1; t <= 0x10; ++t) {
             const char* n = vehicleCodeName(t);
             if (n && c[0].text == n) { type = t; break; }
         }
         if (type < 0) continue;   // ex. SCORPION_PACK: sem descritor próprio
+        if (thisRow < sizeof(kVehicleRowNames) / sizeof(kVehicleRowNames[0]))
+            s_vehName[type] = kVehicleRowNames[thisRow];
         VehPlayerStats& s = s_veh[type][0];
         s.hitPoints = c[4].value;        // +0x00
+        s.armor = c[5].value;            // +0x08 (col 5 Armor Class)
         s.moveSpeed = c[6].value;        // +0x24 (desc+0x2C)
         s.turnRate = c[7].value;         // +0x28 (desc+0x30)
         s.buildTime = c[10].value;       // +0x14 (desc+0x1C)
@@ -106,9 +134,11 @@ bool loadBuildingSheet() {
     std::vector<std::string> lines;
     if (!readSheetLines("building.txt", lines)) return false;
     // 2 linhas de cabeçalho; a 3ª leitura (sub_411220) já é a 1ª linha de dados.
+    size_t row = 0;
     for (size_t li = 2; li < lines.size(); ++li) {
         std::vector<SheetCol> c = splitRow(lines[li]);
         if (c.size() < 32 || c[0].text.empty()) continue;
+        const size_t thisRow = row++;
         // Coluna 0: Code_Name → descritor pelo GetName (loc_445127).
         int type = -1;
         for (int t = 0x15; t <= 0x3A; ++t)
@@ -116,6 +146,8 @@ bool loadBuildingSheet() {
         if (type < 0) continue;                      // loc_44563F: linha ignorada
         StructSheetDesc& d = s_desc[type];
         StructPlayerStats& s = d.player[0];
+        if (thisRow < sizeof(kBuildingRowNames) / sizeof(kBuildingRowNames[0]))
+            d.displayName = kBuildingRowNames[thisRow];
         // col 1 Produce List Name (+0x220), col 2 Building Name (+0x1F8, vem de
         // uma tabela fixa de nomes) — texto, não usados aqui.
         d.sizeX = c[3].value;                                      // +0x248

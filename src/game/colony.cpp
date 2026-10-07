@@ -615,6 +615,10 @@ static void allocate(int p) {
     }
     // (Mensagens "%i Structures Disabled" e "Power Levels: Shortage/Marginal/
     //  Optimal" p/ o jogador local — Fase B.)
+    for (int id : L) {                                    // [+0x38]->+0x10 p/ o painel
+        UnitRecord& r = g_units[id];
+        r.netConnected = (comp[id] >= 0 && compConnected[comp[id]]) ? 1 : 0;
+    }
     c.powerLeft = powerAvail;
     c.workersLeft = workers;
     c.scientistsLeft = scientists;
@@ -776,6 +780,57 @@ static void moraleTick(int p) {
     c.moraleValue = score;
     c.moraleTrend = score > prevValue ? 1 : score < prevValue ? -1 : 0;
     // ("Morale Level: %s" p/ o jogador local e o MORALE.LOG — mensagens/B3.)
+}
+
+int structurePowerOutput(const UnitRecord& r) { return powerProduced(r); }
+
+int structureFoodOutput(const UnitRecord& r) {
+    if (r.type != 0x27) return 0;                          // vt+0xD8 só no Agridome
+    const int cap = prodCap(r);
+    return cap + ((moraleRow(g_playerData[ownerOf(r)].morale).foodBonus * cap + 0x7F) >> 8);
+}
+
+// sub_43AAF0: não pode ociosar em construção/desmontagem/ociosa ou ações
+// 9/0x16/0x17, nem sob EMP (0x40000).
+bool structureCanIdle(const UnitRecord& r) {
+    switch (r.action) {
+        case 9: case 0x12: case 0x16: case 0x17: case ACT_BUILD: case ACT_DISMANTLE: return false;
+        default: return !(r.flags & 0x40000);
+    }
+}
+
+// CommandPacket 0x12: [+0x21]=0x12, [+0x20]=1, [+0x3C]=0, [+0x22]=0, vt+0x84
+// (sub_4837C0: desliga cientistas, trabalhadores e energia) e economia suja.
+void structureDoIdle(int id) {
+    UnitRecord& r = g_units[id];
+    if (r.id == -1 || (r.flags & UNIT_DEAD) || !structureCanIdle(r)) return;
+    r.action = 0x12; r.field20 = 1; r.field3C = 0; r.field22 = 0;
+    r.flags &= ~(UNIT_SCIENTISTS | UNIT_WORKERS | UNIT_POWERED | UNIT_LIGHTS);
+    colonyMarkDirty(ownerOf(r));
+}
+
+// CommandPacket 0x13: reativa se houver trabalhadores (cientistas cobrem a
+// falta), cientistas e energia sobrando — só c/ conexão ao CC (ou o próprio CC).
+bool structureDoActivate(int id) {
+    UnitRecord& r = g_units[id];
+    if (r.id == -1 || (r.flags & UNIT_DEAD) || r.action != 0x12) return false;
+    const int p = ownerOf(r);
+    const ColonyState& c = g_colony[p];
+    const bool linked = r.netConnected || r.type == mapCommandCenter;
+    int workers = linked ? c.workersLeft : 0, scientists = linked ? c.scientistsLeft : 0;
+    const int wReq = workersRequired(r);
+    if (workers < wReq && workers + scientists >= wReq) {
+        scientists -= wReq - workers;
+        workers = wReq;
+    }
+    if (workers < wReq) return false;
+    if (powerRequired(r) > c.powerLeft) return false;
+    if (scientistsRequired(r) > scientists) return false;
+    if (r.flags & 0x80000) return false;
+    r.action = 0; r.field20 = 1; r.field3C = 0;
+    structureTurnOn(r);                                     // vt+0x88
+    colonyMarkDirty(p);
+    return true;
 }
 
 static void colonyPlayerTick(int p) {

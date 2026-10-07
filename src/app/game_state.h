@@ -26,9 +26,16 @@ public:
     void handleEvent(Renderer& renderer, const SDL_Event& e) override;
 
     void setShowPassability(bool v) { m_showPassability = v; }
+    void setSelection(const std::vector<int>& ids) { m_selected = ids; }
+    void setMouse(int nx, int ny) { m_mouseNX = nx; m_mouseNY = ny; }
 
-    // Largura do painel de comando (à direita); viewport = resto da tela.
-    static constexpr int kPanelW = 144;
+    // Painel de comando à direita (216 px, medido na tela original 640x480):
+    // minimapa (y 0..134), linha de 6 abas (135..180) e o quadro de informação
+    // (181..479). Barra de status de 22 px sob a visão do mapa.
+    static constexpr int kPanelW = 216;
+    static constexpr int kMiniMapH = 135;
+    static constexpr int kTabsH = 46;
+    static constexpr int kStatusBarH = 22;
 
 private:
     std::string m_mapName;
@@ -39,6 +46,7 @@ private:
     float m_tickPeriod = 0.05f;   // s/tick: 1/clamp(GameSpeed*4, 4, 40) (sub_49BF80)
     int m_lastRand = 0;           // última amostra do RNG (1 por tick), p/ o HUD
     bool m_showPassability = false; // overlay de debug (tecla G)
+    bool m_showDebugHud = false;    // overlay de depuração (Tick/RNG/economia; tecla F3)
 
     // --- Seleção / interação (a "MAINE" / command pane) ---
     std::vector<int> m_selected;   // ids de unidades selecionadas

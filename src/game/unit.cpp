@@ -206,6 +206,15 @@ bool createUnit(Unit& out, map_id type, LOCATION loc, int owner,
         }
     }
 
+    // Nº de série exibido (byte +0x2C). PROVISÓRIO: contagem por dono e tipo —
+    // o contador exato que o original grava em +0x2C ainda não foi rastreado.
+    {
+        int n = 0;
+        for (int i = 1; i < static_cast<int>(g_units.size()); ++i)
+            if (i != slot && g_units[i].id != -1 && g_units[i].type == type &&
+                (g_units[i].owner & 0x0F) == (owner & 0x0F)) ++n;
+        r.serial = static_cast<uint8_t>(n + 1);
+    }
     // sub_439FE0: prédio entra na lista do dono, ordenada por prioridade.
     if (r.flags & UNIT_BUILDING) colonyStructureAdded(slot);
 

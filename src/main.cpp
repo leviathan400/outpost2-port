@@ -330,6 +330,36 @@ static int runStructTest(const std::string& mapName, const std::string& prefix) 
     return 0;
 }
 
+// --paneshot <map> <out.bmp>: Tokamak ao lado do CC da cena, selecionado, e
+// a tela com o quadro de informação (painel direito) p/ comparar com o original.
+static int runPaneShot(const std::string& mapName, const std::string& outPath) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 paneshot", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    int cc = -1;
+    for (int i = 1; i < (int)op2::g_units.size(); ++i)
+        if (op2::g_units[i].id != -1 && op2::g_units[i].type == op2::mapCommandCenter) { cc = i; break; }
+    int sel = cc;
+    if (cc > 0) {
+        op2::Unit tok;
+        op2::LOCATION l{(op2::g_units[cc].pixelX >> 5) + 3, op2::g_units[cc].pixelY >> 5};
+        if (op2::TethysGame::CreateUnit(tok, op2::mapTokamak, l, op2::g_units[cc].owner & 0x0F)) sel = tok.id();
+    }
+    gs.setSelection({sel});
+    gs.setMouse(200, 150);
+    for (int i = 0; i < 40; ++i) gs.onIdle(renderer, 0.05f);
+    bool ok = writeBmp32(outPath, renderer.getFramebuffer(),
+                         op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+    std::printf("[PaneShot] %s\n", ok ? outPath.c_str() : "falha");
+    renderer.shutdown(); SDL_Quit();
+    return ok ? 0 : 1;
+}
+
 // --colonytest <map>: base mínima (CC + Tokamak e Agridome encostados + Lab
 // isolado) → economia (sub_471F30) → liga o Lab por tubos (cellType 0x1A).
 static int runColonyTest(const std::string& mapName) {
@@ -792,6 +822,8 @@ int main(int argc, char* argv[]) {
         }
         if (std::strcmp(argv[i], "--structtest") == 0 && i + 2 < argc)
             return runStructTest(argv[i + 1], argv[i + 2]);
+        if (std::strcmp(argv[i], "--paneshot") == 0 && i + 2 < argc)
+            return runPaneShot(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--colonytest") == 0 && i + 1 < argc)
             return runColonyTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--movelog") == 0 && i + 1 < argc)

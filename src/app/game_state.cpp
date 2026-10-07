@@ -7,6 +7,7 @@
 #include <cstdlib>
 
 #include "tapp.h"
+#include "info_pane.h"
 #include "../gfx/renderer.h"
 #include "../gfx/font.h"
 #include "../res/res_manager.h"
@@ -381,6 +382,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
 
     // Overlay: relógio (Tick/Time) + uma amostra do RNG — prova visível de que o
     // núcleo de simulação está rodando determinístico.
+    if (m_showDebugHud) {
     uint32_t* fb = renderer.getFramebuffer();
     const int VW = Renderer::NATIVE_WIDTH, VH = Renderer::NATIVE_HEIGHT;
     const _Player& p = Player[TethysGame::localPlayer()];
@@ -409,6 +411,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     Font::drawText(fb, VW, VH, l2, 8, 20, 0xFF80E0A0, true);
     Font::drawText(fb, VW, VH, l3, 8, 32, 0xFFB0C4DE, true);
     Font::drawText(fb, VW, VH, l4, 8, 44, 0xFFE0C080, true);
+    }
 
     renderer.present();
 }
@@ -463,6 +466,7 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
     if (e.type == SDL_KEYDOWN) {
         if (e.key.keysym.sym == SDLK_ESCAPE) gTApp.activateShell();
         if (e.key.keysym.sym == SDLK_g) m_showPassability = !m_showPassability;
+        if (e.key.keysym.sym == SDLK_F3) m_showDebugHud = !m_showDebugHud;
         // DEPURACAO dos estados de predio (ainda nao ha armas/ConVec construindo):
         //   D = +10% do HP max de dano   H = repara (dano 0)
         //   K = Unit::DoDeath (Kill(1))  B = reinicia a construcao (sub_43DE50)
@@ -503,7 +507,18 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
     if (e.type == SDL_MOUSEBUTTONDOWN) {
         int nx, ny; renderer.screenToNative(e.button.x, e.button.y, nx, ny);
         m_mouseNX = nx; m_mouseNY = ny;
-        bool inView = nx < viewportW();
+        bool inView = nx < viewportW() && ny < Renderer::NATIVE_HEIGHT - kStatusBarH;
+        // Botão de comando do quadro (IDLE / ACTIVATE → CommandPacket 0x12 / 0x13).
+        if (e.button.button == SDL_BUTTON_LEFT && !inView && m_selected.size() == 1) {
+            const PaneRect pane{viewportW() + 4, kMiniMapH + kTabsH,
+                                Renderer::NATIVE_WIDTH - 4, Renderer::NATIVE_HEIGHT - 2};
+            PaneButton b;
+            if (infoPaneButton(pane, m_selected[0], TethysGame::localPlayer(), b) &&
+                nx >= b.rc.l && nx < b.rc.r && ny >= b.rc.t && ny < b.rc.b) {
+                if (b.command == 0x12) structureDoIdle(m_selected[0]);
+                else structureDoActivate(m_selected[0]);
+            }
+        }
         if (e.button.button == SDL_BUTTON_LEFT && inView) {
             m_dragging = true; m_dragSX = nx; m_dragSY = ny;
         } else if (e.button.button == SDL_BUTTON_RIGHT && inView && !m_selected.empty()) {
@@ -585,78 +600,95 @@ void GameState::renderPanel(Renderer& renderer) {
     const int VW = Renderer::NATIVE_WIDTH, VH = Renderer::NATIVE_HEIGHT;
     const int px0 = viewportW();                 // início do painel (x)
     uint32_t* fb = renderer.getFramebuffer();
+    const int me = TethysGame::localPlayer();
 
-    // Fundo do painel + borda esquerda.
-    renderer.fillRect(px0, 0, kPanelW, VH, 0xFF1A1E28);
-    for (int y = 0; y < VH; ++y) fb[y * VW + px0] = 0xFF4A5468;
+    // Fundo do painel + bordas (moldura clara/escura, como o original).
+    renderer.fillRect(px0, 0, kPanelW, VH, 0xFF000000);
+    for (int y = 0; y < VH; ++y) {
+        fb[y * VW + px0] = 0xFFDCDCE0;
+        fb[y * VW + px0 + 1] = 0xFF5C5C5F;
+        fb[y * VW + px0 + 3] = 0xFFB9B9BB;
+    }
 
-    // --- Minimapa (topo) ---
-    const int mmX = px0 + 8, mmY = 8, mmSize = kPanelW - 16;
+    // --- Minimapa (y 0..kMiniMapH) ---
+    const int mmX0 = px0 + 6, mmY0 = 2, mmW = kPanelW - 12, mmH = kMiniMapH - 4;
     int mw = g_gameMap.ok() ? g_gameMap.width() : 64;
     int mh = g_gameMap.ok() ? g_gameMap.height() : 64;
-    renderer.fillRect(mmX - 1, mmY - 1, mmSize + 2, mmSize + 2, 0xFF000000);
-    for (int y = 0; y < mmSize; ++y) {
-        int ty = y * mh / mmSize;
-        for (int x = 0; x < mmSize; ++x) {
-            int tx = x * mw / mmSize;
+    // Escala inteira que caiba (o original mostra o mapa inteiro no quadro).
+    int sc = std::max(1, std::min(mmW / mw, mmH / mh));
+    int mmW2 = mw * sc, mmH2 = mh * sc;
+    int mmX = mmX0 + (mmW - mmW2) / 2, mmY = mmY0 + (mmH - mmH2) / 2;
+    renderer.fillRect(mmX0, mmY0, mmW, mmH, 0xFF000000);
+    for (int y = 0; y < mmH2; ++y) {
+        int ty = y / sc;
+        for (int x = 0; x < mmW2; ++x) {
+            int tx = x / sc;
             bool pass = g_gameMap.ok() && g_gameMap.isPassable(LOCATION{tx, ty});
-            uint32_t c = pass ? 0xFF585048 : 0xFF2A1810;
-            fb[(mmY + y) * VW + (mmX + x)] = c;
+            fb[(mmY + y) * VW + (mmX + x)] = pass ? 0xFF6E6658 : 0xFF2E1C12;
         }
     }
-    // Unidades no minimapa (ponto por dono).
-    static const uint32_t kOC[7] = { 0xFF40A0FF,0xFFFF5040,0xFF40D070,0xFFFFD040,
+    static const uint32_t kOC[7] = { 0xFF4060FF,0xFFFF5040,0xFF40D070,0xFFFFD040,
                                      0xFFC060FF,0xFF40E0E0,0xFFFF9030 };
     for (int i = 1; i < (int)g_units.size(); ++i) {
         const UnitRecord& r = g_units[i];
-        if (r.id == -1 || (r.flags & UNIT_DEAD)) continue;
-        int tx = (r.pixelX >> 5), ty = (r.pixelY >> 5);
-        int mx = mmX + tx * mmSize / mw, my = mmY + ty * mmSize / mh;
-        if (mx >= mmX && mx < mmX + mmSize && my >= mmY && my < mmY + mmSize)
-            fb[my * VW + mx] = kOC[(r.owner & 0x0F) % 7];
+        if (r.id == -1 || (r.flags & UNIT_DEAD) || !(r.flags & (UNIT_VEHICLE | UNIT_BUILDING))) continue;
+        int mx = mmX + (r.pixelX >> 5) * sc, my = mmY + (r.pixelY >> 5) * sc;
+        renderer.fillRect(mx, my, sc, sc, kOC[(r.owner & 0x0F) % 7]);
     }
-    // Retângulo da viewport no minimapa.
     {
-        int vx = mmX + (m_camX / 32) * mmSize / mw;
-        int vy = mmY + (m_camY / 32) * mmSize / mh;
-        int vw = (viewportW() / 32 + 1) * mmSize / mw;
-        int vh = (VH / 32 + 1) * mmSize / mh;
+        int vx = mmX + (m_camX / 32) * sc, vy = mmY + (m_camY / 32) * sc;
+        int vw = (viewportW() / 32) * sc, vh = ((VH - kStatusBarH) / 32) * sc;
         renderer.drawRect(vx, vy, vw, vh, 0xFFFFFFFF);
     }
+    for (int x = px0; x < VW; ++x) fb[(kMiniMapH - 1) * VW + x] = 0xFFFFFFFC;
 
-    // --- Info da seleção ---
-    int iy = mmY + mmSize + 8;
-    char buf[64];
-    if (m_selected.empty()) {
-        Font::drawText(fb, VW, VH, "Nada selecionado", px0 + 8, iy, 0xFF8090A0, true);
-    } else if (m_selected.size() == 1) {
-        const UnitRecord& r = g_units[m_selected[0]];
-        // "<Nome> #<jogador>-<NN>", como o jogo original exibe (ver manual,
-        // Tutorial 2/4: "Cargo Truck #1-01", "Laser Lynx #1-01").
-        std::snprintf(buf, sizeof(buf), "%s #%d-%02d", vehName(r.type),
-                      (r.owner & 0x0F) + 1,
-                      vehSerial(r, static_cast<size_t>(m_selected[0])));
-        Font::drawText(fb, VW, VH, buf, px0 + 8, iy, 0xFFFFE060, true);
-        std::snprintf(buf, sizeof(buf), "%s%s",
-                      (r.owner & 0x0F) == 0 ? "EDEN" : "inimigo",
-                      vehIsCombatChassis(r.type) ? "  (chassi)" : "");
-        Font::drawText(fb, VW, VH, buf, px0 + 8, iy + 12, 0xFF80E0A0, true);
-    } else {
-        std::snprintf(buf, sizeof(buf), "%d unidades", (int)m_selected.size());
-        Font::drawText(fb, VW, VH, buf, px0 + 8, iy, 0xFFFFE060, true);
+    // --- Linha de abas (6 botões; os ícones originais entram com a UI de comandos) ---
+    {
+        const int ty = kMiniMapH + 4, th = kTabsH - 10, tw = 32, gap = 2;
+        const int total = 6 * tw + 5 * gap;
+        const int tx0 = px0 + (kPanelW - total) / 2;
+        for (int k = 0; k < 6; ++k) {
+            int bx = tx0 + k * (tw + gap);
+            renderer.fillRect(bx, ty, tw, th, 0xFF3A3A3D);
+            renderer.drawRect(bx, ty, tw, th, 0xFFC2C2C6);
+            char n[4]; std::snprintf(n, sizeof(n), "%d", k + 1);
+            Font::drawTextCentered(fb, VW, VH, n, bx + tw / 2, ty + th / 2 - 4, 0xFF9A9A9E, false);
+        }
+        for (int x = px0; x < VW; ++x) fb[(kMiniMapH + kTabsH - 1) * VW + x] = 0xFFDCDCE0;
     }
 
-    // --- Botões de comando ---
-    auto button = [&](int bx, int by, int bw, int bh, const char* label, bool on) {
-        renderer.fillRect(bx, by, bw, bh, on ? 0xFF3A4A6A : 0xFF2A3040);
-        renderer.drawRect(bx, by, bw, bh, 0xFF5A6478);
-        Font::drawText(fb, VW, VH, label, bx + 6, by + bh / 2 - 4, 0xFFD0D8E8, true);
-    };
-    int by = VH - 70;
-    bool has = !m_selected.empty();
-    button(px0 + 8, by,       kPanelW - 16, 20, "Mover (btn-dir)", has);
-    button(px0 + 8, by + 24,  kPanelW - 16, 20, "Parar (S)", has);
-    Font::drawText(fb, VW, VH, "esq: selec / caixa", px0 + 8, VH - 14, 0xFF6878A0, true);
+    // --- Quadro de informação da seleção (classe de painel @off_4D5220) ---
+    const PaneRect pane{px0 + 4, kMiniMapH + kTabsH, VW - 4, VH - 2};
+    renderer.fillRect(pane.l, pane.t, pane.r - pane.l, pane.b - pane.t, 0xFF000A00);
+    if (!m_selected.empty())
+        drawUnitInfoPane(fb, VW, VH, pane, m_selected[0], static_cast<int>(m_selected.size()), me);
+    if (m_selected.size() == 1) {
+        PaneButton b;
+        if (infoPaneButton(pane, m_selected[0], me, b)) {
+            renderer.fillRect(b.rc.l, b.rc.t, b.rc.r - b.rc.l, b.rc.b - b.rc.t, 0xFF0D0F09);
+            renderer.drawRect(b.rc.l, b.rc.t, b.rc.r - b.rc.l, b.rc.b - b.rc.t, 0xFF70281F);
+            Font::drawTextCentered(fb, VW, VH, b.label, (b.rc.l + b.rc.r) / 2,
+                                   b.rc.t + (b.rc.b - b.rc.t) / 2 - 4, 0xFFE04030, false);
+        }
+    }
+
+    // --- Barra de status sob a visão do mapa ---
+    {
+        const int sy = VH - kStatusBarH, sw = viewportW();
+        renderer.fillRect(0, sy, sw, kStatusBarH, 0xFF141416);
+        for (int x = 0; x < sw; ++x) { fb[sy * VW + x] = 0xFFFFFFFF; fb[(sy + 1) * VW + x] = 0xFF87868A; }
+        // Coordenadas do tile sob o mouse. PROVISÓRIO: exibidas 1-based no
+        // sistema do port — o deslocamento exato que o original aplica (o engine
+        // guarda mapas pequenos com x+32) ainda não foi rastreado.
+        if (m_mouseNX < viewportW() && m_mouseNY < sy) {
+            int tx = (m_camX + m_mouseNX) / 32, ty = (m_camY + m_mouseNY) / 32;
+            if (g_gameMap.ok()) tx &= (g_gameMap.width() - 1);
+            char c[32]; std::snprintf(c, sizeof(c), "%d,%d", tx + 1, ty + 1);
+            Font::drawText(fb, VW, VH, c, 4, sy + 4, 0xFFE0E0E0, false);
+        }
+        // (Mensagens "POWER LEVELS: ..." etc. — próxima rodada, com o sistema
+        //  de mensagens sub_438F70.)
+    }
 }
 
 } // namespace op2

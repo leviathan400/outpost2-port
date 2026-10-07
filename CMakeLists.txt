@@ -33,6 +33,7 @@ add_executable(outpost2_modern
     src/res/res_manager.cpp
     src/gfx/pbmp.cpp
     src/gfx/artfile.cpp
+    src/gfx/art_blit.cpp
     src/game/game_map.cpp
     src/game/terrain_cost.cpp
     src/game/command.cpp
@@ -49,6 +50,7 @@ add_executable(outpost2_modern
     src/game/player.cpp
     src/game/unit.cpp
     src/app/tapp.cpp
+    src/app/info_pane.cpp
     src/app/shell_state.cpp
     src/app/game_state.cpp
     src/core/config.cpp
