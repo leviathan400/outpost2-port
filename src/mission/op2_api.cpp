@@ -21,6 +21,7 @@
 #include "../game/trigger.h"
 #include "../game/unit.h"
 #include "../game/walls.h"
+#include "../game/disaster.h"
 
 namespace op2 {
 
@@ -109,11 +110,9 @@ void __fastcall T_SetCheatFastUnits(int v)          { TethysGame::setCheatFlag(4
 void __fastcall T_SetCheatFastProduction(int v)     { TethysGame::setCheatFlag(5, v); }
 void __fastcall T_SetDaylightEverywhere(int v)      { TethysGame::SetDaylightEverywhere(v); }
 void __fastcall T_SetDaylightMoves(int v)           { TethysGame::SetDaylightMoves(v); }
-// ?SetEarthquake: cria a unidade-desastre 0x4E (sub_4466B0) — desastres ainda
-// não portados.
+// ?SetEarthquake: unidade-desastre 0x4E (sub_4466B0(0x4E, x<<5, y<<5, 6, mag)).
 void __fastcall T_SetEarthquake(int x, int y, int magnitude) {
-    std::cout << "[Mission] SetEarthquake(" << portX(x) << "," << y << "," << magnitude
-              << ") — desastre ainda nao portado" << std::endl;
+    setEarthquake(portX(x), y, magnitude);
 }
 // ?SetMusicPlayList (sub_451090): sem áudio no port.
 void __fastcall T_SetMusicPlayList(int, int, int*) {}

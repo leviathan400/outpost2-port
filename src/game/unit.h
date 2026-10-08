@@ -176,6 +176,10 @@ struct UnitRecord {
     int      velQX = 0, velQY = 0; // +0x64/+0x68 vec*4/duração (rastro)
     bool     rawPixel = false;     // pixelX/Y já no sentido do original (centro, sem +16)
 
+    // --- Desastres (0x4C..0x50) --------------------------------------------
+    int      quakeDir = 0;         // +0x54 terremoto: direção do tremor (256 - rand(512))
+    int      quakeAmp = 0;         // +0x58 terremoto: amplitude (magnitude*4 + 30)
+
     // --- Beacon de mineração (0x51..0x53; vt de off_4CF218) -----------------
     int8_t   beaconRare = 0;       // +0x64 1 = minério raro
     int      beaconYield = 0;      // +0x5C 0/1/2 (rendimento → anim 0x73A..0x73F)

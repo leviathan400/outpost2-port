@@ -386,6 +386,10 @@ void moraleEnemyVehicleKilled(int player) {                 // sub_44FD40
     if (player < 0 || player >= kMaxPlayers) return;
     g_colony[player].moraleEvents += s_me[ME_ENEMY_VEH_DIES];  // dword_4E1FA8 (entrada 13)
 }
+void moraleDisaster(int player, bool warned) {               // sub_44F8E0
+    if (player < 0 || player >= kMaxPlayers) return;
+    g_colony[player].moraleEvents += s_me[warned ? ME_DISASTER_WARNED : ME_DISASTER_NO_WARN];
+}
 void moraleStructureBuilt(int player, int type) {            // sub_44F790
     if (player < 0 || player >= kMaxPlayers) return;
     if (type == mapCommandCenter) g_colony[player].moraleEvents += s_me[ME_CC_BORN];

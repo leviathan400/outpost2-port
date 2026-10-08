@@ -14,6 +14,7 @@
 #include "tethys_game.h"
 #include "terrain_cost.h"
 #include "vehicle_anim.h"
+#include "disaster.h"
 #include "../gfx/artfile.h"
 
 namespace op2 {
@@ -543,6 +544,7 @@ void unitPeriodicTick(int id) {                               // prólogo de sub
         dropRef(u.lastAttacker);
         u.lastAttacker = 0;
     }
+    if (u.id != -1 && !(u.flags & UNIT_DEAD) && disasterPeriodicTick(id)) return;   // vt[20] do desastre
     if (u.id != -1 && !(u.flags & UNIT_DEAD) && (u.flags & UNIT_VEHICLE) && (u.flags & UNIT_ARMED) &&
         (u.flags & UNIT_AUTO_TARGET))
         weaponAutoEngage(id);                                     // vt[20] (sub_485340)

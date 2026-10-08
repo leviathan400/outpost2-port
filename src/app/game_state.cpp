@@ -27,6 +27,7 @@
 #include "../game/weapon.h"
 #include "../game/trigger.h"
 #include "../game/research.h"
+#include "../game/disaster.h"
 #include "../game/scenario.h"
 #include "../mission/mission.h"
 #include "../gfx/artfile.h"
@@ -54,6 +55,7 @@ void GameState::loadSettings() {
     setAmbientAnimations(gs.ambient != 0);   // "Ambient" → dword_575628
     m_stationaryShadows = gs.stationaryShadows != 0;   // dword_575634
     m_mobileShadows = gs.mobileShadows != 0;           // dword_575638
+    m_frameSkip = gs.frameSkip;                        // Value (FrameSkip)
 }
 
 bool GameState::loadMap(const std::string& mapName) {
@@ -226,6 +228,9 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     if (ks[SDL_SCANCODE_RIGHT]) m_camX += speed;
     if (ks[SDL_SCANCODE_UP])    m_camY -= speed;
     if (ks[SDL_SCANCODE_DOWN])  m_camY += speed;
+    // sub_407A10: a rolagem soma o tremor acumulado no desenho anterior e zera.
+    m_camX += m_shakeX; m_camY += m_shakeY;
+    m_shakeX = m_shakeY = 0;
     clampCamera();
 
     // Avança o relógio de simulação na cadência do GameSpeed (m_tickPeriod).
@@ -499,6 +504,10 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         Font::drawTextCentered(renderer.getFramebuffer(), Renderer::NATIVE_WIDTH, Renderer::NATIVE_HEIGHT,
                                gameEndText(gameEndCode()), viewportW() / 2, cy, 0xFFFFE070, true);
     }
+    // vt[6] do terremoto (sub_413560): tremor p/ o próximo quadro, pelo centro da vista.
+    disasterShake(m_camX + (viewportW() / 32) * 16,
+                  m_camY + ((Renderer::NATIVE_HEIGHT - kStatusBarH) / 32) * 16,
+                  m_frameSkip, m_shakeX, m_shakeY);
     renderPanel(renderer);
 
     // Overlay: relógio (Tick/Time) + uma amostra do RNG — prova visível de que o

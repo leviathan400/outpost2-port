@@ -135,6 +135,8 @@ void colonyFreeMorale(int player);
 int colonyDirtProtection(const UnitRecord& r);
 // Crédito de moral ao matar veículo inimigo (sub_44FD40: ENEMY_VEH_DIES).
 void moraleEnemyVehicleKilled(int player);
+// sub_44F8E0: desastre atingiu a colônia (com ou sem aviso).
+void moraleDisaster(int player, bool warned);
 
 // Turno: sub_471F30 p/ cada jogador.
 void tickColony();

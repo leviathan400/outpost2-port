@@ -73,6 +73,7 @@ struct GameSettings {
     int ambient = 1;
     int stationaryShadows = 0;
     int mobileShadows = 0;
+    int frameSkip = 1;          // "FrameSkip" (1..2; sub_49AD05) — fase do tremor de tela
     int introAVI = 1;
     int showMovies = 1;
     int spiffyDraw = 1;

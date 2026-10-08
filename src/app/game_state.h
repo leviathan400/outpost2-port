@@ -38,6 +38,8 @@ public:
     void setSelection(const std::vector<int>& ids) { m_selected = ids; }
     void setMouse(int nx, int ny) { m_mouseNX = nx; m_mouseNY = ny; }
     void setCamera(int x, int y) { m_camX = x; m_camY = y; }
+    int shakeX() const { return m_shakeX; }
+    int shakeY() const { return m_shakeY; }
 
     // Painel de comando à direita (216 px, medido na tela original 640x480):
     // minimapa (y 0..134), linha de 6 abas (135..180) e o quadro de informação
@@ -63,6 +65,8 @@ private:
     bool m_showDebugHud = false;    // overlay de depuração (Tick/RNG/economia; tecla F3)
     bool m_stationaryShadows = false; // INI StationaryShadows (dword_575634)
     bool m_mobileShadows = false;     // INI MobileShadows (dword_575638)
+    int  m_frameSkip = 1;             // INI FrameSkip (Value)
+    int  m_shakeX = 0, m_shakeY = 0;  // tremor acumulado (vista +0x138/+0x13C)
 
     // --- Seleção / interação (a "MAINE" / command pane) ---
     std::vector<int> m_selected;   // ids de unidades selecionadas

@@ -23,6 +23,8 @@
 #include "game/structure.h"
 #include "game/weapon.h"
 #include "game/trigger.h"
+#include "game/disaster.h"
+#include "game/messages.h"
 #include "game/research.h"
 #include "game/building_sheet.h"
 #include "game/colony.h"
@@ -534,7 +536,7 @@ static int runCombatTest(const std::string& mapName, const std::string& prefix) 
 
 // --missiontest <DLL> <out.bmp>: carrega a missão pela DLL (loadMission),
 // roda ~200 ticks e grava a tela; lista unidades e objetivos.
-static int runMissionTest(const std::string& dll, const std::string& outPath) {
+static int runMissionTest(const std::string& dll, const std::string& outPath, int ticks) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
     op2::g_ResManager.init(".");
     op2::g_art.load();
@@ -549,7 +551,20 @@ static int runMissionTest(const std::string& dll, const std::string& outPath) {
         std::printf("[MissionTest] %2d tipo 0x%02X dono %d tile (%d,%d)\n", r.id, r.type, r.owner & 0x0F,
                     op2::unitOX(r) >> 5, op2::unitOY(r) >> 5);
     }
-    for (int k = 0; k < 200; ++k) gs.onIdle(renderer, 0.025f);
+    std::string lastMsg;
+    for (int k = 0; k < ticks; ++k) {
+        gs.onIdle(renderer, 0.2501f / 4.0f);
+        const std::string m = op2::statusBarText();
+        if (m != lastMsg) { std::printf("[MissionTest] t=%d msg: %s\n", op2::TethysGame::tick(), m.c_str()); lastMsg = m; }
+    }
+    {   int hurt = 0, dead = 0;
+        for (size_t i = 1; i < op2::g_units.size(); ++i) {
+            const op2::UnitRecord& r = op2::g_units[i];
+            if (r.id == -1) continue;
+            if (r.flags & op2::UNIT_DEAD) ++dead; else if (r.damage > 0 && (r.flags & op2::UNIT_DAMAGEABLE)) ++hurt;
+        }
+        std::printf("[MissionTest] unidades danificadas=%d mortas=%d\n", hurt, dead);
+    }
     for (const std::string& o : op2::missionObjectives()) std::printf("[MissionTest] objetivo: %s\n", o.c_str());
     {   // pesquisa do jogador 0: nº de tecnologias e alguns blocos melhorados
         int n = 0, up = 0;
@@ -564,6 +579,38 @@ static int runMissionTest(const std::string& dll, const std::string& outPath) {
     bool ok = writeBmp32(outPath, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
     renderer.shutdown(); SDL_Quit();
     return ok ? 0 : 1;
+}
+
+// --quaketest <map>: terremoto de magnitude 3 no CC da cena demo; imprime o
+// dano por unidade e o tremor de tela.
+static int runQuakeTest(const std::string& mapName) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 quaketest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    int cc = 0;
+    for (size_t i = 1; i < op2::g_units.size(); ++i)
+        if (op2::g_units[i].id != -1 && op2::g_units[i].type == op2::mapCommandCenter) { cc = (int)i; break; }
+    if (!cc) return 3;
+    op2::setEarthquake(op2::g_units[cc].pixelX >> 5, op2::g_units[cc].pixelY >> 5, 3);
+    int maxShake = 0;
+    for (int k = 0; k < 1300; ++k) {
+        gs.onIdle(renderer, 0.2501f / 4.0f);
+        const int s = std::abs(gs.shakeX()) + std::abs(gs.shakeY());
+        if (s > maxShake) maxShake = s;
+    }
+    for (size_t i = 1; i < op2::g_units.size(); ++i) {
+        const op2::UnitRecord& r = op2::g_units[i];
+        if (r.id == -1 || !(r.flags & op2::UNIT_DAMAGEABLE)) continue;
+        std::printf("[QuakeTest] %2d tipo 0x%02X dano=%d%s\n", r.id, r.type, r.damage, (r.flags & op2::UNIT_DEAD) ? " (morto)" : "");
+    }
+    std::printf("[QuakeTest] tick=%d tremor max=%d msg=%s\n", op2::TethysGame::tick(), maxShake, op2::statusBarText().c_str());
+    renderer.shutdown(); SDL_Quit();
+    return 0;
 }
 
 // --movelog <map>: manda o 1º veículo andar ~10 células e imprime o
@@ -955,8 +1002,10 @@ int main(int argc, char* argv[]) {
             return runStructTest(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--paneshot") == 0 && i + 2 < argc)
             return runPaneShot(argv[i + 1], argv[i + 2], i + 3 < argc ? atoi(argv[i + 3]) : 0);
+        if (std::strcmp(argv[i], "--quaketest") == 0 && i + 1 < argc)
+            return runQuakeTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--missiontest") == 0 && i + 2 < argc)
-            return runMissionTest(argv[i + 1], argv[i + 2]);
+            return runMissionTest(argv[i + 1], argv[i + 2], i + 3 < argc ? atoi(argv[i + 3]) : 200);
         if (std::strcmp(argv[i], "--combattest") == 0 && i + 2 < argc)
             return runCombatTest(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--colonytest") == 0 && i + 1 < argc)

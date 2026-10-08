@@ -173,6 +173,8 @@ void GameSettings::loadFrom(const Config& cfg) {
     ambient           = cfg.getInt("Game", "Ambient", ambient);
     stationaryShadows = cfg.getInt("Game", "StationaryShadows", stationaryShadows);
     mobileShadows     = cfg.getInt("Game", "MobileShadows", mobileShadows);
+    frameSkip         = cfg.getInt("Game", "FrameSkip", 1);
+    if (static_cast<unsigned>(frameSkip) > 2u) frameSkip = 2;
     introAVI          = cfg.getInt("Game", "IntroAVI", introAVI);
     showMovies        = cfg.getInt("Game", "ShowMovies", showMovies);
     spiffyDraw        = cfg.getInt("Game", "SpiffyDraw", spiffyDraw);
