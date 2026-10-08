@@ -25,10 +25,10 @@ void ShellState::onIdle(Renderer& renderer, float dt) {
     renderer.present();
 
     // o menu pediu para iniciar uma missão?
-    std::string mapName;
-    if (m_menu.consumeLaunch(mapName)) {
-        if (!gTApp.activateGame(mapName))
-            std::cerr << "[Shell] nao foi possivel iniciar a missao (" << mapName << ")" << std::endl;
+    std::string dllName;
+    if (m_menu.consumeLaunch(dllName)) {
+        if (!gTApp.activateMission(dllName))
+            std::cerr << "[Shell] nao foi possivel iniciar a missao (" << dllName << ")" << std::endl;
         return;
     }
     // o menu pediu para sair?

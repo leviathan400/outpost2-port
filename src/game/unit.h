@@ -176,6 +176,23 @@ struct UnitRecord {
     int      velQX = 0, velQY = 0; // +0x64/+0x68 vec*4/duração (rastro)
     bool     rawPixel = false;     // pixelX/Y já no sentido do original (centro, sem +16)
 
+    // --- Beacon de mineração (0x51..0x53; vt de off_4CF218) -----------------
+    int8_t   beaconRare = 0;       // +0x64 1 = minério raro
+    int      beaconYield = 0;      // +0x5C 0/1/2 (rendimento → anim 0x73A..0x73F)
+    int      beaconVariant = 0;    // +0x60
+    uint8_t  beaconSet = 0;        // +0x65
+    uint8_t  beaconHasMine = 0;    // +0x66
+    uint32_t surveyedMask = 0;     // +0x67 jogadores que pesquisaram o beacon
+    int      beaconLink = 0;       // +0x58
+    // Mina (sub_44ADC0, vt[63]): mineYield (+0x70) acima; variante e beacon.
+    int      mineVariant = 0;      // +0x6C
+    int      mineLink = 0;         // +0x68
+    int      mineBeacon = 0;       // +0x60
+    // Fábrica (Unit::SetFactoryCargo): tipo +0x61+baia, carga +0x48+baia, foguete +0x6E.
+    uint8_t  bayType[6] = {};
+    uint8_t  bayCargo[6] = {};
+    int      padCargo = 0;
+
     // --- Lista por Y (dword_54EC0C; [+0x04]/[+0x08]) e slot livre -------------
     int      lnext = 0, lprev = 0;
     int      freeTick = 0;         // [+0x08] tick em que o slot foi liberado

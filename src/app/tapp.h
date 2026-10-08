@@ -21,13 +21,15 @@ public:
     // Cria a GameState (uma vez) e ativa o shell (menu). Se initialMap != "",
     // entra direto no jogo com esse mapa (como o branch de load/newgame do
     // CreateFrames original) — usado pelo modo --play.
-    bool createFrames(const std::string& initialMap = "");
+    bool createFrames(const std::string& initialMap = "", const std::string& initialMission = "");
     void run();           // loop principal (PeekMessage→OnIdle, aqui via SDL)
     void shutdown();
 
     // Troca de estado (equivale a ActivateShell/ActivateGame/SetUIState).
     void activateShell();
     bool activateGame(const std::string& mapName);
+    // Inicia uma missão pela DLL (T##/E##/P##.DLL) e ativa o jogo.
+    bool activateMission(const std::string& dllName);
     void setUIState(UIState* next);
 
     void requestQuit() { m_quit = true; }

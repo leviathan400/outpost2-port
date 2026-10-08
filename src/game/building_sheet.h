@@ -70,6 +70,10 @@ struct VehPlayerStats {
     int turnRate = 0;         // +0x28 (sub_44B650: giro por tick)
     int productionRate = 0;   // +0x2C
 };
+// Classe de movimento do veículo (desc+0x1E8): coluna 2 "Track Type" do
+// VEHICLES.TXT — L=0, W=1, M=2, T=3, H=4. 0 p/ tipos sem linha.
+int vehicleTrackClass(int type);
+
 // Nome de exibição do veículo (+0x1F8; tabela fixa @0x4E93FC pela linha do VEHICLES.TXT).
 const char* vehicleDisplayName(int type);
 bool loadVehicleSheet();

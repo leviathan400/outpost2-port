@@ -78,6 +78,8 @@ public:
 
     // Célula crua (u32) em (x,y) com wrap em X. (leitura)
     uint32_t rawCell(int x, int y) const;
+    // Escreve a célula crua (u32) em (x,y) com wrap em X (sub_435330 & cia.).
+    void setRawCell(int x, int y, uint32_t v);
 
     // Índice linear da célula (x,y) no grid, no layout de faixa do engine:
     //   idx = ((x>>5)*H + y)*32 + (x&31)   [H potência de 2 ⇒ == o shl do asm]

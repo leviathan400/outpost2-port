@@ -187,6 +187,11 @@ uint32_t GameMap::rawCell(int x, int y) const {
     return idx == static_cast<size_t>(-1) ? 0u : m_tiles[idx];
 }
 
+void GameMap::setRawCell(int x, int y, uint32_t v) {
+    size_t idx = cellIndex(x, y);
+    if (idx != static_cast<size_t>(-1)) m_tiles[idx] = v;
+}
+
 void GameMap::setUnitOccupancy(int x, int y, int unitId) {
     size_t idx = cellIndex(x, y);
     if (idx == static_cast<size_t>(-1)) return;

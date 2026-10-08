@@ -269,6 +269,7 @@ bool createUnit(Unit& out, map_id type, LOCATION loc, int owner,
     r.flags  = mapIdIsBuilding(type) ? UNIT_BUILDING
              : mapIdIsVehicle(type)  ? UNIT_VEHICLE : 0u;
     if (r.flags & UNIT_VEHICLE) {
+        r.moveClass = vehicleTrackClass(type);                   // desc+0x1E8 (Track Type)
         r.flags |= UNIT_DAMAGEABLE;                              // sub_44B440
         if (type == mapScorpion || type == mapLynx || type == mapPanther || type == mapTiger)
             r.flags |= UNIT_AUTO_TARGET | UNIT_ARMED;            // off_4D0650

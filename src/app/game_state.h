@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -11,6 +12,7 @@
 namespace op2 {
 
 struct WeaponDrawOp;
+struct MissionScript;
 
 // UIState do jogo — equivale à UIState estática do engine (dword_574A80, criada
 // uma vez em TApp::CreateFrames). Por enquanto desenha o terreno da missão e rola
@@ -20,6 +22,11 @@ public:
     // Carrega o mapa de uma missão (nome do .map, resolvido do export MapName da
     // DLL). false se o mapa/tilesets não forem encontrados.
     bool load(const std::string& mapName);
+    // Inicia uma missão a partir da DLL (T##/E##/P##.DLL) — single player de
+    // sub_4893A0: DescBlock, mapa, jogadores, InitProc; triggers por turno.
+    bool loadMission(const std::string& dllName);
+    GameState();
+    ~GameState();
     bool hasMap() const { return m_terrain.ok(); }
     const std::string& mapName() const { return m_mapName; }
 
@@ -41,6 +48,10 @@ public:
     static constexpr int kStatusBarH = 22;
 
 private:
+    void loadSettings();
+    bool loadMap(const std::string& mapName);
+    void drawObjectives(uint32_t* fb, int fbW, int fbH, int l, int t, int r, int b);
+    std::unique_ptr<MissionScript> m_mission;   // dword_4EFCD8
     std::string m_mapName;
     TerrainRenderer m_terrain;   // desenha sobre o g_gameMap (singleton do engine)
     int m_camX = 0, m_camY = 0;

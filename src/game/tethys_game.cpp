@@ -11,6 +11,7 @@ int TethysGame::s_daylightEverywhere = 0;
 int      TethysGame::s_numPlayers = 0;
 int      TethysGame::s_localPlayer = 0;
 GameRNG  TethysGame::s_rng;
+int      TethysGame::s_cheat[8] = {};
 
 void TethysGame::reset(uint32_t seed, int numPlayers, int localPlayer) {
     s_tick = 0;
@@ -18,6 +19,7 @@ void TethysGame::reset(uint32_t seed, int numPlayers, int localPlayer) {
     s_numPlayers = numPlayers;
     s_localPlayer = localPlayer;
     s_rng.setSeed(seed);
+    for (int& c : s_cheat) c = 0;
 }
 
 void TethysGame::ForceMoraleGreat(int p)  { colonyForceMorale(p, 0); }

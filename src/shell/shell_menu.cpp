@@ -277,7 +277,8 @@ void ShellMenu::dispatchButton(int id) {
             std::string map = missionMapName(dll);
             std::cout << "[Tutorials] START: " << dll << " -> "
                       << (map.empty() ? "(MapName nao encontrado)" : map) << std::endl;
-            if (!map.empty()) { m_launchMap = map; m_launchRequested = true; }
+            // O shell entrega a DLL da missão ao jogo (StartSingleGame → sub_4893A0).
+            if (!map.empty()) { m_launchMap = dll; m_launchRequested = true; }
         } else if (id == 2) setState(MenuState::MainMenu);
         break;
     case MenuState::ColonyGames:
@@ -291,7 +292,7 @@ void ShellMenu::dispatchButton(int id) {
             std::cout << "[Campaign] " << (m_campaignColony == 0 ? "Eden" : "Plymouth")
                       << " dif " << m_campaignDifficulty << " -> " << dll << " -> "
                       << (map.empty() ? "(MapName nao encontrado)" : map) << std::endl;
-            if (!map.empty()) { m_launchMap = map; m_launchRequested = true; }
+            if (!map.empty()) { m_launchMap = dll; m_launchRequested = true; }
         } else if (id == 2) setState(MenuState::MainMenu);
         break;
     case MenuState::Preferences:

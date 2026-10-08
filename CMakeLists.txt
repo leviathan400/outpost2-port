@@ -43,6 +43,12 @@ add_executable(outpost2_modern
     src/game/structure_anim.cpp
     src/game/structure.cpp
     src/game/weapon.cpp
+    src/game/trigger.cpp
+    src/game/walls.cpp
+    src/game/scenario.cpp
+    src/mission/pe_loader.cpp
+    src/mission/mission.cpp
+    src/mission/op2_api.cpp
     src/game/building_sheet.cpp
     src/game/colony.cpp
     src/game/messages.cpp

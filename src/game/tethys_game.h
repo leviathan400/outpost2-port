@@ -40,6 +40,16 @@ public:
         }
     }
     static void SetDaylightMoves(int on)      { s_daylightMoves = on; }
+    // GameMap::SetInitialLightLevel → sub_41F9A0(0, fase, 0): fase de 16 bits
+    // e posição = larguraInterna * fase >> 16.
+    static void setDaylightPhase(int phase, int internalWidth) {
+        s_daylightPhase = phase & 0xFFFF;
+        s_daylightPos = (internalWidth * s_daylightPhase) >> 16;
+    }
+    // Trapaças (CommandPacket 0x2B, sub-ids 0..7 → dword_56DE58[i]): 0 recursos
+    // ilimitados, 1 produz tudo, 4 unidades rápidas, 5 produção rápida.
+    static int  cheatFlag(int i)             { return (i >= 0 && i < 8) ? s_cheat[i] : 0; }
+    static void setCheatFlag(int i, int v)   { if (i >= 0 && i < 8) s_cheat[i] = v; }
     // Moral forçada (CommandPacket 0x2B → colony.cpp). player -1 = todos.
     static void ForceMoraleGreat(int player);
     static void ForceMoraleGood(int player);
@@ -70,6 +80,7 @@ private:
     static int      s_numPlayers;  // dword_56DEC0
     static int      s_localPlayer; // dword_56DEE8
     static GameRNG  s_rng;         // unk_56B1E0
+    static int      s_cheat[8];    // dword_56DE58..
 };
 
 } // namespace op2

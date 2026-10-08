@@ -51,7 +51,7 @@ bool TApp::init() {
     return true;
 }
 
-bool TApp::createFrames(const std::string& initialMap) {
+bool TApp::createFrames(const std::string& initialMap, const std::string& initialMission) {
     // Cria a UIState do jogo uma vez (como dword_574A80 em CreateFrames)...
     m_game = new GameState();
     // ...e a UIState do shell.
@@ -61,6 +61,8 @@ bool TApp::createFrames(const std::string& initialMap) {
 
     // Entra direto no jogo se um mapa foi pedido (branch de newgame/load do
     // CreateFrames original); senão, ativa o shell (ActivateShell).
+    if (!initialMission.empty() && activateMission(initialMission))
+        return true;
     if (!initialMap.empty() && activateGame(initialMap))
         return true;
     activateShell();
@@ -80,6 +82,12 @@ void TApp::activateShell() {
 
 bool TApp::activateGame(const std::string& mapName) {
     if (!m_game->load(mapName)) return false;   // mapa invalido: fica no shell
+    setUIState(m_game);
+    return true;
+}
+
+bool TApp::activateMission(const std::string& dllName) {
+    if (!m_game->loadMission(dllName)) return false;
     setUIState(m_game);
     return true;
 }

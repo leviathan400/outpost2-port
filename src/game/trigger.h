@@ -1,0 +1,54 @@
+#pragma once
+
+#include <string>
+#include <vector>
+
+namespace op2 {
+
+// Stubs de script e triggers — porta do sistema ScStub do OUTPOST2.EXE.
+//
+// Tabela global de 255 stubs (dword_56B71C, índice = stubIndex; alocação
+// sub_47B460 a partir do último usado, dword_56B718). Cada classe registrada
+// (descritor {pai, nome, tamanho, ctor, nó, cabeça}) mantém a sua lista de
+// instâncias com inserção na CABEÇA (sub_47B4F0). Classes portadas:
+//   FuncReference   (off_4E3C58, sub_475710): nome + endereço da função na DLL
+//   _Trigger        (off_4E9E50): [+8] habilitado, [+0x1C] oneShot,
+//                   [+0x20] máscara de jogadores que dispararam, [+0x24] FuncReference
+//   TimeTrigger     (off_4E9E70): [+0x30] período, [+0x34] contador (−4 a cada passada)
+//   ResearchTrigger (off_4E9EB0): [+0x30] tecnologia, [+0x34] jogador
+//   VictoryCondition/FailureCondition (off_4EA0B0/off_4EA0D0): [+0x34] trigger,
+//                   [+0x30] texto do objetivo (memória da DLL)
+// Processamento por turno: missionTriggerTick() = sub_403110.
+
+struct MissionScript;
+
+// Reinicia a tabela de stubs e as listas (sub_47AB00 / início de jogo).
+void resetTriggers();
+
+// Criação (exports Create*Trigger / Create*Condition). Devolvem o stubIndex
+// (0xFF se falhou, como o original).
+int createTimeTrigger(int bEnabled, int bOneShot, int time, const char* func);
+int createResearchTrigger(int bEnabled, int bOneShot, int techID, int playerNum, const char* func);
+int createVictoryCondition(int bEnabled, int bOneShot, int triggerStub, const char* text);
+int createFailureCondition(int bEnabled, int bOneShot, int triggerStub, const char* text);
+
+// ScStub (Enable/Disable/IsEnabled/Destroy) pelo stubIndex.
+void stubEnable(int stub, bool on);
+bool stubEnabled(int stub);
+
+// sub_403110: chamado a cada turno (age quando (tick & 3) == 3): dispara os
+// triggers, roda o AIProc da missão e testa vitória/derrota.
+void missionTriggerTick(MissionScript* mission);
+
+// Objetivos (textos das VictoryConditions, na ordem da lista).
+std::vector<std::string> missionObjectives();
+
+// Fim de jogo (sub_48A650 / TethysGame +0x9C,+0x98): 0 = em andamento;
+// 3 MISSION ACCOMPLISHED, 4 MISSION FAILED, 7 VICTORY IS SWEET, 8 YOU HAVE BEEN
+// DEFEATED, 0xB demo. endTick = tick em que o jogo é encerrado.
+int gameEndCode();
+int gameEndTick();
+const char* gameEndText(int code);     // sub_49CAC0
+void setGameSpeedValue(int v);         // TethysGame +0x50 (GameStartInfo +0xAE)
+
+} // namespace op2

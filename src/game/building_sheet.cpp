@@ -91,6 +91,8 @@ static bool readSheetLines(const char* name, std::vector<std::string>& lines) {
 }
 
 static VehPlayerStats s_veh[0x11][7];
+static int s_vehTrack[0x11] = {};
+int vehicleTrackClass(int type) { return (type >= 1 && type <= 0x10) ? s_vehTrack[type] : 0; }
 static bool s_vehLoaded = false;
 
 const VehPlayerStats* vehicleSheet(int type, int player) {
@@ -115,6 +117,14 @@ bool loadVehicleSheet() {
         if (type < 0) continue;   // ex. SCORPION_PACK: sem descritor próprio
         if (thisRow < sizeof(kVehicleRowNames) / sizeof(kVehicleRowNames[0]))
             s_vehName[type] = kVehicleRowNames[thisRow];
+        switch (c[2].text.empty() ? 0 : c[2].text[0]) {            // desc+0x1E8
+            case 'H': case 'h': s_vehTrack[type] = 4; break;
+            case 'L': case 'l': s_vehTrack[type] = 0; break;
+            case 'M': case 'm': s_vehTrack[type] = 2; break;
+            case 'T': case 't': s_vehTrack[type] = 3; break;
+            case 'W': case 'w': s_vehTrack[type] = 1; break;
+            default: break;
+        }
         VehPlayerStats& s = s_veh[type][0];
         s.hitPoints = c[4].value;        // +0x00
         s.armor = c[5].value;            // +0x08 (col 5 Armor Class)

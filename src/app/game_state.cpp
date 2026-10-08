@@ -25,29 +25,37 @@
 #include "../game/colony.h"
 #include "../game/messages.h"
 #include "../game/weapon.h"
+#include "../game/trigger.h"
+#include "../game/scenario.h"
+#include "../mission/mission.h"
 #include "../gfx/artfile.h"
 #include "../gfx/art_blit.h"
 
 namespace op2 {
 
-bool GameState::load(const std::string& mapName) {
+GameState::GameState() = default;
+GameState::~GameState() = default;
+
+void GameState::loadSettings() {
     // Cadência do tick (sub_489160 relê "GameSpeed" do INI ao iniciar a partida;
     // sub_49BF80: intervalo = 1000 / clamp(GameSpeed*4, 4, 40) ms).
-    {
-        Config config("OUTPOST2.INI");
-        GameSettings gs;
-        if (config.load()) gs.loadFrom(config);
-        int speed = gs.gameSpeed;
-        if (speed > 10) speed = 10;
-        if (speed < 1) speed = 1;
-        int tps = speed * 4;
-        if (tps < 4) tps = 4;
-        if (tps > 40) tps = 40;
-        m_tickPeriod = 1.0f / static_cast<float>(tps);
-        setAmbientAnimations(gs.ambient != 0);   // "Ambient" → dword_575628
-        m_stationaryShadows = gs.stationaryShadows != 0;   // dword_575634
-        m_mobileShadows = gs.mobileShadows != 0;           // dword_575638
-    }
+    Config config("OUTPOST2.INI");
+    GameSettings gs;
+    if (config.load()) gs.loadFrom(config);
+    int speed = gs.gameSpeed;
+    if (speed > 10) speed = 10;
+    if (speed < 1) speed = 1;
+    int tps = speed * 4;
+    if (tps < 4) tps = 4;
+    if (tps > 40) tps = 40;
+    m_tickPeriod = 1.0f / static_cast<float>(tps);
+    setGameSpeedValue(speed * 4);                 // TethysGame +0x50 (GameStartInfo +0xAE)
+    setAmbientAnimations(gs.ambient != 0);   // "Ambient" → dword_575628
+    m_stationaryShadows = gs.stationaryShadows != 0;   // dword_575634
+    m_mobileShadows = gs.mobileShadows != 0;           // dword_575638
+}
+
+bool GameState::loadMap(const std::string& mapName) {
     m_mapName = mapName;
     auto stream = g_ResManager.openStream(mapName);
     if (!stream || !g_gameMap.load(stream->data(), stream->size())) {
@@ -66,6 +74,58 @@ bool GameState::load(const std::string& mapName) {
     m_camX = g_gameMap.clipRect().x1 * 32;
     m_camY = g_gameMap.clipRect().y1 * 32;
     clampCamera();
+    return true;
+}
+
+bool GameState::loadMission(const std::string& dllName) {
+    loadSettings();
+    if (m_mission) { setCurrentMission(nullptr); m_mission.reset(); }
+    resetTriggers();
+    auto mission = std::make_unique<MissionScript>();
+    std::string err;
+    if (!mission->load(dllName, err)) {          // sub_402A10 ("Could not load script file")
+        std::cerr << "[GameState] nao carregou " << dllName << ": " << err << std::endl;
+        return false;
+    }
+    const AIModDesc* d = mission->desc;
+    std::cout << "[Mission] " << dllName << ": '" << mission->levelDesc << "' tipo=" << d->missionType
+              << " jogadores=" << d->numPlayers << " tech=" << d->maxTechLevel
+              << " mapa=" << mission->mapName << " arvore=" << mission->techtreeName << std::endl;
+    if (!loadMap(mission->mapName)) return false;
+    m_mission = std::move(mission);
+    setCurrentMission(m_mission.get());
+
+    TethysGame::reset(/*seed*/ 0x12345678u, d->numPlayers, /*localPlayer*/ 0);
+    m_tickAccum = 0.0f;
+    resetPlayers(d->numPlayers);
+    // GameStartInfo do shell p/ jogo single player: o jogador 0 é o humano, os
+    // demais computador ([+0x28] isHuman).
+    for (int p = 0; p < d->numPlayers; ++p) { if (p == 0) Player[p].GoHuman(); else Player[p].GoAI(); }
+    loadBuildingSheet();
+    loadVehicleSheet();
+    loadWeaponSheet();
+    loadMoraleSheet();
+    resetMessages();
+    resetUnits();
+    TethysGame::SetDaylightMoves(0);
+    TethysGame::SetDaylightEverywhere(0);
+    // sub_402E10: (IA dos jogadores de computador, sub_402E70 — pendente) e InitProc.
+    const int ok = m_mission->initProc ? m_mission->initProc() : 1;
+    std::cout << "[Mission] InitProc -> " << ok << "; unidades=" << (g_units.size() - 1) << std::endl;
+    int cx, cy;
+    if (takeCenterViewRequest(cx, cy)) {           // CenterViewOn
+        m_camX = cx - viewportW() / 2;
+        m_camY = cy - (Renderer::NATIVE_HEIGHT - kStatusBarH) / 2;
+        clampCamera();
+    }
+    return ok != 0;
+}
+
+bool GameState::load(const std::string& mapName) {
+    loadSettings();
+    if (m_mission) { setCurrentMission(nullptr); m_mission.reset(); }
+    resetTriggers();
+    if (!loadMap(mapName)) return false;
 
     // Inicia o núcleo de simulação (relógio zerado + RNG semeado). O seed virá da
     // missão/netgame nos próximos slices; por ora um valor fixo p/ determinismo.
@@ -174,9 +234,27 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         TethysGame::advanceDaylight(g_gameMap.internalWidth());   // início do turno (sub_489DD0)
         m_lastRand = TethysGame::getRand(100);  // 1 consumo determinístico por tick
         tickColony();                            // economia de cada jogador (sub_471F30)
+        missionTriggerTick(currentMission());    // triggers, AIProc, vitória/derrota (sub_403110)
         tickMovement();                          // move as unidades pela rota do pathfinder
         tickUnits();                             // predios + efeitos (sub_43AC30)
         m_tickAccum -= kTickPeriod;
+        // Fim de jogo (TethysGame +0x98): chegado o tick, a partida acaba e
+        // volta ao shell.
+        if (gameEndCode() && TethysGame::tick() >= gameEndTick()) {
+            setCurrentMission(nullptr);
+            m_mission.reset();
+            resetTriggers();
+            gTApp.activateShell();
+            return;
+        }
+    }
+    {   // CenterViewOn pedido pelo script.
+        int cx, cy;
+        if (takeCenterViewRequest(cx, cy)) {
+            m_camX = cx - viewportW() / 2;
+            m_camY = cy - (Renderer::NATIVE_HEIGHT - kStatusBarH) / 2;
+            clampCamera();
+        }
     }
 
     // Seleção: tira unidades que morreram (o slot pode ter sido reusado por
@@ -340,6 +418,23 @@ void GameState::onIdle(Renderer& renderer, float dt) {
                 drew = drawSprite(anim, structureFrame(r), ucx, ucy, pc);
             }
         }
+        if (isEffect && r.type == 0x51) {
+            // Beacon de mineração (sub_405310): pesquisado pelo local → anim pelo
+            // rendimento (raro 0x73F/0x73E/0x73D, comum 0x73C/0x73B/0x73A); senão
+            // 0x740. Frame = tick % nF.
+            int raw = 0x740;
+            if (beaconSurveyed(static_cast<int>(i), TethysGame::localPlayer())) {
+                static const int kRare[3] = {0x73F, 0x73E, 0x73D}, kCommon[3] = {0x73C, 0x73B, 0x73A};
+                const int y = r.beaconYield >= 0 && r.beaconYield <= 2 ? r.beaconYield : 0;
+                raw = r.beaconRare ? kRare[y] : kCommon[y];
+            }
+            const int anim = raw - 0x65;
+            if (g_art.ok() && anim < g_art.numAnimations()) {
+                const int nf = static_cast<int>(g_art.animation(anim).frames.size());
+                drawSprite(anim, nf ? TethysGame::tick() % nf : 0, ucx, ucy, -1);
+            }
+            continue;
+        }
         if (isEffect && isWeaponProjectile(r.type)) {
             // Projétil/explosão de arma (vt[6]: sub_4A3420 / sub_4A3000 /
             // sub_4A2A00 / sub_4A2D50) em coordenadas de mundo do original.
@@ -395,6 +490,13 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     }
 
     // Painel de comando (a "MAINE"): minimapa + info + botões.
+    // Fim de jogo (sub_49CAC0): letreiro sobre a vista até o tick de encerramento.
+    // (O original usa a fonte grande do quadro de detalhe — aqui a fonte do port.)
+    if (gameEndCode()) {
+        const int cy = (Renderer::NATIVE_HEIGHT - kStatusBarH) / 2;
+        Font::drawTextCentered(renderer.getFramebuffer(), Renderer::NATIVE_WIDTH, Renderer::NATIVE_HEIGHT,
+                               gameEndText(gameEndCode()), viewportW() / 2, cy, 0xFFFFE070, true);
+    }
     renderPanel(renderer);
 
     // Overlay: relógio (Tick/Time) + uma amostra do RNG — prova visível de que o
@@ -659,6 +761,35 @@ static int vehSerial(const UnitRecord& r, size_t idx) {
     return n;
 }
 
+// Lista de objetivos do painel (modo dword_565C8C = 1, sub_4663A0): uma linha
+// por VictoryCondition, "<C0>%s" se cumprida (verde) e "<C2>%s" se não (vermelho).
+void GameState::drawObjectives(uint32_t* fb, int fbW, int fbH, int l, int t, int r, int b) {
+    int y = t + 4;
+    const int maxW = r - l - 8;
+    for (const std::string& line : missionObjectives()) {
+        // "<Cn>" + texto; quebra por palavras na largura do painel.
+        const std::string tag = line.substr(0, 4), text = line.substr(4);
+        std::string cur, word;
+        auto flush = [&]() {
+            if (cur.empty() || y >= b) return;
+            y += drawMarkupText(fb, fbW, fbH, PaneRect{l + 4, y, r - 4, b}, tag + cur, 0xFF30D030);
+            cur.clear();
+        };
+        for (size_t i = 0; i <= text.size(); ++i) {
+            if (i == text.size() || text[i] == ' ') {
+                const std::string cand = cur.empty() ? word : cur + " " + word;
+                if (!cur.empty() && Font::getTextWidth(cand) > maxW) { flush(); cur = word; }
+                else cur = cand;
+                word.clear();
+            } else {
+                word += text[i];
+            }
+        }
+        flush();
+        y += 4;
+    }
+}
+
 void GameState::renderPanel(Renderer& renderer) {
     const int VW = Renderer::NATIVE_WIDTH, VH = Renderer::NATIVE_HEIGHT;
     const int px0 = viewportW();                 // início do painel (x)
@@ -752,6 +883,8 @@ void GameState::renderPanel(Renderer& renderer) {
     renderer.fillRect(pane.l, pane.t, pane.r - pane.l, pane.b - pane.t, 0xFF000A00);
     if (!m_selected.empty())
         drawUnitInfoPane(fb, VW, VH, pane, m_selected[0], static_cast<int>(m_selected.size()), me);
+    else if (m_mission)
+        drawObjectives(fb, VW, VH, pane.l, pane.t, pane.r, pane.b);
     if (m_selected.size() == 1) {
         PaneButton b;
         if (infoPaneButton(pane, m_selected[0], me, b)) {
