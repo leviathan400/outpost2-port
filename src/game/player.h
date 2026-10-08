@@ -87,10 +87,10 @@ public:
     int  ColorNumber() const { return d().colorNumber; }
 
     // --- pesquisa (subsistema central no original) ---
-    void SetTechLevel(int v)        { d().techLevel = v; }
+    void SetTechLevel(int v);       // sub_472F70(jogador, v*1000)
     int  TechLevel() const          { return d().techLevel; }
-    void MarkResearchComplete(int t){ d().research.insert(t); }
-    int  HasTechnology(int t) const { return d().research.count(t) ? 1 : 0; }
+    void MarkResearchComplete(int techID);   // sub_473830(jogador, índice)
+    int  HasTechnology(int techID) const;    // sub_472C50(jogador, índice)
 
     int  GetRLVCount() const { return d().rlvCount; }
 

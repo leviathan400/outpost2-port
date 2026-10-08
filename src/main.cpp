@@ -23,6 +23,7 @@
 #include "game/structure.h"
 #include "game/weapon.h"
 #include "game/trigger.h"
+#include "game/research.h"
 #include "game/building_sheet.h"
 #include "game/colony.h"
 #include "game/structure_anim.h"
@@ -550,6 +551,15 @@ static int runMissionTest(const std::string& dll, const std::string& outPath) {
     }
     for (int k = 0; k < 200; ++k) gs.onIdle(renderer, 0.025f);
     for (const std::string& o : op2::missionObjectives()) std::printf("[MissionTest] objetivo: %s\n", o.c_str());
+    {   // pesquisa do jogador 0: nº de tecnologias e alguns blocos melhorados
+        int n = 0, up = 0;
+        for (int i = 1; i < op2::techCount(); ++i)
+            if (op2::techAt(i)->researched & 1u) { ++n; up += static_cast<int>(op2::techAt(i)->upgrades.size()); }
+        const op2::VehPlayerStats* cv0 = op2::vehicleSheet(op2::mapConVec, 0);
+        const op2::VehPlayerStats* cv1 = op2::vehicleSheet(op2::mapConVec, 1);
+        std::printf("[MissionTest] pesquisa j0: %d tecnologias (%d melhorias); ConVec HP j0=%d j1=%d prodRate j0=%d j1=%d\n",
+                    n, up, cv0->hitPoints, cv1->hitPoints, cv0->productionRate, cv1->productionRate);
+    }
     std::printf("[MissionTest] tick=%d fim=%d\n", op2::TethysGame::tick(), op2::gameEndCode());
     bool ok = writeBmp32(outPath, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
     renderer.shutdown(); SDL_Quit();

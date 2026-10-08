@@ -9,6 +9,7 @@
 #include "../res/res_manager.h"
 #include "structure_anim.h"
 #include "vehicle_anim.h"
+#include "unit_names.h"
 
 namespace op2 {
 
@@ -90,14 +91,17 @@ static bool readSheetLines(const char* name, std::vector<std::string>& lines) {
     return true;
 }
 
-static VehPlayerStats s_veh[0x11][7];
+struct VehDesc { VehPlayerStats player[7]; int32_t overflow[17] = {}; };
+static VehDesc s_veh[0x11];
 static int s_vehTrack[0x11] = {};
+static int s_vehTopic[0x11] = {};
+int vehicleResearchTopic(int type) { return (type >= 1 && type <= 0x10) ? s_vehTopic[type] : 0; }
 int vehicleTrackClass(int type) { return (type >= 1 && type <= 0x10) ? s_vehTrack[type] : 0; }
 static bool s_vehLoaded = false;
 
 const VehPlayerStats* vehicleSheet(int type, int player) {
     if (type < 1 || type > 0x10 || player < 0 || player > 6) return nullptr;
-    return &s_veh[type][player];
+    return &s_veh[type].player[player];
 }
 
 bool loadVehicleSheet() {
@@ -125,9 +129,14 @@ bool loadVehicleSheet() {
             case 'W': case 'w': s_vehTrack[type] = 1; break;
             default: break;
         }
-        VehPlayerStats& s = s_veh[type][0];
+        s_vehTopic[type] = c[16].value;                            // desc+0x1E4
+        VehPlayerStats& s = s_veh[type].player[0];
         s.hitPoints = c[4].value;        // +0x00
-        s.armor = c[5].value;            // +0x08 (col 5 Armor Class)
+        s.armor = armorValue(c[5].value); // +0x08 (col 5 Armor Class → dword_4E1510)
+        s.commonOre = c[8].value;        // +0x0C
+        s.rareOre = c[9].value;          // +0x10
+        s.cargo = c[13].value;           // +0x38
+        s.repair = c[18].value;          // +0x04
         s.moveSpeed = c[6].value;        // +0x24 (desc+0x2C)
         s.turnRate = c[7].value;         // +0x28 (desc+0x30)
         s.buildTime = c[10].value;       // +0x14 (desc+0x1C)
@@ -135,7 +144,7 @@ bool loadVehicleSheet() {
         s.productionRate = c[17].value;  // +0x2C (desc+0x34)
     }
     for (int t = 1; t <= 0x10; ++t)
-        for (int pl = 1; pl < 7; ++pl) s_veh[t][pl] = s_veh[t][0];
+        for (int pl = 1; pl < 7; ++pl) s_veh[t].player[pl] = s_veh[t].player[0];
     s_vehLoaded = true;
     return true;
 }
@@ -170,7 +179,7 @@ bool loadBuildingSheet() {
             default: break;
         }
         s.hitPoints = c[6].value;                                  // +0x08
-        s.armor = c[7].value;          // (o engine guarda dword_4E1510[classe])
+        s.armor = armorValue(c[7].value);   // +0x08 (dword_4E1510[classe])
         d.flags24C = (d.flags24C & ~1u) | yesNo(c[8]);             // Border
         s.commonOre = c[9].value;                                  // +0x14
         s.rareOre = c[10].value;                                   // +0x18
@@ -206,28 +215,21 @@ bool loadBuildingSheet() {
 
 namespace op2 {
 
-// Code_Name dos descritores de arma com map_id confirmado (GetName = vt[1],
-// tools/extract_anim_tables.py --mapids). A linha "EMP" não casa com nenhum
-// descritor (loc_445CA1) e não consome nome da tabela fixa.
-static const struct { int type; const char* code; } kWeaponCodes[] = {
-    {0x3B, "ACID"}, {0x3D, "LASER"}, {0x3E, "MICROWAVE"}, {0x3F, "RAIL_GUN"},
-    {0x40, "CANNON"}, {0x46, "SPAM"}, {0x47, "FOAM"}, {0x48, "THORS_HAMMER"},
-    {0x49, "SCORPION_WEAPON"}, {0x4A, "EMP_BIG"},
-    {0x55, "BLD_EXPL_SML"}, {0x56, "BLD_EXPL_MED"}, {0x57, "BLD_EXPL_BIG"},
+// Nomes de exibição das armas: off_4E9590 avança 1 por linha CASADA do
+// WEAPONS.TXT (todas casam com um descritor) — tabela lida do OUTPOST2.EXE.
+static const char* const kWeaponRowNames[] = {
+    "Laser", "Microwave", "Stickyfoam", "Rail Gun", "EMP", "RPG", "Starflare", "Starflare",
+    "ESG", "Supernova", "Supernova", "Acid Cloud", "Thor's Hammer", "", "Damage of EMP Missile",
+    "Inter-colony Shuttle", "Magma Vents", "Fumaroles", "Mine Beacons", "Pretty art!",
+    "Earthquake", "Lava Eruption", "Electrical Storm", "Tornado", "Meteor",
+    "Normal Vehicle Self-destruct", "Disasterous Building Explosion",
+    "Catastrophic Building Explosion", "Athiest Building Explosion",
 };
-// Nomes de exibição: off_4E9590 avança 1 por linha CASADA (LASER, MICROWAVE,
-// FOAM, RAIL_GUN, [EMP não casa], CANNON, ...). Só os 5 primeiros casamentos
-// estão confirmados aqui; os demais ficam sem nome até mapear todos os
-// descritores da faixa 0x41..0x45.
-static const struct { const char* code; const char* name; } kWeaponNames[] = {
-    {"LASER", "Laser"}, {"MICROWAVE", "Microwave"}, {"FOAM", "Stickyfoam"},
-    {"RAIL_GUN", "Rail Gun"}, {"CANNON", "RPG"},
-};
-static WeaponSheetDesc s_weap[0x60];
+static WeaponSheetDesc s_weap[0x73];
 static bool s_weapLoaded = false;
 
 const WeaponSheetDesc* weaponSheet(int type) {
-    if (type < 0 || type >= 0x60 || !s_weap[type].loaded) return nullptr;
+    if (type < 0 || type >= 0x73 || !s_weap[type].loaded) return nullptr;
     return &s_weap[type];
 }
 
@@ -235,14 +237,15 @@ bool loadWeaponSheet() {
     if (s_weapLoaded) return true;
     std::vector<std::string> lines;
     if (!readSheetLines("weapons.txt", lines)) return false;
+    size_t row = 0;
     for (size_t li = 2; li < lines.size(); ++li) {
         std::vector<SheetCol> c = splitRow(lines[li]);
         if (c.size() < 14 || c[0].text.empty()) continue;
-        int type = -1;
-        for (const auto& w : kWeaponCodes) if (c[0].text == w.code) { type = w.type; break; }
-        if (type < 0) continue;
+        const int type = unitTypeFromCodeName(c[0].text.c_str());   // GetName de 1..0x72
+        if (type < 0 || type >= 0x73) continue;                    // loc_445CA1
         WeaponSheetDesc& d = s_weap[type];
-        for (const auto& n : kWeaponNames) if (c[0].text == n.code) d.displayName = n.name;
+        if (row < sizeof(kWeaponRowNames) / sizeof(kWeaponRowNames[0])) d.displayName = kWeaponRowNames[row];
+        ++row;
         WeapPlayerStats& s = d.player[0];
         d.radius = c[2].value;                                     // +0x248
         d.skipped = c[3].value;                                    // +0x24C
@@ -270,6 +273,32 @@ bool loadWeaponSheet() {
         for (int pl = 1; pl < 7; ++pl) d.player[pl] = d.player[0];
     s_weapLoaded = true;
     return true;
+}
+
+// Blocos dos demais tipos (paredes, espaçonaves, desastres...): só melhorias.
+struct OtherDesc { int32_t block[7][17] = {}; int32_t overflow[17] = {}; };
+static OtherDesc s_other[0x73];
+
+uint8_t* unitStatBlock(int type, int player) {
+    if (player < 0 || player > 6 || type < 1 || type > 0x72) return nullptr;
+    if (type >= 0x15 && type <= 0x3A && s_desc[type].loaded)
+        return reinterpret_cast<uint8_t*>(&s_desc[type].player[player]);
+    if (type >= 1 && type <= 0x10) return reinterpret_cast<uint8_t*>(&s_veh[type].player[player]);
+    if (s_weap[type].loaded) return reinterpret_cast<uint8_t*>(&s_weap[type].player[player]);
+    return reinterpret_cast<uint8_t*>(&s_other[type].block[player][0]);
+}
+
+void reloadSheets() {
+    for (auto& d : s_desc) d = StructSheetDesc{};
+    for (auto& v : s_veh) v = VehDesc{};
+    for (auto& w : s_weap) w = WeaponSheetDesc{};
+    for (auto& o : s_other) o = OtherDesc{};
+    for (int& t : s_vehTrack) t = 0;
+    for (int& t : s_vehTopic) t = 0;
+    s_loaded = s_vehLoaded = s_weapLoaded = false;
+    loadBuildingSheet();
+    loadVehicleSheet();
+    loadWeaponSheet();
 }
 
 // WEAPONS.TXT (parte de armas de sub_445070) — por ora só a coluna 13

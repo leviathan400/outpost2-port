@@ -46,6 +46,8 @@ add_executable(outpost2_modern
     src/game/trigger.cpp
     src/game/walls.cpp
     src/game/scenario.cpp
+    src/game/research.cpp
+    src/game/unit_names.cpp
     src/mission/pe_loader.cpp
     src/mission/mission.cpp
     src/mission/op2_api.cpp

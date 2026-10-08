@@ -151,8 +151,8 @@ static int maxHPOf(const UnitRecord& r) {
 }
 static int armorOf(const UnitRecord& r) {
     const int p = statsOf(r);
-    if (r.flags & UNIT_VEHICLE) { const VehPlayerStats* v = vehicleSheet(r.type, p); return armorValue(v ? v->armor : 0); }
-    if (r.flags & UNIT_BUILDING) { const StructSheetDesc* d = structSheet(r.type); return armorValue(d ? d->player[p].armor : 0); }
+    if (r.flags & UNIT_VEHICLE) { const VehPlayerStats* v = vehicleSheet(r.type, p); return v ? v->armor : 256; }
+    if (r.flags & UNIT_BUILDING) { const StructSheetDesc* d = structSheet(r.type); return d ? d->player[p].armor : 256; }
     return 256;
 }
 

@@ -1,5 +1,7 @@
 #include "player.h"
 
+#include "research.h"
+
 namespace op2 {
 
 PlayerData g_playerData[kMaxPlayers];
@@ -10,6 +12,13 @@ _Player Player[kMaxPlayers] = {
     _Player(0), _Player(1), _Player(2), _Player(3),
     _Player(4), _Player(5), _Player(6),
 };
+
+void _Player::SetTechLevel(int v) {
+    d().techLevel = v;
+    researchSetTechLevel(m_index, v);
+}
+void _Player::MarkResearchComplete(int techID) { researchMarkComplete(m_index, techIndex(techID)); }
+int _Player::HasTechnology(int techID) const { return researchHas(m_index, techIndex(techID)) ? 1 : 0; }
 
 void resetPlayers(int numPlayers) {
     (void)numPlayers;

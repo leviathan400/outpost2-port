@@ -26,6 +26,7 @@
 #include "../game/messages.h"
 #include "../game/weapon.h"
 #include "../game/trigger.h"
+#include "../game/research.h"
 #include "../game/scenario.h"
 #include "../mission/mission.h"
 #include "../gfx/artfile.h"
@@ -101,16 +102,17 @@ bool GameState::loadMission(const std::string& dllName) {
     // GameStartInfo do shell p/ jogo single player: o jogador 0 é o humano, os
     // demais computador ([+0x28] isHuman).
     for (int p = 0; p < d->numPlayers; ++p) { if (p == 0) Player[p].GoHuman(); else Player[p].GoAI(); }
-    loadBuildingSheet();
-    loadVehicleSheet();
-    loadWeaponSheet();
+    // sub_4893A0: planilhas relidas (sub_445070) e árvore da missão (sub_4733B0).
+    reloadSheets();
     loadMoraleSheet();
+    loadTechTree(m_mission->techtreeName, d->maxTechLevel);
     resetMessages();
     resetUnits();
     TethysGame::SetDaylightMoves(0);
     TethysGame::SetDaylightEverywhere(0);
     // sub_402E10: (IA dos jogadores de computador, sub_402E70 — pendente) e InitProc.
     const int ok = m_mission->initProc ? m_mission->initProc() : 1;
+    researchStartGame();                         // sub_472C30 (depois do InitProc)
     std::cout << "[Mission] InitProc -> " << ok << "; unidades=" << (g_units.size() - 1) << std::endl;
     int cx, cy;
     if (takeCenterViewRequest(cx, cy)) {           // CenterViewOn

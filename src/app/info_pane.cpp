@@ -92,10 +92,9 @@ static void frameRect(uint32_t* fb, int fbW, int fbH, int x, int y, int w, int h
     fillRect(fb, fbW, fbH, x + w - 1, y, 1, h, c);
 }
 
-// Classe de blindagem → valor (dword_4E1510) → nome (Format[0xEA..0xF1]).
-static const int kArmorValue[6] = {256, 180, 130, 90, 60, 40};
-static const char* armorName(int armorClass, bool isBuilding) {
-    const int v = (armorClass >= 0 && armorClass < 6) ? kArmorValue[armorClass] : 256;
+// Valor de blindagem do bloco (+0x08, já dword_4E1510[classe]) → nome
+// (Format[0xEA..0xF1]).
+static const char* armorName(int v, bool isBuilding) {
     if (isBuilding) {
         if (v >= 0x100) return "No Armor";
         if (v >= 0xB4) return "Very Light Armor";
@@ -224,7 +223,7 @@ void drawUnitInfoPane(uint32_t* fb, int fbW, int fbH, const PaneRect& pane,
     }
     // (Ícone de veículo — sub_458EF0, com a carga/arma — ainda não portado.)
     // Blindagem + HP à direita do ícone.
-    int hp = 0, armorClass = 0;
+    int hp = 0, armorClass = 256;
     if (isBld) {
         if (const StructSheetDesc* d = structSheet(r.type)) {
             hp = d->player[r.owner & 0x0F].hitPoints; armorClass = d->player[r.owner & 0x0F].armor;
