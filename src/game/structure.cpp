@@ -428,6 +428,7 @@ static bool updateTick(int id) {
 void removeUnit(int id) {
     UnitRecord& r = g_units[id];
     if (r.flags & UNIT_BUILDING) colonyStructureRemoved(id);    // sub_439C00
+    else if (r.flags & UNIT_VEHICLE) colonyVehicleRemoved(id);
     // sub_439CE0: veículo no meio de um passo libera a célula de DESTINO (o
     // estado de movimento [+0x34] guarda o destino); senão a própria célula.
     if (g_gameMap.ok() && (r.flags & UNIT_VEHICLE) && r.stepTicks > 0 && (r.velX || r.velY)) {

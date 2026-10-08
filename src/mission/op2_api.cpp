@@ -6,15 +6,18 @@
 //   retorno de Trigger por valor → ponteiro oculto em ECX (o primeiro param).
 // O comportamento segue as rotinas do EXE (citadas em cada função); layouts de
 // classe conferidos no SDK Outpost2DLL só como referência.
+#include <cstdarg>
 #include <cstdio>
 #include <cstring>
 #include <iostream>
 #include <map>
 #include <string>
+#include <vector>
 
 #include "mission.h"
 #include "../game/colony.h"
 #include "../game/game_map.h"
+#include "../game/messages.h"
 #include "../game/player.h"
 #include "../game/scenario.h"
 #include "../game/tethys_game.h"
@@ -59,6 +62,7 @@ void __fastcall P_GoEden(DllPlayer* p, void*)                 { Player[p->player
 void __fastcall P_GoPlymouth(DllPlayer* p, void*)             { Player[p->playerNum].GoPlymouth(); }
 void __fastcall P_SetColorNumber(DllPlayer* p, void*, int v)  { Player[p->playerNum].SetColorNumber(v); }
 void __fastcall P_SetOre(DllPlayer* p, void*, int v)          { Player[p->playerNum].SetOre(v); }
+int  __fastcall P_Difficulty(DllPlayer* p, void*)             { return Player[p->playerNum].Difficulty(); }   // +0x0C
 void __fastcall P_SetRareOre(DllPlayer* p, void*, int v)      { Player[p->playerNum].SetRareOre(v); }
 void __fastcall P_SetFoodStored(DllPlayer* p, void*, int v)   { Player[p->playerNum].SetFoodStored(v); }
 void __fastcall P_SetKids(DllPlayer* p, void*, int v)         { Player[p->playerNum].SetKids(v); }
@@ -102,7 +106,17 @@ int __fastcall T_CreateUnitBlock(DllPlayer* player, const char* exportName, int 
     }
     return n;
 }
+void __fastcall T_ForceMoraleGreat(int p)           { TethysGame::ForceMoraleGreat(p); }
 void __fastcall T_ForceMoraleGood(int p)            { TethysGame::ForceMoraleGood(p); }
+void __fastcall T_ForceMoraleOK(int p)              { TethysGame::ForceMoraleOK(p); }
+void __fastcall T_ForceMoralePoor(int p)            { TethysGame::ForceMoralePoor(p); }
+void __fastcall T_ForceMoraleRotten(int p)          { TethysGame::ForceMoraleRotten(p); }
+// ?AddMessage(x, y, msg, jogador, som): só p/ todos (−1) ou o jogador local;
+// x/y em pixels (x interno) → sub_438F70.
+void __fastcall T_AddMessage(int x, int y, char* msg, int toPlayer, int sound) {
+    if (toPlayer != -1 && toPlayer != TethysGame::localPlayer()) return;
+    postMessage(x - g_gameMap.internalXOffset() * 32, y, msg, sound);
+}
 int  __fastcall T_GetRand(int n)                    { return TethysGame::getRand(n); }
 void __fastcall T_SetCheatUnlimitedResources(int v) { TethysGame::setCheatFlag(0, v); }
 void __fastcall T_SetCheatProduceAll(int v)         { TethysGame::setCheatFlag(1, v); }
@@ -164,6 +178,17 @@ void __fastcall M_SetInitialLightLevel(int pos) {
 void __fastcall U_DoSetLights(int* u, void*, int on)                    { unitSetLights(*u, on); }
 void __fastcall U_SetFactoryCargo(int* u, void*, int bay, int t, int c) { unitSetFactoryCargo(*u, bay, t, c); }
 void __fastcall U_SetTruckCargo(int* u, void*, int t, int amount)       { unitSetTruckCargo(*u, t, amount); }
+// ?SetCargo: [+0x24] = carga; ConVec (2) guarda a arma do kit em +0x4F.
+void __fastcall U_SetCargo(int* u, void*, int cargo, int weapon) {
+    UnitRecord& r = g_units[*u];
+    r.cargo = static_cast<uint16_t>(cargo);
+    if (r.type == mapConVec) r.kitWeapon = static_cast<uint8_t>(weapon);
+}
+// ?PutInGarage(baia, x, y): vt[65] da garagem em (x,y) — garagem ainda não portada.
+void __fastcall U_PutInGarage(int* u, void*, int bay, int x, int y) {
+    std::cerr << "[Mission] PutInGarage(unidade " << *u << ", baia " << bay << ", " << x << "," << y
+              << "): garagem nao portada" << std::endl;
+}
 
 // ---- UnitBlock / ScStub -----------------------------------------------------------------
 DllUnitBlock* __fastcall UB_Ctor(DllUnitBlock* b, void*, MissionUnitRecord* table) {
@@ -172,6 +197,8 @@ DllUnitBlock* __fastcall UB_Ctor(DllUnitBlock* b, void*, MissionUnitRecord* tabl
     return b;
 }
 void __fastcall SS_Dtor(int* stub, void*) { *stub = 0xFF; }   // ??1ScStub: [this] = 0xFF
+int* __fastcall SS_Ctor(int* stub, void*) { *stub = 0xFF; return stub; }   // ??0ScStub
+int  __fastcall TRG_HasFired(int* stub, void*, int player) { return triggerHasFired(*stub, player) ? 1 : 0; }
 
 // ---- Triggers (retorno do Trigger por valor: ponteiro em ECX) -------------------------------
 int* __fastcall TR_CreateTimeTrigger(int* ret, int bEnabled, int bOneShot, int time, const char* fn) {
@@ -186,6 +213,45 @@ int* __fastcall TR_CreateVictoryCondition(int* ret, int bEnabled, int bOneShot, 
     *ret = createVictoryCondition(bEnabled, bOneShot, *trigger, text);
     return ret;
 }
+int* __fastcall TR_CreateFailureCondition(int* ret, int bEnabled, int bOneShot, int* trigger, const char* text) {
+    *ret = createFailureCondition(bEnabled, bOneShot, *trigger, text);
+    return ret;
+}
+int* __fastcall TR_CreateCountTrigger(int* ret, int bEnabled, int bOneShot, int player, int type, int cargo,
+                                      int count, int compare, const char* fn) {
+    *ret = createCountTrigger(bEnabled, bOneShot, player, type, cargo, count, compare, fn);
+    return ret;
+}
+int* __fastcall TR_CreateKitTrigger(int* ret, int bEnabled, int bOneShot, int player, int type, int count, const char* fn) {
+    *ret = createKitTrigger(bEnabled, bOneShot, player, type, count, fn);
+    return ret;
+}
+int* __fastcall TR_CreateBuildingCountTrigger(int* ret, int bEnabled, int bOneShot, int player, int count,
+                                              int compare, const char* fn) {
+    *ret = createBuildingCountTrigger(bEnabled, bOneShot, player, count, compare, fn);
+    return ret;
+}
+int* __fastcall TR_CreateVehicleCountTrigger(int* ret, int bEnabled, int bOneShot, int player, int count,
+                                             int compare, const char* fn) {
+    *ret = createVehicleCountTrigger(bEnabled, bOneShot, player, count, compare, fn);
+    return ret;
+}
+int* __fastcall TR_CreateEscapeTrigger(int* ret, int bEnabled, int bOneShot, int player, int x, int y, int w, int h,
+                                       int refValue, int type, int cargoType, int cargoAmount, const char* fn) {
+    *ret = createEscapeTrigger(bEnabled, bOneShot, player, x, y, w, h, refValue, type, cargoType, cargoAmount, fn);
+    return ret;
+}
+// ?CreateSetTrigger (__cdecl, variádico): retorno oculto no 1º arg; os triggers
+// do conjunto vêm por valor (4 bytes = stubIndex).
+int* __cdecl TR_CreateSetTrigger(int* ret, int bEnabled, int bOneShot, int total, int needed, const char* fn, ...) {
+    std::vector<int> stubs(total > 0 ? total : 0);
+    va_list ap;
+    va_start(ap, fn);
+    for (int i = 0; i < total; ++i) stubs[i] = va_arg(ap, int);
+    va_end(ap);
+    *ret = createSetTrigger(bEnabled, bOneShot, total, needed, fn, stubs.data());
+    return ret;
+}
 
 const std::map<std::string, void*>& table() {
     static const std::map<std::string, void*> t = {
@@ -194,6 +260,23 @@ const std::map<std::string, void*>& table() {
         {"?GoPlymouth@_Player@@QAEXXZ", reinterpret_cast<void*>(&P_GoPlymouth)},
         {"?SetColorNumber@_Player@@QAEXH@Z", reinterpret_cast<void*>(&P_SetColorNumber)},
         {"?SetOre@_Player@@QAEXH@Z", reinterpret_cast<void*>(&P_SetOre)},
+        {"?Difficulty@_Player@@QBEHXZ", reinterpret_cast<void*>(&P_Difficulty)},
+        {"?ForceMoraleGreat@TethysGame@@SIXH@Z", reinterpret_cast<void*>(&T_ForceMoraleGreat)},
+        {"?ForceMoraleOK@TethysGame@@SIXH@Z", reinterpret_cast<void*>(&T_ForceMoraleOK)},
+        {"?ForceMoralePoor@TethysGame@@SIXH@Z", reinterpret_cast<void*>(&T_ForceMoralePoor)},
+        {"?ForceMoraleRotten@TethysGame@@SIXH@Z", reinterpret_cast<void*>(&T_ForceMoraleRotten)},
+        {"?AddMessage@TethysGame@@SIXHHPADHH@Z", reinterpret_cast<void*>(&T_AddMessage)},
+        {"?SetCargo@Unit@@QAEXW4map_id@@0@Z", reinterpret_cast<void*>(&U_SetCargo)},
+        {"?PutInGarage@Unit@@QAEXHHH@Z", reinterpret_cast<void*>(&U_PutInGarage)},
+        {"??0ScStub@@QAE@XZ", reinterpret_cast<void*>(&SS_Ctor)},
+        {"?HasFired@Trigger@@QAEHH@Z", reinterpret_cast<void*>(&TRG_HasFired)},
+        {"?CreateFailureCondition@@YI?AVTrigger@@HHAAV1@PBD@Z", reinterpret_cast<void*>(&TR_CreateFailureCondition)},
+        {"?CreateCountTrigger@@YI?AVTrigger@@HHHW4map_id@@0HW4compare_mode@@PBD@Z", reinterpret_cast<void*>(&TR_CreateCountTrigger)},
+        {"?CreateKitTrigger@@YI?AVTrigger@@HHHW4map_id@@HPBD@Z", reinterpret_cast<void*>(&TR_CreateKitTrigger)},
+        {"?CreateBuildingCountTrigger@@YI?AVTrigger@@HHHHW4compare_mode@@PBD@Z", reinterpret_cast<void*>(&TR_CreateBuildingCountTrigger)},
+        {"?CreateVehicleCountTrigger@@YI?AVTrigger@@HHHHW4compare_mode@@PBD@Z", reinterpret_cast<void*>(&TR_CreateVehicleCountTrigger)},
+        {"?CreateEscapeTrigger@@YI?AVTrigger@@HHHHHHHHW4map_id@@HHPBD@Z", reinterpret_cast<void*>(&TR_CreateEscapeTrigger)},
+        {"?CreateSetTrigger@@YA?AVTrigger@@HHHHPBDZZ", reinterpret_cast<void*>(&TR_CreateSetTrigger)},
         {"?SetRareOre@_Player@@QAEXH@Z", reinterpret_cast<void*>(&P_SetRareOre)},
         {"?SetFoodStored@_Player@@QAEXH@Z", reinterpret_cast<void*>(&P_SetFoodStored)},
         {"?SetKids@_Player@@QAEXH@Z", reinterpret_cast<void*>(&P_SetKids)},

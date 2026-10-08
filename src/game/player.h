@@ -33,6 +33,8 @@ struct PlayerData {
     int colorNumber = 0;   // +0x30
     int solarSat    = 0;   // +0x08 bits 4-7 (0..15)
     int rlvCount    = 0;   // +0x08 bits 0-3  (+0x00 é o objeto contador de RLV)
+    uint32_t spaceBits = 0;  // +0x08 bits 8..31: EDWARD (0x58) nos bits 9-12; demais
+                             // tipos espaciais 1 bit cada (bit = tipo − 0x4D)
     int workers     = 0;   // +0x94
     int scientists  = 0;   // +0x98
     int kids        = 0;   // +0x9C
@@ -103,5 +105,11 @@ extern _Player Player[kMaxPlayers];
 
 // Zera e inicializa os jogadores no começo de uma partida.
 void resetPlayers(int numPlayers);
+
+// Unidades espaciais no +0x08 do registro: bits 0-3 RLV (0x6A), 4-7 SOLAR_SAT
+// (0x59), 9-12 EDWARD (0x58); os outros tipos são 1 bit (tipo − 0x4D).
+uint32_t playerSpaceWord(int player);
+int playerSpaceCount(int player, int type);   // sub_490800 (só 0x6A/0x59/0x58)
+int playerSpaceHas(int player, int type);     // sub_490780
 
 } // namespace op2

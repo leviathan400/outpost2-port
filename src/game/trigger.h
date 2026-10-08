@@ -31,6 +31,19 @@ int createTimeTrigger(int bEnabled, int bOneShot, int time, const char* func);
 int createResearchTrigger(int bEnabled, int bOneShot, int techID, int playerNum, const char* func);
 int createVictoryCondition(int bEnabled, int bOneShot, int triggerStub, const char* text);
 int createFailureCondition(int bEnabled, int bOneShot, int triggerStub, const char* text);
+// CountTrigger (off_4E9FB0): jogador −1 = todos; compare_mode 0 ==, 1 <=, 2 >=, 3 <, 4 >.
+int createCountTrigger(int bEnabled, int bOneShot, int player, int type, int cargo, int count,
+                       int compare, const char* func);
+int createKitTrigger(int bEnabled, int bOneShot, int player, int type, int count, const char* func);
+int createBuildingCountTrigger(int bEnabled, int bOneShot, int player, int count, int compare, const char* func);
+int createVehicleCountTrigger(int bEnabled, int bOneShot, int player, int count, int compare, const char* func);
+// EscapeTrigger (off_4E9F90): retângulo em tiles INTERNOS do original.
+int createEscapeTrigger(int bEnabled, int bOneShot, int player, int x, int y, int w, int h, int refValue,
+                        int type, int cargoType, int cargoAmount, const char* func);
+// SetTrigger (off_4E9F30): dispara p/ o jogador com >= needed dos `total` triggers.
+int createSetTrigger(int bEnabled, int bOneShot, int total, int needed, const char* func, const int* stubs);
+// ?HasFired@Trigger: bit do jogador em [+0x20].
+bool triggerHasFired(int stub, int player);
 
 // ScStub (Enable/Disable/IsEnabled/Destroy) pelo stubIndex.
 void stubEnable(int stub, bool on);

@@ -314,6 +314,7 @@ bool createUnit(Unit& out, map_id type, LOCATION loc, int owner,
     unitListInsert(slot);                        // lista por Y (sub_439910)
     // sub_439FE0: prédio entra na lista do dono, ordenada por prioridade.
     if (r.flags & UNIT_BUILDING) colonyStructureAdded(slot);
+    else if (r.flags & UNIT_VEHICLE) colonyVehicleAdded(slot);
 
     out.SetId(slot);
     return true;

@@ -1,8 +1,11 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
 
 namespace op2 {
+
+struct UnitRecord;
 
 // Criação de unidades e terreno pelos scripts de missão — porta das rotinas do
 // EXE que os exports TethysGame/Unit usam. Coordenadas em tiles do PORT (a
@@ -51,5 +54,14 @@ bool takeCenterViewRequest(int& px, int& py);
 
 // UnitBlock::SortAndInit com o qsort do CRT original (_qsort/_shortsort/_swap).
 void unitBlockSort(MissionUnitRecord* table, int& numUnits, int ranges[16][2]);
+
+// [+0x14]/[+0x18] do original (centro; prédio: ((tile*2 + (tam & 1)) << 4)),
+// com x nas coordenadas do port.
+void unitOrigPixel(const UnitRecord& r, int& x, int& y);
+
+// sub_437700 + sub_437770: unidades vivas (flags 0x46, sem 0x20000, sub-estado
+// != 0x0D) do dono em playerMask e com flags & flagMask, na ordem da lista por
+// Y, com y em [y, y+h) e x em [x, x+w) — px INTERNOS (x dá a volta).
+void mapUnitsInRect(int x, int y, int w, int h, uint32_t playerMask, uint32_t flagMask, std::vector<int>& out);
 
 } // namespace op2

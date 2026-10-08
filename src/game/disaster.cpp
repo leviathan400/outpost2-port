@@ -117,12 +117,8 @@ void setEruption(int x, int y, int speed) {                 // ?SetEruption
 
 bool isDisaster(int type) { return type >= kLightning && type <= kMeteor; }
 
-// Satélite EDWARD (0x58) do jogador (sub_490800).
-static bool hasEdward(int player) {
-    for (size_t i = 1; i < g_units.size(); ++i)
-        if (g_units[i].id != -1 && g_units[i].type == 0x58 && (g_units[i].owner & 0x0F) == player) return true;
-    return false;
-}
+// Satélite EDWARD (0x58) em órbita (sub_490800: bits 9-12 do +0x08 do jogador).
+static bool hasEdward(int player) { return playerSpaceCount(player, 0x58) != 0; }
 
 // Posição exibida (sub_4A7F70 / sub_413790): (x − x1 + 1, y + 1) — nas
 // coordenadas do port o x já começa em 0.

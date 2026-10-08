@@ -204,6 +204,7 @@ struct UnitRecord {
     int      mineLink = 0;         // +0x68
     int      mineBeacon = 0;       // +0x60
     // Fábrica (Unit::SetFactoryCargo): tipo +0x61+baia, carga +0x48+baia, foguete +0x6E.
+    uint8_t  kitWeapon = 0;        // +0x4F ConVec: arma do kit (Unit::SetCargo)
     uint8_t  bayType[6] = {};
     uint8_t  bayCargo[6] = {};
     int      padCargo = 0;

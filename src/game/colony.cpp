@@ -17,6 +17,9 @@ namespace op2 {
 
 ColonyState g_colony[kMaxPlayers];
 static std::vector<int> s_structList[kMaxPlayers];
+// Veículos do jogador ([jogador+0xC1C], encadeada por [unit+0x0C]): sub_439FE0
+// insere na CABEÇA (flag 0x02), sub_439C00 retira.
+static std::vector<int> s_vehicleList[kMaxPlayers];
 
 static int ownerOf(const UnitRecord& r) { return r.owner & 0x0F; }
 
@@ -25,7 +28,7 @@ void colonyMarkDirty(int player) {
 }
 
 void colonyReset() {
-    for (int p = 0; p < kMaxPlayers; ++p) { s_structList[p].clear(); g_colony[p] = ColonyState{}; }
+    for (int p = 0; p < kMaxPlayers; ++p) { s_structList[p].clear(); s_vehicleList[p].clear(); g_colony[p] = ColonyState{}; }
 }
 
 const std::vector<int>& colonyStructures(int player) {
@@ -50,6 +53,22 @@ void colonyStructureAdded(int id) {
     for (size_t i = 0; i < L.size(); ++i)
         if (resourcePriority(g_units[L[i]].type) >= prio) { pos = i; break; }
     L.insert(L.begin() + static_cast<long>(pos), id);
+}
+
+const std::vector<int>& colonyVehicles(int player) {
+    static const std::vector<int> kEmpty;
+    return (player >= 0 && player < kMaxPlayers) ? s_vehicleList[player] : kEmpty;
+}
+void colonyVehicleAdded(int id) {                           // sub_439FE0 (flag 0x02)
+    const int p = ownerOf(g_units[id]);
+    if (p < kMaxPlayers) s_vehicleList[p].insert(s_vehicleList[p].begin(), id);
+}
+void colonyVehicleRemoved(int id) {                         // sub_439C00 (flag 0x02)
+    const int p = ownerOf(g_units[id]);
+    if (p >= kMaxPlayers) return;
+    std::vector<int>& L = s_vehicleList[p];
+    for (size_t i = 0; i < L.size(); ++i)
+        if (L[i] == id) { L.erase(L.begin() + static_cast<long>(i)); break; }
 }
 
 // sub_439C00 (ramo de prédio): marca dirty e retira da lista.

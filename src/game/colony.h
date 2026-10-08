@@ -92,6 +92,10 @@ extern ColonyState g_colony[kMaxPlayers];
 void colonyStructureAdded(int id);
 void colonyStructureRemoved(int id);
 const std::vector<int>& colonyStructures(int player);
+// Veículos do jogador ([+0xC1C]; PlayerUnitEnum/PlayerVehicleEnum): cabeça = mais novo.
+const std::vector<int>& colonyVehicles(int player);
+void colonyVehicleAdded(int id);
+void colonyVehicleRemoved(int id);
 void colonyMarkDirty(int player);
 void colonyReset();
 

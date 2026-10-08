@@ -379,4 +379,34 @@ void unitBlockSort(MissionUnitRecord* table, int& numUnits, int ranges[16][2]) {
     }
 }
 
+void unitOrigPixel(const UnitRecord& r, int& x, int& y) {
+    if (!(r.flags & UNIT_BUILDING)) { x = unitOX(r); y = unitOY(r); return; }
+    int w = 1, h = 1;
+    buildingFootprint(r.type, w, h);
+    x = ((r.pixelX >> 5) * 2 + (w & 1)) << 4;
+    y = ((r.pixelY >> 5) * 2 + (h & 1)) << 4;
+}
+
+void mapUnitsInRect(int x, int y, int w, int h, uint32_t playerMask, uint32_t flagMask, std::vector<int>& out) {
+    const int pxW = g_gameMap.internalWidth() * 32;             // [GameMap+8]
+    int x0 = x, x1 = x + w;
+    bool wrap = false;
+    if (pxW <= x1) { x1 -= pxW; x0 -= pxW; wrap = true; }
+    const int y0 = y;
+    int y1 = y + h;
+    if (g_gameMap.height() * 32 <= y1) y1 = g_gameMap.height() * 32;
+    const int off = g_gameMap.internalXOffset() * 32;
+    for (int id = unitListFirst(); id != 0; id = unitListNext(id)) {
+        const UnitRecord& r = g_units[id];
+        if (!(r.flags & 0x46u) || !(playerMask & (1u << (r.owner & 0x0F))) || !(r.flags & flagMask) ||
+            r.field22 == 0x0D || r.id == -1 || (r.flags & UNIT_DEAD))
+            continue;
+        int ux, uy;
+        unitOrigPixel(r, ux, uy);
+        ux += off;
+        if (uy < y0 || uy >= y1) continue;
+        if ((x0 <= ux && ux < x1) || (wrap && x0 <= ux - pxW && ux - pxW < x1)) out.push_back(id);
+    }
+}
+
 } // namespace op2
