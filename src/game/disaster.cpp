@@ -10,6 +10,7 @@
 #include "player.h"
 #include "research.h"
 #include "structure.h"
+#include "terrain_cost.h"
 #include "tethys_game.h"
 #include "unit.h"
 #include "walls.h"
@@ -641,6 +642,7 @@ static void tornadoMove(UnitRecord& T) {                     // sub_490090
 // cada turno (sub_489DD0) sorteia [+0x10] células por um LFSR ([+4]) e chama
 // vt[0] em cada uma. Bits da célula: 0x10000000 lava possível, 0x8000000 lava.
 struct Spreader { uint32_t lfsr = 0x515; int toggle = 0; int count = 0; };
+static void microbeClearAround(int x, int y);
 static Spreader s_lava;
 
 void lavaReset() { s_lava.count = 0; s_lava.lfsr = 0x515; s_lava.toggle = 0; }   // sub_4322A0
@@ -745,16 +747,139 @@ static void lavaSetCell(int x, int y) {                      // sub_432890 (vt[2
     }
     setTileAt(x, y, lavaTileFor(x, y, lavaMask(x, y)));
     setCellAt(x, y, cellAt(x, y) | 0x8000000u);
-    // sub_49E680 do micróbio: a lava limpa 0x40000000 em (x,y)-(x+1,y+1) (o
-    // reajuste do micróbio, vt[4], entra com o micróbio).
+    microbeClearAround(x, y);                                // sub_49E680 (vt[5] do micróbio)
+    lavaRetile(x, y);
+}
+
+// =====================================================================================
+// MICRÓBIO (dword_57AB98, classe-base off_4D6A80)
+// =====================================================================================
+// O vírus fica nos CANTOS (bit 0x40000000 da célula = canto superior-esquerdo
+// do tile); um tile com algum dos 4 cantos infectado ganha 0x20000000 e o que
+// estiver nele é infectado (prédio) ou morre (veículo). Iniciado uma vez
+// (sub_49E180: [+4] = 0x710071, [+0x10] = 0) — não é reiniciado por partida.
+static Spreader s_microbe = {0x710071u, 0, 0};
+
+static bool virusAt(int tx, int ty) { return (cellAt(tx & iMask(), ty) & 0x40000000u) != 0; }
+
+static int maxHPOfAny(const UnitRecord& t);
+
+// sub_49E3A0 (vt[4]): reavalia os tiles (x−1..x, y−1..y) que tocam o canto (x,y).
+static void microbeRetile(int cx, int cy) {
+    int y0 = cy - 1; if (y0 <= 0) y0 = 0;
+    int y1 = cy; if (y1 >= mapH() - 1) y1 = mapH() - 1;
+    for (int x = cx - 1; x <= cx; ++x) {
+        for (int y = y0; y <= y1; ++y) {
+            const int tx = x & iMask(), ty1 = (y + 1) & (mapH() - 1);
+            const uint32_t c = cellAt(tx, y);
+            if (!(c & 0x40000000u) && !virusAt(tx + 1, y) && !virusAt(tx, ty1) && !virusAt(tx + 1, ty1)) {
+                setCellAt(tx, y, c & ~0x20000000u);
+                continue;
+            }
+            const int occ = static_cast<int>((c & 0x7FF0000u) >> 16);
+            if (occ && occ < static_cast<int>(g_units.size())) {
+                UnitRecord& u = g_units[occ];
+                const bool live = u.id != -1 && !(u.flags & UNIT_DEAD);
+                const bool go = live || ((u.flags & UNIT_BUILDING) && !(u.flags & 0x40000u));
+                if (go) {
+                    // (som 0x53 em (x,y).)
+                    if (u.flags & UNIT_BUILDING) {
+                        if (!(u.flags & 0x40000u)) {
+                            colonyStaffKilled(occ);
+                            UnitRecord& b = g_units[occ];
+                            b.flags |= 0x40000u;
+                            const int hp = maxHPOfAny(b);
+                            if (b.action != 0x21 && b.action != 0x22) {
+                                b.field22 = 0; b.action = 0;
+                                b.damage = static_cast<int16_t>(b.damage + hp / 3);
+                            }
+                            if (hp <= b.damage || b.action == 0x21 || b.action == 0x22) {
+                                b.damage = static_cast<int16_t>(hp);
+                                b.flags |= UNIT_DEAD;
+                                killUnit(occ, 5);
+                            }
+                            // (única selecionada → painel refeito, sub_41A8E0.)
+                        }
+                    } else if (u.flags & UNIT_DAMAGEABLE) {
+                        u.damage = static_cast<int16_t>(maxHPOfAny(u));
+                        u.flags |= UNIT_DEAD;
+                        killUnit(occ, 1);
+                    }
+                }
+            }
+            setCellAt(tx, y, cellAt(tx, y) | 0x20000000u);
+        }
+    }
+}
+
+static void microbeSetVirus(int x, int y) {                  // sub_49E270 (vt[2])
+    x &= iMask();
+    if (y < 0 || mapH() - 1 < y) return;
+    setCellAt(x, y, cellAt(x, y) | 0x40000000u);
+    microbeRetile(x, y);
+}
+
+static void microbeClearAround(int x, int y) {               // sub_49E680 (vt[5])
+    if (y < 0 || mapH() - 1 < y) return;
     setCellAt(x, y, cellAt(x, y) & ~0x40000000u);
     setCellAt((x + 1) & iMask(), y, cellAt((x + 1) & iMask(), y) & ~0x40000000u);
     if (mapH() - 1 > y) {
         setCellAt(x, y + 1, cellAt(x, y + 1) & ~0x40000000u);
         setCellAt((x + 1) & iMask(), y + 1, cellAt((x + 1) & iMask(), y + 1) & ~0x40000000u);
     }
-    lavaRetile(x, y);
+    microbeRetile(x, y);
 }
+
+// dword_4EA440: (dx, dy) do canto a infectar pela máscara dos cantos já
+// infectados (1 = (x,y), 2 = (x+1,y), 4 = (x,y+1), 8 = (x+1,y+1)). O original
+// alterna [+8] entre 0 e 1 e usa (& 2) p/ escolher o par — sempre o primeiro.
+static const int kVirusDir[16][2] = {
+    {-1000, -1000}, {1, 0}, {0, 0}, {0, 1}, {0, 0}, {1, 0}, {0, 0}, {1, 1},
+    {0, 1}, {1, 0}, {0, 0}, {0, 1}, {0, 0}, {1, 0}, {-1000, -1000}, {0, 0},
+};
+
+static void microbeSpreadAt(int x, int y) {                  // sub_49DC90 (vt[0])
+    x &= iMask();
+    const uint32_t c = cellAt(x, y);
+    if (!(c & 0x20000000u)) return;
+    const int y1 = (y + 1) & (mapH() - 1);
+    const int m = (virusAt(x, y1) ? 4 : 0) | (virusAt(x + 1, y1) ? 8 : 0) |
+                  (virusAt(x + 1, y) ? 2 : 0) | ((c & 0x40000000u) ? 1 : 0);
+    if (!m) { setCellAt(x, y, c & ~0x20000000u); return; }
+    if (m == 0xF) return;
+    s_microbe.toggle ^= 1;
+    const int sel = s_microbe.toggle & 2;                   // (sempre 0)
+    const int nx = (x + kVirusDir[m][sel]) & iMask();
+    const int ny = y + kVirusDir[m][sel + 1];
+    if (ny < 0 || mapH() - 1 < ny) return;
+    // Resistência do terreno (coluna 6 de dword_4DEB9C) menos a escuridão da coluna.
+    const int ct = static_cast<int>(cellAt(nx, ny) & 0x1F);
+    const int resist = terrainMoveCost(ct, 6) - g_gameMap.lightDarkness(nx - TethysGame::daylightPos());
+    if (resist <= TethysGame::tick() % 40) return;
+    // Parede de micróbio (0x18) em volta barra (e leva dano: sub_4A23F0(…, 15) — pendente).
+    bool wall = (cellAt(nx, ny) & 0x1F) == 0x18 || (cellAt(nx + 1, ny) & 0x1F) == 0x18;
+    if (ny > 0) wall = wall || (cellAt(nx, ny - 1) & 0x1F) == 0x18 || (cellAt(nx + 1, ny - 1) & 0x1F) == 0x18;
+    if (wall) return;
+    if (cellAt(nx, ny) & 0x8000000u) return;                 // lava
+    microbeSetVirus(nx, ny);
+    // (minimapa: sub_48D1E0(…, 0x301B), e a área redesenhada.)
+}
+
+void setMicrobeSpreadSpeed(int speed) {                      // sub_49E240
+    s_microbe.lfsr = 0x710071;
+    s_microbe.toggle = 0;
+    s_microbe.count = iW() * mapH() * speed / 10000;
+}
+
+void setVirusUL(int x, int y, int spread) {                  // ?SetVirusUL (x INTERNO)
+    if (spread) { microbeSetVirus(x, y); return; }
+    x &= iMask();
+    if (y < 0 || mapH() - 1 < y) return;
+    setCellAt(x, y, cellAt(x, y) & ~0x40000000u);
+    microbeRetile(x, y);
+}
+
+static int maxHPOfAny(const UnitRecord& t) { return maxHPOf(t); }
 
 // sub_4322C0 (vt[0]): célula com lava e algum vizinho sem → tenta uma direção ao acaso.
 static void lavaSpreadAt(int x, int y) {
@@ -766,20 +891,26 @@ static void lavaSpreadAt(int x, int y) {
     lavaSetCell(x + kDir[r][0], y + kDir[r][1]);
 }
 
-void lavaTick() {                                            // sub_49DC20 (lava)
-    if (!g_gameMap.ok() || s_lava.count <= 0) return;
+// sub_49DC20: [+0x10] células sorteadas pelo LFSR ([+4]) → vt[0] em cada.
+static void spreaderTick(Spreader& s, void (*vt0)(int, int)) {
+    if (!g_gameMap.ok() || s.count <= 0) return;
     int lgW = 0;
     while ((1 << lgW) < iW()) ++lgW;                         // dword_54EBCC
-    uint32_t v = s_lava.lfsr;
-    for (int i = 0; i < s_lava.count; ++i) {
+    uint32_t v = s.lfsr;
+    for (int i = 0; i < s.count; ++i) {
         const bool fb = (((v >> 13) ^ (v >> 16)) & 1) != 0;  // paridade de 0x12000
         v <<= 1;
         if (fb) v += 1;
         const int x = static_cast<int>(v) & iMask();
         const int y = (static_cast<int>(v) >> lgW) & (mapH() - 1);
-        lavaSpreadAt(x, y);
+        vt0(x, y);
     }
-    s_lava.lfsr = v;
+    s.lfsr = v;
+}
+
+void lavaTick() {                                            // sub_489DD0: micróbio, depois lava
+    spreaderTick(s_microbe, microbeSpreadAt);
+    spreaderTick(s_lava, lavaSpreadAt);
 }
 
 static void eruptionTick(int id) {                           // sub_4A81A0

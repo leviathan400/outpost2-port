@@ -64,6 +64,25 @@ void __fastcall P_GoPlymouth(DllPlayer* p, void*)             { Player[p->player
 void __fastcall P_SetColorNumber(DllPlayer* p, void*, int v)  { Player[p->playerNum].SetColorNumber(v); }
 void __fastcall P_SetOre(DllPlayer* p, void*, int v)          { Player[p->playerNum].SetOre(v); }
 int  __fastcall P_Difficulty(DllPlayer* p, void*)             { return Player[p->playerNum].Difficulty(); }   // +0x0C
+int  __fastcall P_Ore(DllPlayer* p, void*)                    { return g_playerData[p->playerNum].ore; }        // +0x20
+int  __fastcall P_Kids(DllPlayer* p, void*)                   { return g_playerData[p->playerNum].kids; }       // +0x9C
+int  __fastcall P_Workers(DllPlayer* p, void*)                { return g_playerData[p->playerNum].workers; }    // +0x94
+int  __fastcall P_Scientists(DllPlayer* p, void*)             { return g_playerData[p->playerNum].scientists; } // +0x98
+int  __fastcall P_HasTechnology(DllPlayer* p, void*, int id)  { return Player[p->playerNum].HasTechnology(id); }
+// Cache dos can* nos bytes +4..+11 do _Player da DLL.
+void __fastcall P_ResetChecks(DllPlayer* p, void*) { std::memset(p->checkValue, 0xFF, 8); }
+int  __fastcall P_CanBuildBuilding(DllPlayer* p, void*) {
+    return playerCanBuildBuilding(p->playerNum, p->checkValue);
+}
+int  __fastcall P_CanBuildVehicle(DllPlayer* p, void*, int arg) {
+    return playerCanBuildVehicle(p->playerNum, p->checkValue, arg);
+}
+int  __fastcall P_CanAccumulateOre(DllPlayer* p, void*) {
+    return playerCanAccumulateOre(p->playerNum, p->checkValue);
+}
+int  __fastcall P_CanDoResearch(DllPlayer* p, void*, int techID) {
+    return playerCanDoResearch(p->playerNum, p->checkValue, techID);
+}
 void __fastcall P_SetRareOre(DllPlayer* p, void*, int v)      { Player[p->playerNum].SetRareOre(v); }
 void __fastcall P_SetFoodStored(DllPlayer* p, void*, int v)   { Player[p->playerNum].SetFoodStored(v); }
 void __fastcall P_SetKids(DllPlayer* p, void*, int v)         { Player[p->playerNum].SetKids(v); }
@@ -112,6 +131,9 @@ void __fastcall T_ForceMoraleGood(int p)            { TethysGame::ForceMoraleGoo
 void __fastcall T_ForceMoraleOK(int p)              { TethysGame::ForceMoraleOK(p); }
 void __fastcall T_ForceMoralePoor(int p)            { TethysGame::ForceMoralePoor(p); }
 void __fastcall T_ForceMoraleRotten(int p)          { TethysGame::ForceMoraleRotten(p); }
+// ?FreeMoraleLevel: comando 0x2B com valor 0x20 (sub_4229F0 case 32).
+void __fastcall T_FreeMoraleLevel(int p)            { TethysGame::FreeMoraleLevel(p); }
+void __fastcall T_SetMicrobeSpreadSpeed(int v)      { setMicrobeSpreadSpeed(v); }
 // ?AddMessage(x, y, msg, jogador, som): só p/ todos (−1) ou o jogador local;
 // x/y em pixels (x interno) → sub_438F70.
 void __fastcall T_AddMessage(int x, int y, char* msg, int toPlayer, int sound) {
@@ -156,6 +178,8 @@ void __fastcall M_InitialSetTile(ApiLoc loc, int tile) {
 void __fastcall M_SetTile(ApiLoc loc, int tile) { M_InitialSetTile(loc, tile); }
 // ?SetLavaPossible: bit 0x10000000 da célula; nos mapas estreitos só dentro de
 // [x1, x1 + larguraInterna/2).
+// ?SetVirusUL(LOCATION, spread): canto do vírus (x interno; spread em ECX).
+void __fastcall M_SetVirusUL(ApiLoc loc, int spread) { setVirusUL(loc.x, loc.y, spread); }
 void __fastcall M_SetLavaPossible(ApiLoc loc, int on) {
     const int off = g_gameMap.internalXOffset();
     if (off > loc.x) return;
@@ -194,6 +218,8 @@ int  __fastcall U_IsLive(int* u, void*) {                                     //
     return 0;
 }
 void __fastcall U_DoInfect(int* u, void*)        { unitDoInfect(*u); }
+int  __fastcall U_GetType(int* u, void*)         { return g_units[*u].type; }
+int  __fastcall U_GetCargo(int* u, void*)        { return static_cast<int16_t>(g_units[*u].cargo); }   // movsx [+0x24]
 void __fastcall U_DoSelfDestruct(int* u, void*)  { unitDoSelfDestruct(*u); }
 int  __fastcall U_HasOccupiedBay(int* u, void*)  { return unitHasOccupiedBay(*u); }
 // ?Location: ([+0x14] >> 5, [+0x18] >> 5) em tiles INTERNOS; LOCATION por valor
@@ -244,6 +270,23 @@ DllUnitBlock* __fastcall UB_Ctor(DllUnitBlock* b, void*, MissionUnitRecord* tabl
 void __fastcall SS_Dtor(int* stub, void*) { *stub = 0xFF; }   // ??1ScStub: [this] = 0xFF
 int* __fastcall SS_Ctor(int* stub, void*) { *stub = 0xFF; return stub; }   // ??0ScStub
 int  __fastcall TRG_HasFired(int* stub, void*, int player) { return triggerHasFired(*stub, player) ? 1 : 0; }
+int  __fastcall SS_IsInitialized(int* stub, void*) { return *stub != 0xFF ? 1 : 0; }
+
+// PlayerUnitEnum(jogador): lista de veículos (+0xC1C), na ordem.
+struct ApiPlayerEnum { int player; int pos; };
+void* __fastcall E_PlayerUnitCtor(void* self, void*, int player) {
+    auto* e = static_cast<ApiPlayerEnum*>(self);
+    e->player = player;
+    e->pos = 0;
+    return self;
+}
+int __fastcall E_PlayerUnitGetNext(void* self, void*, int* unit) {
+    auto* e = static_cast<ApiPlayerEnum*>(self);
+    const std::vector<int>& L = colonyVehicles(e->player);
+    if (e->pos >= static_cast<int>(L.size())) return 0;
+    *unit = L[e->pos++];
+    return 1;
+}
 
 // ---- Triggers (retorno do Trigger por valor: ponteiro em ECX) -------------------------------
 int* __fastcall TR_CreateTimeTrigger(int* ret, int bEnabled, int bOneShot, int time, const char* fn) {
@@ -256,6 +299,26 @@ int* __fastcall TR_CreateResearchTrigger(int* ret, int bEnabled, int bOneShot, i
 }
 int* __fastcall TR_CreateVictoryCondition(int* ret, int bEnabled, int bOneShot, int* trigger, const char* text) {
     *ret = createVictoryCondition(bEnabled, bOneShot, *trigger, text);
+    return ret;
+}
+// ?CreateTimeTrigger(min, max): tempo = min + GetRand(max − min).
+int* __fastcall TR_CreateTimeTriggerRange(int* ret, int bEnabled, int bOneShot, int tmin, int tmax, const char* fn) {
+    const int time = tmin + TethysGame::getRand(tmax - tmin);
+    *ret = createTimeTrigger(bEnabled, bOneShot, time, fn);
+    return ret;
+}
+int* __fastcall TR_CreateResourceTrigger(int* ret, int bEnabled, int bOneShot, int res, int amount, int player,
+                                         int compare, const char* fn) {
+    *ret = createResourceTrigger(bEnabled, bOneShot, res, amount, player, compare, fn);
+    return ret;
+}
+int* __fastcall TR_CreateEvacTrigger(int* ret, int bEnabled, int bOneShot, int player, const char* fn) {
+    *ret = createEvacTrigger(bEnabled, bOneShot, player, fn);
+    return ret;
+}
+int* __fastcall TR_CreateOperationalTrigger(int* ret, int bEnabled, int bOneShot, int player, int type, int count,
+                                            int compare, const char* fn) {
+    *ret = createOperationalTrigger(bEnabled, bOneShot, player, type, count, compare, fn);
     return ret;
 }
 int* __fastcall TR_CreateFailureCondition(int* ret, int bEnabled, int bOneShot, int* trigger, const char* text) {
@@ -306,6 +369,28 @@ const std::map<std::string, void*>& table() {
         {"?SetColorNumber@_Player@@QAEXH@Z", reinterpret_cast<void*>(&P_SetColorNumber)},
         {"?SetOre@_Player@@QAEXH@Z", reinterpret_cast<void*>(&P_SetOre)},
         {"?Difficulty@_Player@@QBEHXZ", reinterpret_cast<void*>(&P_Difficulty)},
+        {"?Ore@_Player@@QBEHXZ", reinterpret_cast<void*>(&P_Ore)},
+        {"?Kids@_Player@@QBEHXZ", reinterpret_cast<void*>(&P_Kids)},
+        {"?Workers@_Player@@QBEHXZ", reinterpret_cast<void*>(&P_Workers)},
+        {"?Scientists@_Player@@QBEHXZ", reinterpret_cast<void*>(&P_Scientists)},
+        {"?HasTechnology@_Player@@QBEHH@Z", reinterpret_cast<void*>(&P_HasTechnology)},
+        {"?resetChecks@_Player@@QAEXXZ", reinterpret_cast<void*>(&P_ResetChecks)},
+        {"?canBuildBuilding@_Player@@QAEHXZ", reinterpret_cast<void*>(&P_CanBuildBuilding)},
+        {"?canBuildVehicle@_Player@@QAEHH@Z", reinterpret_cast<void*>(&P_CanBuildVehicle)},
+        {"?canAccumulateOre@_Player@@QAEHXZ", reinterpret_cast<void*>(&P_CanAccumulateOre)},
+        {"?canDoResearch@_Player@@QAEHH@Z", reinterpret_cast<void*>(&P_CanDoResearch)},
+        {"?FreeMoraleLevel@TethysGame@@SIXH@Z", reinterpret_cast<void*>(&T_FreeMoraleLevel)},
+        {"?SetMicrobeSpreadSpeed@TethysGame@@SIXH@Z", reinterpret_cast<void*>(&T_SetMicrobeSpreadSpeed)},
+        {"?SetVirusUL@GameMap@@SIXULOCATION@@H@Z", reinterpret_cast<void*>(&M_SetVirusUL)},
+        {"?GetType@Unit@@QBE?AW4map_id@@XZ", reinterpret_cast<void*>(&U_GetType)},
+        {"?GetCargo@Unit@@QBE?AW4map_id@@XZ", reinterpret_cast<void*>(&U_GetCargo)},
+        {"?IsInitialized@ScStub@@QAEHXZ", reinterpret_cast<void*>(&SS_IsInitialized)},
+        {"??0PlayerUnitEnum@@QAE@H@Z", reinterpret_cast<void*>(&E_PlayerUnitCtor)},
+        {"?GetNext@PlayerUnitEnum@@QAEHAAVUnit@@@Z", reinterpret_cast<void*>(&E_PlayerUnitGetNext)},
+        {"?CreateTimeTrigger@@YI?AVTrigger@@HHHHPBD@Z", reinterpret_cast<void*>(&TR_CreateTimeTriggerRange)},
+        {"?CreateResourceTrigger@@YI?AVTrigger@@HHW4trig_res@@HHW4compare_mode@@PBD@Z", reinterpret_cast<void*>(&TR_CreateResourceTrigger)},
+        {"?CreateEvacTrigger@@YI?AVTrigger@@HHHPBD@Z", reinterpret_cast<void*>(&TR_CreateEvacTrigger)},
+        {"?CreateOperationalTrigger@@YI?AVTrigger@@HHHW4map_id@@HW4compare_mode@@PBD@Z", reinterpret_cast<void*>(&TR_CreateOperationalTrigger)},
         {"?ForceMoraleGreat@TethysGame@@SIXH@Z", reinterpret_cast<void*>(&T_ForceMoraleGreat)},
         {"?ForceMoraleOK@TethysGame@@SIXH@Z", reinterpret_cast<void*>(&T_ForceMoraleOK)},
         {"?ForceMoralePoor@TethysGame@@SIXH@Z", reinterpret_cast<void*>(&T_ForceMoralePoor)},

@@ -1,6 +1,7 @@
 #include "trigger.h"
 
 #include <cstdio>
+#include <cstring>
 #include <iostream>
 #include <memory>
 
@@ -34,6 +35,7 @@ struct FuncReference : Stub {
 enum TriggerKind {
     TK_TIME, TK_RESEARCH, TK_VICTORY, TK_FAILURE,
     TK_COUNT, TK_KIT, TK_BUILDING_COUNT, TK_VEHICLE_COUNT, TK_ESCAPE, TK_SET,
+    TK_RESOURCE, TK_EVAC, TK_OPERATIONAL,
 };
 
 // _Trigger (off_4E9E50) e derivadas. Campos +0x30/+0x34 conforme a classe.
@@ -234,6 +236,38 @@ int createSetTrigger(int bEnabled, int bOneShot, int total, int needed, const ch
     return id;
 }
 
+int createResourceTrigger(int bEnabled, int bOneShot, int resType, int amount, int player, int compare,
+                          const char* func) {
+    const int fr = createFuncRef(func);
+    if (fr == 0xFF) return 0xFF;
+    const int id = newTrigger(TK_RESOURCE, bEnabled, bOneShot, fr, nullptr);
+    if (Trigger* t = trig(id)) {                                     // sub_4922C0
+        t->f30 = resType; t->f34 = amount; t->f38 = player; t->f3C = compare;
+        if (player != -1) t->playerMask = (1u << player) ^ 0x3Fu;
+    }
+    return id;
+}
+
+int createEvacTrigger(int bEnabled, int bOneShot, int player, const char* func) {
+    const int fr = createFuncRef(func);
+    if (fr == 0xFF) return 0xFF;
+    const int id = newTrigger(TK_EVAC, bEnabled, bOneShot, fr, nullptr);
+    if (Trigger* t = trig(id)) { t->f30 = player; initPlayerMask(*t, player); }   // sub_4945D0
+    return id;
+}
+
+int createOperationalTrigger(int bEnabled, int bOneShot, int player, int type, int count, int compare,
+                             const char* func) {
+    const int fr = createFuncRef(func);
+    if (fr == 0xFF) return 0xFF;
+    const int id = newTrigger(TK_OPERATIONAL, bEnabled, bOneShot, fr, nullptr);
+    if (Trigger* t = trig(id)) {                                     // sub_4953B0
+        t->f30 = type; t->f34 = count; t->f38 = player; t->f3C = compare;
+        initPlayerMask(*t, player);
+    }
+    return id;
+}
+
 bool triggerHasFired(int stub, int player) {                // ?HasFired (bit de [+0x20])
     const Trigger* t = trig(stub);
     return t && player >= 0 && player < 32 && (t->playerMask & (1u << player));
@@ -316,6 +350,24 @@ static int countAccumulate(int p, int type, int cargo, int acc) {
         }
     }
     return acc;
+}
+
+// trig_res: 0 comida (+0x10), 1 minério comum (+0x20), 2 raro (+0x24),
+// 3 crianças (+0x9C), 4 trabalhadores (+0x94), 5 cientistas (+0x98),
+// 6 colonos (3+4+5), 7 comum + raro.
+static int resourceOf(int p, int res, int fallback) {
+    const PlayerData& d = g_playerData[p];
+    switch (res) {
+        case 0: return d.foodStored;
+        case 1: return d.ore;
+        case 2: return d.rareOre;
+        case 3: return d.kids;
+        case 4: return d.workers;
+        case 5: return d.scientists;
+        case 6: return d.kids + d.workers + d.scientists;
+        case 7: return d.rareOre + d.ore;
+        default: return fallback;                             // (registrador sem valor novo)
+    }
 }
 
 // vt[9]: disparou?
@@ -420,6 +472,55 @@ static bool hasFired(Trigger& t) {
                 if (t.f34 <= hits) t.playerMask |= 1u << p;
             }
             return t.playerMask != 0;
+        case TK_RESOURCE: {                                   // sub_492300
+            t.playerMask = 0;
+            if (t.f38 == -1) {                                // todos: sempre ">=" (ignora o modo)
+                int v = 0;
+                for (int p = 0; p < n; ++p) {
+                    v = resourceOf(p, t.f30, v);
+                    if (v >= t.f34) t.playerMask |= 1u << p;
+                }
+                return t.playerMask != 0;
+            }
+            if (t.f38 < 0 || t.f38 >= kMaxPlayers) return false;
+            if (!compareCount(t.f3C, t.f34, resourceOf(t.f38, t.f30, 0))) return false;
+            t.playerMask = 1u << t.f38;                       // só o bit do jogador
+            return true;
+        }
+        case TK_EVAC: {                                       // sub_494600
+            t.playerMask = 0;
+            if (t.f30 < 0 || t.f30 >= kMaxPlayers) return false;
+            const PlayerData& d = g_playerData[t.f30];
+            const int colonists = d.workers + d.scientists + d.kids;
+            int transports = 0;                               // + baias das garagens (não portada)
+            for (int v : colonyVehicles(t.f30)) if (g_units[v].type == 0x0D) ++transports;
+            const uint8_t* blk = unitStatBlock(0x0D, t.f30);  // capacidade (bloco +0x38)
+            int cap = 0;
+            if (blk) std::memcpy(&cap, blk + 0x38, 4);
+            if (cap * transports < colonists) return false;
+            t.playerMask = 0x3F;
+            return true;
+        }
+        case TK_OPERATIONAL: {                                // sub_4953F0
+            t.playerMask = 0;
+            auto count = [&](int p) {
+                int c = 0;
+                if (p < 0 || p >= kMaxPlayers) return 0;      // (lista do "jogador −1": vazia)
+                for (int b : colonyStructures(p))
+                    if (g_units[b].type == t.f30 && structureOperational(g_units[b])) ++c;
+                return c;
+            };
+            if (t.f38 > -1) {
+                if (!compareCount(t.f3C, t.f34, count(t.f38))) return false;
+                t.playerMask = 0x3F;
+                return true;
+            }
+            // Jogador −1: o original relê sempre a lista de [+0x38] (= −1) e para
+            // no primeiro jogador cuja comparação passa.
+            for (int p = 0; p < n; ++p)
+                if (compareCount(t.f3C, t.f34, count(t.f38))) { t.playerMask |= 1u << p; return true; }
+            return false;
+        }
         case TK_VICTORY:                                      // sub_4957C0
         case TK_FAILURE: {                                    // sub_495A10
             t.playerMask = 0;

@@ -42,6 +42,14 @@ int createEscapeTrigger(int bEnabled, int bOneShot, int player, int x, int y, in
                         int type, int cargoType, int cargoAmount, const char* func);
 // SetTrigger (off_4E9F30): dispara p/ o jogador com >= needed dos `total` triggers.
 int createSetTrigger(int bEnabled, int bOneShot, int total, int needed, const char* func, const int* stubs);
+// ResourceTrigger (off_4E9E90): trig_res 0..7; jogador −1 = todos (sempre >=).
+int createResourceTrigger(int bEnabled, int bOneShot, int resType, int amount, int player, int compare,
+                          const char* func);
+// EvacTrigger (off_4E9FF0): capacidade dos Evac Transports >= colonos.
+int createEvacTrigger(int bEnabled, int bOneShot, int player, const char* func);
+// OperationalTrigger (off_4EA090): prédios operando do tipo.
+int createOperationalTrigger(int bEnabled, int bOneShot, int player, int type, int count, int compare,
+                             const char* func);
 // ?HasFired@Trigger: bit do jogador em [+0x20].
 bool triggerHasFired(int stub, int player);
 

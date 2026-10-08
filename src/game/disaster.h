@@ -32,9 +32,14 @@ void setEruption(int x, int y, int speed);
 void setLavaSpeed(int speed);                                // ?SetLavaSpeed (sub_49E240)
 void setLavaPossible(int x, int y, bool on);                 // ?SetLavaPossible (bit 0x10000000)
 
-// Lava (dword_54E3A0): sub_4322A0 no início da partida; sub_49DC20 a cada turno.
+// Lava (dword_54E3A0): sub_4322A0 no início da partida; sub_49DC20 a cada turno
+// (lavaTick roda antes o micróbio, dword_57AB98, como sub_489DD0).
 void lavaReset();
 void lavaTick();
+// Micróbio: ?SetMicrobeSpreadSpeed (sub_49E240) e ?SetVirusUL (canto em tiles
+// INTERNOS; spread != 0 infecta, 0 limpa).
+void setMicrobeSpreadSpeed(int speed);
+void setVirusUL(int x, int y, int spread);
 
 bool isDisaster(int type);
 

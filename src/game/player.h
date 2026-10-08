@@ -109,6 +109,17 @@ void resetPlayers(int numPlayers);
 // Unidades espaciais no +0x08 do registro: bits 0-3 RLV (0x6A), 4-7 SOLAR_SAT
 // (0x59), 9-12 EDWARD (0x58); os outros tipos são 1 bit (tipo − 0x4D).
 uint32_t playerSpaceWord(int player);
+
+// _Player::hasVehicle(tipo, carga): veículo da lista (+0xC1C) do tipo com a
+// carga (−1 = qualquer); garagens também contariam (não portadas).
+bool playerHasVehicle(int player, int type, int cargo);
+// _Player::can* — cache[0..7] = bytes +4..+11 do _Player da DLL (0xFF = não
+// calculado; resetChecks zera tudo p/ 0xFF): [0] canBuildBuilding, [1]
+// canBuildVehicle, [3] canAccumulateOre, [5..7] canDoResearch (lab 1..3).
+int playerCanBuildBuilding(int player, signed char* cache);
+int playerCanBuildVehicle(int player, signed char* cache, int arg);
+int playerCanAccumulateOre(int player, signed char* cache);
+int playerCanDoResearch(int player, signed char* cache, int techID);
 int playerSpaceCount(int player, int type);   // sub_490800 (só 0x6A/0x59/0x58)
 int playerSpaceHas(int player, int type);     // sub_490780
 
