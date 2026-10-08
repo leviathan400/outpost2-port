@@ -903,17 +903,28 @@ void GameState::renderPanel(Renderer& renderer) {
     }
     for (int x = px0; x < VW; ++x) fb[(kMiniMapH - 1) * VW + x] = 0xFFFFFFFC;
 
-    // --- Linha de abas (6 botões; os ícones originais entram com a UI de comandos) ---
+    // --- Linha de abas: os 6 ícones originais do op2_art (anims 40..45, frame 0).
+    // PROVISÓRIO: posição distribuída a olho; a janela de comandos original
+    // (layout, estados pressionado/realçado e ação de cada aba) ainda não foi portada.
     {
-        const int ty = kMiniMapH + 4, th = kTabsH - 10, tw = 32, gap = 2;
-        const int total = 6 * tw + 5 * gap;
-        const int tx0 = px0 + (kPanelW - total) / 2;
+        const int slot = kPanelW / 6, cy = kMiniMapH + kTabsH / 2;
         for (int k = 0; k < 6; ++k) {
-            int bx = tx0 + k * (tw + gap);
-            renderer.fillRect(bx, ty, tw, th, 0xFF3A3A3D);
-            renderer.drawRect(bx, ty, tw, th, 0xFFC2C2C6);
-            char n[4]; std::snprintf(n, sizeof(n), "%d", k + 1);
-            Font::drawTextCentered(fb, VW, VH, n, bx + tw / 2, ty + th / 2 - 4, 0xFF9A9A9E, false);
+            const int cx = px0 + slot * k + slot / 2;
+            if (!g_art.ok() || 40 + k >= g_art.numAnimations()) continue;
+            // Centraliza pelo retângulo das imagens do frame 0 (o hotspot dos
+            // ícones de UI não é o centro).
+            const ArtAnimation& an = g_art.animation(40 + k);
+            if (an.frames.empty()) continue;
+            int x0 = 1 << 20, y0 = 1 << 20, x1 = -(1 << 20), y1 = -(1 << 20);
+            for (const auto& pic : an.frames[0].pics) {
+                const ArtImage& im = g_art.image(pic.image);
+                x0 = std::min(x0, static_cast<int>(pic.x)); y0 = std::min(y0, static_cast<int>(pic.y));
+                x1 = std::max(x1, static_cast<int>(pic.x) + static_cast<int>(im.width));
+                y1 = std::max(y1, static_cast<int>(pic.y) + static_cast<int>(im.height));
+            }
+            const int hx = static_cast<int>(an.header[5]), hy = static_cast<int>(an.header[6]);
+            blitArtFrame(fb, VW, VH, 40 + k, 0, cx - (x0 + x1) / 2 + hx, cy - (y0 + y1) / 2 + hy, -1,
+                         px0, kMiniMapH, VW, kMiniMapH + kTabsH);
         }
         for (int x = px0; x < VW; ++x) fb[(kMiniMapH + kTabsH - 1) * VW + x] = 0xFFDCDCE0;
     }
