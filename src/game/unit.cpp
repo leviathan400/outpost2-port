@@ -279,6 +279,8 @@ bool createUnit(Unit& out, map_id type, LOCATION loc, int owner,
     if (r.flags & UNIT_BUILDING) {
         r.flags |= 0x20000000u | UNIT_DAMAGEABLE;                // sub_482F30
         if (type == 0x17) r.flags |= UNIT_TURRET_BLD;            // Guard Post (sub_42CD90)
+        if (type == 0x2D || type == 0x2E || type == 0x2F || type == 0x30 || type == 0x37)
+            r.flags |= UNIT_FACTORY;                             // sub_443260 (off_4D29D0)
         // sub_4466B0: bit 0x800000 = bit6 de desc+0x24C (AutoTargeted).
         const StructSheetDesc* d = structSheet(type);
         if (d && (d->flags24C & 0x40)) r.flags |= UNIT_AUTO_TARGET;

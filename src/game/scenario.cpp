@@ -1,6 +1,7 @@
 #include "scenario.h"
 
 #include <cstring>
+#include <cstdio>
 
 #include "building_sheet.h"
 #include "colony.h"
@@ -387,26 +388,92 @@ void unitOrigPixel(const UnitRecord& r, int& x, int& y) {
     y = ((r.pixelY >> 5) * 2 + (h & 1)) << 4;
 }
 
-void mapUnitsInRect(int x, int y, int w, int h, uint32_t playerMask, uint32_t flagMask, std::vector<int>& out) {
+void mapRectIterInit(MapRectIter& it, int x, int y, int w, int h, uint32_t playerMask, uint32_t flagMask) {
     const int pxW = g_gameMap.internalWidth() * 32;             // [GameMap+8]
-    int x0 = x, x1 = x + w;
-    bool wrap = false;
-    if (pxW <= x1) { x1 -= pxW; x0 -= pxW; wrap = true; }
-    const int y0 = y;
-    int y1 = y + h;
-    if (g_gameMap.height() * 32 <= y1) y1 = g_gameMap.height() * 32;
+    it.cur = 0;
+    it.playerMask = playerMask;
+    it.flagMask = flagMask;
+    it.x0 = x; it.x1 = x + w; it.wrap = 0;
+    if (pxW <= it.x1) { it.x1 -= pxW; it.x0 -= pxW; it.wrap = 1; }
+    it.y0 = y;
+    it.y1 = y + h;
+    if (g_gameMap.height() * 32 <= it.y1) it.y1 = g_gameMap.height() * 32;
+}
+
+int mapRectIterNext(MapRectIter& it) {
+    const int pxW = g_gameMap.internalWidth() * 32;
     const int off = g_gameMap.internalXOffset() * 32;
-    for (int id = unitListFirst(); id != 0; id = unitListNext(id)) {
+    for (int id = it.cur ? unitListNext(it.cur) : unitListFirst(); id != 0; id = unitListNext(id)) {
+        it.cur = id;
         const UnitRecord& r = g_units[id];
-        if (!(r.flags & 0x46u) || !(playerMask & (1u << (r.owner & 0x0F))) || !(r.flags & flagMask) ||
+        if (!(r.flags & 0x46u) || !(it.playerMask & (1u << (r.owner & 0x0F))) || !(r.flags & it.flagMask) ||
             r.field22 == 0x0D || r.id == -1 || (r.flags & UNIT_DEAD))
             continue;
         int ux, uy;
         unitOrigPixel(r, ux, uy);
         ux += off;
-        if (uy < y0 || uy >= y1) continue;
-        if ((x0 <= ux && ux < x1) || (wrap && x0 <= ux - pxW && ux - pxW < x1)) out.push_back(id);
+        if (uy < it.y0 || uy >= it.y1) continue;
+        if ((it.x0 <= ux && ux < it.x1) || (it.wrap && it.x0 <= ux - pxW && ux - pxW < it.x1)) return id;
     }
+    return 0;
+}
+
+void mapUnitsInRect(int x, int y, int w, int h, uint32_t playerMask, uint32_t flagMask, std::vector<int>& out) {
+    MapRectIter it;
+    mapRectIterInit(it, x, y, w, h, playerMask, flagMask);
+    for (int id = mapRectIterNext(it); id != 0; id = mapRectIterNext(it)) out.push_back(id);
+}
+
+static int buildingMaxHP(const UnitRecord& r) {
+    const StructSheetDesc* d = structSheet(r.type);
+    return d ? d->player[(r.owner >> 4) & 0x0F].hitPoints : 0;
+}
+
+void unitDoInfect(int id) {                                  // ?DoInfect
+    UnitRecord& r = g_units[id];
+    if (r.id == -1 || (r.flags & UNIT_DEAD) || !(r.flags & UNIT_BUILDING)) return;
+    if (TethysGame::noPlayers() > 1) return;
+    // (som 0x53 em (x,y).)
+    colonyStaffKilled(id);
+    UnitRecord& b = g_units[id];
+    b.flags |= 0x40000u;
+    const int act = static_cast<int8_t>(b.action);
+    const int hp = buildingMaxHP(b);
+    b.damage = static_cast<int16_t>(b.damage + hp / 3);
+    if (act == 0x22 || act == 0x21) b.damage = static_cast<int16_t>(hp);
+    else if (act != 0x12) { b.field22 = 0; b.action = 0; }
+    if (hp <= b.damage) {
+        b.damage = static_cast<int16_t>(hp);
+        b.flags |= UNIT_DEAD;
+        killUnit(id, 5);
+    }
+    // (se é a única unidade selecionada, o painel é refeito — sub_41A8E0.)
+}
+
+void unitDoSelfDestruct(int id) {                            // ?DoSelfDestruct
+    UnitRecord& r = g_units[id];
+    if (r.id == -1 || (r.flags & UNIT_DEAD)) return;
+    // sub_40E210 case 20: comandável (vt[29] sub_44B620: viva, sem 0x80000/0x20000,
+    // sub-estado != 0x0A) e veículo/0x40.
+    if (((r.flags | (r.flags << 2)) & 0x80000u) || r.field22 == 0x0A) return;
+    if (!(r.flags & 0x42u)) return;
+    // sub_43A6A0: cria a arma SCUTTLE_DESTRUCT (0x45) no lugar (ou detona a
+    // 0x41/0x42 de quem a carrega) — essas armas ainda não estão portadas;
+    // aqui só a morte da unidade (0x20000, ação 0x2F, [+0x3C] = 5).
+    std::fprintf(stderr, "[Mission] DoSelfDestruct(%d): explosao SCUTTLE (0x45) nao portada\n", id);
+    r.flags |= UNIT_DEAD;
+    r.action = 0x2F;
+    r.field3C = 5;
+    r.field20 = 1;
+}
+
+int unitHasOccupiedBay(int id) {                             // ?HasOccupiedBay
+    const UnitRecord& r = g_units[id];
+    if (r.type == 0x29) return 0;                            // garagem: vt[63] — não portada (vazia)
+    if (!(r.flags & UNIT_FACTORY)) return 0;
+    for (int i = 0; i < 6; ++i)                              // vt[65] = movsx [+0x61+baia]
+        if (static_cast<int8_t>(r.bayType[i]) != 0) return 1;
+    return 0;
 }
 
 } // namespace op2

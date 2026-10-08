@@ -11,6 +11,7 @@
 #include <cstring>
 #include <iostream>
 #include <map>
+#include <new>
 #include <string>
 #include <vector>
 
@@ -184,6 +185,50 @@ void __fastcall U_SetCargo(int* u, void*, int cargo, int weapon) {
     r.cargo = static_cast<uint16_t>(cargo);
     if (r.type == mapConVec) r.kitWeapon = static_cast<uint8_t>(weapon);
 }
+int  __fastcall U_IsVehicle(int* u, void*)      { return (g_units[*u].flags & UNIT_VEHICLE) ? -1 : 0; }   // shl 1Eh; sar 1Fh
+int  __fastcall U_IsLive(int* u, void*) {                                     // zera o Unit se morta
+    if (*u == 0) return 0;
+    const UnitRecord& r = g_units[*u];
+    if (r.id != -1 && !(r.flags & UNIT_DEAD)) return 1;
+    *u = 0;
+    return 0;
+}
+void __fastcall U_DoInfect(int* u, void*)        { unitDoInfect(*u); }
+void __fastcall U_DoSelfDestruct(int* u, void*)  { unitDoSelfDestruct(*u); }
+int  __fastcall U_HasOccupiedBay(int* u, void*)  { return unitHasOccupiedBay(*u); }
+// ?Location: ([+0x14] >> 5, [+0x18] >> 5) em tiles INTERNOS; LOCATION por valor
+// → ponteiro oculto na pilha.
+ApiLoc* __fastcall U_Location(int* u, void*, ApiLoc* ret) {
+    int x, y;
+    unitOrigPixel(g_units[*u], x, y);
+    ret->x = (x + g_gameMap.internalXOffset() * 32) >> 5;
+    ret->y = y >> 5;
+    return ret;
+}
+
+// ---- Enumeradores ------------------------------------------------------------------------
+// InRectEnumerator (52 bytes): MAP_RECT {x1,y1,x2,y2} em tiles internos, inclusivo.
+// A largura dá a volta comparando com a máscara de PIXELS (dword_54EBBC), como o original.
+struct ApiRect { int x1, y1, x2, y2; };
+static_assert(sizeof(MapRectIter) <= 52, "InRectEnumerator: 52 bytes");
+void* __fastcall E_InRectCtor(void* self, void*, const ApiRect* rc) {
+    const int pxMask = g_gameMap.internalWidth() * 32 - 1, pxW = pxMask + 1;
+    int dx = rc->x2 - rc->x1;
+    const int half = pxMask / 2;
+    if (-half >= dx) dx += pxW;
+    else if (half < dx) dx = -((-dx) & pxMask);
+    const int w = dx + 1, h = rc->y2 - rc->y1 + 1;
+    auto* it = new (self) MapRectIter();
+    mapRectIterInit(*it, rc->x1 << 5, rc->y1 << 5, w << 5, h << 5, 0xFFFFFFFFu, 0xFFFFFFFFu);
+    return self;
+}
+int __fastcall E_InRectGetNext(void* self, void*, int* unit) {
+    const int id = mapRectIterNext(*static_cast<MapRectIter*>(self));
+    if (!id) return 0;
+    *unit = id;
+    return 1;
+}
+
 // ?PutInGarage(baia, x, y): vt[65] da garagem em (x,y) — garagem ainda não portada.
 void __fastcall U_PutInGarage(int* u, void*, int bay, int x, int y) {
     std::cerr << "[Mission] PutInGarage(unidade " << *u << ", baia " << bay << ", " << x << "," << y
@@ -268,6 +313,14 @@ const std::map<std::string, void*>& table() {
         {"?AddMessage@TethysGame@@SIXHHPADHH@Z", reinterpret_cast<void*>(&T_AddMessage)},
         {"?SetCargo@Unit@@QAEXW4map_id@@0@Z", reinterpret_cast<void*>(&U_SetCargo)},
         {"?PutInGarage@Unit@@QAEXHHH@Z", reinterpret_cast<void*>(&U_PutInGarage)},
+        {"?IsVehicle@Unit@@QBEHXZ", reinterpret_cast<void*>(&U_IsVehicle)},
+        {"?IsLive@Unit@@QAEHXZ", reinterpret_cast<void*>(&U_IsLive)},
+        {"?DoInfect@Unit@@QAEXXZ", reinterpret_cast<void*>(&U_DoInfect)},
+        {"?DoSelfDestruct@Unit@@QAEXXZ", reinterpret_cast<void*>(&U_DoSelfDestruct)},
+        {"?HasOccupiedBay@Unit@@QBEHXZ", reinterpret_cast<void*>(&U_HasOccupiedBay)},
+        {"?Location@Unit@@QBE?AULOCATION@@XZ", reinterpret_cast<void*>(&U_Location)},
+        {"??0InRectEnumerator@@QAE@ABUMAP_RECT@@@Z", reinterpret_cast<void*>(&E_InRectCtor)},
+        {"?GetNext@InRectEnumerator@@QAEHAAVUnit@@@Z", reinterpret_cast<void*>(&E_InRectGetNext)},
         {"??0ScStub@@QAE@XZ", reinterpret_cast<void*>(&SS_Ctor)},
         {"?HasFired@Trigger@@QAEHH@Z", reinterpret_cast<void*>(&TRG_HasFired)},
         {"?CreateFailureCondition@@YI?AVTrigger@@HHAAV1@PBD@Z", reinterpret_cast<void*>(&TR_CreateFailureCondition)},

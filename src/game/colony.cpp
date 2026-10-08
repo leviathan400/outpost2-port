@@ -376,10 +376,38 @@ static void statsTick(ColonyState& c, const UnitRecord& r, bool inactive) {
 // ---- Eventos de moral (somam em +0x38) -------------------------------------
 static int colonists(const PlayerData& pd) { return pd.workers + pd.scientists + pd.kids; }
 
-// sub_44F120: KID_DIES por criança + ADULT_DIES por adulto.
+// sub_44F120: KID_DIES por criança + ADULT_DIES por adulto; p/ o jogador local,
+// "<n> Children, <n> Workers, <n> Scientists has/have died" (som 0x84 se > 5).
 static void moraleDeaths(int p, int kids, int sci, int workers) {
     if (kids + sci + workers == 0) return;
     g_colony[p].moraleEvents += kids * s_me[ME_KID_DIES] + (sci + workers) * s_me[ME_ADULT_DIES];
+    char k[20] = "", w[20] = "", s[20] = "", msg[65];
+    if (kids) std::snprintf(k, sizeof(k), "%i %s", kids, kids > 1 ? "Children" : "Child");
+    if (workers) std::snprintf(w, sizeof(w), "%s%i %s", kids ? ", " : "", workers, workers > 1 ? "Workers" : "Worker");
+    if (sci) std::snprintf(s, sizeof(s), "%s%i %s", (kids + workers) ? ", " : "", sci, sci > 1 ? "Scientists" : "Scientist");
+    const int total = kids + sci + workers;
+    std::snprintf(msg, sizeof(msg), "%s%s%s %s %s", k, w, s, total > 1 ? "have" : "has", "died");
+    if (p == TethysGame::localPlayer()) postMessage(-1, -1, msg, total > 5 ? 0x84 : 0);
+}
+
+void colonyStaffKilled(int id) {                             // sub_482C30
+    UnitRecord& r = g_units[id];
+    const int p = ownerOf(r);
+    if (p >= kMaxPlayers) return;
+    int w = (r.flags & UNIT_WORKERS) ? workersRequired(r) : 0;
+    int s = (r.flags & UNIT_SCIENTISTS) ? scientistsRequired(r) : 0;
+    PlayerData& pd = g_playerData[p];
+    if (pd.workers < w) {                                    // falta suprida por cientistas
+        s = s - pd.workers + w;
+        w = pd.workers;
+        pd.workers = 0;
+    } else {
+        pd.workers -= w;
+    }
+    pd.scientists = pd.scientists - s > 0 ? pd.scientists - s : 0;
+    if (s || w) moraleDeaths(p, 0, s, w);
+    r.flags &= ~(UNIT_SCIENTISTS | UNIT_WORKERS);
+    g_colony[p].dirty = 1;
 }
 // sub_44F410: KID_BORN por criança (com pop >= 125, só +1 cada).
 static void moraleBirths(int p, int n) {

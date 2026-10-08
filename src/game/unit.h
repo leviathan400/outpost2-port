@@ -67,6 +67,7 @@ enum UnitFlags : uint32_t {
     // Combate (ctors: veículo sub_44B440 |= 2|0x400; prédio sub_482F30 |=
     // 0x20000000|4|0x400; veículo armado off_4D0650 |= 0x800000|0x10; Guard Post
     // sub_42CD90 |= 0x800000|0x80).
+    UNIT_FACTORY    = 0x08u,       // prédio com baias (fábrica-base sub_443260: 0x2D/2E/2F/30/37)
     UNIT_ARMED      = 0x10u,       // veículo com arma (Lynx/Panther/Tiger/Scorpion, SCAT)
     UNIT_TURRET_BLD = 0x80u,       // prédio com arma (Guard Post); no projétil: +1 alcance, dano x1.5
     UNIT_DAMAGEABLE = 0x400u,      // alvo de dano/armas (veículos e prédios)

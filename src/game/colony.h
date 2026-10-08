@@ -96,6 +96,9 @@ const std::vector<int>& colonyStructures(int player);
 const std::vector<int>& colonyVehicles(int player);
 void colonyVehicleAdded(int id);
 void colonyVehicleRemoved(int id);
+// sub_482C30: a equipe do prédio morre (trabalhadores; a falta sai dos
+// cientistas), moral + mensagem (sub_44F120) e o prédio fica sem 0x4000/0x8000.
+void colonyStaffKilled(int id);
 void colonyMarkDirty(int player);
 void colonyReset();
 

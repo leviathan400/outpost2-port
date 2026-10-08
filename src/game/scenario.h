@@ -64,4 +64,20 @@ void unitOrigPixel(const UnitRecord& r, int& x, int& y);
 // Y, com y em [y, y+h) e x em [x, x+w) — px INTERNOS (x dá a volta).
 void mapUnitsInRect(int x, int y, int w, int h, uint32_t playerMask, uint32_t flagMask, std::vector<int>& out);
 
+// O mesmo iterador, preguiçoso (cabe nos 52 bytes do InRectEnumerator da DLL).
+struct MapRectIter {
+    int cur = 0;                    // [+0x00] nó atual da lista por Y (0 = antes do 1º)
+    int x0 = 0, x1 = 0, y0 = 0, y1 = 0, wrap = 0;   // [+0x18]/[+0x20]/[+0x1C]/[+0x24]/[+0x28]
+    uint32_t playerMask = 0, flagMask = 0;          // [+0x10] / [+0x14]
+};
+void mapRectIterInit(MapRectIter& it, int x, int y, int w, int h, uint32_t playerMask, uint32_t flagMask);
+int  mapRectIterNext(MapRectIter& it);       // id da próxima unidade (0 = fim)
+
+// Unit::DoInfect (prédio; só com 1 jogador): equipe morre, 0x40000, dano de 1/3 do HP.
+void unitDoInfect(int id);
+// Unit::DoSelfDestruct → comando 0x14 (sub_40E210) → sub_43A6A0.
+void unitDoSelfDestruct(int id);
+// Unit::HasOccupiedBay: garagem (vt[63]) ou fábrica (0x08) com alguma baia ocupada.
+int unitHasOccupiedBay(int id);
+
 } // namespace op2
