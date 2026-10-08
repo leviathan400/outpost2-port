@@ -114,6 +114,19 @@ void __fastcall T_SetDaylightMoves(int v)           { TethysGame::SetDaylightMov
 void __fastcall T_SetEarthquake(int x, int y, int magnitude) {
     setEarthquake(portX(x), y, magnitude);
 }
+// ?SetMeteor / ?SetEruption: 0x50 / 0x4F (cargo = tamanho / velocidade da lava).
+void __fastcall T_SetMeteor(int x, int y, int size)    { setMeteor(portX(x), y, size); }
+void __fastcall T_SetEruption(int x, int y, int speed) { setEruption(portX(x), y, speed); }
+// ?SetLightning: 0x4C (cargo = duração); destino em +0x64/+0x66 se endX != -1.
+void __fastcall T_SetLightning(int x, int y, int duration, int endX, int endY) {
+    setLightning(portX(x), y, duration, endX == -1 ? -1 : portX(endX), endY);
+}
+// ?SetTornado: 0x4D (cargo = duração); destino em +0x65/+0x67; imediato pula os avisos.
+void __fastcall T_SetTornado(int x, int y, int duration, int endX, int endY, int immediate) {
+    setTornado(portX(x), y, duration, endX == -1 ? -1 : portX(endX), endY, immediate);
+}
+// ?SetLavaSpeed (sub_432DE0 → sub_49E240).
+void __fastcall T_SetLavaSpeed(int speed) { setLavaSpeed(speed); }
 // ?SetMusicPlayList (sub_451090): sem áudio no port.
 void __fastcall T_SetMusicPlayList(int, int, int*) {}
 
@@ -126,6 +139,14 @@ void __fastcall M_InitialSetTile(ApiLoc loc, int tile) {
 }
 // ?SetTile (sub_435330 + redesenho da vista).
 void __fastcall M_SetTile(ApiLoc loc, int tile) { M_InitialSetTile(loc, tile); }
+// ?SetLavaPossible: bit 0x10000000 da célula; nos mapas estreitos só dentro de
+// [x1, x1 + larguraInterna/2).
+void __fastcall M_SetLavaPossible(ApiLoc loc, int on) {
+    const int off = g_gameMap.internalXOffset();
+    if (off > loc.x) return;
+    if (off && off + g_gameMap.internalWidth() / 2 <= loc.x) return;
+    setLavaPossible(portX(loc.x), loc.y, on != 0);
+}
 // ?SetCellType: troca os 5 bits baixos.
 void __fastcall M_SetCellType(ApiLoc loc, int type) {
     const int x = portX(loc.x);
@@ -195,6 +216,12 @@ const std::map<std::string, void*>& table() {
         {"?SetDaylightEverywhere@TethysGame@@SIXH@Z", reinterpret_cast<void*>(&T_SetDaylightEverywhere)},
         {"?SetDaylightMoves@TethysGame@@SIXH@Z", reinterpret_cast<void*>(&T_SetDaylightMoves)},
         {"?SetEarthquake@TethysGame@@SIXHHH@Z", reinterpret_cast<void*>(&T_SetEarthquake)},
+        {"?SetMeteor@TethysGame@@SIXHHH@Z", reinterpret_cast<void*>(&T_SetMeteor)},
+        {"?SetEruption@TethysGame@@SIXHHH@Z", reinterpret_cast<void*>(&T_SetEruption)},
+        {"?SetLightning@TethysGame@@SIXHHHHH@Z", reinterpret_cast<void*>(&T_SetLightning)},
+        {"?SetTornado@TethysGame@@SIXHHHHHH@Z", reinterpret_cast<void*>(&T_SetTornado)},
+        {"?SetLavaSpeed@TethysGame@@SIXH@Z", reinterpret_cast<void*>(&T_SetLavaSpeed)},
+        {"?SetLavaPossible@GameMap@@SIXULOCATION@@H@Z", reinterpret_cast<void*>(&M_SetLavaPossible)},
         {"?SetMusicPlayList@TethysGame@@SIXHHPAW4SongIds@@@Z", reinterpret_cast<void*>(&T_SetMusicPlayList)},
         {"?InitialSetTile@GameMap@@SIXULOCATION@@H@Z", reinterpret_cast<void*>(&M_InitialSetTile)},
         {"?SetTile@GameMap@@SIXULOCATION@@H@Z", reinterpret_cast<void*>(&M_SetTile)},

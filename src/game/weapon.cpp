@@ -175,6 +175,12 @@ static const int8_t* frameOffsets(int animReal, int frame) {
 
 bool isTankChassis(int type) { return type == mapLynx || type == mapPanther || type == mapTiger; }
 
+int8_t  dirCos(uint8_t dir) { return kCos[dir]; }
+int8_t  dirSin(uint8_t dir) { return kSin[dir]; }
+uint8_t dirOfVec(int dx, int dy) { return dirOf(dx, dy); }
+int artLastFrameRaw(int raw) { return lastFrameRaw(raw); }
+const int8_t* artFrameOffsets(int raw, int frame) { return frameOffsets(raw - kAnimBias, frame); }
+
 static bool isEdenUnit(const UnitRecord& r) {
     const int ow = ownerOf(r);
     return ow < kMaxPlayers && g_playerData[ow].isEden != 0;
@@ -846,6 +852,8 @@ static int scorchTile(int tile) {
     if (base) base += TethysGame::getRand(3);
     return base;
 }
+
+int scorchTileFor(int tile) { return scorchTile(tile); }
 
 void vehicleDeath(int id) {
     UnitRecord& r = g_units[id];

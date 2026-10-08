@@ -18,4 +18,9 @@ void autotileWallTube(int x, int y, int wallType);
 // sub_48B860: tile de tubo "isolado" (grupo +0xBC, entrada 15) p/ o tile dado.
 int tubeTileFor(int tile);
 
+// sub_4A25F0: tubo (cellType 0x1A sem o bit 31) ou parede (0x17..0x19) vira
+// terraplanado (0x15) e os vizinhos perdem a ligação (sub_4A20B0). Devolve 1
+// (tubo), 2 (parede) ou 0.
+int destroyWallOrTube(int x, int y);
+
 } // namespace op2

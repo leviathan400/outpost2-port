@@ -89,6 +89,7 @@ enum UnitSubState : uint8_t {
     SUB_IDLE   = 0,
     SUB_WAIT   = 6,     // espera [+0x3C] ticks (cases 6/9)
     SUB_REMOVE = 0x0B,  // sub_43DE50 retorna 1 → o laço remove a unidade
+    SUB_DRIFT  = 0x10,  // case 16: vt[32] a cada tick (meteoro/raio/tornado andando)
 };
 
 // Bloco de ordem — porta o bloco alocado em unit+0x38 por sub_4230F0 (@asm 57211;
@@ -179,6 +180,16 @@ struct UnitRecord {
     // --- Desastres (0x4C..0x50) --------------------------------------------
     int      quakeDir = 0;         // +0x54 terremoto: direção do tremor (256 - rand(512))
     int      quakeAmp = 0;         // +0x58 terremoto: amplitude (magnitude*4 + 30)
+    // Meteoro 0x50 / raio 0x4C / tornado 0x4D (rawPixel; x do port; os tiles
+    // abaixo ficam em x INTERNO, como no original):
+    int      dsTick = 0;           // +0x54 tick de início do efeito
+    int      dsAux = 0;            // +0x58 meteoro: defesa que atirou; raio: tick do
+                                   //       próximo raio; tornado: tick do início da curva
+    int16_t  dsTX = 0, dsTY = 0;   // meteoro +0x34/+0x36 alvo; raio +0x60/+0x62 e
+                                   // tornado +0x61/+0x63 tile de partida
+    int16_t  dsEndX = -1, dsEndY = -1; // raio +0x64/+0x66, tornado +0x65/+0x67 (-1 = sorteado)
+    uint8_t  dsDir = 0;            // raio +0x1C / tornado +0x5C direção 0..255
+    int16_t  dsAccX = 0, dsAccY = 0;   // raio +0x5C/+0x5E, tornado +0x5D/+0x5F fração 8.8
 
     // --- Beacon de mineração (0x51..0x53; vt de off_4CF218) -----------------
     int8_t   beaconRare = 0;       // +0x64 1 = minério raro

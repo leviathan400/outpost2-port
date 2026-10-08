@@ -110,6 +110,7 @@ bool GameState::loadMission(const std::string& dllName) {
     loadTechTree(m_mission->techtreeName, d->maxTechLevel);
     resetMessages();
     resetUnits();
+    lavaReset();                                 // sub_4322A0 (início da partida)
     TethysGame::SetDaylightMoves(0);
     TethysGame::SetDaylightEverywhere(0);
     // sub_402E10: (IA dos jogadores de computador, sub_402E70 — pendente) e InitProc.
@@ -161,6 +162,7 @@ bool GameState::load(const std::string& mapName) {
     loadMoraleSheet();
     resetMessages();
     resetUnits();
+    lavaReset();                                 // sub_4322A0 (início da partida)
     // Dia/noite como as missões de colônia configuram (SetDaylightMoves(1) /
     // SetDaylightEverywhere(0)); as missões reais definem isso no InitProc.
     TethysGame::SetDaylightMoves(1);
@@ -239,6 +241,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     while (m_tickAccum >= kTickPeriod) {
         TethysGame::advanceTick();
         TethysGame::advanceDaylight(g_gameMap.internalWidth());   // início do turno (sub_489DD0)
+        lavaTick();                              // sub_49DC20 da lava (micróbio: pendente)
         m_lastRand = TethysGame::getRand(100);  // 1 consumo determinístico por tick
         tickColony();                            // economia de cada jogador (sub_471F30)
         missionTriggerTick(currentMission());    // triggers, AIProc, vitória/derrota (sub_403110)
@@ -362,6 +365,18 @@ void GameState::onIdle(Renderer& renderer, float dt) {
                             0, 0, viewportW(), Renderer::NATIVE_HEIGHT - kStatusBarH);
     };
 
+    // Passe de sombra (sub_49E8C0): vt[30] das unidades com 0x10000000 — a
+    // poeira do tornado — antes de tudo.
+    for (size_t i = 1; i < g_units.size(); ++i) {
+        const UnitRecord& r = g_units[i];
+        if (r.id == -1 || !isDisaster(r.type)) continue;
+        std::vector<WeaponDrawOp> ops;
+        disasterDrawOps((int)i, true, ops);
+        for (const WeaponDrawOp& op : ops)
+            if (op.anim >= 0 && g_art.ok() && op.anim < g_art.numAnimations())
+                drawSprite(op.anim, op.frame, screenXOf(op.x), op.y - m_camY, -1);
+    }
+
     // Tres passes: ESTRUTURAS primeiro (ficam por baixo), depois veiculos e por
     // fim as unidades-efeito (explosoes) por cima.
     for (int pass = 0; pass < 3; ++pass)
@@ -439,6 +454,20 @@ void GameState::onIdle(Renderer& renderer, float dt) {
             if (g_art.ok() && anim < g_art.numAnimations()) {
                 const int nf = static_cast<int>(g_art.animation(anim).frames.size());
                 drawSprite(anim, nf ? TethysGame::tick() % nf : 0, ucx, ucy, -1);
+            }
+            continue;
+        }
+        if (isEffect && isDisaster(r.type)) {
+            // Meteoro / raio / tornado (vt[6]); terremoto e erupção não desenham.
+            std::vector<WeaponDrawOp> ops;
+            disasterDrawOps((int)i, false, ops);
+            for (const WeaponDrawOp& op : ops) {
+                if (op.kind == WeaponDrawOp::SPRITE) {
+                    if (op.anim >= 0 && g_art.ok() && op.anim < g_art.numAnimations())
+                        drawSprite(op.anim, op.frame, screenXOf(op.x), op.y - m_camY, -1);
+                } else {
+                    drawBeam(renderer, op);
+                }
             }
             continue;
         }

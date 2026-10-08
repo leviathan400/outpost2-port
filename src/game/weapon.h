@@ -70,4 +70,13 @@ bool tankTurret(const UnitRecord& r, int bodyAnimReal, int bodyFrame,
 // sub_484A90: frame do chassi do tanque (em movimento: (id + tick/2) % nF).
 bool isTankChassis(int type);
 
+// Utilitários compartilhados com os desastres:
+int8_t  dirCos(uint8_t dir);                 // byte_4E9AF8 (cos * 64)
+int8_t  dirSin(uint8_t dir);                 // byte_4E9BF8 (sen * 64)
+uint8_t dirOfVec(int dx, int dy);            // sub_45C4F0
+int artLastFrameRaw(int raw);                // sub_404C70 (nFrames-1, animação crua)
+const int8_t* artFrameOffsets(int raw, int frame);   // sub_404DF0 (bytes x1,y1,x2,y2)
+// sub_48BAE0 + sub_48B6F0: tile queimado p/ o tile dado (0 = nenhum).
+int scorchTileFor(int tile);
+
 } // namespace op2

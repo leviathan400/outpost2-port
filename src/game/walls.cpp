@@ -119,4 +119,47 @@ int createWallOrTube(int x, int y, int wallType) {
     return 1;
 }
 
+// dword_4EA640 / 4EA680 / 4EA6C0 / 4EA700: entrada do grupo do vizinho de cima /
+// baixo / esquerda / direita quando PERDE a ligação com (x,y).
+static const int kUnlinkUp[16]    = {0, 12, 14, 13, 4, 5, 6, 0, 6, 4, 5, 15, 12, 13, 14, 15};
+static const int kUnlinkDown[16]  = {0, 11, 2, 3, 14, 13, 0, 7, 7, 2, 3, 11, 15, 13, 14, 15};
+static const int kUnlinkLeft[16]  = {14, 1, 2, 11, 4, 12, 4, 2, 9, 9, 1, 11, 12, 15, 14, 15};
+static const int kUnlinkRight[16] = {13, 1, 11, 3, 12, 5, 5, 3, 10, 1, 10, 11, 12, 13, 15, 15};
+
+// sub_4A20B0: os vizinhos parede/tubo (qualquer tipo) de (x,y) perdem a ligação.
+static void unlinkNeighbors(int x, int y) {
+    const int mask = g_gameMap.width() - 1, H = g_gameMap.height();
+    if (y > 0 && sameKind(static_cast<int>(g_gameMap.rawCell(x, y - 1) & 0x1F), 0))
+        relinkNeighbor(x, y - 1, kUnlinkUp);
+    if (y + 1 < H && sameKind(static_cast<int>(g_gameMap.rawCell(x, y + 1) & 0x1F), 0))
+        relinkNeighbor(x, y + 1, kUnlinkDown);
+    if (sameKind(static_cast<int>(g_gameMap.rawCell((x + 1) & mask, y) & 0x1F), 0))
+        relinkNeighbor((x + 1) & mask, y, kUnlinkRight);
+    if (sameKind(static_cast<int>(g_gameMap.rawCell((x - 1) & mask, y) & 0x1F), 0))
+        relinkNeighbor((x - 1) & mask, y, kUnlinkLeft);
+}
+
+int destroyWallOrTube(int x, int y) {                          // sub_4A25F0
+    const uint32_t c = g_gameMap.rawCell(x, y);
+    const int ct = static_cast<int>(c & 0x1F);
+    const int tile = static_cast<int>((c & 0xFFE0) >> 5);
+    int ret;
+    if (ct == 0x1A) {
+        if (c & 0x80000000u) return 0;
+        setTileIndex(x, y, g_gameMap.bulldozedTile(tile));
+        for (int p = 0; p < kMaxPlayers; ++p) colonyMarkDirty(p);   // sub_42F8A0: rede de tubos
+        unlinkNeighbors(x, y);
+        ret = 1;
+    } else if (ct >= 0x17 && ct <= 0x19) {
+        setTileIndex(x, y, g_gameMap.bulldozedTile(tile));
+        g_gameMap.setRawCell(x, y, g_gameMap.rawCell(x, y) & 0x7FFFFFFFu);
+        unlinkNeighbors(x, y);
+        ret = 2;
+    } else {
+        return 0;
+    }
+    g_gameMap.setRawCell(x, y, (g_gameMap.rawCell(x, y) & 0x7FFFFFE0u) | 0x15u);
+    return ret;
+}
+
 } // namespace op2

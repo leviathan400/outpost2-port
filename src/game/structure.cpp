@@ -2,6 +2,7 @@
 
 #include "building_sheet.h"
 #include "colony.h"
+#include "disaster.h"
 #include "messages.h"
 #include <cstdio>
 #include "game_map.h"
@@ -416,6 +417,9 @@ static bool updateTick(int id) {
             return false;
         case SUB_REMOVE:                  // loc_43E77B
             return true;
+        case SUB_DRIFT:                   // case 16: vt[32] (desastre andando)
+            disasterMoveTick(id);
+            return false;
         default:
             return false;
     }

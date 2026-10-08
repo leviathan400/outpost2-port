@@ -613,6 +613,87 @@ static int runQuakeTest(const std::string& mapName) {
     return 0;
 }
 
+// --disastertest <map> <meteor|lightning|tornado|eruption> <prefix>: desastre
+// perto do CC da cena demo; imprime o dano por unidade, a lava e grava quadros
+// <prefix>_NN.bmp com a câmera no desastre.
+static int runDisasterTest(const std::string& mapName, const std::string& kind, const std::string& prefix) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 disastertest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    int cc = 0;
+    for (size_t i = 1; i < op2::g_units.size(); ++i)
+        if (op2::g_units[i].id != -1 && op2::g_units[i].type == op2::mapCommandCenter) { cc = (int)i; break; }
+    if (!cc) return 3;
+    const int cx = op2::g_units[cc].pixelX >> 5, cy = op2::g_units[cc].pixelY >> 5;
+    const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
+    int type = 0;
+    if (kind == "meteor")    { type = 0x50; op2::setMeteor(cx, cy, 2); }
+    if (kind == "lightning") { type = 0x4C; op2::setLightning((cx - 6 + W) % W, cy, 3, (cx + 12) % W, cy); }
+    if (kind == "tornado")   { type = 0x4D; op2::setTornado((cx - 8 + W) % W, cy, 25, (cx + 12) % W, cy, 1); }
+    if (kind == "eruption") {
+        type = 0x4F;
+        for (int y = cy - 3; y <= cy + 12; ++y)
+            for (int x = cx + 2; x <= cx + 16; ++x)
+                if (y >= 0 && y < H) op2::setLavaPossible(x % W, y, true);
+        op2::setEruption((cx + 8) % W, cy + 4, 40);
+    }
+    if (!type) return 4;
+    auto lavaCells = [&]() {
+        int n = 0;
+        for (int y = 0; y < H; ++y) for (int x = 0; x < W; ++x) if (op2::g_gameMap.rawCell(x, y) & 0x8000000u) ++n;
+        return n;
+    };
+    std::vector<int> lastDmg(op2::g_units.size(), 0);
+    int start = -1, shots = 0, lastX = 0, lastY = 0;
+    for (int k = 0; k < 2600; ++k) {
+        gs.onIdle(renderer, 0.2501f / 4.0f);
+        int did = 0;
+        for (size_t i = 1; i < op2::g_units.size(); ++i)
+            if (op2::g_units[i].id != -1 && op2::g_units[i].type == type) { did = (int)i; break; }
+        if (type == 0x4F && start < 0 && lavaCells() > 0) {        // erupção: a 1ª lava
+            start = op2::TethysGame::tick();
+            lastX = (((cx + 8) % W) << 5) + 16; lastY = ((cy + 4) << 5) + 16;
+            std::printf("[Disaster] lava comecou tick=%d\n", start);
+        }
+        if (did) {
+            const op2::UnitRecord& d = op2::g_units[did];
+            lastX = op2::unitOX(d); lastY = op2::unitOY(d);
+            if (start < 0 && (d.flags & 0x2000u)) {
+                start = op2::TethysGame::tick();
+                std::printf("[Disaster] %s comecou tick=%d em (%d,%d) px\n", kind.c_str(), start, lastX, lastY);
+            }
+        }
+        if (lastDmg.size() < op2::g_units.size()) lastDmg.resize(op2::g_units.size(), 0);
+        for (size_t i = 1; i < op2::g_units.size(); ++i) {
+            const op2::UnitRecord& r = op2::g_units[i];
+            if (r.id == -1 || !(r.flags & op2::UNIT_DAMAGEABLE) || r.damage == lastDmg[i]) continue;
+            std::printf("[Disaster] t=%d unidade %d tipo 0x%02X dano %d -> %d%s\n", op2::TethysGame::tick(), (int)i,
+                        r.type, lastDmg[i], r.damage, (r.flags & op2::UNIT_DEAD) ? " (MORTA)" : "");
+            lastDmg[i] = r.damage;
+        }
+        static int nextSnap = 0;
+        if (start >= 0 && nextSnap == 0) nextSnap = start + 4;
+        const int every = type == 0x4F ? 120 : type == 0x50 ? 8 : 24;
+        if (start >= 0 && shots < 12 && op2::TethysGame::tick() >= nextSnap) {
+            nextSnap += every;
+            gs.setCamera(lastX - 240, lastY - 220);
+            gs.onIdle(renderer, 0.0f);
+            char fn[256]; std::snprintf(fn, sizeof(fn), "%s_%02d.bmp", prefix.c_str(), shots++);
+            writeBmp32(fn, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        }
+        if (start >= 0 && !did && type != 0x4F && op2::TethysGame::tick() > start + 40) break;
+    }
+    std::printf("[Disaster] fim tick=%d lava=%d msg=%s\n", op2::TethysGame::tick(), lavaCells(),
+                op2::statusBarText().c_str());
+    renderer.shutdown(); SDL_Quit();
+    return 0;
+}
+
 // --movelog <map>: manda o 1º veículo andar ~10 células e imprime o
 // deslocamento (px) por tick — prova que o deslize é contínuo (sem tick parado).
 static int runMoveLog(const std::string& mapName) {
@@ -1004,6 +1085,8 @@ int main(int argc, char* argv[]) {
             return runPaneShot(argv[i + 1], argv[i + 2], i + 3 < argc ? atoi(argv[i + 3]) : 0);
         if (std::strcmp(argv[i], "--quaketest") == 0 && i + 1 < argc)
             return runQuakeTest(argv[i + 1]);
+        if (std::strcmp(argv[i], "--disastertest") == 0 && i + 3 < argc)
+            return runDisasterTest(argv[i + 1], argv[i + 2], argv[i + 3]);
         if (std::strcmp(argv[i], "--missiontest") == 0 && i + 2 < argc)
             return runMissionTest(argv[i + 1], argv[i + 2], i + 3 < argc ? atoi(argv[i + 3]) : 200);
         if (std::strcmp(argv[i], "--combattest") == 0 && i + 2 < argc)
