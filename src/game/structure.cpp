@@ -2,6 +2,7 @@
 
 #include "building_sheet.h"
 #include "colony.h"
+#include "production.h"
 #include "commands.h"
 #include "disaster.h"
 #include "messages.h"
@@ -336,6 +337,9 @@ static void actionTick(int id) {
             case ACT_DISMANTLE:                                 // case 34
                 r.field22 = 0; r.state34 = 0;
                 break;
+            case 9:                                             // produzir (pacote 9)
+                factoryProduceStart(id);
+                return;
             default: break;
         }
         r.field20 = 0;
@@ -400,6 +404,9 @@ static void actionTick(int id) {
         case 0x36:                                              // case 54: projétil
             weaponProjectileAction(id);
             break;
+        case 9:                                                 // produto pronto
+            factoryProduceFinish(id);
+            break;
         default: break;
     }
 }
@@ -415,6 +422,9 @@ static bool updateTick(int id) {
     switch (u.field22) {
         case SUB_WAIT: case 9:            // loc_43E2B3
             if (--u.field3C == 0) { u.field23 = u.field22; u.field22 = 0; }
+            return false;
+        case 7:                           // loc_43E2D1: produção
+            factoryProduceCountdown(id);
             return false;
         case SUB_REMOVE:                  // loc_43E77B
             return true;

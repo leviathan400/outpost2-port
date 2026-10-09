@@ -424,6 +424,13 @@ void moraleStructureLost(int player, int type) {             // sub_44F6C0
     if (player < 0 || player >= kMaxPlayers) return;
     g_colony[player].moraleEvents += s_me[isGoodBuilding(type) ? ME_GOOD_BUILD_DIES : ME_REG_BUILD_DIES];
 }
+void moraleConsumerGoods(int player, int type) {             // sub_44FA10
+    if (player < 0 || player >= kMaxPlayers) return;
+    // (com dword_56DE60 o original também anota em MORALE.LOG — depuração.)
+    if (type == 0x6C) g_colony[player].moraleEvents += s_me[ME_CONSUMER_GOODS_1];        // Impulse Items
+    else if (type == 0x6D) g_colony[player].moraleEvents += s_me[ME_CONSUMER_GOODS_2];   // Wares
+    else if (type == 0x6E) g_colony[player].moraleEvents += s_me[ME_CONSUMER_GOODS_3];   // Luxury Wares
+}
 void moraleEnemyStructureKilled(int player, int type) {      // sub_44FBE0
     if (player < 0 || player >= kMaxPlayers) return;
     if (isGoodBuilding(type)) g_colony[player].moraleEvents += s_me[ME_ENEMY_GOOD_DIES];

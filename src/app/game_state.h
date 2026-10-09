@@ -8,6 +8,7 @@
 #include "../game/game_map.h"
 #include "../game/terrain_renderer.h"
 #include "location.h"
+#include "produce_pane.h"
 
 namespace op2 {
 
@@ -36,6 +37,7 @@ public:
 
     void setShowPassability(bool v) { m_showPassability = v; }
     void setSelection(const std::vector<int>& ids) { m_selected = ids; }
+    void pressCommand(int cmd) { clickCommand(cmd); }      // testes: botão do painel
     void setMouse(int nx, int ny) { m_mouseNX = nx; m_mouseNY = ny; }
     void setCamera(int x, int y) { m_camX = x; m_camY = y; }
     int shakeX() const { return m_shakeX; }
@@ -79,7 +81,13 @@ private:
     struct CmdButton { int cmd; int l, t, r, b; int iconRaw; std::string tip; char hotkey; };
     std::vector<CmdButton> commandButtons() const;
     // Botões de texto do prédio (sub_459F70 + layout sub_458D10). wide = arte 0x97.
-    struct TextButton { int cmd; int l, t, r, b; bool wide; std::string label, tip; char hotkey; };
+    struct TextButton { int cmd; int l, t, r, b; bool wide; std::string label, tip; char hotkey;
+                        bool disabled = false; };
+    // Painel de produção (BUILD da fábrica) e seus botões (sub_4682C0).
+    ProducePane m_produce;
+    static constexpr int kCmdBuildIt = -2, kCmdStatus = -3;
+    PaneRect infoPaneRect() const;
+    void produceBuildIt();
     std::vector<TextButton> structureButtons() const;
     void clickCommand(int cmd);
 

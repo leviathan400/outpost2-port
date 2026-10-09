@@ -49,6 +49,8 @@ add_executable(outpost2_modern
     src/game/research.cpp
     src/game/disaster.cpp
     src/game/commands.cpp
+    src/game/production.cpp
+    src/app/produce_pane.cpp
     src/game/unit_names.cpp
     src/mission/pe_loader.cpp
     src/mission/mission.cpp

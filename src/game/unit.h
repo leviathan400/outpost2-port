@@ -210,6 +210,11 @@ struct UnitRecord {
     // Fábrica (Unit::SetFactoryCargo): tipo +0x61+baia, carga +0x48+baia, foguete +0x6E.
     uint8_t  kitWeapon = 0;        // +0x4F ConVec: arma do kit (Unit::SetCargo)
     uint8_t  bayType[6] = {};
+    // Produção da fábrica (pacote 9 / ação 9): tipo em produção +0x60 (byte),
+    // arma em +0x4F (kitWeapon), duração total +0x68, grupo de IA +0x6C.
+    uint8_t  produceType = 0;
+    int      produceTotal = 0;
+    int16_t  produceGroup = -1;
     uint8_t  bayCargo[6] = {};
     int      padCargo = 0;
 

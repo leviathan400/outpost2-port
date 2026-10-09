@@ -30,6 +30,7 @@
 #include "game/building_sheet.h"
 #include "game/colony.h"
 #include "game/structure_anim.h"
+#include "game/production.h"
 #include "gfx/artfile.h"
 #include "app/tapp.h"
 #include "app/game_state.h"
@@ -521,6 +522,94 @@ static int runCmdTest(const std::string& mapName) {
     }
     renderer.shutdown(); SDL_Quit();
     return 0;
+}
+
+// --producetest <map> <prefix>: CC + Tokamak + Vehicle Factory + Structure
+// Factory encostados; lista de produção (sem e com o atalho "toda tecnologia"),
+// painel BUILD (screenshot), pacote 9 e entrega (veículo e kit na baia).
+static int runProduceTest(const std::string& mapName, const std::string& prefix) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 producetest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    op2::resetUnits();
+    const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
+    int bx = -1, by = -1;
+    for (int y = 3; y < H - 10 && bx < 0; ++y)
+        for (int x = 3; x < W - 16 && bx < 0; ++x) {
+            bool ok = true;
+            for (int dy = -1; dy <= 7 && ok; ++dy)
+                for (int dx = -2; dx <= 12 && ok; ++dx)
+                    if (!op2::g_gameMap.isPassable(op2::LOCATION{x + dx, y + dy})) ok = false;
+            if (ok) { bx = x; by = y; }
+        }
+    if (bx < 0) { std::printf("[Produce] sem area livre\n"); return 3; }
+    op2::Unit cc, tok, vf, sf;
+    op2::TethysGame::CreateUnit(cc, op2::mapCommandCenter, op2::LOCATION{bx, by}, 0);
+    op2::TethysGame::CreateUnit(tok, op2::mapTokamak, op2::LOCATION{bx + 3, by}, 0);
+    op2::TethysGame::CreateUnit(vf, op2::mapVehicleFactory, op2::LOCATION{bx + 1, by + 2}, 0);
+    op2::TethysGame::CreateUnit(sf, op2::mapStructureFactory, op2::LOCATION{bx + 5, by + 2}, 0);
+    op2::PlayerData& pd = op2::g_playerData[0];
+    pd.workers = 40; pd.scientists = 10;
+    op2::colonyMarkDirty(0);
+    for (int t = 0; t < 60; ++t) gs.onIdle(renderer, 0.2501f / 4.0f);
+    pd.ore = 5000; pd.rareOre = 1000;            // (a colônia limita pela capacidade a cada recálculo)
+    std::printf("[Produce] VF operando=%d SF operando=%d\n", op2::structureOperational(op2::g_units[vf.id()]),
+                op2::structureOperational(op2::g_units[sf.id()]));
+    std::printf("[Produce] sem pesquisa: VF %d itens, SF %d itens\n", (int)op2::factoryProduceList(vf.id()).size(),
+                (int)op2::factoryProduceList(sf.id()).size());
+    op2::TethysGame::setCheatFlag(1, 1);                     // dword_56DE5C: toda tecnologia
+    for (int f : {vf.id(), sf.id()}) {
+        const std::vector<uint32_t> items = op2::factoryProduceList(f);
+        std::printf("[Produce] %s (%d itens):\n", op2::unitTitle(op2::g_units[f]).c_str(), (int)items.size());
+        for (uint32_t it : items)
+            std::printf("    %-34s pagavel=%d  %s\n", op2::produceItemName(it).c_str(),
+                        (int)op2::produceAffordable(f, it), op2::produceItemCost(it, 0).c_str());
+    }
+    // Painel BUILD da Vehicle Factory, com o 2o item selecionado e o mouse no 3o.
+    gs.setSelection({vf.id()});
+    gs.pressCommand(op2::UC_BUILD);
+    const std::vector<uint32_t> vitems = op2::factoryProduceList(vf.id());
+    const int listY0 = op2::GameState::kMiniMapH + op2::GameState::kTabsH + 0x21 + 2;   // topo do quadro + 33 + 2
+    gs.setMouse(op2::Renderer::NATIVE_WIDTH - 216 + 40, listY0 + 2 * 15 + 5);
+    for (int i = 0; i < 4; ++i) gs.onIdle(renderer, 0.05f);
+    writeBmp32(prefix + "_list.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+    // Produz o Lynx/Laser (1o combo de chassi) pelo pacote 9.
+    uint32_t lynx = 0;
+    for (uint32_t it : vitems) if ((it & 0xFFFF) == op2::mapLynx) { lynx = it; break; }
+    const int ore0 = pd.ore, rare0 = pd.rareOre;
+    op2::sendProduce(vf.id(), lynx);
+    const op2::UnitRecord& v = op2::g_units[vf.id()];
+    std::printf("[Produce] pacote 9 %s: acao=%d minerio %d->%d raro %d->%d\n", op2::produceItemName(lynx).c_str(),
+                v.action, ore0, pd.ore, rare0, pd.rareOre);
+    int t = 0;
+    for (; t < 3000 && v.action == 9; ++t) {
+        gs.onIdle(renderer, 0.2501f / 4.0f);
+        if (t == 1) std::printf("[Produce] t=1 sub=%d duracao=%d\n", v.field22, v.produceTotal);
+    }
+    int made = 0;
+    for (int i = 1; i < (int)op2::g_units.size(); ++i) {
+        const op2::UnitRecord& r = op2::g_units[i];
+        if (r.id != -1 && r.type == op2::mapLynx && !(r.flags & op2::UNIT_DEAD)) {
+            made = i;
+            std::printf("[Produce] t=%d Lynx id=%d em (%d,%d) arma=0x%X rot=%d (fabrica em %d,%d)\n", t, i,
+                        r.pixelX >> 5, r.pixelY >> 5, r.cargo, r.rotation, v.pixelX >> 5, v.pixelY >> 5);
+        }
+    }
+    std::printf("[Produce] mensagem: %s\n", op2::statusBarText().c_str());
+    // Kit na Structure Factory: Tokamak.
+    pd.ore = 5000; pd.rareOre = 1000;
+    op2::sendProduce(sf.id(), 0x3A);
+    const op2::UnitRecord& s = op2::g_units[sf.id()];
+    for (t = 0; t < 6000 && s.action == 9; ++t) gs.onIdle(renderer, 0.2501f / 4.0f);
+    std::printf("[Produce] kit pronto em t=%d: baias %d %d %d %d %d %d | %s\n", t, s.bayType[0], s.bayType[1],
+                s.bayType[2], s.bayType[3], s.bayType[4], s.bayType[5], op2::statusBarText().c_str());
+    renderer.shutdown(); SDL_Quit();
+    return made ? 0 : 4;
 }
 
 // --colonytest <map>: base mínima (CC + Tokamak e Agridome encostados + Lab
@@ -1252,6 +1341,8 @@ int main(int argc, char* argv[]) {
             return runMissionTest(argv[i + 1], argv[i + 2], i + 3 < argc ? atoi(argv[i + 3]) : 200);
         if (std::strcmp(argv[i], "--combattest") == 0 && i + 2 < argc)
             return runCombatTest(argv[i + 1], argv[i + 2]);
+        if (std::strcmp(argv[i], "--producetest") == 0 && i + 2 < argc)
+            return runProduceTest(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--colonytest") == 0 && i + 1 < argc)
             return runColonyTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--movelog") == 0 && i + 1 < argc)

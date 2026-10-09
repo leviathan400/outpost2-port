@@ -8,6 +8,7 @@
 
 #include "tapp.h"
 #include "info_pane.h"
+#include "../game/production.h"
 #include "../gfx/renderer.h"
 #include "../gfx/font.h"
 #include "../res/res_manager.h"
@@ -717,8 +718,15 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
         int nx, ny; renderer.screenToNative(e.button.x, e.button.y, nx, ny);
         m_mouseNX = nx; m_mouseNY = ny;
         bool inView = nx < viewportW() && ny < Renderer::NATIVE_HEIGHT - kStatusBarH;
+        // Painel de produção: lista e setas (sub_4683F0 / sub_4683B0 / sub_430910-60).
+        bool paneHit = false;
+        if (e.button.button == SDL_BUTTON_LEFT && !inView && m_produce.isOpen()) {
+            bool buildNow = false;
+            paneHit = m_produce.click(infoPaneRect(), nx, ny, e.button.clicks >= 2, buildNow);
+            if (buildNow) produceBuildIt();
+        }
         // Botão de comando do quadro (IDLE / ACTIVATE → CommandPacket 0x12 / 0x13).
-        if (e.button.button == SDL_BUTTON_LEFT && !inView) {
+        if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit) {
             for (const TextButton& b : structureButtons())
                 if (nx >= b.l && nx < b.r && ny >= b.t && ny < b.b) { clickCommand(b.cmd); break; }
         }
@@ -798,7 +806,19 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
     if (m_selected.size() != 1) return out;
     const UnitRecord& u = g_units[m_selected[0]];
     if (u.id == -1 || !(u.flags & UNIT_BUILDING) || (u.owner & 0x0F) != TethysGame::localPlayer()) return out;
+    if (m_produce.isOpen()) {
+        // sub_4682C0: "&BUILD IT" (desabilitado até escolher um item pagável) e
+        // "&STATUS" — ambos voltam ao painel de status (dword_564A80).
+        TextButton b{};
+        b.cmd = kCmdBuildIt; b.label = "&BUILD IT"; b.tip = "&Build selected item"; b.hotkey = 'B';
+        b.disabled = !m_produce.buildEnabled();
+        out.push_back(b);
+        b = TextButton{};
+        b.cmd = kCmdStatus; b.label = "&STATUS"; b.tip = "Back to Structure &Status"; b.hotkey = 'S';
+        out.push_back(b);
+    }
     for (int cmd : uiCommandsStructure()) {
+        if (m_produce.isOpen()) break;
         if (out.size() == 4) break;
         if (!uiCommandAvailable(cmd, m_selected)) continue;
         const UiCommandDesc d = uiCommandDescribe(cmd, m_selected);
@@ -822,7 +842,25 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
     return out;
 }
 
+PaneRect GameState::infoPaneRect() const {
+    return PaneRect{viewportW() + 4, kMiniMapH + kTabsH, Renderer::NATIVE_WIDTH - 4, Renderer::NATIVE_HEIGHT - 2};
+}
+
+// BUILD IT (sub_467D50): item escolhido → sub_456B50 (pacote 9); volta ao status.
+void GameState::produceBuildIt() {
+    if (!m_produce.isOpen() || !m_produce.buildEnabled() || !m_produce.selected()) return;
+    sendProduce(m_produce.factory(), m_produce.selected());
+    m_produce.close();
+}
+
 void GameState::clickCommand(int cmd) {                  // vt[1] do comando
+    if (cmd == kCmdBuildIt) { produceBuildIt(); return; }
+    if (cmd == kCmdStatus) { m_produce.close(); return; }
+    if (cmd == UC_BUILD) {                                // sub_456250 → painel de produção
+        if (m_selected.size() == 1) m_produce.open(m_selected[0]);
+        m_targetCmd = -1;
+        return;
+    }
     switch (uiCommandClick(cmd, m_selected)) {
         case UiClick::TARGET: m_targetCmd = cmd; break;
         case UiClick::DONE: m_targetCmd = -1; break;
@@ -1013,9 +1051,12 @@ void GameState::renderPanel(Renderer& renderer) {
     }
 
     // --- Quadro de informação da seleção (classe de painel @off_4D5220) ---
-    const PaneRect pane{px0 + 4, kMiniMapH + kTabsH, VW - 4, VH - 2};
+    const PaneRect pane = infoPaneRect();
     renderer.fillRect(pane.l, pane.t, pane.r - pane.l, pane.b - pane.t, 0xFF000A00);
-    if (!m_selected.empty())
+    m_produce.update(m_selected);
+    if (m_produce.isOpen())
+        m_produce.draw(fb, VW, VH, pane, m_mouseNX, m_mouseNY);
+    else if (!m_selected.empty())
         drawUnitInfoPane(fb, VW, VH, pane, m_selected[0], static_cast<int>(m_selected.size()), me);
     else if (m_mission)
         drawObjectives(fb, VW, VH, pane.l, pane.t, pane.r, pane.b);
@@ -1065,8 +1106,9 @@ void GameState::renderPanel(Renderer& renderer) {
         }
         std::string t;
         for (char ch : b.label) if (ch != '&') t += ch;
+        // Desabilitado (BUILD IT sem item pagável): texto apagado (PROVISÓRIO).
         Font::drawTextCentered(fb, VW, VH, t, (b.l + b.r) / 2, b.t + (b.b - b.t) / 2 - 4,
-                               over ? 0xFFFF7050 : 0xFFE04030, false);
+                               b.disabled ? 0xFF603020 : over ? 0xFFFF7050 : 0xFFE04030, false);
     }
 
     // --- Barra de status sob a visão do mapa ---

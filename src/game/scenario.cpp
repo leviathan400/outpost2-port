@@ -17,7 +17,7 @@
 namespace op2 {
 
 // sub_4027D0: tipo de missão multiplayer (−8..−4)?
-static bool multiplayerMission() {
+bool multiplayerMission() {
     MissionScript* m = currentMission();
     return m && m->desc && m->desc->missionType <= -4 && m->desc->missionType >= -8;
 }

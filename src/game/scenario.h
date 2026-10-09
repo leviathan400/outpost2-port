@@ -24,6 +24,8 @@ struct MissionUnitRecord {
 };
 static_assert(sizeof(MissionUnitRecord) == 32, "UnitRecord da missao: 32 bytes");
 
+// sub_4027D0: tipo de missão multiplayer ([dword_4EFD24] em −8..−4)?
+bool multiplayerMission();
 // sub_4366D0: espiral a partir de (x,y) até uma célula livre e transitável p/
 // a classe de movimento do tipo.
 void findVehicleSpot(int type, int& x, int& y);
