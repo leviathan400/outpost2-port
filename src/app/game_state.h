@@ -11,6 +11,7 @@
 #include "produce_pane.h"
 #include "objectives_pane.h"
 #include "storage_pane.h"
+#include "research_pane.h"
 #include "game_frame.h"
 
 namespace op2 {
@@ -41,6 +42,7 @@ public:
     void setShowPassability(bool v) { m_showPassability = v; }
     void setSelection(const std::vector<int>& ids) { m_selected = ids; }
     void pressCommand(int cmd) { clickCommand(cmd); }      // testes: botão do painel
+    ResearchPane& researchPaneForTest() { return m_research; }
     void setMouse(int nx, int ny) { m_mouseNX = nx; m_mouseNY = ny; }
     void setCamera(int x, int y) { m_camX = x; m_camY = y; }
     int shakeX() const { return m_shakeX; }
@@ -98,6 +100,9 @@ private:
     ProducePane m_produce;
     ObjectivesPane m_objectives;   // aba de objetivos (sem seleção)
     StoragePane m_storage;         // STORAGE (baias)
+    ResearchPane m_research;       // ASSIGN (pesquisa do laboratório)
+    static constexpr int kCmdAssign = -5, kCmdCancel = -6, kCmdStart = -7, kCmdTopics = -8;
+    void closePanes() { m_produce.close(); m_storage.close(); m_research.close(); }
     static constexpr int kCmdGameOptions = -4;
     static constexpr int kCmdBuildIt = -2, kCmdStatus = -3;
     PaneRect infoPaneRect() const;

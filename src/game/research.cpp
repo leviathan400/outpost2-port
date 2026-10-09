@@ -285,6 +285,16 @@ void researchSetTechLevel(int player, int level) {           // sub_472F70
     }
 }
 
+bool researchAvailable(int player, int index) {             // sub_473300
+    if (index <= 0 || index >= techCount() || player < 0 || player > 6) return false;
+    const Tech& t = *s_techs[index];
+    const unsigned bit = 1u << player;
+    if (t.researched & bit) return false;
+    if (s_maxTechID < t.id) return false;
+    if ((g_playerData[player].isEden ? t.edenCost : t.plymouthCost) == -1) return false;
+    return requiresMet(t, bit);
+}
+
 bool researchHas(int player, int index) {                    // sub_472C50
     if (TethysGame::cheatFlag(1)) return true;
     if (index < 0 || index >= techCount() || player < 0 || player > 6) return false;

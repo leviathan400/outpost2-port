@@ -122,6 +122,8 @@ void moraleEnemyStructureKilled(int player, int type);
 void moraleStructureBuilt(int player, int type);
 // sub_44FA10: bens de consumo produzidos (0x6C/0x6D/0x6E → CONSUMER_GOODS_1/2/3).
 void moraleConsumerGoods(int player, int type);
+// sub_44F840: pesquisa concluída (NEW_TECH_BORN).
+void moraleNewTech(int player);
 
 // Produção exibida no painel (sub_45AEB0): energia (vt+0xD0) e comida (vt+0xD8).
 int structurePowerOutput(const UnitRecord& r);

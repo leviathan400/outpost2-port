@@ -136,6 +136,7 @@ struct UnitRecord {
     uint16_t ambientCursor = 0;    // +0x54 PRÉDIO: (contagem<<8)|índice em byte_4E4138
     int      extraWorkers = 0;     // +0x60 PRÉDIO: trabalhadores extras (University: alunos)
     int8_t   extraScientists = 0;  // +0x64 PRÉDIO: cientistas extras (labs: pesquisa)
+    int      labTopic = 0;         // +0x60 LAB: tópico em pesquisa (índice da tecnologia)
     int      mineYield = 0;        // +0x70 MINA: variante do veio (0/1/2) p/ estatísticas
     uint8_t  netConnected = 0;     // [+0x38]->+0x10: componente de rede ligado a um CC operando
     int      netComp = -1;         // [+0x38]: componente de rede (índice em ColonyState::components)

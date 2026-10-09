@@ -53,5 +53,8 @@ void researchStartGame();                              // sub_472C30
 void researchMarkComplete(int player, int index);      // sub_473830
 void researchSetTechLevel(int player, int level);      // sub_472F70(player, level*1000)
 bool researchHas(int player, int index);               // sub_472C50
+// sub_473300: o jogador pode pesquisar o tópico? (não pesquisado, dentro do
+// nível máximo, custo da facção != −1 e todos os pré-requisitos pesquisados)
+bool researchAvailable(int player, int index);
 
 } // namespace op2

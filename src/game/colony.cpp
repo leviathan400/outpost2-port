@@ -424,6 +424,10 @@ void moraleStructureLost(int player, int type) {             // sub_44F6C0
     if (player < 0 || player >= kMaxPlayers) return;
     g_colony[player].moraleEvents += s_me[isGoodBuilding(type) ? ME_GOOD_BUILD_DIES : ME_REG_BUILD_DIES];
 }
+void moraleNewTech(int player) {                             // sub_44F840
+    if (player < 0 || player >= kMaxPlayers) return;
+    g_colony[player].moraleEvents += s_me[ME_NEW_TECH_BORN];    // dword_4E1F48
+}
 void moraleConsumerGoods(int player, int type) {             // sub_44FA10
     if (player < 0 || player >= kMaxPlayers) return;
     // (com dword_56DE60 o original também anota em MORALE.LOG — depuração.)

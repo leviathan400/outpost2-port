@@ -33,6 +33,8 @@
 #include "game/production.h"
 #include "game/docking.h"
 #include "game/construction.h"
+#include "game/research_lab.h"
+#include "game/research.h"
 #include "gfx/artfile.h"
 #include "app/tapp.h"
 #include "app/game_state.h"
@@ -674,6 +676,57 @@ static int runProduceTest(const std::string& mapName, const std::string& prefix)
     }
     renderer.shutdown(); SDL_Quit();
     return made ? 0 : 4;
+}
+
+// --researchtest <dll> <prefix>: laboratório do jogador 0 da missão — lista de
+// tópicos, painel ASSIGN (modos 0 e 1, screenshots), pacote 0x16 e conclusão.
+static int runResearchTest(const std::string& dll, const std::string& prefix) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 researchtest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    for (int t = 0; t < 40; ++t) gs.onIdle(renderer, 0.2501f / 4.0f);
+    int lab = 0;
+    for (int i = 1; i < (int)op2::g_units.size() && !lab; ++i) {
+        const op2::UnitRecord& r = op2::g_units[i];
+        if (r.id != -1 && (r.owner & 0x0F) == 0 && op2::labResearchKind(r.type)) lab = i;
+    }
+    if (!lab) { std::printf("[Research] sem laboratorio\n"); return 3; }
+    const op2::UnitRecord& L = op2::g_units[lab];
+    std::printf("[Research] lab id=%d tipo 0x%X operando=%d cientistas livres=%d\n", lab, L.type,
+                (int)op2::structureOperational(L), op2::g_colony[0].scientistsLeft);
+    const std::vector<int> topics = op2::labTopics(lab);
+    for (int t : topics)
+        std::printf("    %-40s custo=%d max=%d\n", op2::techAt(t)->name.c_str(), op2::techAt(t)->plymouthCost,
+                    op2::techAt(t)->maxScientists);
+    if (topics.empty()) return 4;
+    gs.setSelection({lab});
+    gs.pressCommand(op2::UC_ASSIGN_SCIENTISTS);
+    for (int i = 0; i < 2; ++i) gs.onIdle(renderer, 0.05f);
+    writeBmp32(prefix + "_topics.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+    gs.researchPaneForTest().open(lab, 0);
+    // escolhe o 1o tópico (como o clique na lista) e passa ao modo 1
+    gs.researchPaneForTest().selectForTest(topics[0]);
+    gs.pressCommand(-5);   // kCmdAssign
+    for (int i = 0; i < 2; ++i) gs.onIdle(renderer, 0.05f);
+    writeBmp32(prefix + "_assign.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+    gs.researchPaneForTest().more();
+    gs.pressCommand(-7);   // kCmdStart
+    std::printf("[Research] START %s: lab acao=0x%X cientistas=%d\n", op2::techAt(topics[0])->name.c_str(), L.action,
+                (int)L.extraScientists);
+    int t = 0;
+    for (; t < 60000 && (L.action == 0x16); ++t) {
+        gs.onIdle(renderer, 0.2501f / 4.0f);
+        if (t == 3) std::printf("[Research] t=3 sub=0x%X pontos=%d\n", L.field22, L.field3C);
+    }
+    std::printf("[Research] t=%d fim: acao=0x%X pesquisado=%d | %s\n", t, L.action,
+                (int)op2::researchHas(0, topics[0]), op2::statusBarText().c_str());
+    renderer.shutdown(); SDL_Quit();
+    return 0;
 }
 
 // --colonytest <map>: base mínima (CC + Tokamak e Agridome encostados + Lab
@@ -1407,6 +1460,8 @@ int main(int argc, char* argv[]) {
             return runCombatTest(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--producetest") == 0 && i + 2 < argc)
             return runProduceTest(argv[i + 1], argv[i + 2]);
+        if (std::strcmp(argv[i], "--researchtest") == 0 && i + 2 < argc)
+            return runResearchTest(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--colonytest") == 0 && i + 1 < argc)
             return runColonyTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--movelog") == 0 && i + 1 < argc)

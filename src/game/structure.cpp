@@ -5,6 +5,7 @@
 #include "production.h"
 #include "docking.h"
 #include "construction.h"
+#include "research_lab.h"
 #include "scenario.h"
 #include "commands.h"
 #include "disaster.h"
@@ -340,6 +341,9 @@ static void actionTick(int id) {
             case ACT_DISMANTLE:                                 // case 34
                 r.field22 = 0; r.state34 = 0;
                 break;
+            case 0x16:                                          // pesquisa (pacote 0x16)
+                labResearchStart(id);
+                return;
             case 9:                                             // produzir (pacote 9)
                 factoryProduceStart(id);
                 return;
@@ -410,6 +414,9 @@ static void actionTick(int id) {
         case 9:                                                 // produto pronto
             factoryProduceFinish(id);
             break;
+        case 0x16:                                              // pesquisa concluída
+            labResearchFinish(id);
+            break;
         default: break;
     }
 }
@@ -428,6 +435,9 @@ static bool updateTick(int id) {
             return false;
         case 7:                           // loc_43E2D1: produção
             factoryProduceCountdown(id);
+            return false;
+        case 0x0C:                        // loc_43E37A: pesquisa
+            labResearchProgress(id);
             return false;
         case SUB_REMOVE:                  // loc_43E77B
             return true;

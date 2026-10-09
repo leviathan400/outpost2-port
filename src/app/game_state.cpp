@@ -726,6 +726,11 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
                 }
             }
         }
+        // Pesquisa (modo 1): L&ESS / &MORE.
+        if (!ctrl && m_research.isOpen() && m_research.mode() == 1) {
+            if (k == SDLK_e) m_research.less();
+            if (k == SDLK_m) m_research.more();
+        }
         // STORAGE: Alt+1..6 = botão da baia (sub_40A900(0x31 + i)).
         if ((SDL_GetModState() & KMOD_ALT) && k >= SDLK_1 && k <= SDLK_6 && m_storage.isOpen())
             m_storage.pressBay(static_cast<int>(k - SDLK_1));
@@ -755,6 +760,11 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
             bool buildNow = false;
             paneHit = m_produce.click(infoPaneRect(), nx, ny, e.button.clicks >= 2, buildNow);
             if (buildNow) produceBuildIt();
+        }
+        if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_research.isOpen()) {
+            bool dbl = false;
+            paneHit = m_research.click(kColX, kPaneWinY, infoPaneRect(), nx, ny, e.button.clicks >= 2, dbl);
+            if (dbl) clickCommand(kCmdAssign);
         }
         if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_storage.isOpen())
             paneHit = m_storage.click(kColX, kPaneWinY, nx, ny);
@@ -851,6 +861,26 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
     if (m_selected.size() != 1) return out;
     const UnitRecord& u = g_units[m_selected[0]];
     if (u.id == -1 || !(u.flags & UNIT_BUILDING) || (u.owner & 0x0F) != TethysGame::localPlayer()) return out;
+    if (m_research.isOpen()) {
+        // sub_46C520: modo 0 = ASSIGN (habilita com tópico) / CANCEL;
+        // modo 1 = START / TOPICS (ou STATUS se o lab já pesquisa).
+        TextButton b{};
+        if (m_research.mode() == 0) {
+            b.cmd = kCmdAssign; b.label = "&ASSIGN"; b.tip = "&Assign Scientists"; b.hotkey = 'A';
+            b.disabled = !m_research.assignEnabled();
+            out.push_back(b);
+            b = TextButton{};
+            b.cmd = kCmdCancel; b.label = "CA&NCEL"; b.tip = "Ca&ncel"; b.hotkey = 'N';
+            out.push_back(b);
+        } else {
+            b.cmd = kCmdStart; b.label = "ST&ART"; b.tip = "St&art Research"; b.hotkey = 'A';
+            out.push_back(b);
+            b = TextButton{};
+            if (m_research.researching()) { b.cmd = kCmdStatus; b.label = "&STATUS"; b.tip = "&Status"; b.hotkey = 'S'; }
+            else { b.cmd = kCmdTopics; b.label = "&TOPICS"; b.tip = "Research &Topics"; b.hotkey = 'T'; }
+            out.push_back(b);
+        }
+    }
     if (m_storage.isOpen()) {
         // sub_463170: só "&STATUS" (o LAUNCH do modo plataforma ainda não).
         TextButton b{};
@@ -869,7 +899,7 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
         out.push_back(b);
     }
     for (int cmd : uiCommandsStructure()) {
-        if (m_produce.isOpen() || m_storage.isOpen()) break;
+        if (m_produce.isOpen() || m_storage.isOpen() || m_research.isOpen()) break;
         if (out.size() == 4) break;
         if (!uiCommandAvailable(cmd, m_selected)) continue;
         const UiCommandDesc d = uiCommandDescribe(cmd, m_selected);
@@ -906,10 +936,21 @@ void GameState::produceBuildIt() {
 
 void GameState::clickCommand(int cmd) {                  // vt[1] do comando
     if (cmd == kCmdBuildIt) { produceBuildIt(); return; }
-    if (cmd == kCmdStatus) { m_produce.close(); m_storage.close(); return; }
+    if (cmd == kCmdStatus || cmd == kCmdCancel) { closePanes(); return; }
+    if (cmd == kCmdAssign) {                                // botão volta ao painel no modo 1
+        if (m_research.isOpen() && m_research.assignEnabled()) m_research.open(m_research.lab(), 1);
+        return;
+    }
+    if (cmd == kCmdTopics) { if (m_research.isOpen()) m_research.open(m_research.lab(), 0); return; }
+    if (cmd == kCmdStart) { m_research.start(); return; }
+    if (cmd == UC_ASSIGN_SCIENTISTS && m_selected.size() == 1) {   // sub_456340 → unk_569110
+        closePanes();
+        m_research.open(m_selected[0], g_units[m_selected[0]].action == 0x16 ? 1 : 0);
+        return;
+    }
     if (cmd == UC_STORAGE && m_selected.size() == 1) {      // loc_456640 → painel dword_5650F0
         if (StoragePane::supports(g_units[m_selected[0]].type)) {
-            m_produce.close();
+            closePanes();
             m_storage.open(m_selected[0]);
         } else {
             postMessage(-1, -1, "STORAGE deste predio ainda nao portado", 0);
@@ -918,7 +959,7 @@ void GameState::clickCommand(int cmd) {                  // vt[1] do comando
     }
     if (cmd == kCmdGameOptions) { postMessage(-1, -1, "Game Options ainda nao portado", 0); return; }
     if (cmd == UC_BUILD) {                                // sub_456250 → painel de produção
-        if (m_selected.size() == 1) { m_storage.close(); m_produce.open(m_selected[0]); }
+        if (m_selected.size() == 1) { closePanes(); m_produce.open(m_selected[0]); }
         m_targetCmd = -1;
         return;
     }
@@ -1118,7 +1159,10 @@ void GameState::renderPanel(Renderer& renderer) {
     // --- Quadro de informação da seleção (classe de painel @off_4D5220) ---
     m_produce.update(m_selected);
     m_storage.update(m_selected);
-    if (m_produce.isOpen())
+    m_research.update(m_selected);
+    if (m_research.isOpen())
+        m_research.draw(fb, VW, VH, kColX, kPaneWinY, pane, m_mouseNX, m_mouseNY);
+    else if (m_produce.isOpen())
         m_produce.draw(fb, VW, VH, pane, m_mouseNX, m_mouseNY);
     else if (m_storage.isOpen())
         m_storage.draw(fb, VW, VH, kColX, kPaneWinY, pane, kPaneBottom - 2 - 25, m_mouseNX, m_mouseNY);
