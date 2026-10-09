@@ -10,6 +10,7 @@
 #include "tapp.h"
 #include "info_pane.h"
 #include "../game/production.h"
+#include "../game/construction.h"
 #include "../gfx/renderer.h"
 #include "../gfx/font.h"
 #include "../res/res_manager.h"
@@ -521,6 +522,21 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         if (ucx < -16 || ucx > viewportW() + 16 || ucy < -16 || ucy > viewportH() + 16)
             continue;
         renderer.drawRect(ucx - 15, ucy - 15, 30, 30, 0xFF40FF40);   // verde (selecionado)
+    }
+    // Modo de posicionamento do kit (sub_451AC0 → sub_41B5B0: retângulo do
+    // tamanho da área no cursor). PROVISÓRIO: contorno da área (verde) e do
+    // anel de terraplanagem (cinza); o cursor real do original não foi portado.
+    if (m_targetCmd == UC_BUILD_KIT && !m_selected.empty()) {
+        int w = 0, h = 0;
+        const int mvx = m_mouseNX - kViewX, mvy = m_mouseNY - kViewY;
+        if (kitFootprint(m_selected[0], w, h) && mvx >= 0 && mvx < viewportW() && mvy >= 0 && mvy < viewportH()) {
+            int tx = (m_camX + mvx) / 32, ty = (m_camY + mvy) / 32, l, t, r, b;
+            if (g_gameMap.ok()) tx &= (g_gameMap.width() - 1);
+            kitPlacementRect(w, h, tx, ty, l, t, r, b);
+            const int sx = screenXOf((l + 1) * 32), sy = (t + 1) * 32 - m_camY;
+            renderer.drawRect(sx - 32, sy - 32, (w + 2) * 32, (h + 2) * 32, 0xFF909090);
+            renderer.drawRect(sx, sy, w * 32, h * 32, 0xFF40FF40);
+        }
     }
     // Caixa de arrasto (multi-seleção).
     if (m_dragging) {

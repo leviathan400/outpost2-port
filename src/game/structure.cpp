@@ -4,6 +4,8 @@
 #include "colony.h"
 #include "production.h"
 #include "docking.h"
+#include "construction.h"
+#include "scenario.h"
 #include "commands.h"
 #include "disaster.h"
 #include "messages.h"
@@ -161,7 +163,7 @@ void structureStartBuild(int id, int builderId) {
     int dur = (prod + ((prod >> 31) & 0x7F)) >> 7;
     dur += cv3C;
     // sub_4027D0: certos tipos de missão ([dword_4EFD24] em -8..-4) dividem por 2.
-    // O port ainda não tem descritor de missão → falso.
+    if (multiplayerMission()) dur = (dur - (dur >> 31)) >> 1;
     dur &= ~3;
     r.buildTime = dur;
     const int q = dur >> 2;
@@ -485,6 +487,7 @@ static bool vehicleTick(int id) {
     else if (!r.field20 && r.field22 == 0 && r.action == 0x24) weaponAttackTick(id);
     else if (!r.field20 && r.field22 == 0 && r.action == 0x25) weaponGuardTick(id);
     else if (!r.field20 && r.field22 == 0 && r.action == 0x28) unitPatrolTick(id);   // case 40
+    else if (!r.field20 && r.field22 == 0 && r.action == 6) conVecBuildTick(id);      // case 6
     {   // def_43B312: armado (0x10 xor 0x80), sem 0x20000/0x80000 → vt[5] da arma.
         UnitRecord& u = g_units[id];
         if ((((u.flags << 24) ^ (u.flags << 27)) & 0x80000000u) && !(u.flags & 0xA0000u))
@@ -498,6 +501,12 @@ static bool vehicleTick(int id) {
             return false;
         case 0x0D:                        // loc_43E424: troca de carga na doca
             dockTransferTick(id);
+            return false;
+        case 2:                           // loc_43DFD2: ConVec cria o prédio
+            conVecBuildStart(id);
+            return false;
+        case 0x0A:                        // loc_43E35C: espera a obra
+            if (--u.field3C == 0) { u.field23 = u.field22; u.field22 = 0; }
             return false;
         case SUB_REMOVE:
             return true;

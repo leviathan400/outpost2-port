@@ -32,6 +32,7 @@
 #include "game/structure_anim.h"
 #include "game/production.h"
 #include "game/docking.h"
+#include "game/construction.h"
 #include "gfx/artfile.h"
 #include "app/tapp.h"
 #include "app/game_state.h"
@@ -629,6 +630,47 @@ static int runProduceTest(const std::string& mapName, const std::string& prefix)
         std::printf("[Produce] apos %d: convec carga=0x%X sub=0x%X | baia0=0x%X\n", tt, c.cargo, c.field22, s.bayType[0]);
         for (int i = 0; i < 3; ++i) gs.onIdle(renderer, 0.05f);
         writeBmp32(prefix + "_storage2.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        // ConVec constrói o Tokamak (kit) num local livre perto dela.
+        int w = 0, h = 0;
+        op2::kitFootprint(cv.id(), w, h);
+        int px = -1, py = -1;
+        for (int r = 4; r < 20 && px < 0; ++r)
+            for (int oy = -r; oy <= r && px < 0; ++oy)
+                for (int ox = -r; ox <= r && px < 0; ++ox) {
+                    const int cxp = (c.pixelX >> 5) + ox, cyp = (c.pixelY >> 5) + oy;
+                    int l, t, rr, bb;
+                    op2::kitPlacementRect(w, h, cxp, cyp, l, t, rr, bb);
+                    bool ok = t >= 0 && bb < op2::g_gameMap.height();
+                    for (int yy = t; ok && yy <= bb; ++yy)
+                        for (int xx = l; ok && xx <= rr; ++xx)
+                            ok = op2::g_gameMap.isPassable(op2::LOCATION{xx, yy}) && !op2::g_gameMap.cellOccupant(xx, yy);
+                    if (ok) { px = cxp; py = cyp; }
+                }
+        std::printf("[Produce] obra: kit %dx%d em (%d,%d)\n", w, h, px, py);
+        gs.setSelection({cv.id()});
+        gs.pressCommand(op2::UC_BUILD_KIT);
+        gs.setCamera(px * 32 - 200, py * 32 - 200 < 0 ? 0 : py * 32 - 200);
+        gs.setMouse(op2::GameState::kViewX + 200 + 16, op2::GameState::kViewY + (py * 32 - 200 < 0 ? py * 32 : 200) + 16);
+        for (int i = 0; i < 2; ++i) gs.onIdle(renderer, 0.05f);
+        writeBmp32(prefix + "_place.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        op2::sendBuildKit({cv.id()}, px, py);
+        std::printf("[Produce] convec acao=%d sub=%d destino retangulo=(%d,%d)-(%d,%d)\n", c.action, c.field22,
+                    c.buildL, c.buildT, c.buildR, c.buildB);
+        int bld = 0, tb = 0;
+        for (; tb < 6000; ++tb) {
+            gs.onIdle(renderer, 0.2501f / 4.0f);
+            if (!bld)
+                for (int i = 1; i < (int)op2::g_units.size(); ++i)
+                    if (op2::g_units[i].id != -1 && op2::g_units[i].type == op2::mapTokamak && i != tok.id()) {
+                        bld = i;
+                        std::printf("[Produce] t=%d Tokamak criado id=%d em (%d,%d) acao=0x%X duracao=%d | convec sub=%d espera=%d\n",
+                                    tb, i, op2::g_units[i].pixelX >> 5, op2::g_units[i].pixelY >> 5, op2::g_units[i].action,
+                                    op2::g_units[i].buildTime, c.field22, c.field3C);
+                    }
+            if (bld && op2::g_units[bld].action == 0 && c.action == 0) break;
+        }
+        std::printf("[Produce] t=%d fim: tokamak acao=0x%X | convec acao=%d sub=%d carga=0x%X | %s\n", tb,
+                    bld ? op2::g_units[bld].action : -1, c.action, c.field22, c.cargo, op2::statusBarText().c_str());
     }
     renderer.shutdown(); SDL_Quit();
     return made ? 0 : 4;

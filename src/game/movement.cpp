@@ -159,7 +159,7 @@ static void stepUnit(int id) {
     // segura a posição), 0x28 (patrulhar) — sub_43ACA0 inicia todas em
     // loc_43ADAD — e a aproximação de atacar/guardar (0x24/0x25).
     const bool moving = u.action == CMD_MOVE || u.action == 0x26 || u.action == 0x24 ||
-                        u.action == 0x25 || u.action == 0x28;
+                        u.action == 0x25 || u.action == 0x28 || u.action == 6;   // 6: ConVec indo à obra
     if (u.field20 != 1 || !moving || !u.hasOrder || u.order.waypoints.empty()) {
         // Parado: sai do sub-estado de movimento (1). Os demais sub-estados
         // (espera 6, troca na doca 0x0D...) são do laço da unidade (sub_43DE50).
@@ -181,6 +181,7 @@ static void stepUnit(int id) {
         if (pfMoveCost(curX, curY) < 0) {                // sub_440550: chegou ao objetivo
             if (ob.curWaypoint == ob.countMinus1) {      // loc_44C1C0: fim da lista
                 u.field20 = 0; u.field22 = 0;
+                u.field23 = 1;                           // [+0x23] = sub-estado anterior (movimento)
                 u.routeDirs.clear(); u.routeIdx = 0;
                 // Patrulhar: a ordem fica; o tick da ação (case 40) recomeça.
                 if (u.action == 0x28) return;

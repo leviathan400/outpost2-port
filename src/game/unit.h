@@ -213,6 +213,8 @@ struct UnitRecord {
     uint8_t  bayBits = 0;          // +0x67 PRÉDIO: máscara por baia (troca com o bit 0x200000 do veículo)
     // Doca (veículo): baia da troca +0x5C e tick +0x5E (sub_415880); sub-estado 0x0D.
     int16_t  dockBay = 0;
+    // ConVec construindo (ação 6, sub_423310): retângulo área + anel em [+0x62..+0x69].
+    int16_t  buildL = 0, buildT = 0, buildR = 0, buildB = 0;
     int16_t  dockTick = 0;
     // Produção da fábrica (pacote 9 / ação 9): tipo em produção +0x60 (byte),
     // arma em +0x4F (kitWeapon), duração total +0x68, grupo de IA +0x6C.

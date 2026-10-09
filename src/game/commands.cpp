@@ -6,6 +6,7 @@
 
 #include "building_sheet.h"
 #include "colony.h"
+#include "construction.h"
 #include "command.h"
 #include "game_map.h"
 #include "player.h"
@@ -440,6 +441,7 @@ UiClick uiCommandClick(int cmd, const std::vector<int>& sel) {
         case UC_STAND_GROUND: return UiClick::TARGET;                   // sub_4518E0 (modo 7)
         case UC_ATTACK: return UiClick::TARGET;                         // sub_4530D0
         case UC_GUARD: return UiClick::TARGET;                          // sub_4534D0 (modo 7)
+        case UC_BUILD_KIT: return UiClick::TARGET;                      // sub_451AC0 (modo 2, área do kit)
         case UC_PATROL:                                                 // sub_4544F0 (modo 6)
             s_patrol = {};
             s_hint = "Set path to initial patrol point";
@@ -503,6 +505,7 @@ UiClick uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int til
         if (!ids.empty()) processAttackPacket(me, 0x24, ids, {}, tgt);
         return UiClick::DONE;
     }
+    if (cmd == UC_BUILD_KIT) { sendBuildKit(sel, tileX, tileY); return UiClick::DONE; }   // sub_451B30
     if (cmd == UC_GUARD) { processGuardTarget(TethysGame::localPlayer(), sel, tileX, tileY); return UiClick::DONE; }
     if (cmd != UC_MOVE) return UiClick::NOT_PORTED;
     // sub_451280: no chão → pacote 2 (mover). Garagem/doca (pacotes 3/4) pendentes.

@@ -51,6 +51,7 @@ add_executable(outpost2_modern
     src/game/commands.cpp
     src/game/production.cpp
     src/game/docking.cpp
+    src/game/construction.cpp
     src/app/produce_pane.cpp
     src/app/game_frame.cpp
     src/app/objectives_pane.cpp
