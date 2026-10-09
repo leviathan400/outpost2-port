@@ -344,6 +344,12 @@ static void actionTick(int id) {
             case 0x16:                                          // pesquisa (pacote 0x16)
                 labResearchStart(id);
                 return;
+            case 0x17:                                          // treino (pacote 0x17)
+                universityTrainStart(id);
+                return;
+            case 5:                                             // parar (pacote 5)
+                structureStopTick(id);
+                return;
             case 9:                                             // produzir (pacote 9)
                 factoryProduceStart(id);
                 return;
@@ -416,6 +422,9 @@ static void actionTick(int id) {
             break;
         case 0x16:                                              // pesquisa concluída
             labResearchFinish(id);
+            break;
+        case 0x17:                                              // treino concluído
+            universityTrainFinish(id);
             break;
         default: break;
     }

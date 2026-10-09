@@ -10,6 +10,7 @@
 #include "../game/colony.h"
 #include "../game/research.h"
 #include "../game/research_lab.h"
+#include "../game/building_sheet.h"
 #include "../game/structure.h"
 #include "../game/tethys_game.h"
 #include "../game/unit.h"
@@ -163,6 +164,91 @@ bool ResearchPane::click(int winL, int winT, const PaneRect& pane, int x, int y,
         dblAssign = dbl;                                 // sub_46C800
     }
     return true;
+}
+
+// ---- University ------------------------------------------------------------
+
+int StudentsPane::maxClass() const {
+    const UnitRecord& r = g_units[m_univ];
+    const StructSheetDesc* d = structSheet(r.type);
+    return d ? d->player[(r.owner >> 4) & 0x0F].productionCapacity : 0;   // bloco+0x34
+}
+
+void StudentsPane::open(int univId) {                   // sub_46E020
+    m_open = true; m_univ = univId;
+    const UnitRecord& r = g_units[univId];
+    if (r.action != 0x17) m_n = std::min(g_colony[r.owner & 0x0F].workersLeft, maxClass());   // dword_56E380
+}
+
+void StudentsPane::update(const std::vector<int>& sel) {
+    if (!m_open) return;
+    if (sel.size() != 1 || sel[0] != m_univ || g_units[m_univ].id == -1 || (g_units[m_univ].flags & UNIT_DEAD))
+        m_open = false;
+}
+
+void StudentsPane::more() {
+    const int cap = std::min(maxClass(), g_colony[g_units[m_univ].owner & 0x0F].workersLeft);
+    if (m_n < cap) ++m_n;
+}
+
+void StudentsPane::start() {
+    if (m_n > 0) sendTrain(m_univ, m_n);
+    m_open = false;
+}
+
+void StudentsPane::draw(uint32_t* fb, int fbW, int fbH, int winL, int winT, const PaneRect& pane, int mx, int my) const {
+    if (!m_open) return;
+    const UnitRecord& r = g_units[m_univ];
+    drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.t + 1, pane.r - 0xD, pane.t + 0x28},
+                   unitTitle(r) + "\nAssign Students To Class", 0xFF00FF00u);
+    const int avail = g_colony[r.owner & 0x0F].workersLeft;
+    const int n = std::min(m_n, avail);                  // sub_46E220 limita ao disponível
+    char buf[200];
+    std::snprintf(buf, sizeof(buf), "%s %s<R>%i" "\n" "<L>%s<R>%i" "\n" "<L>%s<R>%i", "Workers", "Available", avail,
+                  "Assigned To Training", n, "Maximum Class Size", maxClass());
+    drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.t + 1 + 0x28, pane.r - 0xD, pane.t + 0x87}, buf, 0xFF00FF00u);
+    auto textBtn = [&](int x, const char* label) {
+        const PaneRect b{winL + x, winT + 0x91, winL + x + 87, winT + 0x91 + 25};
+        const int anim = 0x98 - 0x65;
+        const bool over = mx >= b.l && mx < b.r && my >= b.t && my < b.b;
+        if (g_art.ok() && anim < g_art.numAnimations())
+            blitArtFrame(fb, fbW, fbH, anim, over ? 1 : 0, b.l, b.t, -1, pane.l, pane.t, pane.r, pane.b);
+        Font::drawTextCentered(fb, fbW, fbH, label, (b.l + b.r) / 2, b.t + 8, over ? 0xFFFF7050 : 0xFFE04030, false);
+    };
+    textBtn(9, "LESS");
+    textBtn(9 + 87, "MORE");
+}
+
+bool StudentsPane::click(int winL, int winT, int x, int y) {
+    if (!m_open) return false;
+    if (y < winT + 0x91 || y >= winT + 0x91 + 25) return false;
+    if (x >= winL + 9 && x < winL + 96) { less(); return true; }
+    if (x >= winL + 96 && x < winL + 183) { more(); return true; }
+    return false;
+}
+
+// ---- Confirmação -------------------------------------------------------------
+
+void ConfirmPane::update(const std::vector<int>& sel) {
+    if (m_open && (sel.size() != 1 || sel[0] != m_unit)) m_open = false;
+}
+
+void ConfirmPane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane) const {   // sub_45C0B0
+    if (!m_open) return;
+    // Quebra por palavras (sub_415EC0, centrado) na largura W − 0xE − 0xC.
+    const int width = pane.r - pane.l - 0xE - 0xC - 0xD;
+    std::string out, line, word;
+    auto flush = [&]() {
+        if (word.empty()) return;
+        const std::string cand = line.empty() ? word : line + " " + word;
+        if (!line.empty() && Font::getTextWidth(cand) > width) { out += "<X>" + line + "\n"; line = word; }
+        else line = cand;
+        word.clear();
+    };
+    for (char ch : m_msg) { if (ch == ' ') flush(); else word += ch; }
+    flush();
+    out += "<X>" + line;
+    drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.t + 0xD, pane.r - 0xE, pane.b}, out, 0xFFFF0000u);
 }
 
 } // namespace op2

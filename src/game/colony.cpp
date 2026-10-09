@@ -424,6 +424,11 @@ void moraleStructureLost(int player, int type) {             // sub_44F6C0
     if (player < 0 || player >= kMaxPlayers) return;
     g_colony[player].moraleEvents += s_me[isGoodBuilding(type) ? ME_GOOD_BUILD_DIES : ME_REG_BUILD_DIES];
 }
+void moralePhdTrained(int player, int n) {                   // sub_44F330
+    if (player < 0 || player >= kMaxPlayers) return;
+    if (g_playerData[player].scientists < 0x28) g_colony[player].moraleEvents += s_me[ME_PHD_TRAINED] * n;
+    else g_colony[player].moraleEvents += n;
+}
 void moraleNewTech(int player) {                             // sub_44F840
     if (player < 0 || player >= kMaxPlayers) return;
     g_colony[player].moraleEvents += s_me[ME_NEW_TECH_BORN];    // dword_4E1F48

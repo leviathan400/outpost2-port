@@ -25,4 +25,20 @@ void labResearchStart(int labId);                       // case 22 com [+0x20]
 void labResearchProgress(int labId);                    // sub-estado 0x0C
 void labResearchFinish(int labId);                      // jpt_43B312 case 22
 
+// Treino de cientistas na University (0x26):
+//   pacote 0x17 {univ, alunos} → sub_40E210 case 23: University parada e
+//   operando → ação 0x17, [+0x60] alunos, [+0x64] duração = coluna "Storage
+//   Capacity" do bloco (/2 em multiplayer)
+//   sub_43ACA0 case 23 ([+0x20]): sub-estado 7 (conta só operando) por [+0x64]
+//   jpt_43B312 case 23: trabalhadores −n, cientistas +n, "Scientist training
+//   completed", moral PHD_TRAINED (sub_44F330).
+void sendTrain(int univId, int students);
+bool processTrainPacket(int owner, int univId, int students);
+void universityTrainStart(int univId);
+void universityTrainFinish(int univId);
+
+// sub_43ACA0 case 5 num prédio: ação/sub-estado 0 e vt[0xC0] — labs
+// (sub_432060) zeram tópico e cientistas; University (sub_49D610) os alunos.
+void structureStopTick(int id);
+
 } // namespace op2

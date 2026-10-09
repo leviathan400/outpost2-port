@@ -51,4 +51,44 @@ private:
     int m_top = 0;
 };
 
+// Painel "Assign Students To Class" da University — porta dword_56AF28
+// (vtable off_4D5B78): sub_46E020 abre (turma máxima = bloco+0x34 "Production
+// Capacity"; alunos = mín(trabalhadores livres, máximo)); sub_46E220 desenha
+// "Workers Available / Assigned To Training / Maximum Class Size" em topo+0x28;
+// LESS/MORE (sub_46E4B0) em (9, 0x91) e (9+87, 0x91); botões START ("S&tart
+// Class", pacote 0x17) e STATUS (sub_46E0D0).
+class StudentsPane {
+public:
+    bool isOpen() const { return m_open; }
+    void open(int univId);
+    void close() { m_open = false; }
+    void update(const std::vector<int>& sel);
+    void draw(uint32_t* fb, int fbW, int fbH, int winL, int winT, const PaneRect& pane, int mx, int my) const;
+    bool click(int winL, int winT, int x, int y);
+    void less() { if (m_n > 1) --m_n; }
+    void more();
+    void start();
+private:
+    int maxClass() const;
+    bool m_open = false;
+    int m_univ = 0;
+    int m_n = 0;                 // [+0x2B0]
+};
+
+// Confirmação de comando — porta dword_564EA8 (vtable off_4D5310): mensagem
+// em vermelho centrada (sub_45C0B0) e os botões "&YES" / "&NO" (sub_45C200).
+// Usada pelos STOP de pesquisa/treino (sub_457FC0 / sub_458100).
+class ConfirmPane {
+public:
+    bool isOpen() const { return m_open; }
+    void open(int unitId, const std::string& msg) { m_open = true; m_unit = unitId; m_msg = msg; }
+    void close() { m_open = false; }
+    void update(const std::vector<int>& sel);
+    void draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane) const;
+private:
+    bool m_open = false;
+    int m_unit = 0;
+    std::string m_msg;
+};
+
 } // namespace op2

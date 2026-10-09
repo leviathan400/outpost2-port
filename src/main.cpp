@@ -718,6 +718,42 @@ static int runResearchTest(const std::string& dll, const std::string& prefix) {
     gs.pressCommand(-7);   // kCmdStart
     std::printf("[Research] START %s: lab acao=0x%X cientistas=%d\n", op2::techAt(topics[0])->name.c_str(), L.action,
                 (int)L.extraScientists);
+    // STOP com confirmação: abre, screenshot, YES → lab parado e sem cientistas; depois recomeça.
+    if (L.action != 0x16) op2::sendStartResearch(lab, topics[0], 1);
+    for (int i = 0; i < 20; ++i) gs.onIdle(renderer, 0.2501f / 4.0f);
+    std::printf("[Research] antes do STOP: lab acao=0x%X sub=0x%X cientistas=%d\n", L.action, L.field22, (int)L.extraScientists);
+    gs.setSelection({lab});
+    gs.pressCommand(op2::UC_STOP_RESEARCH);
+    for (int i = 0; i < 2; ++i) gs.onIdle(renderer, 0.05f);
+    writeBmp32(prefix + "_stop.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+    gs.pressCommand(-9);   // kCmdYes
+    for (int i = 0; i < 3; ++i) gs.onIdle(renderer, 0.2501f / 4.0f);
+    std::printf("[Research] STOP+YES: lab acao=0x%X sub=0x%X topico=%d cientistas=%d\n", L.action, L.field22, L.labTopic,
+                (int)L.extraScientists);
+    op2::sendStartResearch(lab, topics[0], 5);
+    // University: treino de alunos.
+    int uni = 0;
+    for (int i = 1; i < (int)op2::g_units.size() && !uni; ++i) {
+        const op2::UnitRecord& r = op2::g_units[i];
+        if (r.id != -1 && (r.owner & 0x0F) == 0 && r.type == 0x26) uni = i;
+    }
+    if (uni) {
+        const op2::UnitRecord& U = op2::g_units[uni];
+        gs.setSelection({uni});
+        gs.pressCommand(op2::UC_ASSIGN_STUDENTS);
+        for (int i = 0; i < 2; ++i) gs.onIdle(renderer, 0.05f);
+        writeBmp32(prefix + "_students.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        const int w0 = op2::g_playerData[0].workers, s0 = op2::g_playerData[0].scientists;
+        gs.pressCommand(-11);  // kCmdStartClass
+        if (U.action != 0x17) op2::sendTrain(uni, 2);   // sem trabalhadores livres: força uma turma de 2
+        std::printf("[Research] University id=%d operando=%d: acao=0x%X alunos=%d tempo=%d\n", uni,
+                    (int)op2::structureOperational(U), U.action, U.extraWorkers, U.trainTime);
+        int tu = 0;
+        for (; tu < 20000 && U.action == 0x17; ++tu) gs.onIdle(renderer, 0.2501f / 4.0f);
+        std::printf("[Research] treino fim t=%d: trabalhadores %d->%d cientistas %d->%d | %s\n", tu, w0,
+                    op2::g_playerData[0].workers, s0, op2::g_playerData[0].scientists, op2::statusBarText().c_str());
+        gs.setSelection({lab});
+    }
     int t = 0;
     for (; t < 60000 && (L.action == 0x16); ++t) {
         gs.onIdle(renderer, 0.2501f / 4.0f);

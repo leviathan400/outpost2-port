@@ -726,6 +726,11 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
                 }
             }
         }
+        // University: L&ESS / &MORE.
+        if (!ctrl && m_students.isOpen()) {
+            if (k == SDLK_e) m_students.less();
+            if (k == SDLK_m) m_students.more();
+        }
         // Pesquisa (modo 1): L&ESS / &MORE.
         if (!ctrl && m_research.isOpen() && m_research.mode() == 1) {
             if (k == SDLK_e) m_research.less();
@@ -761,6 +766,8 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
             paneHit = m_produce.click(infoPaneRect(), nx, ny, e.button.clicks >= 2, buildNow);
             if (buildNow) produceBuildIt();
         }
+        if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_students.isOpen())
+            paneHit = m_students.click(kColX, kPaneWinY, nx, ny);
         if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_research.isOpen()) {
             bool dbl = false;
             paneHit = m_research.click(kColX, kPaneWinY, infoPaneRect(), nx, ny, e.button.clicks >= 2, dbl);
@@ -861,6 +868,22 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
     if (m_selected.size() != 1) return out;
     const UnitRecord& u = g_units[m_selected[0]];
     if (u.id == -1 || !(u.flags & UNIT_BUILDING) || (u.owner & 0x0F) != TethysGame::localPlayer()) return out;
+    if (m_confirm.isOpen()) {                                // sub_45C200: &YES / &NO
+        TextButton b{};
+        b.cmd = kCmdYes; b.label = "&YES"; b.tip = "&YES: Confirm command"; b.hotkey = 'Y';
+        out.push_back(b);
+        b = TextButton{};
+        b.cmd = kCmdNo; b.label = "&NO"; b.tip = "&NO: Abort command"; b.hotkey = 'N';
+        out.push_back(b);
+    }
+    if (m_students.isOpen()) {                               // sub_46E0D0: S&TART / &STATUS
+        TextButton b{};
+        b.cmd = kCmdStartClass; b.label = "S&TART"; b.tip = "S&tart Class"; b.hotkey = 'T';
+        out.push_back(b);
+        b = TextButton{};
+        b.cmd = kCmdStatus; b.label = "&STATUS"; b.tip = "&Status"; b.hotkey = 'S';
+        out.push_back(b);
+    }
     if (m_research.isOpen()) {
         // sub_46C520: modo 0 = ASSIGN (habilita com tópico) / CANCEL;
         // modo 1 = START / TOPICS (ou STATUS se o lab já pesquisa).
@@ -899,7 +922,7 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
         out.push_back(b);
     }
     for (int cmd : uiCommandsStructure()) {
-        if (m_produce.isOpen() || m_storage.isOpen() || m_research.isOpen()) break;
+        if (anyPaneOpen()) break;
         if (out.size() == 4) break;
         if (!uiCommandAvailable(cmd, m_selected)) continue;
         const UiCommandDesc d = uiCommandDescribe(cmd, m_selected);
@@ -943,6 +966,25 @@ void GameState::clickCommand(int cmd) {                  // vt[1] do comando
     }
     if (cmd == kCmdTopics) { if (m_research.isOpen()) m_research.open(m_research.lab(), 0); return; }
     if (cmd == kCmdStart) { m_research.start(); return; }
+    if (cmd == kCmdStartClass) { m_students.start(); return; }
+    if (cmd == kCmdYes) {                                   // confirma: pacote 5 (parar) c/ a seleção
+        m_confirm.close();
+        uiCommandClick(UC_STOP, m_selected);
+        return;
+    }
+    if (cmd == kCmdNo) { m_confirm.close(); return; }
+    if (cmd == UC_ASSIGN_STUDENTS && m_selected.size() == 1) {      // sub_4564E0 → dword_56AF28
+        closePanes();
+        m_students.open(m_selected[0]);
+        return;
+    }
+    if ((cmd == UC_STOP_RESEARCH || cmd == UC_STOP_TRAINING) && m_selected.size() == 1) {   // sub_457FC0 / sub_458100
+        closePanes();
+        m_confirm.open(m_selected[0], cmd == UC_STOP_RESEARCH
+            ? "Stopping loses all research already done on this topic. Confirm your order to stop?"
+            : "Stopping loses all training already done with these workers. Confirm your order to stop?");
+        return;
+    }
     if (cmd == UC_ASSIGN_SCIENTISTS && m_selected.size() == 1) {   // sub_456340 → unk_569110
         closePanes();
         m_research.open(m_selected[0], g_units[m_selected[0]].action == 0x16 ? 1 : 0);
@@ -1160,7 +1202,13 @@ void GameState::renderPanel(Renderer& renderer) {
     m_produce.update(m_selected);
     m_storage.update(m_selected);
     m_research.update(m_selected);
-    if (m_research.isOpen())
+    m_students.update(m_selected);
+    m_confirm.update(m_selected);
+    if (m_confirm.isOpen())
+        m_confirm.draw(fb, VW, VH, pane);
+    else if (m_students.isOpen())
+        m_students.draw(fb, VW, VH, kColX, kPaneWinY, pane, m_mouseNX, m_mouseNY);
+    else if (m_research.isOpen())
         m_research.draw(fb, VW, VH, kColX, kPaneWinY, pane, m_mouseNX, m_mouseNY);
     else if (m_produce.isOpen())
         m_produce.draw(fb, VW, VH, pane, m_mouseNX, m_mouseNY);

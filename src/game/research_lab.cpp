@@ -2,6 +2,7 @@
 
 #include <cstdio>
 
+#include "building_sheet.h"
 #include "colony.h"
 #include "messages.h"
 #include "player.h"
@@ -127,6 +128,65 @@ void labResearchFinish(int labId) {                     // jpt_43B312 case 22
     colonyMarkDirty(p);
     r.labTopic = 0;                                      // [+0x60]
     r.action = 0;
+}
+
+bool processTrainPacket(int owner, int univId, int students) {   // case 23
+    if (!valid(univId)) return false;
+    UnitRecord& r = g_units[univId];
+    if (ownerOf(r) != (owner & 0x0F)) return false;
+    if (r.action != 0) return false;
+    if (!(r.flags & UNIT_DEAD) && structureOperational(r)) {
+        r.action = 0x17; r.field20 = 1; r.field3C = 0;
+        r.extraWorkers = static_cast<int8_t>(students);  // [+0x60] (byte com sinal)
+        const StructSheetDesc* d = structSheet(r.type);
+        int t = d ? d->player[(r.owner >> 4) & 0x0F].storageCapacity : 0;   // bloco+0x30
+        if (multiplayerMission()) t = (t - (t >> 31)) >> 1;
+        r.trainTime = t;                                 // [+0x64]
+    }
+    colonyMarkDirty(ownerOf(r));
+    return true;
+}
+
+void sendTrain(int univId, int students) {
+    processTrainPacket(TethysGame::localPlayer(), univId, students);
+}
+
+void universityTrainStart(int univId) {                 // sub_43ACA0 case 23 ([+0x20])
+    UnitRecord& r = g_units[univId];
+    r.field20 = 0;
+    if (r.field22 == 7) return;
+    r.field22 = 7;
+    r.field3C = TethysGame::cheatFlag(5) ? 1 : r.trainTime;   // dword_56DE6C
+}
+
+void universityTrainFinish(int univId) {                // jpt_43B312 case 23
+    UnitRecord& r = g_units[univId];
+    const int p = ownerOf(r);
+    // (som 0x3A p/ o jogador local)
+    if (p == TethysGame::localPlayer())
+        postMessage(r.pixelX + 16, r.pixelY + 16, "Scientist training completed", 0x3A);
+    const int n = r.extraWorkers;
+    g_playerData[p].workers -= n;                        // dword_56E370
+    g_playerData[p].scientists += n;                     // dword_56E374
+    moralePhdTrained(p, n);                              // sub_44F330
+    r.extraWorkers = 0;
+    colonyMarkDirty(p);
+    r.action = 0;
+}
+
+void structureStopTick(int id) {                        // sub_43ACA0 case 5 (prédio)
+    UnitRecord& r = g_units[id];
+    r.action = 0;
+    r.field22 = 0;
+    if (labResearchKind(r.type)) {                       // sub_432060
+        r.extraScientists = 0;
+        r.labTopic = 0;
+        colonyMarkDirty(ownerOf(r));
+    } else if (r.type == 0x26) {                         // sub_49D610 (University)
+        r.extraWorkers = 0;
+        colonyMarkDirty(ownerOf(r));
+    }
+    r.field20 = 0;
 }
 
 } // namespace op2

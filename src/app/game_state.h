@@ -101,8 +101,16 @@ private:
     ObjectivesPane m_objectives;   // aba de objetivos (sem seleção)
     StoragePane m_storage;         // STORAGE (baias)
     ResearchPane m_research;       // ASSIGN (pesquisa do laboratório)
+    StudentsPane m_students;       // ASSIGN (alunos da University)
+    ConfirmPane m_confirm;         // confirmação dos STOP
     static constexpr int kCmdAssign = -5, kCmdCancel = -6, kCmdStart = -7, kCmdTopics = -8;
-    void closePanes() { m_produce.close(); m_storage.close(); m_research.close(); }
+    static constexpr int kCmdYes = -9, kCmdNo = -10, kCmdStartClass = -11;
+    void closePanes() {
+        m_produce.close(); m_storage.close(); m_research.close(); m_students.close(); m_confirm.close();
+    }
+    bool anyPaneOpen() const {
+        return m_produce.isOpen() || m_storage.isOpen() || m_research.isOpen() || m_students.isOpen() || m_confirm.isOpen();
+    }
     static constexpr int kCmdGameOptions = -4;
     static constexpr int kCmdBuildIt = -2, kCmdStatus = -3;
     PaneRect infoPaneRect() const;

@@ -124,6 +124,8 @@ void moraleStructureBuilt(int player, int type);
 void moraleConsumerGoods(int player, int type);
 // sub_44F840: pesquisa concluída (NEW_TECH_BORN).
 void moraleNewTech(int player);
+// sub_44F330: n cientistas formados (PHD_TRAINED por cientista, ou +n com >= 40 cientistas).
+void moralePhdTrained(int player, int n);
 
 // Produção exibida no painel (sub_45AEB0): energia (vt+0xD0) e comida (vt+0xD8).
 int structurePowerOutput(const UnitRecord& r);
