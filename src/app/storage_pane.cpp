@@ -5,6 +5,7 @@
 #include "../gfx/art_blit.h"
 #include "../gfx/artfile.h"
 #include "../gfx/font.h"
+#include "../gfx/ui_font.h"
 #include "../game/building_sheet.h"
 #include "../game/colony.h"
 #include "../game/docking.h"
@@ -69,7 +70,7 @@ static std::string wrapText(const std::string& text, int width) {
     auto flushWord = [&]() {
         if (word.empty()) return;
         const std::string cand = line.empty() ? word : line + " " + word;
-        if (!line.empty() && Font::getTextWidth(cand) > width) { out += line + "\n"; line = word; }
+        if (!line.empty() && UiFont::width(cand) > width) { out += line + "\n"; line = word; }
         else line = cand;
         word.clear();
     };
@@ -88,7 +89,7 @@ void StoragePane::draw(uint32_t* fb, int fbW, int fbH, int winL, int winT, const
     const UnitRecord& b = g_units[m_bld];
     // Título (unk_578F08, verde).
     drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.t + 1, pane.r - 0xD, pane.t + 20},
-                   unitTitle(b), 0xFF00FF00u);
+                   unitTitle(b), 0xFF00FF00u, true);
     const int n = bays();
     for (int i = 0; i < n; ++i) {
         const PaneRect r = bayRect(winL, winT, i);
@@ -101,10 +102,10 @@ void StoragePane::draw(uint32_t* fb, int fbW, int fbH, int winL, int winT, const
         // Nome sob o ícone (x .. x+0x57, y = 0x64 + 0x3A*k) e "Alt+N" à direita.
         const int lx = winL + (i < 3 ? 7 : 0x61), ly = winT + 0x64 + 0x3A * (i % 3);
         std::string name = bayName(b, i);
-        while (!name.empty() && Font::getTextWidth(name) > 0x55) name.pop_back();
-        Font::drawTextCentered(fb, fbW, fbH, name, lx + 0x57 / 2, ly, 0xFF00FF00u, false);
+        while (!name.empty() && UiFont::width(name) > 0x55) name.pop_back();
+        UiFont::drawCentered(fb, fbW, fbH, name, lx + 0x57 / 2, ly, 0xFF00FF00u, false);
         const std::string alt = "Alt+" + std::to_string(i + 1);
-        Font::drawTextCentered(fb, fbW, fbH, alt, lx + (0x39 + 0x57) / 2, ly - 0x1E + 8, 0xFF00FF00u, false);
+        UiFont::drawCentered(fb, fbW, fbH, alt, lx + (0x39 + 0x57) / 2, ly - 0x1E + 8, 0xFF00FF00u, false);
     }
     // Caixa da doca (0x33 acima do botão STATUS) e o texto à direita.
     const int by = statusTop - 0x33, bx = winL + 0xD;

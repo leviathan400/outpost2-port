@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "../gfx/font.h"
+#include "../gfx/ui_font.h"
 #include "../gfx/art_blit.h"
 #include "../game/unit.h"
 #include "../game/player.h"
@@ -28,10 +29,10 @@ static uint32_t rgb555(uint16_t c) {
     return 0xFF000000u | (r << 16) | (g << 8) | b;
 }
 
-int markupLineHeight() { return Font::getTextHeight() + 3; }
+int markupLineHeight() { return UiFont::lineHeight(); }   // sub_416A00: tmHeight
 
 int drawMarkupText(uint32_t* fb, int fbW, int fbH, const PaneRect& rc,
-                   const std::string& text, uint32_t defaultColor) {
+                   const std::string& text, uint32_t defaultColor, bool bold) {
     struct Seg { std::string s; uint32_t color; int align; };   // 0 esq, 1 centro, 2 dir
     const int lh = markupLineHeight();
     int y = rc.t;
@@ -62,23 +63,23 @@ int drawMarkupText(uint32_t* fb, int fbW, int fbH, const PaneRect& rc,
         flush();
         int xl = rc.l, wl = 0, wr = 0, wc = 0;
         for (const auto& s : segs) {
-            if (s.align == 0) wl += Font::getTextWidth(s.s);
-            if (s.align == 2) wr += Font::getTextWidth(s.s);
-            if (s.align == 1) wc += Font::getTextWidth(s.s);
+            if (s.align == 0) wl += UiFont::width(s.s, bold);
+            if (s.align == 2) wr += UiFont::width(s.s, bold);
+            if (s.align == 1) wc += UiFont::width(s.s, bold);
         }
         // sub_416650 quebra a linha quando não cabe: o trecho à direita que
         // colidiria com o da esquerda desce p/ a linha seguinte.
-        if (wl && wr && rc.l + wl + Font::getTextWidth(" ") > rc.r - wr) {
+        if (wl && wr && rc.l + wl + UiFont::width(" ", bold) > rc.r - wr) {
             for (const auto& s : segs)
-                if (s.align == 0) { Font::drawText(fb, fbW, fbH, s.s, xl, y, s.color, false); xl += Font::getTextWidth(s.s); }
+                if (s.align == 0) { UiFont::draw(fb, fbW, fbH, s.s, xl, y, s.color, bold); xl += UiFont::width(s.s, bold); }
             y += lh;
             for (auto& s : segs) if (s.align == 0) s.s.clear();
         }
         int xr = rc.r - wr, xc = (rc.l + rc.r - wc) / 2;
         for (const auto& s : segs) {
             int& x = (s.align == 0) ? xl : (s.align == 1) ? xc : xr;
-            Font::drawText(fb, fbW, fbH, s.s, x, y, s.color, false);
-            x += Font::getTextWidth(s.s);
+            UiFont::draw(fb, fbW, fbH, s.s, x, y, s.color, bold);
+            x += UiFont::width(s.s, bold);
         }
         y += lh;
         if (nl == std::string::npos) break;
@@ -215,7 +216,7 @@ void drawUnitInfoPane(uint32_t* fb, int fbW, int fbH, const PaneRect& pane,
         std::snprintf(title, sizeof(title), "%s", unitTitle(r).c_str());   // vt+0x40
     }
     PaneRect trc{L, titleTop, R, titleBottom};
-    drawMarkupText(fb, fbW, fbH, trc, title, kTextGreen);   // fonte do título unk_578F08: verde
+    drawMarkupText(fb, fbW, fbH, trc, title, kTextGreen, true);   // fonte do título unk_578F08: verde
     // Separador (anim 0x9B → real 0x36) sob o título.
     blitArtFrame(fb, fbW, fbH, 0x9B - 0x65, 0, L - 10, titleBottom - 3, -1,
                  pane.l, pane.t, pane.r, pane.b);

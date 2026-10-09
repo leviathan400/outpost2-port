@@ -58,6 +58,7 @@ add_executable(outpost2_modern
     src/app/objectives_pane.cpp
     src/app/storage_pane.cpp
     src/app/research_pane.cpp
+    src/gfx/ui_font.cpp
     src/game/unit_names.cpp
     src/mission/pe_loader.cpp
     src/mission/mission.cpp

@@ -7,6 +7,7 @@
 #include "../gfx/art_blit.h"
 #include "../gfx/artfile.h"
 #include "../gfx/font.h"
+#include "../gfx/ui_font.h"
 #include "../game/colony.h"
 #include "../game/research.h"
 #include "../game/research_lab.h"
@@ -55,7 +56,7 @@ std::vector<std::string> ResearchPane::teaserLines(int width) const {   // sub_4
     auto flush = [&]() {
         if (word.empty()) return;
         const std::string cand = line.empty() ? word : line + " " + word;
-        if (!line.empty() && Font::getTextWidth(cand) > width) { out.push_back(line); line = word; }
+        if (!line.empty() && UiFont::width(cand) > width) { out.push_back(line); line = word; }
         else line = cand;
         word.clear();
     };
@@ -78,7 +79,7 @@ void ResearchPane::draw(uint32_t* fb, int fbW, int fbH, int winL, int winT, cons
     if (m_mode == 0) {
         const ListBoxLayout L = topicsLayout(pane);
         drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.t + 2, pane.r - 0xE, L.list.t},
-                       labName + "\nAvailable Topics", 0xFF00FF00u);
+                       labName + "\nAvailable Topics", 0xFF00FF00u, true);
         drawListBoxFrame(fb, fbW, fbH, L);
         auto rgb555 = [](uint16_t c) {
             return 0xFF000000u | (uint32_t(((c >> 10) & 31) << 3) << 16) | (uint32_t(((c >> 5) & 31) << 3) << 8) | uint32_t((c & 31) << 3);
@@ -94,8 +95,8 @@ void ResearchPane::draw(uint32_t* fb, int fbW, int fbH, int winL, int winT, cons
                     }
             }
             std::string name = techAt(topic) ? techAt(topic)->name : "";
-            while (!name.empty() && Font::getTextWidth(name) > L.list.r - L.list.l - 8) name.pop_back();
-            Font::drawText(fb, fbW, fbH, name, L.list.l + 4, y + 1, 0xFF00FF00u, false);
+            while (!name.empty() && UiFont::width(name) > L.list.r - L.list.l - 8) name.pop_back();
+            UiFont::draw(fb, fbW, fbH, name, L.list.l + 4, y + 1, 0xFF00FF00u, false);
         }
         drawListBoxArrows(fb, fbW, fbH, L, pane, m_top > 0, m_top + L.rows < static_cast<int>(m_topics.size()), mx, my);
         return;
@@ -103,7 +104,7 @@ void ResearchPane::draw(uint32_t* fb, int fbW, int fbH, int winL, int winT, cons
     // Modo 1.
     const ListBoxLayout L = teaserLayout(pane);
     drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.t + 2, pane.r - 0xE, pane.t + 0x28},
-                   labName + "\nAssign Scientists", 0xFF00FF00u);
+                   labName + "\nAssign Scientists", 0xFF00FF00u, true);
     const Tech* t = techAt(m_topic);
     const int avail = g_colony[g_units[m_lab].owner & 0x0F].scientistsLeft;
     char buf[200];
@@ -116,14 +117,15 @@ void ResearchPane::draw(uint32_t* fb, int fbW, int fbH, int winL, int winT, cons
         const bool over = mx >= r.l && mx < r.r && my >= r.t && my < r.b;
         if (g_art.ok() && anim < g_art.numAnimations())
             blitArtFrame(fb, fbW, fbH, anim, over ? 1 : 0, r.l, r.t, -1, pane.l, pane.t, pane.r, pane.b);
-        Font::drawTextCentered(fb, fbW, fbH, label, (r.l + r.r) / 2, r.t + 8, over ? 0xFFFF7050 : 0xFFE04030, false);
+        UiFont::drawCentered(fb, fbW, fbH, label, (r.l + r.r) / 2, r.t + 8, over ? 0xFFFF7050 : 0xFFE04030, false);
     };
     textBtn(lessRect(winL, winT), "LESS");
     textBtn(moreRect(winL, winT), "MORE");
     drawListBoxFrame(fb, fbW, fbH, L);
     const std::vector<std::string> lines = teaserLines(L.list.r - L.list.l - 8);
     for (int i = 0; i < L.rows && m_top + i < static_cast<int>(lines.size()); ++i)
-        Font::drawText(fb, fbW, fbH, lines[m_top + i], L.list.l + 4, L.list.t + 3 + i * L.lineH, 0xFF00FF00u, false);
+        UiFont::draw(fb, fbW, fbH, lines[m_top + i], L.list.l + 4, L.list.t + 3 + i * L.lineH, 0xFF00FF00u, false,
+                     L.list.l + 1, L.list.t + 1, L.list.r - 1, L.list.b - 1);   // recortado pela lista
     drawListBoxArrows(fb, fbW, fbH, L, pane, m_top > 0, m_top + L.rows < static_cast<int>(lines.size()), mx, my);
 }
 
@@ -200,7 +202,7 @@ void StudentsPane::draw(uint32_t* fb, int fbW, int fbH, int winL, int winT, cons
     if (!m_open) return;
     const UnitRecord& r = g_units[m_univ];
     drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.t + 1, pane.r - 0xD, pane.t + 0x28},
-                   unitTitle(r) + "\nAssign Students To Class", 0xFF00FF00u);
+                   unitTitle(r) + "\nAssign Students To Class", 0xFF00FF00u, true);
     const int avail = g_colony[r.owner & 0x0F].workersLeft;
     const int n = std::min(m_n, avail);                  // sub_46E220 limita ao disponível
     char buf[200];
@@ -213,7 +215,7 @@ void StudentsPane::draw(uint32_t* fb, int fbW, int fbH, int winL, int winT, cons
         const bool over = mx >= b.l && mx < b.r && my >= b.t && my < b.b;
         if (g_art.ok() && anim < g_art.numAnimations())
             blitArtFrame(fb, fbW, fbH, anim, over ? 1 : 0, b.l, b.t, -1, pane.l, pane.t, pane.r, pane.b);
-        Font::drawTextCentered(fb, fbW, fbH, label, (b.l + b.r) / 2, b.t + 8, over ? 0xFFFF7050 : 0xFFE04030, false);
+        UiFont::drawCentered(fb, fbW, fbH, label, (b.l + b.r) / 2, b.t + 8, over ? 0xFFFF7050 : 0xFFE04030, false);
     };
     textBtn(9, "LESS");
     textBtn(9 + 87, "MORE");
@@ -241,7 +243,7 @@ void ConfirmPane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane) con
     auto flush = [&]() {
         if (word.empty()) return;
         const std::string cand = line.empty() ? word : line + " " + word;
-        if (!line.empty() && Font::getTextWidth(cand) > width) { out += "<X>" + line + "\n"; line = word; }
+        if (!line.empty() && UiFont::width(cand) > width) { out += "<X>" + line + "\n"; line = word; }
         else line = cand;
         word.clear();
     };

@@ -13,6 +13,7 @@
 #include "../game/construction.h"
 #include "../gfx/renderer.h"
 #include "../gfx/font.h"
+#include "../gfx/ui_font.h"
 #include "../res/res_manager.h"
 #include "../core/config.h"
 #include "../game/tethys_game.h"
@@ -1238,11 +1239,11 @@ void GameState::renderPanel(Renderer& renderer) {
         if (hover) {
             std::string t;
             for (char ch : hover->tip) if (ch != '&') t += ch;
-            const int w = Font::getTextWidth(t) + 8, h = 14;
+            const int w = UiFont::width(t) + 8, h = 14;
             int tx = std::min(m_mouseNX + 4, VW - w - 2), ty = m_mouseNY - h - 4;
             renderer.fillRect(tx, ty, w, h, 0xFF101810);
             renderer.drawRect(tx, ty, w, h, 0xFF40C040);
-            Font::drawText(fb, VW, VH, t, tx + 4, ty + 2, 0xFFE0FFE0, false);
+            UiFont::draw(fb, VW, VH, t, tx + 4, ty + 2, 0xFFE0FFE0, false);
         }
     }
     // Botões de texto do prédio: arte 0x98 (87x25) / 0x97 larga (175x25), frame 0
@@ -1257,7 +1258,7 @@ void GameState::renderPanel(Renderer& renderer) {
         std::string t;
         for (char ch : b.label) if (ch != '&') t += ch;
         // Desabilitado (BUILD IT sem item pagável): texto apagado (PROVISÓRIO).
-        Font::drawTextCentered(fb, VW, VH, t, (b.l + b.r) / 2, b.t + (b.b - b.t) / 2 - 4,
+        UiFont::drawCentered(fb, VW, VH, t, (b.l + b.r) / 2, b.t + (b.b - b.t) / 2 - 4,
                                b.disabled ? 0xFF603020 : over ? 0xFFFF7050 : 0xFFE04030, false);
     }
 
@@ -1272,12 +1273,12 @@ void GameState::renderPanel(Renderer& renderer) {
         char num[16];
         m_frame.drawPiece(fb, VW, VH, 23, oreX, y1 + 2);                 // 211 (comum)
         std::snprintf(num, sizeof(num), "%d", pd.ore);
-        Font::drawText(fb, VW, VH, num, oreX + m_frame.width(23) + 2, y1, 0xFFFFFFFF, false);
+        UiFont::draw(fb, VW, VH, num, oreX + m_frame.width(23) + 2, y1, 0xFFFFFFFF, false);
         // [+0xA8]: linha do minério raro. PROVISÓRIO: mostrada quando há raro.
         if (pd.rareOre > 0) {
             m_frame.drawPiece(fb, VW, VH, 24, oreX, y2 + 2);             // 210 (raro)
             std::snprintf(num, sizeof(num), "%d", pd.rareOre);
-            Font::drawText(fb, VW, VH, num, oreX + m_frame.width(24) + 2, y2, 0xFFFFFFFF, false);
+            UiFont::draw(fb, VW, VH, num, oreX + m_frame.width(24) + 2, y2, 0xFFFFFFFF, false);
         }
         // Texto (linha 2): coordenadas do tile sob o mouse e a última mensagem
         // (sub_49BF10) ou a ajuda do modo de mira (unk_575570). PROVISÓRIO: a
@@ -1288,12 +1289,12 @@ void GameState::renderPanel(Renderer& renderer) {
             int tx = (m_camX + mvx) / 32, ty = (m_camY + mvy) / 32;
             if (g_gameMap.ok()) tx &= (g_gameMap.width() - 1);
             char c[32]; std::snprintf(c, sizeof(c), "%d,%d", tx + 1, ty + 1);
-            Font::drawText(fb, VW, VH, c, tx0, y1, 0xFFE0E0E0, false);
+            UiFont::draw(fb, VW, VH, c, tx0, y1, 0xFFE0E0E0, false);
         }
         const std::string& msg = (m_targetCmd >= 0 && !uiCommandHint().empty()) ? uiCommandHint() : statusBarText();
         std::string clipped = msg;
-        while (!clipped.empty() && tx0 + Font::getTextWidth(clipped) > oreX - 8) clipped.pop_back();
-        Font::drawText(fb, VW, VH, clipped, tx0, y2, 0xFFE8E8E8, false);
+        while (!clipped.empty() && tx0 + UiFont::width(clipped) > oreX - 8) clipped.pop_back();
+        UiFont::draw(fb, VW, VH, clipped, tx0, y2, 0xFFE8E8E8, false);
     }
 }
 

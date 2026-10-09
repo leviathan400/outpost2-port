@@ -6,6 +6,7 @@
 #include "../gfx/art_blit.h"
 #include "../gfx/artfile.h"
 #include "../gfx/font.h"
+#include "../gfx/ui_font.h"
 #include "../game/production.h"
 #include "../game/structure.h"
 #include "../game/tethys_game.h"
@@ -126,7 +127,7 @@ void ProducePane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, int
     const Layout L = layout(pane);
     // Título (sub_468320 → sub_459B60): nome da fábrica (vt+0x40) e a instrução.
     std::string title = unitTitle(g_units[m_factory]) + "\nSelect Item to Produce";
-    drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.t + 2, pane.r - 0xE, L.list.t}, title, 0xFF00FF00u);   // unk_578F08: verde
+    drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.t + 2, pane.r - 0xE, L.list.t}, title, 0xFF00FF00u, true);   // unk_578F08: verde
     // Lista (sub_430400): moldura 0x4E0, fundo, item selecionado com fundo
     // 0x1CE7 e moldura 0x3DEF; texto na fonte do painel (verde).
     auto fill = [&](int x, int y, int w, int h, uint32_t c) {
@@ -146,7 +147,7 @@ void ProducePane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, int
             fill(L.list.l + 2, y, L.list.r - L.list.l - 4, L.lineH, rgb555(0x1CE7));
             frame(L.list.l + 2, y, L.list.r - L.list.l - 4, L.lineH, rgb555(0x3DEF));
         }
-        Font::drawText(fb, fbW, fbH, produceItemName(item), L.list.l + 4, y + 1, 0xFF00FF00u, false);
+        UiFont::draw(fb, fbW, fbH, produceItemName(item), L.list.l + 4, y + 1, 0xFF00FF00u, false);
         if (mx >= L.list.l && mx < L.list.r && my >= y && my < y + L.lineH) hoverItem = &m_items[m_top + i];
     }
     const bool canUp = m_top > 0, canDown = m_top + L.rows < static_cast<int>(m_items.size());
@@ -154,11 +155,11 @@ void ProducePane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, int
     // Dica com o custo (provedor vt6 sub_4686E0). PROVISÓRIO: caixa junto ao cursor.
     if (hoverItem) {
         const std::string t = produceItemCost(*hoverItem, TethysGame::localPlayer());
-        const int w = Font::getTextWidth(t) + 8, h = 14;
+        const int w = UiFont::width(t) + 8, h = 14;
         const int tx = std::max(2, std::min(mx + 4, fbW - w - 2)), ty = my - h - 4;
         fill(tx, ty, w, h, 0xFF101810u);
         frame(tx, ty, w, h, 0xFF40C040u);
-        Font::drawText(fb, fbW, fbH, t, tx + 4, ty + 2, 0xFFE0FFE0u, false);
+        UiFont::draw(fb, fbW, fbH, t, tx + 4, ty + 2, 0xFFE0FFE0u, false);
     }
 }
 

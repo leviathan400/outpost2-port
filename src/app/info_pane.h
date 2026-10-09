@@ -16,8 +16,9 @@ struct PaneRect { int l, t, r, b; };
 // Texto marcado do renderizador unk_5772A8 (sub_416650/sub_416A00): '\n'
 // quebra linha; <L> alinha à esquerda, <R> à direita, <X> centraliza; <Cn>
 // troca a cor (n = 0..5). Retorna a altura usada.
+// bold = fonte de título (unk_578F08, Arial −11 negrito); senão unk_5772A8.
 int drawMarkupText(uint32_t* fb, int fbW, int fbH, const PaneRect& rc,
-                   const std::string& text, uint32_t defaultColor);
+                   const std::string& text, uint32_t defaultColor, bool bold = false);
 int markupLineHeight();
 
 // Desenha o quadro no retângulo do painel (coordenadas de tela).

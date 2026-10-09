@@ -6,6 +6,7 @@
 
 #include "produce_pane.h"
 #include "../gfx/font.h"
+#include "../gfx/ui_font.h"
 #include "../game/trigger.h"
 
 namespace op2 {
@@ -23,7 +24,7 @@ static std::vector<std::string> objectiveLines(int width) {
         for (size_t i = 0; i <= text.size(); ++i) {
             if (i == text.size() || text[i] == ' ') {
                 const std::string cand = cur.empty() ? word : cur + " " + word;
-                if (!cur.empty() && Font::getTextWidth(cand) > width) { out.push_back(tag + cur); cur = word; }
+                if (!cur.empty() && UiFont::width(cand) > width) { out.push_back(tag + cur); cur = word; }
                 else cur = cand;
                 word.clear();
             } else {
@@ -40,7 +41,7 @@ static std::vector<std::string> objectiveLines(int width) {
 void ObjectivesPane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, int mx, int my) const {
     const ListBoxLayout L = objLayout(pane);
     drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.t + 2, pane.r - 0xE, L.list.t},
-                   "Mission Objectives (Alt+O)", 0xFF00FF00u);           // sub_459B60 (verde)
+                   "Mission Objectives (Alt+O)", 0xFF00FF00u, true);           // sub_459B60 (verde)
     drawListBoxFrame(fb, fbW, fbH, L);
     const std::vector<std::string> lines = objectiveLines(L.list.r - L.list.l - 8);
     const int top = std::min(m_top, std::max(0, static_cast<int>(lines.size()) - 1));
