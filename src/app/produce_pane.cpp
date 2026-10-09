@@ -35,6 +35,43 @@ static void artSize(int anim, int& w, int& h) {
 }
 static const int kArrowUp = 0x1C6 - 0x65, kArrowDown = 0x1C5 - 0x65;   // "Scroll up/down page"
 
+ListBoxLayout listBoxLayout(const PaneRect& pane, int arg8, int argC, int arg10, int arg14) {   // sub_459940
+    ListBoxLayout L{};
+    int aw, ah; artSize(kArrowUp, aw, ah);
+    L.list = PaneRect{pane.l + arg8 + 0xD, pane.t + argC + 0xD, pane.r - arg10 - 0xE, pane.b - ah - arg14 - 0x10};
+    L.up = PaneRect{L.list.l - 3, L.list.b + 2, L.list.l - 3 + aw, L.list.b + 2 + ah};
+    int dw, dh; artSize(kArrowDown, dw, dh);
+    L.down = PaneRect{L.list.r - dw - 2, L.list.b + 2, L.list.r - 2, L.list.b + 2 + dh};
+    L.lineH = markupLineHeight();
+    L.rows = std::max(1, (L.list.b - L.list.t - 4) / L.lineH);
+    return L;
+}
+
+void drawListBoxFrame(uint32_t* fb, int fbW, int fbH, const ListBoxLayout& L) {    // sub_430400
+    const PaneRect& r = L.list;
+    for (int y = std::max(0, r.t); y < std::min(fbH, r.b); ++y)
+        for (int x = std::max(0, r.l); x < std::min(fbW, r.r); ++x) {
+            const bool edge = y == r.t || y == r.b - 1 || x == r.l || x == r.r - 1;
+            fb[y * fbW + x] = edge ? rgb555(0x4E0) : rgb555(0x40);
+        }
+}
+
+void drawListBoxArrows(uint32_t* fb, int fbW, int fbH, const ListBoxLayout& L, const PaneRect& clip,
+                       bool canUp, bool canDown, int mx, int my) {
+    auto arrow = [&](int anim, const PaneRect& r, bool en) {
+        if (!g_art.ok() || anim >= g_art.numAnimations()) return;
+        const ArtAnimation& an = g_art.animation(anim);
+        const bool over = en && mx >= r.l && mx < r.r && my >= r.t && my < r.b;
+        // Frames do botão (sub_40AE50 {0, 1, 2}): normal / aceso (mouse em cima) /
+        // desabilitado (sub_459C70: sem página p/ rolar).
+        const int fr = !en ? 2 : over ? 1 : 0;
+        if (fr >= static_cast<int>(an.frames.size())) return;
+        blitArtFrame(fb, fbW, fbH, anim, fr, r.l, r.t, -1, clip.l, clip.t, clip.r, clip.b);   // hotspot no canto
+    };
+    arrow(kArrowUp, L.up, canUp);
+    arrow(kArrowDown, L.down, canDown);
+}
+
 void ProducePane::open(int factoryId) {                     // sub_468090
     m_open = true;
     m_factory = factoryId;
@@ -112,17 +149,8 @@ void ProducePane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, int
         Font::drawText(fb, fbW, fbH, produceItemName(item), L.list.l + 4, y + 1, 0xFF00FF00u, false);
         if (mx >= L.list.l && mx < L.list.r && my >= y && my < y + L.lineH) hoverItem = &m_items[m_top + i];
     }
-    // Setas de página (frame 1 = aceso com o mouse em cima; PROVISÓRIO).
     const bool canUp = m_top > 0, canDown = m_top + L.rows < static_cast<int>(m_items.size());
-    auto arrow = [&](int anim, const PaneRect& r, bool en) {
-        if (!g_art.ok() || anim >= g_art.numAnimations()) return;
-        const ArtAnimation& an = g_art.animation(anim);
-        const bool over = en && mx >= r.l && mx < r.r && my >= r.t && my < r.b;
-        const int fr = over && an.frames.size() > 1 ? 1 : 0;
-        blitArtFrame(fb, fbW, fbH, anim, fr, r.l, r.t, -1, pane.l, pane.t, pane.r, pane.b);   // hotspot no canto
-    };
-    arrow(kArrowUp, L.up, canUp);
-    arrow(kArrowDown, L.down, canDown);
+    drawListBoxArrows(fb, fbW, fbH, ListBoxLayout{L.list, L.up, L.down, L.lineH, L.rows}, pane, canUp, canDown, mx, my);
     // Dica com o custo (provedor vt6 sub_4686E0). PROVISÓRIO: caixa junto ao cursor.
     if (hoverItem) {
         const std::string t = produceItemCost(*hoverItem, TethysGame::localPlayer());

@@ -9,6 +9,7 @@
 #include "../game/terrain_renderer.h"
 #include "location.h"
 #include "produce_pane.h"
+#include "objectives_pane.h"
 #include "game_frame.h"
 
 namespace op2 {
@@ -64,7 +65,6 @@ public:
 private:
     void loadSettings();
     bool loadMap(const std::string& mapName);
-    void drawObjectives(uint32_t* fb, int fbW, int fbH, int l, int t, int r, int b);
     std::unique_ptr<MissionScript> m_mission;   // dword_4EFCD8
     std::string m_mapName;
     TerrainRenderer m_terrain;   // desenha sobre o g_gameMap (singleton do engine)
@@ -95,6 +95,8 @@ private:
                         bool disabled = false; };
     // Painel de produção (BUILD da fábrica) e seus botões (sub_4682C0).
     ProducePane m_produce;
+    ObjectivesPane m_objectives;   // aba de objetivos (sem seleção)
+    static constexpr int kCmdGameOptions = -4;
     static constexpr int kCmdBuildIt = -2, kCmdStatus = -3;
     PaneRect infoPaneRect() const;
     void produceBuildIt();

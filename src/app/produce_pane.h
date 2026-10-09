@@ -7,6 +7,16 @@
 
 namespace op2 {
 
+// Caixa de lista dos painéis (base off_4D5588): sub_459940(provedor, 1, arg8,
+// argC, arg10, arg14) posiciona a lista em (arg8+0xD, topo+argC+0xD) até
+// (W-arg10-0xE, H-alt(seta)-arg14-0x10) e as setas de página 0x1C6/0x1C5
+// logo abaixo (esquerda / direita). sub_430400: fundo 0x40, moldura 0x4E0.
+struct ListBoxLayout { PaneRect list, up, down; int lineH, rows; };
+ListBoxLayout listBoxLayout(const PaneRect& pane, int arg8, int argC, int arg10, int arg14);
+void drawListBoxFrame(uint32_t* fb, int fbW, int fbH, const ListBoxLayout& L);
+void drawListBoxArrows(uint32_t* fb, int fbW, int fbH, const ListBoxLayout& L, const PaneRect& clip,
+                       bool canUp, bool canDown, int mx, int my);
+
 // Painel de produção da fábrica — porta dword_5674E8 (vtable off_4D5808,
 // base de lista off_4D5588). Aberto pelo botão BUILD (sub_456250 →
 // sub_45D020: o gerenciador do painel direito troca o painel atual).

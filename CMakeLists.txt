@@ -52,6 +52,7 @@ add_executable(outpost2_modern
     src/game/production.cpp
     src/app/produce_pane.cpp
     src/app/game_frame.cpp
+    src/app/objectives_pane.cpp
     src/game/unit_names.cpp
     src/mission/pe_loader.cpp
     src/mission/mission.cpp

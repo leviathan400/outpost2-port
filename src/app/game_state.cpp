@@ -737,6 +737,8 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
             paneHit = m_produce.click(infoPaneRect(), nx, ny, e.button.clicks >= 2, buildNow);
             if (buildNow) produceBuildIt();
         }
+        if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_selected.empty() && m_mission)
+            paneHit = m_objectives.click(infoPaneRect(), nx, ny);
         // Botão de comando do quadro (IDLE / ACTIVATE → CommandPacket 0x12 / 0x13).
         if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit) {
             for (const TextButton& b : structureButtons())
@@ -816,6 +818,15 @@ std::vector<GameState::CmdButton> GameState::commandButtons() const {
 // quadro (dword_5750EC[+0x40]) e x relativo ao painel.
 std::vector<GameState::TextButton> GameState::structureButtons() const {
     std::vector<TextButton> out;
+    if (m_selected.empty() && m_mission) {
+        // Aba de objetivos (sub_465830, modo 1): "&GAME OPTIONS" largo.
+        TextButton b{};
+        b.cmd = kCmdGameOptions; b.label = "&GAME OPTIONS"; b.tip = "Show &Game Options"; b.hotkey = 'G';
+        b.wide = true;
+        b.l = kColX + 9; b.t = kPaneBottom - 2 - 25; b.r = b.l + 175; b.b = b.t + 25;
+        out.push_back(b);
+        return out;
+    }
     if (m_selected.size() != 1) return out;
     const UnitRecord& u = g_units[m_selected[0]];
     if (u.id == -1 || !(u.flags & UNIT_BUILDING) || (u.owner & 0x0F) != TethysGame::localPlayer()) return out;
@@ -869,6 +880,7 @@ void GameState::produceBuildIt() {
 void GameState::clickCommand(int cmd) {                  // vt[1] do comando
     if (cmd == kCmdBuildIt) { produceBuildIt(); return; }
     if (cmd == kCmdStatus) { m_produce.close(); return; }
+    if (cmd == kCmdGameOptions) { postMessage(-1, -1, "Game Options ainda nao portado", 0); return; }
     if (cmd == UC_BUILD) {                                // sub_456250 → painel de produção
         if (m_selected.size() == 1) m_produce.open(m_selected[0]);
         m_targetCmd = -1;
@@ -937,33 +949,6 @@ static int vehSerial(const UnitRecord& r, size_t idx) {
 
 // Lista de objetivos do painel (modo dword_565C8C = 1, sub_4663A0): uma linha
 // por VictoryCondition, "<C0>%s" se cumprida (verde) e "<C2>%s" se não (vermelho).
-void GameState::drawObjectives(uint32_t* fb, int fbW, int fbH, int l, int t, int r, int b) {
-    int y = t + 4;
-    const int maxW = r - l - 8;
-    for (const std::string& line : missionObjectives()) {
-        // "<Cn>" + texto; quebra por palavras na largura do painel.
-        const std::string tag = line.substr(0, 4), text = line.substr(4);
-        std::string cur, word;
-        auto flush = [&]() {
-            if (cur.empty() || y >= b) return;
-            y += drawMarkupText(fb, fbW, fbH, PaneRect{l + 4, y, r - 4, b}, tag + cur, 0xFF30D030);
-            cur.clear();
-        };
-        for (size_t i = 0; i <= text.size(); ++i) {
-            if (i == text.size() || text[i] == ' ') {
-                const std::string cand = cur.empty() ? word : cur + " " + word;
-                if (!cur.empty() && Font::getTextWidth(cand) > maxW) { flush(); cur = word; }
-                else cur = cand;
-                word.clear();
-            } else {
-                word += text[i];
-            }
-        }
-        flush();
-        y += 4;
-    }
-}
-
 void GameState::renderPanel(Renderer& renderer) {
     const int VW = Renderer::NATIVE_WIDTH, VH = Renderer::NATIVE_HEIGHT;
     const int px0 = kColX;                       // coluna direita (x)
@@ -986,9 +971,12 @@ void GameState::renderPanel(Renderer& renderer) {
     const int mmX0 = kColX, mmY0 = kMiniMapY, mmW = kColW, mmH = kMiniMapH;
     int mw = g_gameMap.ok() ? g_gameMap.width() : 64;
     int mh = g_gameMap.ok() ? g_gameMap.height() : 64;
-    int sc = std::max(1, std::min(mmW / mw, mmH / mh));
-    int mmW2 = mw * sc, mmH2 = mh * sc;
-    int mmX = mmX0 + (mmW - mmW2) / 2, mmY = mmY0 + (mmH - mmH2) / 2;
+    // Zoom 0 (sub_48E7F0): escalas independentes [+0]/[+4] = janela / mapa em
+    // 16.16 — o mapa estica p/ ocupar a janela inteira. PROVISÓRIO: os zooms
+    // 1+ (botões +/−) e o ajuste vertical dos mapas largos não foram portados.
+    const int mmX = mmX0, mmY = mmY0;
+    auto mapX = [&](int tx) { return mmX + tx * mmW / mw; };      // tile → pixel do minimapa
+    auto mapY = [&](int ty) { return mmY + ty * mmH / mh; };
     renderer.fillRect(mmX0, mmY0, mmW, mmH, 0xFF000000);
     const bool shade = g_gameMap.ok() && !TethysGame::daylightEverywhere();
     // Brilho 0..31 da coluna do port (x interna = x + deslocamento).
@@ -1010,7 +998,7 @@ void GameState::renderPanel(Renderer& renderer) {
                     const int b = brightness(tx);
                     r5 = shade5(r5, b); g5 = shade5(g5, b); b5 = shade5(b5, b);
                 }
-                renderer.fillRect(mmX + tx * sc, mmY + ty * sc, sc, sc,
+                renderer.fillRect(mapX(tx), mapY(ty), mapX(tx + 1) - mapX(tx), mapY(ty + 1) - mapY(ty),
                                   0xFF000000u | (uint32_t(r5 << 3) << 16) | (uint32_t(g5 << 3) << 8) | uint32_t(b5 << 3));
             }
     }
@@ -1028,13 +1016,28 @@ void GameState::renderPanel(Renderer& renderer) {
                 g_gameMap.lightDarkness((r.pixelX >> 5) + g_gameMap.internalXOffset() - TethysGame::daylightPos()) >= 16)
                 continue;
         }
-        int mx = mmX + (r.pixelX >> 5) * sc, my = mmY + (r.pixelY >> 5) * sc;
-        renderer.fillRect(mx, my, sc, sc, kOC[ow % 7]);
+        const int tx = r.pixelX >> 5, ty = r.pixelY >> 5;
+        renderer.fillRect(mapX(tx), mapY(ty), std::max(1, mapX(tx + 1) - mapX(tx)),
+                          std::max(1, mapY(ty + 1) - mapY(ty)), kOC[ow % 7]);
     }
     {
-        int vx = mmX + (m_camX / 32) * sc, vy = mmY + (m_camY / 32) * sc;
-        int vw = (viewportW() / 32) * sc, vh = (viewportH() / 32) * sc;
-        renderer.drawRect(vx, vy, vw, vh, 0xFFFFFFFF);
+        const int ctx = ((m_camX / 32) % mw + mw) % mw, cty = m_camY / 32;
+        const int vx = mapX(ctx), vy = mapY(cty);
+        renderer.drawRect(vx, vy, mapX(ctx + viewportW() / 32) - vx, mapY(cty + viewportH() / 32) - vy, 0xFFFFFFFF);
+    }
+    // Botões do minimapa (sub_458930, posição [+0x310] = 0: topo, centrados):
+    // x = W/2 − 32 e +16 por botão. Arte crua {0x9D Zoom In, 0x9C Zoom Out,
+    // 0x9E Toggle Tactical View, 0x9A Toggle Globe View (só sem dword_54EBF0)}.
+    // PROVISÓRIO: só o desenho (frame 0) — zoom/visões ainda não portados.
+    if (g_art.ok()) {
+        static const int kMiniBtn[4] = {0x9D, 0x9C, 0x9E, 0x9A};
+        const int n = g_gameMap.ok() && g_gameMap.internalXOffset() ? 3 : 4;
+        for (int k = 0; k < n; ++k) {
+            const int anim = kMiniBtn[k] - 0x65;
+            if (anim >= g_art.numAnimations()) continue;
+            blitArtFrame(fb, VW, VH, anim, 0, mmX0 + mmW / 2 - 0x20 + 16 * k, mmY0, -1,
+                         mmX0, mmY0, mmX0 + mmW, mmY0 + mmH);
+        }
     }
 
     // --- Janela do quadro (dword_5750D8): abas no topo + painel atual ---
@@ -1083,7 +1086,7 @@ void GameState::renderPanel(Renderer& renderer) {
     else if (!m_selected.empty())
         drawUnitInfoPane(fb, VW, VH, pane, m_selected[0], static_cast<int>(m_selected.size()), me);
     else if (m_mission)
-        drawObjectives(fb, VW, VH, pane.l, pane.t, pane.r, pane.b);
+        m_objectives.draw(fb, VW, VH, pane, m_mouseNX, m_mouseNY);
     // Botoeira do veículo (sub_46D540): ícones verdes do op2_art (anim crua − 0x65).
     {
         const std::vector<CmdButton> btns = commandButtons();
