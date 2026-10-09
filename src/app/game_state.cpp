@@ -11,6 +11,7 @@
 #include "info_pane.h"
 #include "../game/production.h"
 #include "../game/construction.h"
+#include "../game/mining.h"
 #include "../gfx/renderer.h"
 #include "../gfx/font.h"
 #include "../gfx/ui_font.h"
@@ -164,6 +165,7 @@ bool GameState::load(const std::string& mapName) {
     // Planilhas de unidades (sub_445070): HP, Build Points, entulho, explosao...
     loadBuildingSheet();
     loadVehicleSheet();
+    loadMinesSheet();
     loadWeaponSheet();
     loadSpaceSheet();
     loadMoraleSheet();
@@ -409,6 +411,10 @@ void GameState::onIdle(Renderer& renderer, float dt) {
             int ow = r.owner & 0x0F;
             bool eden = (ow >= 0 && ow < kMaxPlayers) ? (g_playerData[ow].isEden != 0) : true;
             int anim = vehicleAnimIndex(r.type, r.rotation, eden);   // resolver fiel (facção)
+            if (r.type == mapCargoTruck) {               // vt[0x80] sub_4062B0 (carga/doca)
+                const int raw = truckAnimRaw(r, ((r.rotation + 8) & 0xF0) >> 4);
+                if (raw) anim = raw - 0x65;
+            }
             if (anim >= 0) {
                 int nf = g_art.ok() && anim < g_art.numAnimations()
                          ? (int)g_art.animation(anim).frames.size() : 0;
@@ -429,6 +435,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
                 }
                 // Cor do dono: campo +0x30 do registro do jogador (colorNumber),
                 // que indexa as rampas de 24 cores de color.bmp (sub_4A8D70).
+                if (r.type == mapCargoTruck) frame = truckFrame(r, (int)i);   // vt[8] sub_44C7B0
                 int pc = (ow >= 0 && ow < kMaxPlayers) ? g_playerData[ow].colorNumber : 0;
                 drew = drawSprite(anim, frame, ucx, ucy, pc);
                 // Torre (sub_484CF0): anim da arma p/ a direção da torre [+0x2D],
@@ -560,10 +567,12 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     // Modo de posicionamento do kit (sub_451AC0 → sub_41B5B0: retângulo do
     // tamanho da área no cursor). PROVISÓRIO: contorno da área (verde) e do
     // anel de terraplanagem (cinza); o cursor real do original não foi portado.
-    if (m_targetCmd == UC_BUILD_KIT && !m_selected.empty()) {
+    if ((m_targetCmd == UC_BUILD_KIT || m_targetCmd == UC_BUILD_MINE) && !m_selected.empty()) {
         int w = 0, h = 0;
         const int mvx = m_mouseNX - kViewX, mvy = m_mouseNY - kViewY;
-        if (kitFootprint(m_selected[0], w, h) && mvx >= 0 && mvx < viewportW() && mvy >= 0 && mvy < viewportH()) {
+        if (m_targetCmd == UC_BUILD_MINE) mineFootprint(w, h);      // sub_451FC0: off_4E1394
+        else kitFootprint(m_selected[0], w, h);
+        if (w && mvx >= 0 && mvx < viewportW() && mvy >= 0 && mvy < viewportH()) {
             int tx = (m_camX + mvx) / 32, ty = (m_camY + mvy) / 32, l, t, r, b;
             if (g_gameMap.ok()) tx &= (g_gameMap.width() - 1);
             kitPlacementRect(w, h, tx, ty, l, t, r, b);
@@ -1313,7 +1322,7 @@ void GameState::renderPanel(Renderer& renderer) {
         std::string t;
         for (char ch : b.label) if (ch != '&') t += ch;
         // Desabilitado (BUILD IT sem item pagável): texto apagado (PROVISÓRIO).
-        UiFont::drawCentered(fb, VW, VH, t, (b.l + b.r) / 2, b.t + (b.b - b.t) / 2 - 4,
+        UiFont::drawCentered(fb, VW, VH, t, (b.l + b.r) / 2, UiFont::centeredY(b.t, b.b),
                                b.disabled ? 0xFF603020 : over ? 0xFFFF7050 : 0xFFE04030, false);
     }
 

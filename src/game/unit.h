@@ -172,6 +172,12 @@ struct UnitRecord {
     int16_t  field4A = 0x7FFF;     // +0x4A (0x8000 = unidade, y do tile, 0x7FFF = nenhum)
     int16_t  guardLo = 0, guardHi = 0x7FFF;   // +0x50/+0x52 unidade guardada (ação 0x25)
     int16_t  patrolStart = 0;      // +0x5E (veículo) waypoint onde a patrulha recomeça (ação 0x28)
+    // Caminhão (src/game/mining.cpp): pedido da doca +0x5C ((qtd << 4) | tipo),
+    // carregando na mina +0x6D; rota de minério (ação 0x27): índices dos pontos
+    // da mina +0x62 e do smelter +0x64, ids da mina +0x66 e do smelter +0x68.
+    uint16_t cargoRequest = 0;
+    uint8_t  dockLoad = 0;
+    int16_t  routeMineIdx = 0, routeSmelterIdx = 0, routeMine = 0, routeSmelter = 0;
     int16_t  target4C = 0;         // +0x4C alvo: id da unidade ou x do tile
                                    // (+0x4E field4E: 0xFFFF = unidade, y do tile, 0x7FFF = nenhum)
     // Projétil (unidades de arma 0x3B..0x57):

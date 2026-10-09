@@ -8,6 +8,7 @@
 #include "building_sheet.h"
 #include "colony.h"
 #include "construction.h"
+#include "mining.h"
 #include "command.h"
 #include "game_map.h"
 #include "player.h"
@@ -424,6 +425,13 @@ static struct {
     int start = 0;                  // [+0xE]
 } s_patrol;
 static std::string s_hint;
+// Rota de minério (objeto do comando off_4D4D38): [+4] mina, [+8] smelter,
+// [+0x10] nº de pontos, [+0x12] índice do ponto da mina, [+0x14] do smelter.
+static struct {
+    int mine = 0, smelter = 0;
+    std::vector<uint32_t> pts;
+    int mineIdx = 0, smelterIdx = 0;
+} s_ore;
 
 const std::string& uiCommandHint() { return s_hint; }
 
@@ -443,6 +451,11 @@ UiClick uiCommandClick(int cmd, const std::vector<int>& sel) {
         case UC_ATTACK: return UiClick::TARGET;                         // sub_4530D0
         case UC_GUARD: return UiClick::TARGET;                          // sub_4534D0 (modo 7)
         case UC_BUILD_KIT: return UiClick::TARGET;                      // sub_451AC0 (modo 2, área do kit)
+        case UC_BUILD_MINE: return UiClick::TARGET;                     // sub_451FC0 (modo 2, área da mina)
+        case UC_ORE_ROUTE:                                              // sub_453F50 (modo 3)
+            s_ore = {};
+            s_hint = "Set path to mine";
+            return UiClick::TARGET;
         case UC_PATROL:                                                 // sub_4544F0 (modo 6)
             s_patrol = {};
             s_hint = "Set path to initial patrol point";
@@ -458,6 +471,32 @@ UiClick uiCommandClick(int cmd, const std::vector<int>& sel) {
 }
 
 UiClick uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int tileY) {
+    if (cmd == UC_BUILD_MINE) { sendBuildMine(sel, tileX, tileY); return UiClick::DONE; }   // sub_452010
+    if (cmd == UC_ORE_ROUTE) {                               // sub_454290 + sub_453FA0
+        const UnitRecord* u = first(sel);
+        if (!u) return UiClick::DONE;
+        const int stage = !s_ore.mine ? 0 : !s_ore.smelter ? 1 : 2;
+        const int b = oreRouteTarget(stage, s_ore.mine, u->owner & 0x0F, tileX, tileY);
+        if (!b) { soundPlay(0x58); return UiClick::TARGET; } // sub_41AAA0: alvo recusado
+        s_ore.pts.push_back(packLocation(tileX, tileY));
+        soundPlay(0x59);
+        if (stage == 0) {
+            s_ore.mine = b; s_ore.mineIdx = 0;
+            s_hint = "Set path from mine to smelter";
+            return UiClick::TARGET;
+        }
+        if (stage == 1) {
+            s_ore.smelter = b;
+            s_ore.smelterIdx = static_cast<int>(s_ore.pts.size()) - 1;
+            s_hint = "Set path from smelter back to mine";
+            return UiClick::TARGET;
+        }
+        s_hint.clear();
+        sendOreRoute(sel, s_ore.pts, s_ore.mineIdx, s_ore.smelterIdx, s_ore.mine, s_ore.smelter);
+        soundPlay(0x56);
+        s_ore = {};
+        return UiClick::DONE;
+    }
     if (cmd == UC_PATROL) {                                  // sub_454540
         if (s_patrol.stage == 0) {                           // 1º clique: ponto inicial
             s_patrol.stage = 1;

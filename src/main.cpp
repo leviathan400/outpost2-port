@@ -33,6 +33,9 @@
 #include "game/production.h"
 #include "game/docking.h"
 #include "game/construction.h"
+#include "game/mining.h"
+#include "game/scenario.h"
+#include "game/commands.h"
 #include "game/research_lab.h"
 #include "game/research.h"
 #include "gfx/artfile.h"
@@ -531,6 +534,120 @@ static int runCmdTest(const std::string& mapName) {
 // --producetest <map> <prefix>: CC + Tokamak + Vehicle Factory + Structure
 // Factory encostados; lista de produção (sem e com o atalho "toda tecnologia"),
 // painel BUILD (screenshot), pacote 9 e entrega (veículo e kit na baia).
+// Ciclo do minério: Robo-Miner instala a mina no beacon; caminhão faz a rota
+// mina → smelter → mina; imprime cargas, estoque e estado do caminhão.
+static int runOreTest(const std::string& mapName, const std::string& prefix) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 oretest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    op2::resetUnits();
+    const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
+    int bx = -1, by = -1;
+    for (int y = 3; y < H - 14 && bx < 0; ++y)
+        for (int x = 3; x < W - 26 && bx < 0; ++x) {
+            bool ok = true;
+            for (int dy = -1; dy <= 11 && ok; ++dy)
+                for (int dx = -2; dx <= 22 && ok; ++dx)
+                    if (!op2::g_gameMap.isPassable(op2::LOCATION{x + dx, y + dy})) ok = false;
+            if (ok) { bx = x; by = y; }
+        }
+    if (bx < 0) { std::printf("[Ore] sem area livre\n\n"); return 3; }
+    op2::Unit cc, tok, sm;
+    op2::TethysGame::CreateUnit(cc, op2::mapCommandCenter, op2::LOCATION{bx, by}, 0);
+    op2::TethysGame::CreateUnit(tok, op2::mapTokamak, op2::LOCATION{bx + 3, by}, 0);
+    sm = op2::Unit(op2::placeBuilding(0x36, bx, by + 2, 0));   // encostado no CC (rede por adjacência)
+    op2::PlayerData& pd = op2::g_playerData[0];
+    pd.workers = 40; pd.scientists = 10;
+    op2::TethysGame::setCheatFlag(1, 1);                       // toda tecnologia (Build mine)
+    op2::colonyMarkDirty(0);
+    const int beaconX = bx + 16, beaconY = by + 6;
+    op2::createBeacon(0x51, beaconX, beaconY, 0, 0, 0);         // comum, rendimento alto, variante 1
+    op2::Unit miner, truck;
+    op2::TethysGame::CreateUnit(miner, op2::mapRoboMiner, op2::LOCATION{beaconX - 4, beaconY + 3}, 0);
+    for (int t = 0; t < 40; ++t) gs.onIdle(renderer, 0.2501f / 4.0f);
+    std::printf("[Ore] smelter operando=%d capacidade=%d flags=0x%X acao=%d | cc op=%d | tok op=%d | trab=%d\n",
+                op2::structureOperational(op2::g_units[sm.id()]), op2::g_colony[0].oreCapacity,
+                op2::g_units[sm.id()].flags, op2::g_units[sm.id()].action,
+                op2::structureOperational(op2::g_units[cc.id()]),
+                op2::structureOperational(op2::g_units[tok.id()]), pd.workers);
+    {
+        int w1, h1, w2, h2;
+        op2::buildingFootprint(op2::mapCommandCenter, w1, h1);
+        op2::buildingFootprint(static_cast<op2::map_id>(0x36), w2, h2);
+        std::printf("[Ore] cc (%d,%d) %dx%d | smelter (%d,%d) %dx%d | base (%d,%d)\n",
+                    op2::g_units[cc.id()].pixelX >> 5, op2::g_units[cc.id()].pixelY >> 5, w1, h1,
+                    op2::g_units[sm.id()].pixelX >> 5, op2::g_units[sm.id()].pixelY >> 5, w2, h2, bx, by);
+    }
+    // Robo-Miner: Build mine no beacon.
+    const std::vector<int> selM{miner.id()};
+    op2::uiCommandClick(op2::UC_BUILD_MINE, selM);
+    op2::uiCommandTarget(op2::UC_BUILD_MINE, selM, beaconX, beaconY);
+    int mine = 0, t = 0;
+    for (; t < 6000; ++t) {
+        gs.onIdle(renderer, 0.2501f / 4.0f);
+        for (int i = 1; i < (int)op2::g_units.size(); ++i) {
+            const op2::UnitRecord& r = op2::g_units[i];
+            if (r.id != -1 && (r.type == 0x15 || r.type == 0x16) && r.action == 0) { mine = i; break; }
+        }
+        if (mine) break;
+    }
+    const op2::UnitRecord& mm = op2::g_units[miner.id()];
+    std::printf("[Ore] t=%d mina=%d (%s) | robo-miner id=%d vivo=%d\n\n", t, mine,
+                mine ? op2::unitTitle(op2::g_units[mine]).c_str() : "-", mm.id,
+                mm.id != -1 && !(mm.flags & op2::UNIT_DEAD));
+    if (!mine) return 4;
+    for (t = 0; t < 40; ++t) gs.onIdle(renderer, 0.2501f / 4.0f);
+    std::printf("[Ore] mina operando=%d rendimento=%d variante=%d cargas=%d\n\n",
+                op2::structureOperational(op2::g_units[mine]), op2::g_units[mine].mineYield,
+                op2::g_units[mine].mineVariant, op2::g_units[mine].mineLink);
+    // Caminhão + rota (3 cliques nas docas).
+    int mdx, mdy, sdx, sdy;
+    op2::dockCell(mine, mdx, mdy);
+    op2::dockCell(sm.id(), sdx, sdy);
+    op2::TethysGame::CreateUnit(truck, op2::mapCargoTruck, op2::LOCATION{bx + 8, by + 9}, 0);
+    const std::vector<int> selT{truck.id()};
+    op2::uiCommandClick(op2::UC_ORE_ROUTE, selT);
+    std::printf("[Ore] clique fora da doca: %d\n\n",
+                (int)op2::uiCommandTarget(op2::UC_ORE_ROUTE, selT, mdx + 1, mdy - 1));
+    op2::uiCommandTarget(op2::UC_ORE_ROUTE, selT, mdx, mdy);
+    op2::uiCommandTarget(op2::UC_ORE_ROUTE, selT, sdx, sdy);
+    op2::uiCommandTarget(op2::UC_ORE_ROUTE, selT, mdx, mdy);
+    const op2::UnitRecord& tr = op2::g_units[truck.id()];
+    std::printf("[Ore] rota: acao=0x%X pontos=%d mina(%d,%d) smelter(%d,%d)\n\n", tr.action,
+                (int)tr.order.waypoints.size(), mdx, mdy, sdx, sdy);
+    int lastCargo = -1, lastSub = -1;
+    const int ore0 = pd.ore;
+    for (t = 0; t < 6000; ++t) {
+        gs.onIdle(renderer, 0.2501f / 4.0f);
+        if (tr.cargo != lastCargo || (tr.field22 == 0x0D) != (lastSub == 0x0D)) {
+            std::printf("[Ore] t=%d caminhao (%d,%d) acao=0x%X sub=%d carga=%d tipo=%d | estoque=%d cargas=%d\n\n", t,
+                        tr.pixelX >> 5, tr.pixelY >> 5, tr.action, tr.field22, (tr.cargo >> 4) & 0xFFF, tr.cargo & 15,
+                        pd.ore, op2::g_units[mine].mineLink);
+            lastCargo = tr.cargo; lastSub = tr.field22;
+        }
+        if (t % 500 == 0)
+            std::printf("[Ore]   t=%d smelterOp=%d (%d,%d) f20=%d f22=%d f23=%d cur=%d end=%d dirs=%d\n", t, (int)op2::structureOperational(op2::g_units[sm.id()]),
+                        tr.pixelX >> 5, tr.pixelY >> 5, tr.field20, tr.field22, tr.field23,
+                        tr.order.curWaypoint, tr.order.countMinus1, (int)tr.routeDirs.size());
+        if (t == 290 || t == 600 || t == 850) {               // na mina / carregado / no smelter
+            gs.setCamera(tr.pixelX - 200, tr.pixelY - 200);
+            gs.onIdle(renderer, 0.0f);
+            writeBmp32(prefix + "_route" + std::to_string(t) + ".bmp", renderer.getFramebuffer(),
+                       op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        }
+    }
+    std::printf("[Ore] fim: estoque %d -> %d, cargas da mina=%d, caminhao acao=0x%X\n\n", ore0, pd.ore,
+                op2::g_units[mine].mineLink, tr.action);
+    renderer.shutdown();
+    SDL_Quit();
+    return 0;
+}
+
 static int runProduceTest(const std::string& mapName, const std::string& prefix) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
     op2::g_ResManager.init(".");
@@ -1494,6 +1611,8 @@ int main(int argc, char* argv[]) {
             return runMissionTest(argv[i + 1], argv[i + 2], i + 3 < argc ? atoi(argv[i + 3]) : 200);
         if (std::strcmp(argv[i], "--combattest") == 0 && i + 2 < argc)
             return runCombatTest(argv[i + 1], argv[i + 2]);
+        if (std::strcmp(argv[i], "--oretest") == 0 && i + 2 < argc)
+            return runOreTest(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--producetest") == 0 && i + 2 < argc)
             return runProduceTest(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--researchtest") == 0 && i + 2 < argc)

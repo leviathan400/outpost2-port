@@ -159,7 +159,8 @@ static void stepUnit(int id) {
     // segura a posição), 0x28 (patrulhar) — sub_43ACA0 inicia todas em
     // loc_43ADAD — e a aproximação de atacar/guardar (0x24/0x25).
     const bool moving = u.action == CMD_MOVE || u.action == 0x26 || u.action == 0x24 ||
-                        u.action == 0x25 || u.action == 0x28 || u.action == 6;   // 6: ConVec indo à obra
+                        u.action == 0x25 || u.action == 0x27 || u.action == 0x28 ||
+                        u.action == 6;   // 6: ConVec indo à obra; 0x27: rota de minério
     if (u.field20 != 1 || !moving || !u.hasOrder || u.order.waypoints.empty()) {
         // Parado: sai do sub-estado de movimento (1). Os demais sub-estados
         // (espera 6, troca na doca 0x0D...) são do laço da unidade (sub_43DE50).
@@ -184,7 +185,7 @@ static void stepUnit(int id) {
                 u.field23 = 1;                           // [+0x23] = sub-estado anterior (movimento)
                 u.routeDirs.clear(); u.routeIdx = 0;
                 // Patrulhar: a ordem fica; o tick da ação (case 40) recomeça.
-                if (u.action == 0x28) return;
+                if (u.action == 0x28 || u.action == 0x27) return;   // (0x27: case 39)
                 // Mover (casos 2-4 de jpt_43B312) zera a ação; 0x26 não tem tratamento
                 // por tick (def_43B312): a ação fica 0x26 (posição mantida).
                 // Atacar/guardar (0x24/0x25) seguem no tick da ação (jpt_43B312 casos 36/37).

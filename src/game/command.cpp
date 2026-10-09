@@ -100,8 +100,8 @@ void processCommandPacket(int owner, const CommandPacket& pkt) {
     // Dispatcher sub_40E210 — caso MOVE (loc_40E2C0). Aplica a ordem a cada
     // unidade do packet cujo dono confere e que aceita comando.
     // Casos 2-4 e 38-40 (loc_40E2C0): ordem de movimento com a ação = tipo.
-    // Portados: 2 (mover), 0x26 (ficar parado) e 0x28 (patrulhar).
-    if (pkt.type != CMD_MOVE && pkt.type != 0x26 && pkt.type != 0x28) return;
+    // Portados: 2 (mover), 0x26 (ficar parado), 0x27 (rota de minério) e 0x28 (patrulhar).
+    if (pkt.type != CMD_MOVE && pkt.type != 0x26 && pkt.type != 0x27 && pkt.type != 0x28) return;
 
     const int numUnits = static_cast<int>(pkt.unitIds.size());
     for (int idx = 0; idx < numUnits; ++idx) {
@@ -117,13 +117,21 @@ void processCommandPacket(int owner, const CommandPacket& pkt) {
         if (u.field22 == 0x0D) continue;                 // não-comandável
 
         resetUnitOrder(u);                               // sub_43A910
-        setUnitMoveOrder(u, static_cast<int>(pkt.waypoints.size()),
-                         pkt.waypoints, idx, numUnits);  // sub_4230F0
+        // sub_4230F0 (0x27: índice 0 de 1 — cada caminhão sem formação).
+        setUnitMoveOrder(u, static_cast<int>(pkt.waypoints.size()), pkt.waypoints,
+                         pkt.type == 0x27 ? 0 : idx, pkt.type == 0x27 ? 1 : numUnits);
 
         u.action  = static_cast<uint8_t>(pkt.type);      // [esi+21h] = tipo
         u.field20 = 1;                                    // [esi+20h] = 1
         u.field3C = 0;                                    // [esi+3Ch] = 0
         if (pkt.type == 0x28) u.patrolStart = static_cast<int16_t>(pkt.patrolStart);   // [esi+5Eh]
+        if (pkt.type == 0x27) {                          // [+0x62..+0x68]; [ordem+4] = [+0x62]
+            u.routeMineIdx = static_cast<int16_t>(pkt.routeMineIdx);
+            u.routeSmelterIdx = static_cast<int16_t>(pkt.routeSmelterIdx);
+            u.routeMine = static_cast<int16_t>(pkt.routeMine);
+            u.routeSmelter = static_cast<int16_t>(pkt.routeSmelter);
+            u.order.countMinus1 = u.routeMineIdx;
+        }
     }
 }
 

@@ -25,6 +25,14 @@ bool kitFootprint(int convecId, int& w, int& h);
 void kitPlacementRect(int w, int h, int tileX, int tileY, int& l, int& t, int& r, int& b);
 // sub_451B30 + case 6 (jogador local).
 void sendBuildKit(const std::vector<int>& sel, int tileX, int tileY);
+// sub_452010: Robo-Miner / GeoCon — mesmo pacote 6 com a área da mina (off_4E1394).
+void sendBuildMine(const std::vector<int>& sel, int tileX, int tileY);
+// Área da mina (desc 0x15 +0x248/+0x24A) — o retângulo de posicionamento do
+// Robo-Miner e da GeoCon (sub_451FC0).
+void mineFootprint(int& w, int& h);
+// sub_44C410: gira [+0x1C] rumo ao alvo (no máximo Turn Rate por tick); true = virado.
+struct UnitRecord;
+bool unitTurnTo(UnitRecord& u, unsigned char target);
 // Tick da ação 6 (sub-estado 0, sem [+0x20]).
 void conVecBuildTick(int id);
 // Sub-estado 2 (sub_43DE50 case 2): cria o prédio.

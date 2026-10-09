@@ -7,6 +7,7 @@
 #include "tethys_game.h"
 #include "unit.h"
 #include "vehicle_anim.h"
+#include "mining.h"
 #include "../gfx/artfile.h"
 
 namespace op2 {
@@ -147,6 +148,7 @@ void dockTransferTick(int vehicleId) {                    // sub_43DE50 case 13
     }
     // Meio: o caminhão (tipo 1) usa vt[0x98] (minério — não portado); os demais sub_411050.
     if (u.type != mapCargoTruck) exchangeWithBay(u);
+    else truckDockExchange(vehicleId);                    // vt[0x98] (sub_406610)
     u.dockTick = static_cast<int16_t>(TethysGame::tick());
     u.flags |= 0x1000000u;
     const bool eden = ownerOf(u) < kMaxPlayers && g_playerData[ownerOf(u)].isEden;
@@ -154,6 +156,8 @@ void dockTransferTick(int vehicleId) {                    // sub_43DE50 case 13
     u.field3C = (g_art.ok() && anim >= 0 && anim < g_art.numAnimations())
                     ? static_cast<int>(g_art.animation(anim).frames.size()) : 1;
     if (u.field3C <= 0) u.field3C = 1;
+    // Caminhão: último frame da animação de doca da 2ª fase (vt[0x80] sub_4062B0).
+    if (u.type == mapCargoTruck) u.field3C = truckDockPhaseTicks(u);
 }
 
 } // namespace op2

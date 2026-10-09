@@ -299,6 +299,13 @@ bool createUnit(Unit& out, map_id type, LOCATION loc, int owner,
             for (int dy = 0; dy < h; ++dy)
                 for (int dx = 0; dx < w; ++dx)
                     g_gameMap.setUnitOccupancy(tlx + dx, tly + dy, slot);
+            // Doca (desc+0x2A4 Eden / +0x2A5 Plymouth, coluna 1-based na
+            // última linha): a célula fica sem ocupação (and 0xF800FFFF).
+            if (const StructSheetDesc* sd = structSheet(type)) {
+                const bool eden = (owner & 0x0F) < kMaxPlayers && g_playerData[owner & 0x0F].isEden;
+                const int dock = eden ? sd->dockLocE : sd->dockLocP;
+                if (dock) g_gameMap.clearUnitOccupancy(tlx + dock - 1, tly + h - 1);
+            }
         } else if (mapIdIsVehicle(type)) {
             g_gameMap.setUnitOccupancy(cx, cy, slot);
         }

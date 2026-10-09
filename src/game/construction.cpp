@@ -61,6 +61,36 @@ static void setBuildOrder(UnitRecord& u, uint32_t loc, int l, int t, int r, int 
     u.buildR = static_cast<int16_t>(r); u.buildB = static_cast<int16_t>(b);   // [+0x66]/[+0x68]
 }
 
+void mineFootprint(int& w, int& h) {
+    const StructSheetDesc* d = structSheet(0x15);
+    w = d ? d->sizeX : 1; h = d ? d->sizeY : 1;
+}
+
+// sub_40E210 case 6: unidade comandável; ConVec só com kit; [+0x23] != 2 →
+// vt[0x84] (sub_423310 / sub_4233A0 / sub_423430: idênticos).
+static void sendBuildPacket(const std::vector<int>& sel, int w, int h, int tileX, int tileY) {
+    const int me = TethysGame::localPlayer();
+    int l, t, r, b;
+    kitPlacementRect(w, h, tileX, tileY, l, t, r, b);
+    const uint32_t loc = packLocation(r, b);             // canto inferior direito do anel
+    soundPlay(0x56);
+    for (int id : sel) {
+        if (!valid(id)) continue;
+        UnitRecord& u = g_units[id];
+        if (ownerOf(u) != me || !commandable(u)) continue;
+        if (u.type == mapConVec && u.cargo == 0) continue;
+        if (u.field23 == 2) continue;
+        if (u.type != mapConVec && u.type != mapRoboMiner && u.type != mapGeoCon) continue;   // vt[0x84] nulo
+        setBuildOrder(u, loc, l, t, r, b);
+    }
+}
+
+void sendBuildMine(const std::vector<int>& sel, int tileX, int tileY) {   // sub_452010
+    int w, h;
+    mineFootprint(w, h);
+    sendBuildPacket(sel, w, h, tileX, tileY);
+}
+
 void sendBuildKit(const std::vector<int>& sel, int tileX, int tileY) {   // sub_451B30
     const int me = TethysGame::localPlayer();
     int w = 0, h = 0;
@@ -127,9 +157,59 @@ static bool turnTo(UnitRecord& u, uint8_t target) {
     u.curDir = static_cast<uint8_t>(((u.rotation + 16) & 0xFF) >> 5);
     return u.rotation == target;
 }
+bool unitTurnTo(UnitRecord& u, unsigned char target) { return turnTo(u, target); }
 
 void conVecBuildTick(int id) {                            // jpt_43B312 case 6
     UnitRecord& u = g_units[id];
+    if (u.field23 == 1 && (u.type == mapRoboMiner || u.type == mapGeoCon)) {   // loc_43B72F
+        // Giro: Robo-Miner 0x60 (Eden) / 0x80 (Plymouth); GeoCon 0x40.
+        const bool eden = ownerOf(u) < kMaxPlayers && g_playerData[ownerOf(u)].isEden;
+        const uint8_t dir = u.type == mapRoboMiner ? (eden ? 0x60 : 0x80) : 0x40;
+        if (!turnTo(u, dir)) return;
+        int w, h;
+        mineFootprint(w, h);                              // off_4E1394 (mina)
+        pfSetContext(id);
+        int cost = 0;
+        bool ok = true;
+        const int mc = u.moveClass;
+        for (int i = 0; i < w + 2; ++i)
+            for (int j = 0; j < h + 2; ++j) {
+                const int x = (u.buildL + i) & wmask(), y = u.buildT + j;
+                if (y >= 0 && y < g_gameMap.height()) {
+                    if (TethysGame::cheatFlag(4)) ++cost;
+                    else {
+                        const int ct = static_cast<int>(g_gameMap.rawCell(x, y) & 0x1F);
+                        if (ct != 0x15 && ct != 0x1A) cost += terrainMoveCost(ct, 3) >> 6;
+                    }
+                }
+                const bool ring = i == 0 || j == 0 || i == w + 1 || j == h + 1;
+                if (ring) { ok = ok && cellOkRing(id, mc, x, y); continue; }
+                if (cellOkInterior(id, x, y)) continue;
+                // Célula interna recusada: vale se estiver livre e com um beacon,
+                // respiradouro ou fumarola (lista dword_5737D0).
+                if (y < 0 || y >= g_gameMap.height() || g_gameMap.cellOccupant(x, y)) { ok = false; continue; }
+                bool site = false;
+                for (size_t k = 1; k < g_units.size() && !site; ++k) {
+                    const UnitRecord& s = g_units[k];
+                    if (s.id == -1 || (s.type != 0x51 && s.type != 0x52 && s.type != 0x53)) continue;
+                    site = ((unitOX(s) >> 5) & wmask()) == x && (unitOY(s) >> 5) == y;
+                }
+                if (!site) ok = false;
+            }
+        if (ok) { u.field22 = 2; u.field3C = cost; return; }
+        if (ownerOf(u) == TethysGame::localPlayer())
+            postMessage(u.pixelX + 16, u.pixelY + 16, "Building command not successful", 0x9E);
+        u.action = 0; u.field22 = 0;
+        return;
+    }
+    if (u.field23 == 2 && (u.type == mapRoboMiner || u.type == mapGeoCon)) {   // loc_43BA42
+        soundPlayAt(unitOX(u), unitOY(u), 0x42);
+        killUnit(id, 1);                                  // sub_43A890(1): o veículo vira a mina
+        UnitRecord& v = g_units[id];
+        v.flags |= UNIT_DEAD;                             // 0x20000
+        v.cargo = 0;
+        return;
+    }
     if (u.field23 == 1) {                                 // chegou ao canto da obra
         if (u.type != mapConVec) { u.action = 0; return; }
         if (!turnTo(u, 0x60)) return;                     // espera virar
@@ -173,7 +253,12 @@ void conVecBuildTick(int id) {                            // jpt_43B312 case 6
 
 void conVecBuildStart(int id) {                           // sub_43DE50 case 2
     UnitRecord& u = g_units[id];
-    const int type = static_cast<int16_t>(u.cargo);
+    int type = static_cast<int16_t>(u.cargo);
+    const bool miner = u.type == mapRoboMiner || u.type == mapGeoCon;
+    if (miner) {                                          // loc_43E013 / loc_43E064
+        type = u.type == mapRoboMiner ? 0x15 : 0x2C;      // mina / Geothermal Plant
+        g_gameMap.clearUnitOccupancy((u.pixelX >> 5) & wmask(), u.pixelY >> 5);   // and 0xF800FFFF
+    }
     // Centro do retângulo (área + anel) em tiles.
     int dx = u.buildR - u.buildL - 1;
     if (dx < 0) dx += g_gameMap.width() - 1 + 1;          // (largura interna − 1 no original)
@@ -187,7 +272,7 @@ void conVecBuildStart(int id) {                           // sub_43DE50 case 2
     // (sub_4030E0: grupo de IA [+0x6A]; revelação do mapa dword_574C88 — pendentes)
     structureStartBuild(bld, id);                         // ação 0x21, duração com o [+0x3C] da ConVec
     u.field3C = b.buildTime;                              // [esi+3Ch] = [edi+5Ch]
-    soundPlayAt(unitOX(g_units[bld]), unitOY(g_units[bld]), 3);   // (sub_42F000 pendente)
+    if (!miner) soundPlayAt(unitOX(g_units[bld]), unitOY(g_units[bld]), 3);   // (sub_42F000 pendente)
     u.field23 = u.field22;
     u.field22 = 0;
 }

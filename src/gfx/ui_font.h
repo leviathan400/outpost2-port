@@ -23,6 +23,9 @@ public:
                              uint32_t color, bool bold = false);
     static int width(const std::string& text, bool bold = false);
     static int lineHeight(bool bold = false);           // tmHeight
+    // y do texto centralizado num botão (sub_40AC80: [+0x24] = (topo + base + 1 −
+    // altura do texto) / 2; a altura vem de sub_415EC0 = linhas × tmHeight).
+    static int centeredY(int top, int bottom, bool bold = false) { return (top + bottom + 1 - lineHeight(bold)) / 2; }
     static int ascent(bool bold = false);
 };
 

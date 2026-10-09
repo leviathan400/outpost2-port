@@ -118,7 +118,7 @@ void ResearchPane::draw(uint32_t* fb, int fbW, int fbH, int winL, int winT, cons
         const bool over = mx >= r.l && mx < r.r && my >= r.t && my < r.b;
         if (g_art.ok() && anim < g_art.numAnimations())
             blitArtFrame(fb, fbW, fbH, anim, over ? 1 : 0, r.l, r.t, -1, pane.l, pane.t, pane.r, pane.b);
-        UiFont::drawCentered(fb, fbW, fbH, label, (r.l + r.r) / 2, r.t + 8, over ? 0xFFFF7050 : 0xFFE04030, false);
+        UiFont::drawCentered(fb, fbW, fbH, label, (r.l + r.r) / 2, UiFont::centeredY(r.t, r.b), over ? 0xFFFF7050 : 0xFFE04030, false);
     };
     textBtn(lessRect(winL, winT), "LESS");
     textBtn(moreRect(winL, winT), "MORE");
@@ -216,7 +216,7 @@ void StudentsPane::draw(uint32_t* fb, int fbW, int fbH, int winL, int winT, cons
         const bool over = mx >= b.l && mx < b.r && my >= b.t && my < b.b;
         if (g_art.ok() && anim < g_art.numAnimations())
             blitArtFrame(fb, fbW, fbH, anim, over ? 1 : 0, b.l, b.t, -1, pane.l, pane.t, pane.r, pane.b);
-        UiFont::drawCentered(fb, fbW, fbH, label, (b.l + b.r) / 2, b.t + 8, over ? 0xFFFF7050 : 0xFFE04030, false);
+        UiFont::drawCentered(fb, fbW, fbH, label, (b.l + b.r) / 2, UiFont::centeredY(b.t, b.b), over ? 0xFFFF7050 : 0xFFE04030, false);
     };
     textBtn(9, "LESS");
     textBtn(9 + 87, "MORE");
