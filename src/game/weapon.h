@@ -70,6 +70,16 @@ bool tankTurret(const UnitRecord& r, int bodyAnimReal, int bodyFrame,
 // sub_484A90: frame do chassi do tanque (em movimento: (id + tick/2) % nF).
 bool isTankChassis(int type);
 
+// Ordens de ataque/guarda (ações 0x24/0x25):
+// sub_423850 — alvo da ordem [+0x48], rota até ele ou arma apontada se ao alcance.
+void unitOrderAttack(int id, int type, const std::vector<uint32_t>& wps, uint32_t tgt, int unitIdx, int adj);
+// sub_40E210 casos 36/37 (pacotes 0x24 atacar / 0x25 guardar).
+void processAttackPacket(int owner, int type, const std::vector<int>& ids,
+                         const std::vector<uint32_t>& wps, uint32_t tgt);
+// sub_43ACA0: ramo [+0x20] dos casos 36/37 e o tick da ação 0x24 (jpt_43B312 case 36).
+void weaponAttackStart(int id);
+void weaponAttackTick(int id);
+
 // Utilitários compartilhados com os desastres:
 int8_t  dirCos(uint8_t dir);                 // byte_4E9AF8 (cos * 64)
 int8_t  dirSin(uint8_t dir);                 // byte_4E9BF8 (sen * 64)

@@ -14,6 +14,7 @@
 #include "structure.h"
 #include "tethys_game.h"
 #include "unit.h"
+#include "weapon.h"
 
 namespace op2 {
 
@@ -293,11 +294,14 @@ void unitResetCombat(int id) {                               // sub_43A910
         if (ref > 0 && ref < static_cast<int>(g_units.size()) && g_units[ref].refCount) --g_units[ref].refCount;
     };
     if (u.flags & UNIT_ARMED) {
-        if (u.hasTarget() && u.targetIsUnit()) drop(u.target4C);
+        if (u.target() & 0x80000000u) drop(u.target4C);     // [+0x4C]
+        if (u.guardTarget() & 0x80000000u) drop(u.guardLo); // [+0x50]
         u.flags &= ~(0x400000u | 0x2000u);
-        u.field4E = 0x7FFF;                                  // (+0x52 = 0x7FFF: 2º alvo não modelado)
+        u.field4E = 0x7FFF;
+        u.guardHi = 0x7FFF;
     }
     if (u.lastAttacker) { drop(u.lastAttacker); u.lastAttacker = 0; }
+    if (u.orderTarget() & 0x80000000u) drop(u.orderLo);     // [+0x48]
     u.field4A = 0x7FFF;
 }
 
@@ -312,7 +316,12 @@ void unitFinishStop(int id) {                                // sub_43ACA0 case 
                 --g_units[u.target4C].refCount;
             u.field4E = 0x7FFF;
         }
-        u.field4A = 0x7FFF;
+        if (u.field4A != 0x7FFF) {
+            if ((u.orderTarget() & 0x80000000u) && u.orderLo > 0 && u.orderLo < static_cast<int>(g_units.size()) &&
+                g_units[u.orderLo].refCount)
+                --g_units[u.orderLo].refCount;
+            u.field4A = 0x7FFF;
+        }
     }
     // (prédio: vt[48] — sub-estado/produção — entra com os botões de prédio.)
     u.hasOrder = false;
@@ -392,6 +401,7 @@ UiClick uiCommandClick(int cmd, const std::vector<int>& sel) {
         case UC_SELF_DESTRUCT: sendSelfDestruct(sel); return UiClick::DONE;   // sub_4555F0 (0x14)
         case UC_MOVE: return UiClick::TARGET;                           // sub_451260 (modo 7)
         case UC_STAND_GROUND: return UiClick::TARGET;                   // sub_4518E0 (modo 7)
+        case UC_ATTACK: return UiClick::TARGET;                         // sub_4530D0
         case UC_SCATTER: sendScatter(sel); return UiClick::DONE;        // sub_4556B0 (0x15)
         // IDLE (pacote 0x12) / ACTIVATE (0x13). O IDLE do original confirma antes
         // quando o prédio guarda metal (smelter/armazém: "All metal in storage
@@ -411,6 +421,21 @@ bool uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int tileY)
         for (int id : sel)
             if ((g_units[id].owner & 0x0F) == me && (g_units[id].flags & UNIT_ARMED)) pkt.unitIds.push_back(id);
         if (!pkt.unitIds.empty()) processCommandPacket(me, pkt);
+        return true;
+    }
+    if (cmd == UC_ATTACK) {                                  // sub_453130: pacote 0x24 (armados 0x10|0x80)
+        const int me = TethysGame::localPlayer();
+        std::vector<int> ids;
+        for (int id : sel)
+            if ((g_units[id].owner & 0x0F) == me && (g_units[id].flags & 0x90u)) ids.push_back(id);
+        // Alvo = unidade sob o cursor (dword_56DDE4) ou o tile.
+        uint32_t tgt = static_cast<uint32_t>(static_cast<uint16_t>(tileX)) |
+                       (static_cast<uint32_t>(static_cast<uint16_t>(tileY)) << 16);
+        const int occ = g_gameMap.cellOccupant(tileX & (g_gameMap.width() - 1), tileY);
+        if (occ > 0 && occ < static_cast<int>(g_units.size()) && g_units[occ].id != -1 &&
+            !(g_units[occ].flags & UNIT_DEAD))
+            tgt = static_cast<uint32_t>(occ) | 0xFFFF0000u;
+        if (!ids.empty()) processAttackPacket(me, 0x24, ids, {}, tgt);
         return true;
     }
     if (cmd != UC_MOVE) return false;

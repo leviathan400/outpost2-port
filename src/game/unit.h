@@ -166,7 +166,9 @@ struct UnitRecord {
     uint8_t  turretDir = 0;        // +0x2D direção da torre (0..255)
     int16_t  reload = 0;           // +0x2E recarga restante (ticks)
     uint8_t  refCount = 0;         // +0x32 referências (alvos/projéteis); slot não é reusado
-    int16_t  field4A = 0x7FFF;     // +0x4A
+    int16_t  orderLo = 0;          // +0x48 (veículo) alvo da ORDEM: id ou x do tile (+0x4A = field4A)
+    int16_t  field4A = 0x7FFF;     // +0x4A (0x8000 = unidade, y do tile, 0x7FFF = nenhum)
+    int16_t  guardLo = 0, guardHi = 0x7FFF;   // +0x50/+0x52 unidade guardada (ação 0x25)
     int16_t  target4C = 0;         // +0x4C alvo: id da unidade ou x do tile
                                    // (+0x4E field4E: 0xFFFF = unidade, y do tile, 0x7FFF = nenhum)
     // Projétil (unidades de arma 0x3B..0x57):
@@ -214,6 +216,10 @@ struct UnitRecord {
     int      lnext = 0, lprev = 0;
     int      freeTick = 0;         // [+0x08] tick em que o slot foi liberado
 
+    // Alvo da ordem como o dword [+0x48].
+    uint32_t orderTarget() const { return (static_cast<uint32_t>(static_cast<uint16_t>(field4A)) << 16) | static_cast<uint16_t>(orderLo); }
+    void setOrderTarget(uint32_t v) { orderLo = static_cast<int16_t>(v & 0xFFFF); field4A = static_cast<int16_t>(v >> 16); }
+    uint32_t guardTarget() const { return (static_cast<uint32_t>(static_cast<uint16_t>(guardHi)) << 16) | static_cast<uint16_t>(guardLo); }
     // Alvo como o dword [+0x4C]: bit31 = unidade.
     uint32_t target() const { return (static_cast<uint32_t>(field4E) << 16) | static_cast<uint16_t>(target4C); }
     bool hasTarget() const { return field4E != 0x7FFF; }

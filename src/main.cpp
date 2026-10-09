@@ -446,6 +446,28 @@ static int runCmdTest(const std::string& mapName) {
     for (int t = 0; t < 300; ++t) gs.onIdle(renderer, 0.2501f / 4.0f);
     const op2::UnitRecord& g0 = op2::g_units[grp[0]];
     std::printf("[CmdTest] apos: tile=(%d,%d) acao=0x%X f20=%d sub=%d\n", g0.pixelX >> 5, g0.pixelY >> 5, g0.action, g0.field20, g0.field22);
+    // Atacar: Lynx nosso contra um Scout do jogador 1 a 12 tiles.
+    {
+        op2::Unit me2, foe;
+        op2::resetUnits();                                   // cena limpa: só os dois
+        const int ax = sx, ay = sy - 4;
+        op2::TethysGame::CreateUnit(me2, op2::mapLynx, op2::LOCATION{ax, ay}, op2::g_units[cc].owner & 0x0F, 0x3D);
+        op2::TethysGame::CreateUnit(foe, op2::mapScout, op2::LOCATION{ax + 12, ay}, 1, 0);
+        op2::g_units[me2.id()].flags &= ~op2::UNIT_AUTO_TARGET;   // so a ordem (sem alvo automatico)
+        const std::vector<int> s1{me2.id()};
+        std::printf("[CmdTest] Atacar: %d\n", (int)op2::uiCommandClick(op2::UC_ATTACK, s1));
+        op2::uiCommandTarget(op2::UC_ATTACK, s1, ax + 12, ay);
+        for (int t = 0; t < 600; ++t) {
+            gs.onIdle(renderer, 0.2501f / 4.0f);
+            const op2::UnitRecord& a = op2::g_units[me2.id()];
+            const op2::UnitRecord& f = op2::g_units[foe.id()];
+            if (t % 40 == 0 || (f.flags & op2::UNIT_DEAD))
+                std::printf("[CmdTest] t=%3d lynx=(%d,%d) acao=0x%X sub=%d ordem=%08X arma=%08X | scout dano=%d%s\n", t,
+                            a.pixelX >> 5, a.pixelY >> 5, a.action, a.field22, a.orderTarget(), a.target(), f.damage,
+                            (f.flags & op2::UNIT_DEAD) ? " MORTO" : "");
+            if (f.flags & op2::UNIT_DEAD) break;
+        }
+    }
     renderer.shutdown(); SDL_Quit();
     return 0;
 }

@@ -1,5 +1,8 @@
 #include "weapon.h"
 
+#include "command.h"
+#include "commands.h"
+
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -299,8 +302,9 @@ static bool turretBonus(const UnitRecord& u) {
     return (u.flags & UNIT_TURRET_BLD) && u.netConnected;
 }
 
-// sub_485140: o alvo está ao alcance (e à vista, se o modo exigir)?
-static bool inRange(const UnitRecord& u) {
+// sub_485140(alvo): o alvo (dword no formato de [+0x4C]) está ao alcance (e à
+// vista, se o modo exigir)?
+static bool inRangeTo(const UnitRecord& u, uint32_t tgt) {
     const int p = statsOf(u);
     int R;
     if (u.action == 0x25) {
@@ -314,14 +318,15 @@ static bool inRange(const UnitRecord& u) {
     }
     const int sx = unitOX(u) >> 5, sy = unitOY(u) >> 5;
     int tx, ty, dx, dy;
-    if (u.hasTarget() && u.targetIsUnit()) {
-        const UnitRecord& t = g_units[u.target4C];
+    const int16_t tLo = static_cast<int16_t>(tgt & 0xFFFF), tHi = static_cast<int16_t>(tgt >> 16);
+    if ((tgt & 0x80000000u) && tHi != 0x7FFF) {
+        const UnitRecord& t = g_units[tLo > 0 && tLo < static_cast<int>(g_units.size()) ? tLo : 0];
         nearestTile(t, sx, sy, tx, ty);
         dy = std::abs(unitOY(u) - ty * 32 - 16);
         const int cx = tx * 32 + 16, ux = unitOX(u);
         dx = (ux > cx ? ux : cx) - (ux < cx ? ux : cx);
     } else {
-        tx = u.target4C; ty = static_cast<int16_t>(u.field4E);
+        tx = tLo; ty = tHi;
         dx = ((tx > sx ? tx : sx) - (tx < sx ? tx : sx)) * 32;
         dy = std::abs(sy - ty) * 32;
     }
@@ -333,6 +338,7 @@ static bool inRange(const UnitRecord& u) {
     if (R < dist) return false;
     return lineOfSight(sx, sy, tx, ty) != 0;
 }
+static bool inRange(const UnitRecord& u) { return inRangeTo(u, u.target()); }
 
 // Filtro comum das buscas: prédio só se AutoTargeted; máscara de flags; não aliado.
 static bool candidateOk(const UnitRecord& c, uint32_t mask, uint32_t ownerBit) {
@@ -524,21 +530,222 @@ void weaponTick(int id) {                                     // sub_4A7AF0 / su
     if (fireWeapon(id)) reload();
 }
 
+static void addRef(int id) {
+    if (id > 0 && id < static_cast<int>(g_units.size())) ++g_units[id].refCount;
+}
+static void dropIfUnit(uint32_t tgt) { if (tgt & 0x80000000u) dropRef(static_cast<int16_t>(tgt & 0xFFFF)); }
+
+// sub_439810: ponto de rota do alvo — lugar: centro do tile; unidade: o tile
+// dela mais próximo da posição (vt[27]).
+static uint32_t targetWaypoint(const UnitRecord& u, uint32_t tgt) {
+    int tx, ty;
+    if (tgt & 0x80000000u) {
+        nearestTile(g_units[static_cast<int16_t>(tgt & 0xFFFF)], unitOX(u) >> 5, unitOY(u) >> 5, tx, ty);
+    } else {
+        tx = static_cast<int16_t>(tgt & 0xFFFF); ty = static_cast<int16_t>(tgt >> 16);
+    }
+    return packLocation(tx & tileMask(), ty);
+}
+
+void unitOrderAttack(int id, int type, const std::vector<uint32_t>& wps, uint32_t tgt, int unitIdx, int adj) {   // sub_423850
+    UnitRecord& u = g_units[id];
+    if ((tgt >> 16) == 0x7FFF) tgt = (tgt & 0xFFFF) | 0xFFFF0000u;
+    const bool tUnit = (tgt & 0x80000000u) != 0;
+    if (tUnit) {
+        const int t = static_cast<int16_t>(tgt & 0xFFFF);
+        if (t <= 0 || t >= static_cast<int>(g_units.size()) || g_units[t].id == -1 || (g_units[t].flags & UNIT_DEAD)) {
+            u.action = 0; u.field3C = 0; u.field20 = 1;          // alvo morto: cancela
+            if (u.orderTarget() & 0x80000000u) { dropRef(u.orderLo); u.field4A = 0x7FFF; }
+            if (u.guardTarget() & 0x80000000u) { dropRef(u.guardLo); u.guardHi = 0x7FFF; }
+            u.flags &= ~0x400000u;
+            return;
+        }
+    }
+    u.field20 = 1;
+    u.action = static_cast<uint8_t>(type);
+    u.field3C = unitIdx / 4;
+    const uint32_t cur = u.orderTarget();
+    if (!(u.field4A != 0x7FFF && (cur & 0x80000000u) && tUnit && u.orderLo == static_cast<int16_t>(tgt & 0xFFFF))) {
+        dropIfUnit(cur);
+        u.setOrderTarget(tgt);
+        if (tUnit) addRef(u.orderLo);
+    }
+    if (type == 0x25) {
+        if (u.guardTarget() != tgt) {
+            dropIfUnit(u.guardTarget());
+            u.guardLo = static_cast<int16_t>(tgt & 0xFFFF); u.guardHi = static_cast<int16_t>(tgt >> 16);
+            addRef(u.guardLo);
+        }
+    } else if (!(u.flags & 0x400000u)) {
+        dropIfUnit(u.guardTarget());
+        u.guardHi = 0x7FFF;
+    }
+    if (inRangeTo(u, u.orderTarget()) && wps.empty()) {
+        u.hasOrder = false; u.order = OrderBlock{};          // já ao alcance: sem rota
+        u.routeDirs.clear(); u.routeIdx = 0;
+        if (u.field4E != 0x7FFF && u.target4C == u.orderLo) return;
+        if (u.targetIsUnit() && u.hasTarget()) dropRef(u.target4C);
+        u.field4E = 0x7FFF;
+        if (u.action == 0x25 || (u.flags & 0x400000u)) return;
+        u.target4C = u.orderLo; u.field4E = u.field4A;       // [+0x4C] = [+0x48]
+        if (u.targetIsUnit()) addRef(u.target4C);
+        return;
+    }
+    // Rota até o alvo; [ordem+0x40] = distância de parada pelo alcance da arma.
+    u.hasOrder = true;
+    u.order = OrderBlock{};
+    u.order.waypoints = wps;
+    u.order.count = static_cast<int>(wps.size()) + 1;
+    u.order.countMinus1 = static_cast<int>(wps.size());
+    const bool moving = tUnit && g_units[u.orderLo].field22 == 1;
+    const WeapPlayerStats* w = weapStats(static_cast<int16_t>(u.cargo), statsOf(u));
+    const int R = w ? w->range : 0;
+    int d;
+    if (type == 0x25) d = moving ? R >> 1 : R - 1;
+    else d = R - (moving ? 2 : 0) - adj;
+    if (d <= 1) d = 1;
+    u.order.field40 = d;                                     // (o executor de rota do port ainda não usa)
+    u.order.waypoints.push_back(targetWaypoint(u, tgt));
+    u.routeDirs.clear(); u.routeIdx = 0;
+}
+
+void processAttackPacket(int owner, int type, const std::vector<int>& ids,
+                         const std::vector<uint32_t>& wps, uint32_t tgt) {   // sub_40E210 cases 36,37
+    // (mais de 4 unidades: formação sub_410210 — pendente.)
+    bool wallOrBld = false;                                  // var_114 → flag 0x4000000
+    if (!(tgt & 0x80000000u)) {
+        const int tx = static_cast<int16_t>(tgt & 0xFFFF) & tileMask(), ty = static_cast<int16_t>(tgt >> 16);
+        const int ct = static_cast<int>(g_gameMap.rawCell(tx, ty) & 0x1F);
+        wallOrBld = ct >= 0x17 && ct <= 0x19;
+    } else {
+        wallOrBld = (g_units[static_cast<int16_t>(tgt & 0xFFFF)].flags & UNIT_BUILDING) != 0;
+    }
+    int idx = 0;
+    for (int id : ids) {
+        UnitRecord& u = g_units[id];
+        const int i = idx++;
+        if ((u.owner & 0x0F) != owner) continue;
+        u.flags = (u.flags & ~0x4000000u) | (wallOrBld ? 0x4000000u : 0u);
+        unitResetCombat(id);
+        if ((tgt & 0x80000000u) && static_cast<int16_t>(tgt & 0xFFFF) == id) continue;
+        const bool cmdable = u.id != -1 && !((u.flags | (u.flags << 2)) & 0x80000u) && u.field22 != 0x0A;
+        if ((u.flags & UNIT_ARMED) && cmdable) {
+            if (type == 0x24) {
+                u.flags &= ~0x400000u;
+                if (tgt & 0x80000000u) u.flags &= ~UNIT_FIRE_GROUND;
+            }
+            unitOrderAttack(id, type, wps, tgt, i, 0);
+        }
+        // Prédio-torre (0x80) operando: vt[63] — Guard Post ainda não portado.
+    }
+}
+
+// sub_43ACA0, ramo [+0x20] dos casos 36/37 (loc_43B2B7): com rota, anda; sem, para.
+void weaponAttackStart(int id) {
+    UnitRecord& u = g_units[id];
+    if (!(u.flags & UNIT_ARMED)) { u.field20 = 0; return; }
+    if (!u.hasOrder) { u.field22 = 0; u.field20 = 0; }
+}
+
+// Fim da ordem de ataque: guarda volta a guardar; senão ação 0 e alvo automático.
+static void attackEnded(int id) {
+    UnitRecord& u = g_units[id];
+    if (u.flags & 0x400000u) unitOrderAttack(id, 0x25, {}, u.guardTarget(), 0, 0);
+    else { u.action = 0; u.flags |= UNIT_AUTO_TARGET; }
+}
+
+void weaponAttackTick(int id) {                              // sub_43ACA0 jpt_43B312 case 36
+    UnitRecord& u = g_units[id];
+    const uint32_t ord = u.orderTarget();
+    if (!(ord & 0x80000000u)) {                              // lugar
+        if (u.flags & 0x4000000u) {
+            const int tx = u.orderLo & tileMask(), ty = u.field4A;
+            if (!(g_gameMap.rawCell(tx, ty) & 0x80000000u)) {   // a parede sumiu
+                u.field4A = 0x7FFF;
+                clearTarget(u);
+                attackEnded(id);
+                return;
+            }
+        }
+        if (!inRangeTo(u, ord)) { u.action = 0; u.flags |= UNIT_AUTO_TARGET; clearTarget(u); return; }
+        if (u.target() == ord) return;
+        clearTarget(u);
+        u.target4C = u.orderLo; u.field4E = u.field4A;
+        return;
+    }
+    const int t = u.orderLo;
+    const UnitRecord* tr = (t > 0 && t < static_cast<int>(g_units.size())) ? &g_units[t] : nullptr;
+    const int16_t wpn = static_cast<int16_t>(u.cargo);
+    if (!tr || tr->id == -1 || (tr->flags & UNIT_DEAD) || !(tr->flags & UNIT_DAMAGEABLE) ||
+        ((tr->flags & UNIT_EMP) && wpn == 0x3C) || ((tr->flags & 0x40000u) && wpn == 0x47)) {
+        dropRef(t);
+        u.field4A = 0x7FFF;
+        attackEnded(id);
+        return;
+    }
+    if (u.flags & UNIT_ARMED) {
+        if (!inRangeTo(u, ord)) {                            // fora do alcance: refaz a rota
+            unitOrderAttack(id, u.action, {}, u.field4E != 0x7FFF ? u.target() : ord, 0, 1);
+            return;
+        }
+        if (u.field4E != 0x7FFF && u.target4C == u.orderLo) {
+            if (!(u.flags & 0x400000u)) unitOrderAttack(id, 0x24, {}, ord, 0, 0);
+            else unitOrderAttack(id, 0x25, {}, u.guardTarget(), 0, 0);
+            return;
+        }
+        clearTarget(u);
+        u.target4C = u.orderLo; u.field4E = u.field4A;
+        addRef(u.target4C);
+        return;
+    }
+    if (u.target() == ord || !inRangeTo(u, ord)) return;
+    clearTarget(u);
+    u.target4C = u.orderLo; u.field4E = u.field4A;
+    addRef(u.target4C);
+}
+
 void weaponAutoEngage(int id) {                               // sub_485340
     UnitRecord& u = g_units[id];
     const WeaponClass* c = classOf(static_cast<int16_t>(u.cargo));
     if (!c) return;
-    // (atacado nos últimos 12 ticks → sub_44DE10; e o ramo de retaliação com a
-    //  ordem de ataque 0x24 via sub_423850 — pendentes, dependem das ordens.)
-    if (u.hasTarget() || !(u.flags & UNIT_AUTO_TARGET)) return;
-    uint32_t mask = UNIT_DAMAGEABLE;
-    const int o = ownerOf(u);
-    if (o < kMaxPlayers && g_playerData[o].isHuman) {
-        if (u.field22 == 1) mask |= UNIT_VEHICLE;
-        if (u.field4A != 0x7FFF) mask |= UNIT_ARMED;
+    // (atacado nos últimos 12 ticks → sub_44DE10 — pendente.)
+    if (!u.hasTarget() && (u.flags & UNIT_AUTO_TARGET)) {
+        const int16_t wpn = static_cast<int16_t>(u.cargo);
+        if (wpn == 0x41 || wpn == 0x42) return;              // autodestruição: nunca procura
+        bool retaliate = u.action == 0 && u.field22 == 0;
+        if (!retaliate && u.action == 0x25 && (u.field22 == 0 || u.field22 == 6)) {
+            const int g = u.guardLo;
+            retaliate = g > 0 && g < static_cast<int>(g_units.size()) && g_units[g].lastAttacker == 0;
+        }
+        // Contra-ataque: quem atacou nos últimos 150 ticks (não aliado) vira alvo
+        // de uma ordem de ataque (0x24) — persegue.
+        if (retaliate && u.lastAttacker && TethysGame::tick() - u.lastAttackTick < 0x96) {
+            const UnitRecord& a = g_units[u.lastAttacker];
+            const bool empVsScorpion = wpn == 0x3C && a.type == mapScorpion;
+            const int ow = ownerOf(u);
+            const bool ally = ow < kMaxPlayers && (g_playerData[ow].allyMask & (1u << ownerOf(a)));
+            if (!empVsScorpion && !ally) {
+                u.action = 0;
+                unitOrderAttack(id, 0x24, {}, static_cast<uint32_t>(u.lastAttacker) | 0xFFFF0000u, 0, 0);
+                return;
+            }
+        }
+        uint32_t mask = UNIT_DAMAGEABLE;
+        const int o = ownerOf(u);
+        if (o < kMaxPlayers && g_playerData[o].isHuman) {
+            if (u.field22 == 1) mask |= UNIT_VEHICLE;
+            if (u.field4A != 0x7FFF) mask |= UNIT_ARMED;
+        }
+        const int t = findTarget(id, mask);
+        if (t) setUnitTarget(g_units[id], t);
+        return;
     }
-    const int t = findTarget(id, mask);
-    if (t) setUnitTarget(g_units[id], t);
+    // Aproximação (loc_485507): atacando e andando, com o alvo da ordem vivo —
+    // ao alcance, refaz a ordem (sem rota: para e aponta a arma).
+    if (u.action == 0x24 && u.field22 == 1 && (u.orderTarget() & 0x80000000u) && alive(u.orderLo)) {
+        if (inRangeTo(u, u.orderTarget())) unitOrderAttack(id, u.action, {}, u.orderTarget(), 0, 0);
+        // (alvo que se moveu: re-rota pela posição [ordem+0x50] — pendente)
+    }
 }
 
 void unitPeriodicTick(int id) {                               // prólogo de sub_43DE50
@@ -551,8 +758,7 @@ void unitPeriodicTick(int id) {                               // prólogo de sub
         u.lastAttacker = 0;
     }
     if (u.id != -1 && !(u.flags & UNIT_DEAD) && disasterPeriodicTick(id)) return;   // vt[20] do desastre
-    if (u.id != -1 && !(u.flags & UNIT_DEAD) && (u.flags & UNIT_VEHICLE) && (u.flags & UNIT_ARMED) &&
-        (u.flags & UNIT_AUTO_TARGET))
+    if (u.id != -1 && !(u.flags & UNIT_DEAD) && (u.flags & UNIT_VEHICLE) && (u.flags & UNIT_ARMED))
         weaponAutoEngage(id);                                     // vt[20] (sub_485340)
 }
 

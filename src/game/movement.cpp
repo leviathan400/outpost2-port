@@ -123,7 +123,7 @@ static void stepUnit(int id) {
 
     // Ações de movimento: 2 (mover) e 0x26 (ficar parado: anda até o ponto e
     // segura a posição — sub_43ACA0 inicia ambas em loc_43ADAD).
-    const bool moving = u.action == CMD_MOVE || u.action == 0x26;
+    const bool moving = u.action == CMD_MOVE || u.action == 0x26 || u.action == 0x24 || u.action == 0x25;
     if (u.field20 != 1 || !moving || !u.hasOrder || u.order.waypoints.empty()) {
         u.field22 = 0;                                          // parado: não anima
         return;
@@ -136,7 +136,8 @@ static void stepUnit(int id) {
         // Mover (casos 2-4 de jpt_43B312) zera a ação; 0x26 não tem tratamento
         // por tick (def_43B312): a ação fica 0x26 (posição mantida).
         u.field20 = 0; u.field22 = 0;
-        if (u.action != 0x26) u.action = 0;
+        // Atacar/guardar (0x24/0x25) seguem no tick da ação (jpt_43B312 casos 36/37).
+        if (u.action == CMD_MOVE) u.action = 0;
         u.hasOrder = false; u.order = OrderBlock{};
         u.routeDirs.clear(); u.routeIdx = 0;
         return;

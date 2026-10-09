@@ -469,6 +469,9 @@ static bool vehicleTick(int id) {
     // Ação 5 (Parar, pacote 5): o veículo no meio de um passo espera (sub_44D530)
     // e então zera a ação/sub-estado e solta os alvos (sub_43ACA0 case 5).
     if (r.field20 && r.action == 5 && r.stepTicks == 0) unitFinishStop(id);
+    // Atacar/guardar: ramo [+0x20] (loc_43B2B7) e o tick da ação 0x24 (case 36).
+    if (r.field20 && (r.action == 0x24 || r.action == 0x25)) weaponAttackStart(id);
+    else if (!r.field20 && r.field22 == 0 && r.action == 0x24) weaponAttackTick(id);
     {   // def_43B312: armado (0x10 xor 0x80), sem 0x20000/0x80000 → vt[5] da arma.
         UnitRecord& u = g_units[id];
         if ((((u.flags << 24) ^ (u.flags << 27)) & 0x80000000u) && !(u.flags & 0xA0000u))
