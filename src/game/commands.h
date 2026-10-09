@@ -54,12 +54,19 @@ char uiCommandHotkey(const UiCommandDesc& d);
 // uiCommandTarget); NOT_PORTED = comando ainda não portado (nada acontece).
 enum class UiClick { DONE, TARGET, NOT_PORTED };
 UiClick uiCommandClick(int cmd, const std::vector<int>& sel);
-// vt[3]: alvo no tile (x,y do port). false se não portado.
-bool uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int tileY);
+// vt[3]: alvo no tile (x,y do port). DONE = comando enviado; TARGET = segue
+// no modo de mira (Patrulhar pede 2 pontos); NOT_PORTED = não portado.
+UiClick uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int tileY);
+// Texto de ajuda do modo de mira (sub_411BF0 em unk_575570), ex. "Set path to
+// initial patrol point"; vazio se o comando não tem.
+const std::string& uiCommandHint();
 
 // sub_43A910: solta os alvos/referências de combate da unidade (armada).
 void unitResetCombat(int id);
 // Ação 5 (parada) no laço de ações (sub_43ACA0 case 5).
 void unitFinishStop(int id);
+// Ação 0x28 (patrulhar) no laço de ações (sub_43ACA0 case 40): chegou ao último
+// ponto → volta ao ponto inicial da patrulha e anda de novo.
+void unitPatrolTick(int id);
 
 } // namespace op2

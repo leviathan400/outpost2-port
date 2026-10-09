@@ -333,6 +333,23 @@ void unitFinishStop(int id) {                                // sub_43ACA0 case 
 
 // Pacote com a lista dos selecionados (sub_41A7E0) despachado pelo comando do
 // jogador local (sub_40E210). Casos portados aqui: 5 parar, 0x14 autodestruir.
+void unitPatrolTick(int id) {                                // sub_43ACA0 case 40
+    UnitRecord& u = g_units[id];
+    if (!u.hasOrder || u.order.waypoints.empty()) { u.action = 0; return; }
+    OrderBlock& ob = u.order;
+    // [ordem+4] == [ordem+8] (no último ponto) → [ordem+8] = [+0x5E].
+    if (ob.countMinus1 == ob.curWaypoint) ob.curWaypoint = u.patrolStart;
+    if (ob.curWaypoint < 0 || ob.curWaypoint > ob.countMinus1) ob.curWaypoint = 0;
+    // sub_44C2F0 (novo objetivo) e [ordem+0x34] &= ~1; [+0x23] = [+0x22], [+0x22] = 1.
+    // (No port o objetivo/rota é refeito pelo stepUnit; [+0x20] = 1 mantém o
+    // movimento ligado, como na partida da ordem.)
+    ob.flags &= ~1u;
+    u.routeDirs.clear(); u.routeIdx = 0;
+    u.field23 = u.field22;
+    u.field22 = 1;
+    u.field20 = 1;
+}
+
 static void sendStop(const std::vector<int>& sel) {         // case 5
     const int me = TethysGame::localPlayer();
     for (int id : sel) {
@@ -395,7 +412,27 @@ static void sendScatter(const std::vector<int>& sel) {
     }
 }
 
+// Patrulhar (off_4D4D60, instância dword_564940): [+4] já tem o 1º ponto,
+// [+0xC] nº de pontos, [+0xE] índice do ponto inicial, [+0x12...] pontos.
+// (Os pontos enfileirados antes de cada clique — unk_5471B0/dword_5471AC, a
+// fila de waypoints com Shift — ainda não existem no port: fila vazia.)
+static struct {
+    int stage = 0;                  // [+4]
+    std::vector<uint32_t> pts;      // [+0x12...]
+    int start = 0;                  // [+0xE]
+} s_patrol;
+static std::string s_hint;
+
+const std::string& uiCommandHint() { return s_hint; }
+
+// Ponto da patrulha: pixel do clique empacotado (x & 0x7FFF) | (y << 15), com
+// os bits 29-31 = 3 (chegar a até 3 tiles de cada ponto intermediário).
+static uint32_t patrolPoint(int tileX, int tileY) {
+    return packLocation(tileX, tileY) | 0x60000000u;
+}
+
 UiClick uiCommandClick(int cmd, const std::vector<int>& sel) {
+    s_hint.clear();
     switch (cmd) {
         case UC_STOP: sendStop(sel); return UiClick::DONE;              // sub_455540 (pacote 5)
         case UC_SELF_DESTRUCT: sendSelfDestruct(sel); return UiClick::DONE;   // sub_4555F0 (0x14)
@@ -403,6 +440,10 @@ UiClick uiCommandClick(int cmd, const std::vector<int>& sel) {
         case UC_STAND_GROUND: return UiClick::TARGET;                   // sub_4518E0 (modo 7)
         case UC_ATTACK: return UiClick::TARGET;                         // sub_4530D0
         case UC_GUARD: return UiClick::TARGET;                          // sub_4534D0 (modo 7)
+        case UC_PATROL:                                                 // sub_4544F0 (modo 6)
+            s_patrol = {};
+            s_hint = "Set path to initial patrol point";
+            return UiClick::TARGET;
         case UC_SCATTER: sendScatter(sel); return UiClick::DONE;        // sub_4556B0 (0x15)
         // IDLE (pacote 0x12) / ACTIVATE (0x13). O IDLE do original confirma antes
         // quando o prédio guarda metal (smelter/armazém: "All metal in storage
@@ -413,7 +454,30 @@ UiClick uiCommandClick(int cmd, const std::vector<int>& sel) {
     }
 }
 
-bool uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int tileY) {
+UiClick uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int tileY) {
+    if (cmd == UC_PATROL) {                                  // sub_454540
+        if (s_patrol.stage == 0) {                           // 1º clique: ponto inicial
+            s_patrol.stage = 1;
+            s_patrol.start = static_cast<int>(s_patrol.pts.size());   // [+0xC] = [+0xE] = fila
+            s_patrol.pts.push_back(patrolPoint(tileX, tileY));
+            s_hint = "Set path to final patrol point";       // (som 0x59)
+            return UiClick::TARGET;                          // mira de novo (7 - n pontos)
+        }
+        s_patrol.pts.push_back(patrolPoint(tileX, tileY));   // 2º clique: ponto final (som 0x59)
+        s_hint.clear();
+        // Pacote 0x28: unidades selecionadas (sub_41A7E0, máscara -1), os
+        // pontos e as palavras [+0xE]/[+0x10]. (Som 0x56.)
+        const int me = TethysGame::localPlayer();
+        CommandPacket pkt;
+        pkt.type = 0x28;
+        pkt.waypoints = s_patrol.pts;
+        pkt.patrolStart = s_patrol.start;
+        for (int id : sel)
+            if ((g_units[id].owner & 0x0F) == me && (g_units[id].flags & UNIT_VEHICLE)) pkt.unitIds.push_back(id);
+        if (!pkt.unitIds.empty()) processCommandPacket(me, pkt);
+        s_patrol = {};
+        return UiClick::DONE;
+    }
     if (cmd == UC_STAND_GROUND) {                            // sub_451900: pacote 0x26, armados (0x10)
         const int me = TethysGame::localPlayer();
         CommandPacket pkt;
@@ -422,7 +486,7 @@ bool uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int tileY)
         for (int id : sel)
             if ((g_units[id].owner & 0x0F) == me && (g_units[id].flags & UNIT_ARMED)) pkt.unitIds.push_back(id);
         if (!pkt.unitIds.empty()) processCommandPacket(me, pkt);
-        return true;
+        return UiClick::DONE;
     }
     if (cmd == UC_ATTACK) {                                  // sub_453130: pacote 0x24 (armados 0x10|0x80)
         const int me = TethysGame::localPlayer();
@@ -437,10 +501,10 @@ bool uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int tileY)
             !(g_units[occ].flags & UNIT_DEAD))
             tgt = static_cast<uint32_t>(occ) | 0xFFFF0000u;
         if (!ids.empty()) processAttackPacket(me, 0x24, ids, {}, tgt);
-        return true;
+        return UiClick::DONE;
     }
-    if (cmd == UC_GUARD) { processGuardTarget(TethysGame::localPlayer(), sel, tileX, tileY); return true; }
-    if (cmd != UC_MOVE) return false;
+    if (cmd == UC_GUARD) { processGuardTarget(TethysGame::localPlayer(), sel, tileX, tileY); return UiClick::DONE; }
+    if (cmd != UC_MOVE) return UiClick::NOT_PORTED;
     // sub_451280: no chão → pacote 2 (mover). Garagem/doca (pacotes 3/4) pendentes.
     const int me = TethysGame::localPlayer();
     CommandPacket pkt;
@@ -450,7 +514,7 @@ bool uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int tileY)
         if ((g_units[id].owner & 0x0F) == me && (g_units[id].flags & UNIT_VEHICLE)) pkt.unitIds.push_back(id);
     if (!pkt.unitIds.empty()) processCommandPacket(me, pkt);
     // (som 0x56.)
-    return true;
+    return UiClick::DONE;
 }
 
 } // namespace op2

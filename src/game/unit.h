@@ -98,14 +98,14 @@ enum UnitSubState : uint8_t {
 // Guarda a lista de waypoints da ordem de movimento e o progresso do pathfinder.
 struct OrderBlock {
     int count       = 0;   // [0x00] nº de waypoints
-    int countMinus1 = 0;   // [0x04] count-1
+    int countMinus1 = 0;   // [0x04] count-1 (índice do último waypoint)
     uint32_t flags  = 0;   // [0x34] (|= 1 ao setar a ordem)
     int multiFlag   = 0;   // [0x3C] (setado p/ grupos > 4 unidades)
     int field40     = 0;   // [0x40]
     // [0x14...] lista de LOCATIONs EMPACOTADOS (ver packLocation): x em bits5-14,
     // y em bits20-28, campo de 29 bits. Copiada verbatim do buffer de comando.
     std::vector<uint32_t> waypoints;
-    int curWaypoint = 0;   // índice do waypoint atual (consumido no tick/busca)
+    int curWaypoint = 0;   // [0x08] índice do waypoint atual (sub_44BEC0 avança)
 };
 
 // Registro de unidade — no original é um array global (dword_54EC08) de registros
@@ -169,6 +169,7 @@ struct UnitRecord {
     int16_t  orderLo = 0;          // +0x48 (veículo) alvo da ORDEM: id ou x do tile (+0x4A = field4A)
     int16_t  field4A = 0x7FFF;     // +0x4A (0x8000 = unidade, y do tile, 0x7FFF = nenhum)
     int16_t  guardLo = 0, guardHi = 0x7FFF;   // +0x50/+0x52 unidade guardada (ação 0x25)
+    int16_t  patrolStart = 0;      // +0x5E (veículo) waypoint onde a patrulha recomeça (ação 0x28)
     int16_t  target4C = 0;         // +0x4C alvo: id da unidade ou x do tile
                                    // (+0x4E field4E: 0xFFFF = unidade, y do tile, 0x7FFF = nenhum)
     // Projétil (unidades de arma 0x3B..0x57):

@@ -473,6 +473,7 @@ static bool vehicleTick(int id) {
     if (r.field20 && (r.action == 0x24 || r.action == 0x25)) weaponAttackStart(id);
     else if (!r.field20 && r.field22 == 0 && r.action == 0x24) weaponAttackTick(id);
     else if (!r.field20 && r.field22 == 0 && r.action == 0x25) weaponGuardTick(id);
+    else if (!r.field20 && r.field22 == 0 && r.action == 0x28) unitPatrolTick(id);   // case 40
     {   // def_43B312: armado (0x10 xor 0x80), sem 0x20000/0x80000 → vt[5] da arma.
         UnitRecord& u = g_units[id];
         if ((((u.flags << 24) ^ (u.flags << 27)) & 0x80000000u) && !(u.flags & 0xA0000u))

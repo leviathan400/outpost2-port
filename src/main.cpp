@@ -493,6 +493,32 @@ static int runCmdTest(const std::string& mapName) {
             }
         }
     }
+    // Patrulhar: Lynx vai ao ponto inicial e fica indo e voltando até o final.
+    {
+        op2::resetUnits();
+        const int px = sx, py = sy - 4;
+        op2::Unit ly;
+        op2::TethysGame::CreateUnit(ly, op2::mapLynx, op2::LOCATION{px, py}, op2::TethysGame::localPlayer(), 0x3D);
+        const std::vector<int> s1{ly.id()};
+        // Ponto final: 1ª célula enterável a partir de px+8 (indo p/ oeste).
+        op2::pfSetContext(ly.id());
+        int ex = px + 8;
+        while (ex > px && !op2::pfCanEnter(ex, py)) --ex;
+        const int r0 = (int)op2::uiCommandClick(op2::UC_PATROL, s1);
+        std::printf("[CmdTest] Patrulhar: %d dica=\"%s\"\n", r0, op2::uiCommandHint().c_str());
+        const int r1 = (int)op2::uiCommandTarget(op2::UC_PATROL, s1, px - 6, py);
+        std::printf("[CmdTest] 1o ponto: %d dica=\"%s\"\n", r1, op2::uiCommandHint().c_str());
+        const int r2 = (int)op2::uiCommandTarget(op2::UC_PATROL, s1, ex, py);
+        const op2::UnitRecord& a = op2::g_units[ly.id()];
+        std::printf("[CmdTest] 2o ponto: %d acao=0x%X pontos=%d inicio=%d | rota (%d,%d) <-> (%d,%d)\n", r2, a.action,
+                    a.order.count, a.patrolStart, px - 6, py, ex, py);
+        for (int t = 0; t < 1200; ++t) {
+            gs.onIdle(renderer, 0.2501f / 4.0f);
+            if (t % 40 == 0)
+                std::printf("[CmdTest] t=%4d lynx=(%d,%d) acao=0x%X sub=%d wp=%d/%d\n", t, a.pixelX >> 5, a.pixelY >> 5,
+                            a.action, a.field22, a.order.curWaypoint, a.order.countMinus1);
+        }
+    }
     renderer.shutdown(); SDL_Quit();
     return 0;
 }

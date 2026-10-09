@@ -1,5 +1,8 @@
 #include "movement.h"
 
+#include <algorithm>
+#include <cstdlib>
+
 #include "unit.h"
 #include "game_map.h"
 #include "pathfinder.h"
@@ -104,6 +107,37 @@ static bool setupStep(int id, int dir) {
     return true;
 }
 
+// sub_44C2F0: objetivo da busca p/ o waypoint atual [ordem+8]. O último usa o
+// modo/distância do bloco ([ordem+0x3C]/[+0x40]); os intermediários usam os
+// bits 29-31 do ponto (0 = célula exata; n>0 = modo 1, chegar a até n tiles).
+static void waypointGoal(const OrderBlock& ob, int& x, int& y, int& mode, int& dist) {
+    const uint32_t wp = ob.waypoints[ob.curWaypoint];
+    x = unpackLocX(wp); y = unpackLocY(wp);
+    if (ob.curWaypoint == ob.countMinus1) { mode = ob.multiFlag; dist = ob.field40; }
+    else if (wp & 0xE0000000u) { mode = 1; dist = static_cast<int>(wp >> 29); }
+    else { mode = 0; dist = 0; }
+}
+
+// sub_44BEC0: pula os waypoints (antes do último) que já estão a até n tiles
+// (n = bits 29-31; distância de Chebyshev em pixels/32, x com wrap) da unidade.
+static bool waypointAdvance(UnitRecord& u) {
+    OrderBlock& ob = u.order;
+    bool advanced = false;
+    const int W = g_gameMap.ok() ? g_gameMap.width() * 32 : 0;
+    while (ob.countMinus1 > ob.curWaypoint) {
+        const uint32_t wp = ob.waypoints[ob.curWaypoint];
+        // pixelX/Y do port = canto do tile (o original guarda o centro, +16).
+        int dx = u.pixelX - static_cast<int>(wp & 0x7FE0u);
+        if (W) { if (dx < -W / 2) dx += W; else if (dx > W / 2) dx -= W; }
+        const int dy = u.pixelY - static_cast<int>((wp & 0x1FF00000u) >> 15);
+        const int d = std::max(std::abs(dx) >> 5, std::abs(dy) >> 5);
+        if (d > static_cast<int>(wp >> 29)) break;
+        ++ob.curWaypoint;
+        advanced = true;
+    }
+    return advanced;
+}
+
 static void stepUnit(int id) {
     UnitRecord& u = g_units[id];
     if (u.id == -1 || (u.flags & UNIT_DEAD)) return;
@@ -121,46 +155,64 @@ static void stepUnit(int id) {
         u.velX = u.velY = 0;
     }
 
-    // Ações de movimento: 2 (mover) e 0x26 (ficar parado: anda até o ponto e
-    // segura a posição — sub_43ACA0 inicia ambas em loc_43ADAD).
-    const bool moving = u.action == CMD_MOVE || u.action == 0x26 || u.action == 0x24 || u.action == 0x25;
+    // Ações de movimento: 2 (mover), 0x26 (ficar parado: anda até o ponto e
+    // segura a posição), 0x28 (patrulhar) — sub_43ACA0 inicia todas em
+    // loc_43ADAD — e a aproximação de atacar/guardar (0x24/0x25).
+    const bool moving = u.action == CMD_MOVE || u.action == 0x26 || u.action == 0x24 ||
+                        u.action == 0x25 || u.action == 0x28;
     if (u.field20 != 1 || !moving || !u.hasOrder || u.order.waypoints.empty()) {
         u.field22 = 0;                                          // parado: não anima
         return;
     }
 
-    int curX = u.pixelX >> 5, curY = u.pixelY >> 5;
-    int destX = unpackLocX(u.order.waypoints.back());
-    int destY = unpackLocY(u.order.waypoints.back());
-    // Último ponto (sub_44C2F0 → vt[31] sub_44C350): modo [ordem+0x3C] e
-    // distância [ordem+0x40] viram o objetivo da busca ([mov+0xCC/+0xD0]);
-    // sub_4401F0: custo negativo na própria célula = já chegou.
-    pfSetContext(id);
-    pfSetGoal(u.order.multiFlag, destX, destY, u.order.field40);
-    const bool arrived = pfMoveCost(curX, curY) < 0;
-    if (arrived) {                                        // chegou ao destino
-        // Mover (casos 2-4 de jpt_43B312) zera a ação; 0x26 não tem tratamento
-        // por tick (def_43B312): a ação fica 0x26 (posição mantida).
-        u.field20 = 0; u.field22 = 0;
-        // Atacar/guardar (0x24/0x25) seguem no tick da ação (jpt_43B312 casos 36/37).
-        if (u.action == CMD_MOVE) u.action = 0;
-        u.hasOrder = false; u.order = OrderBlock{};
-        u.routeDirs.clear(); u.routeIdx = 0;
-        return;
+    const int curX = u.pixelX >> 5, curY = u.pixelY >> 5;
+    OrderBlock& ob = u.order;
+    int destX = 0, destY = 0, mode = 0, dist = 0;
+    // Laço de sub_44C0B0 (loc_44C114): objetivo = waypoint [ordem+8]; chegou a
+    // um ponto intermediário → avança (sub_44BEC0); sem rota p/ um ponto
+    // intermediário → pula-o ([ordem+8]++). (Guarda contra laço infinito.)
+    for (int guard = 0;; ++guard) {
+        if (ob.curWaypoint > ob.countMinus1) ob.curWaypoint = ob.countMinus1;
+        waypointGoal(ob, destX, destY, mode, dist);      // sub_44C2F0
+        pfSetContext(id);
+        pfSetGoal(mode, destX, destY, dist);
+        if (pfMoveCost(curX, curY) < 0) {                // sub_440550: chegou ao objetivo
+            if (ob.curWaypoint == ob.countMinus1) {      // loc_44C1C0: fim da lista
+                u.field20 = 0; u.field22 = 0;
+                u.routeDirs.clear(); u.routeIdx = 0;
+                // Patrulhar: a ordem fica; o tick da ação (case 40) recomeça.
+                if (u.action == 0x28) return;
+                // Mover (casos 2-4 de jpt_43B312) zera a ação; 0x26 não tem tratamento
+                // por tick (def_43B312): a ação fica 0x26 (posição mantida).
+                // Atacar/guardar (0x24/0x25) seguem no tick da ação (jpt_43B312 casos 36/37).
+                if (u.action == CMD_MOVE) u.action = 0;
+                u.hasOrder = false; u.order = OrderBlock{};
+                return;
+            }
+            waypointAdvance(u);                          // sub_44BEC0
+            u.routeDirs.clear(); u.routeIdx = 0;
+            if (guard < 64) continue;
+            u.field22 = 0; return;
+        }
+
+        // (Re)computa a rota se necessário (rota real do pathfinder).
+        if (u.routeIdx >= static_cast<int>(u.routeDirs.size())) {
+            SearchContext sc; sc.unitId = id;
+            sc.startX = curX; sc.startY = curY; sc.destX = destX; sc.destY = destY;
+            int dirs[600]; int reached = 0;
+            int n = pfSearchRoute(sc, dirs, 600, &reached);
+            u.routeDirs.assign(dirs, dirs + n);
+            u.routeIdx = 0;
+            if (n == 0) {
+                // loc_44C16D: sem rota p/ um ponto intermediário → o próximo.
+                if (ob.curWaypoint < ob.countMinus1 && guard < 64) { ++ob.curWaypoint; continue; }
+                u.field22 = 0; return;                    // sem rota: parado, não anima
+            }
+        }
+        break;
     }
 
-    // (Re)computa a rota se necessário (rota real do pathfinder).
-    if (u.routeIdx >= static_cast<int>(u.routeDirs.size())) {
-        SearchContext sc; sc.unitId = id;
-        sc.startX = curX; sc.startY = curY; sc.destX = destX; sc.destY = destY;
-        int dirs[600]; int reached = 0;
-        int n = pfSearchRoute(sc, dirs, 600, &reached);
-        u.routeDirs.assign(dirs, dirs + n);
-        u.routeIdx = 0;
-        if (n == 0) { u.field22 = 0; return; }            // sem rota: parado, não anima
-    }
-
-    pfSetGoal(u.order.multiFlag, destX, destY, u.order.field40);
+    pfSetGoal(mode, destX, destY, dist);
     if (!setupStep(id, u.routeDirs[u.routeIdx] & 7)) {
         u.routeDirs.clear(); u.routeIdx = 0; u.field22 = 0;
         return;

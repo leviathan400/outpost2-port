@@ -729,8 +729,8 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
             // Modo de mira: o clique escolhe o alvo (vt[3] do comando).
             int tileX = (m_camX + nx) / 32, tileY = (m_camY + ny) / 32;
             if (g_gameMap.ok()) tileX &= (g_gameMap.width() - 1);
-            uiCommandTarget(m_targetCmd, m_selected, tileX, tileY);
-            m_targetCmd = -1;
+            if (uiCommandTarget(m_targetCmd, m_selected, tileX, tileY) != UiClick::TARGET)
+                m_targetCmd = -1;                            // Patrulhar: 2 cliques
         } else if (e.button.button == SDL_BUTTON_RIGHT && m_targetCmd >= 0) {
             m_targetCmd = -1;                                // cancela a mira
         } else if (e.button.button == SDL_BUTTON_LEFT && inView) {
@@ -1084,6 +1084,10 @@ void GameState::renderPanel(Renderer& renderer) {
         }
         // Última mensagem (sub_49BF10: maiúsculas).
         Font::drawText(fb, VW, VH, statusBarText(), 4, sy + 13, 0xFFE8E8E8, false);
+        // Ajuda do modo de mira (sub_411BF0 em unk_575570). PROVISÓRIO: na linha
+        // das coordenadas — a posição real do texto desse objeto não foi medida.
+        if (m_targetCmd >= 0 && !uiCommandHint().empty())
+            Font::drawText(fb, VW, VH, uiCommandHint(), 60, sy + 2, 0xFFE8E8E8, false);
     }
 }
 

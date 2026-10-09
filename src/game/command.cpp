@@ -100,8 +100,8 @@ void processCommandPacket(int owner, const CommandPacket& pkt) {
     // Dispatcher sub_40E210 — caso MOVE (loc_40E2C0). Aplica a ordem a cada
     // unidade do packet cujo dono confere e que aceita comando.
     // Casos 2-4 e 38-40 (loc_40E2C0): ordem de movimento com a ação = tipo.
-    // Portados: 2 (mover) e 0x26 (ficar parado).
-    if (pkt.type != CMD_MOVE && pkt.type != 0x26) return;
+    // Portados: 2 (mover), 0x26 (ficar parado) e 0x28 (patrulhar).
+    if (pkt.type != CMD_MOVE && pkt.type != 0x26 && pkt.type != 0x28) return;
 
     const int numUnits = static_cast<int>(pkt.unitIds.size());
     for (int idx = 0; idx < numUnits; ++idx) {
@@ -123,6 +123,7 @@ void processCommandPacket(int owner, const CommandPacket& pkt) {
         u.action  = static_cast<uint8_t>(pkt.type);      // [esi+21h] = tipo
         u.field20 = 1;                                    // [esi+20h] = 1
         u.field3C = 0;                                    // [esi+3Ch] = 0
+        if (pkt.type == 0x28) u.patrolStart = static_cast<int16_t>(pkt.patrolStart);   // [esi+5Eh]
     }
 }
 

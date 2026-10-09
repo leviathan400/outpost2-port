@@ -38,6 +38,7 @@ struct CommandPacket {
     int type = 0;                      // [packet+0]
     std::vector<int> unitIds;          // lista de unidades-alvo do comando
     std::vector<uint32_t> waypoints;   // LOCATIONs empacotados (destino/rota)
+    int patrolStart = 0;               // 0x28: 1ª palavra após os pontos → unidade+0x5E
 };
 
 // Scratch global da busca em espiral (porta dword_5472E8/EC/F0/F4/F8) — setado por
