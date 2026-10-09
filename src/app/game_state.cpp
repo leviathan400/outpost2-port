@@ -1024,35 +1024,49 @@ void GameState::renderPanel(Renderer& renderer) {
     }
     for (int x = px0; x < VW; ++x) fb[(kMiniMapH - 1) * VW + x] = 0xFFFFFFFC;
 
-    // --- Linha de abas: os 6 ícones originais do op2_art (anims 40..45, frame 0).
-    // PROVISÓRIO: posição distribuída a olho; a janela de comandos original
-    // (layout, estados pressionado/realçado e ação de cada aba) ainda não foi portada.
+    // --- Janela do quadro (dword_5750D8): abas no topo + painel atual ---
+    // sub_45C940: 6 abas encostadas, x = 1 + soma das larguras (sub_404D30 =
+    // retângulo do header), y = 0, arte da tabela dword_4D5390 {0x8E, 0x91,
+    // 0x90, 0x8F, 0x92, 0x8D} (crua; frames 0 normal / 1 atual / 2 desabilitada).
+    // O conteúdo começa abaixo delas (sub_45CB00). Fundo (sub_45CCF0): preto +
+    // emblema da facção centrado (anim crua 0x99 Eden / 0x540 Plymouth).
+    const PaneRect pane = infoPaneRect();
     {
-        const int slot = kPanelW / 6, cy = kMiniMapH + kTabsH / 2;
-        for (int k = 0; k < 6; ++k) {
-            const int cx = px0 + slot * k + slot / 2;
-            if (!g_art.ok() || 40 + k >= g_art.numAnimations()) continue;
-            // Centraliza pelo retângulo das imagens do frame 0 (o hotspot dos
-            // ícones de UI não é o centro).
-            const ArtAnimation& an = g_art.animation(40 + k);
-            if (an.frames.empty()) continue;
-            int x0 = 1 << 20, y0 = 1 << 20, x1 = -(1 << 20), y1 = -(1 << 20);
-            for (const auto& pic : an.frames[0].pics) {
-                const ArtImage& im = g_art.image(pic.image);
-                x0 = std::min(x0, static_cast<int>(pic.x)); y0 = std::min(y0, static_cast<int>(pic.y));
-                x1 = std::max(x1, static_cast<int>(pic.x) + static_cast<int>(im.width));
-                y1 = std::max(y1, static_cast<int>(pic.y) + static_cast<int>(im.height));
+        const int winT = pane.t - 42;                       // topo da janela = topo das abas
+        const int winL = pane.l, winW = pane.r - pane.l, winH = pane.b - winT;
+        // PROVISÓRIO: a bandeja metálica em volta das abas é da "skin" do ODASL
+        // (bitmaps do OUT2RES.DLL) — por ora preto.
+        renderer.fillRect(px0 + 4, kMiniMapH, kPanelW - 4, winT - kMiniMapH, 0xFF000000);
+        renderer.fillRect(winL, winT, winW, winH, 0xFF000000);
+        if (g_art.ok()) {
+            const bool eden = g_playerData[me < kMaxPlayers ? me : 0].isEden != 0;
+            const int emb = (eden ? 0x99 : 0x540) - 0x65;
+            if (emb < g_art.numAnimations()) {
+                const ArtAnimation& an = g_art.animation(emb);
+                const int w = static_cast<int>(an.header[3]) - static_cast<int>(an.header[1]);
+                const int h = static_cast<int>(an.header[4]) - static_cast<int>(an.header[2]);
+                int ey = (winH >> 1) - (h >> 1);
+                if (ey < 0x6E) ey = 0x6E;
+                const int ex = (winW >> 1) - (w >> 1) - 1;
+                blitArtFrame(fb, VW, VH, emb, 0, winL + ex, winT + ey, -1, winL, winT, pane.r, pane.b);
             }
-            const int hx = static_cast<int>(an.header[5]), hy = static_cast<int>(an.header[6]);
-            blitArtFrame(fb, VW, VH, 40 + k, 0, cx - (x0 + x1) / 2 + hx, cy - (y0 + y1) / 2 + hy, -1,
-                         px0, kMiniMapH, VW, kMiniMapH + kTabsH);
+            static const int kTabArt[6] = {0x8E, 0x91, 0x90, 0x8F, 0x92, 0x8D};   // dword_4D5390
+            // Aba atual (sub_40A790 com 0x40): só a de objetivos é portada.
+            const int current = (m_selected.empty() && m_mission) ? 5 : -1;
+            int x = 1;
+            for (int k = 0; k < 6; ++k) {
+                const int anim = kTabArt[k] - 0x65;
+                if (anim >= g_art.numAnimations()) continue;
+                const ArtAnimation& an = g_art.animation(anim);
+                // Botão (sub_40AEE0): sub_403E00 com o hotspot no canto do retângulo.
+                blitArtFrame(fb, VW, VH, anim, k == current ? 1 : 0, winL + x, winT, -1,
+                             px0, kMiniMapH, VW, pane.t);
+                x += static_cast<int>(an.header[3]) - static_cast<int>(an.header[1]);
+            }
         }
-        for (int x = px0; x < VW; ++x) fb[(kMiniMapH + kTabsH - 1) * VW + x] = 0xFFDCDCE0;
     }
 
     // --- Quadro de informação da seleção (classe de painel @off_4D5220) ---
-    const PaneRect pane = infoPaneRect();
-    renderer.fillRect(pane.l, pane.t, pane.r - pane.l, pane.b - pane.t, 0xFF000A00);
     m_produce.update(m_selected);
     if (m_produce.isOpen())
         m_produce.draw(fb, VW, VH, pane, m_mouseNX, m_mouseNY);
@@ -1067,15 +1081,8 @@ void GameState::renderPanel(Renderer& renderer) {
         for (const CmdButton& b : btns) {
             const int anim = b.iconRaw - 0x65;
             if (g_art.ok() && anim >= 0 && anim < g_art.numAnimations()) {
-                // O hotspot dos ícones de UI não é o centro: posiciona pelo bbox.
-                const ArtAnimation& an = g_art.animation(anim);
-                int x0 = 1 << 20, y0 = 1 << 20;
-                for (const auto& pic : an.frames.empty() ? std::vector<ArtPicture>{} : an.frames[0].pics) {
-                    x0 = std::min(x0, static_cast<int>(pic.x)); y0 = std::min(y0, static_cast<int>(pic.y));
-                }
-                if (x0 == (1 << 20)) x0 = y0 = 0;
-                blitArtFrame(fb, VW, VH, anim, 0, b.l - x0 + static_cast<int>(an.header[5]),
-                             b.t - y0 + static_cast<int>(an.header[6]), -1, px0, 0, VW, VH);
+                // Botão (sub_40AEE0): sub_403E00 com o hotspot no canto do retângulo.
+                blitArtFrame(fb, VW, VH, anim, 0, b.l, b.t, -1, px0, 0, VW, VH);
             }
             const bool over = m_mouseNX >= b.l && m_mouseNX < b.r && m_mouseNY >= b.t && m_mouseNY < b.b;
             if (over) hover = &b;
@@ -1100,9 +1107,8 @@ void GameState::renderPanel(Renderer& renderer) {
         const bool over = m_mouseNX >= b.l && m_mouseNX < b.r && m_mouseNY >= b.t && m_mouseNY < b.b;
         const int anim = b.wide ? 0x97 - 0x65 : 0x98 - 0x65;
         if (g_art.ok() && anim < g_art.numAnimations()) {
-            const ArtAnimation& an = g_art.animation(anim);
-            blitArtFrame(fb, VW, VH, anim, over ? 1 : 0, b.l + static_cast<int>(an.header[5]),
-                         b.t + static_cast<int>(an.header[6]), -1, px0, 0, VW, VH);
+            // Botão (sub_40AEE0): sub_403E00 com o hotspot no canto do retângulo.
+            blitArtFrame(fb, VW, VH, anim, over ? 1 : 0, b.l, b.t, -1, px0, 0, VW, VH);
         }
         std::string t;
         for (char ch : b.label) if (ch != '&') t += ch;

@@ -60,10 +60,19 @@ int drawMarkupText(uint32_t* fb, int fbW, int fbH, const PaneRect& rc,
             cur += line[i];
         }
         flush();
-        int xl = rc.l, wr = 0, wc = 0;
+        int xl = rc.l, wl = 0, wr = 0, wc = 0;
         for (const auto& s : segs) {
+            if (s.align == 0) wl += Font::getTextWidth(s.s);
             if (s.align == 2) wr += Font::getTextWidth(s.s);
             if (s.align == 1) wc += Font::getTextWidth(s.s);
+        }
+        // sub_416650 quebra a linha quando não cabe: o trecho à direita que
+        // colidiria com o da esquerda desce p/ a linha seguinte.
+        if (wl && wr && rc.l + wl + Font::getTextWidth(" ") > rc.r - wr) {
+            for (const auto& s : segs)
+                if (s.align == 0) { Font::drawText(fb, fbW, fbH, s.s, xl, y, s.color, false); xl += Font::getTextWidth(s.s); }
+            y += lh;
+            for (auto& s : segs) if (s.align == 0) s.s.clear();
         }
         int xr = rc.r - wr, xc = (rc.l + rc.r - wc) / 2;
         for (const auto& s : segs) {
@@ -206,7 +215,7 @@ void drawUnitInfoPane(uint32_t* fb, int fbW, int fbH, const PaneRect& pane,
         std::snprintf(title, sizeof(title), "%s", unitTitle(r).c_str());   // vt+0x40
     }
     PaneRect trc{L, titleTop, R, titleBottom};
-    drawMarkupText(fb, fbW, fbH, trc, title, 0xFFFFFFFFu);
+    drawMarkupText(fb, fbW, fbH, trc, title, kTextGreen);   // fonte do título unk_578F08: verde
     // Separador (anim 0x9B → real 0x36) sob o título.
     blitArtFrame(fb, fbW, fbH, 0x9B - 0x65, 0, L - 10, titleBottom - 3, -1,
                  pane.l, pane.t, pane.r, pane.b);

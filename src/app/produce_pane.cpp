@@ -89,7 +89,7 @@ void ProducePane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, int
     const Layout L = layout(pane);
     // Título (sub_468320 → sub_459B60): nome da fábrica (vt+0x40) e a instrução.
     std::string title = unitTitle(g_units[m_factory]) + "\nSelect Item to Produce";
-    drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.t + 2, pane.r - 0xE, L.list.t}, title, 0xFFFFFFFFu);
+    drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.t + 2, pane.r - 0xE, L.list.t}, title, 0xFF00FF00u);   // unk_578F08: verde
     // Lista (sub_430400): moldura 0x4E0, fundo, item selecionado com fundo
     // 0x1CE7 e moldura 0x3DEF; texto na fonte do painel (verde).
     auto fill = [&](int x, int y, int w, int h, uint32_t c) {
@@ -99,7 +99,7 @@ void ProducePane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, int
     auto frame = [&](int x, int y, int w, int h, uint32_t c) {
         fill(x, y, w, 1, c); fill(x, y + h - 1, w, 1, c); fill(x, y, 1, h, c); fill(x + w - 1, y, 1, h, c);
     };
-    fill(L.list.l, L.list.t, L.list.r - L.list.l, L.list.b - L.list.t, 0xFF000000u);
+    fill(L.list.l, L.list.t, L.list.r - L.list.l, L.list.b - L.list.t, rgb555(0x40));   // [+0x52] = 0x40 (sub_459940)
     frame(L.list.l, L.list.t, L.list.r - L.list.l, L.list.b - L.list.t, rgb555(0x4E0));
     const uint32_t* hoverItem = nullptr;
     for (int i = 0; i < L.rows && m_top + i < static_cast<int>(m_items.size()); ++i) {
@@ -119,8 +119,7 @@ void ProducePane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, int
         const ArtAnimation& an = g_art.animation(anim);
         const bool over = en && mx >= r.l && mx < r.r && my >= r.t && my < r.b;
         const int fr = over && an.frames.size() > 1 ? 1 : 0;
-        blitArtFrame(fb, fbW, fbH, anim, fr, r.l + static_cast<int>(an.header[5]),
-                     r.t + static_cast<int>(an.header[6]), -1, pane.l, pane.t, pane.r, pane.b);
+        blitArtFrame(fb, fbW, fbH, anim, fr, r.l, r.t, -1, pane.l, pane.t, pane.r, pane.b);   // hotspot no canto
     };
     arrow(kArrowUp, L.up, canUp);
     arrow(kArrowDown, L.down, canDown);
