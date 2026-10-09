@@ -339,7 +339,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         for (size_t i = 1; i < g_units.size(); ++i) {
             const UnitRecord& r = g_units[i];
             if (r.id == -1 || (r.flags & UNIT_DEAD)) continue;
-            if (!r.hasOrder || r.action != CMD_MOVE || r.order.waypoints.empty()) continue;
+            if (!r.hasOrder || (r.action != CMD_MOVE && r.action != 0x26) || r.order.waypoints.empty()) continue;
             uint32_t dest = r.order.waypoints.back();
             int dxt = unpackLocX(dest), dyt = unpackLocY(dest);
             int ux = screenXOf(r.pixelX) + 16;

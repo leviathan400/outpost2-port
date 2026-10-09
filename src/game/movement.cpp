@@ -121,7 +121,10 @@ static void stepUnit(int id) {
         u.velX = u.velY = 0;
     }
 
-    if (u.field20 != 1 || u.action != CMD_MOVE || !u.hasOrder || u.order.waypoints.empty()) {
+    // Ações de movimento: 2 (mover) e 0x26 (ficar parado: anda até o ponto e
+    // segura a posição — sub_43ACA0 inicia ambas em loc_43ADAD).
+    const bool moving = u.action == CMD_MOVE || u.action == 0x26;
+    if (u.field20 != 1 || !moving || !u.hasOrder || u.order.waypoints.empty()) {
         u.field22 = 0;                                          // parado: não anima
         return;
     }
@@ -130,7 +133,10 @@ static void stepUnit(int id) {
     int destX = unpackLocX(u.order.waypoints.back());
     int destY = unpackLocY(u.order.waypoints.back());
     if (curX == destX && curY == destY) {                 // chegou ao destino
-        u.field20 = 0; u.action = 0; u.field22 = 0;
+        // Mover (casos 2-4 de jpt_43B312) zera a ação; 0x26 não tem tratamento
+        // por tick (def_43B312): a ação fica 0x26 (posição mantida).
+        u.field20 = 0; u.field22 = 0;
+        if (u.action != 0x26) u.action = 0;
         u.hasOrder = false; u.order = OrderBlock{};
         u.routeDirs.clear(); u.routeIdx = 0;
         return;

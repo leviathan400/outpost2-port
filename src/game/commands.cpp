@@ -7,6 +7,7 @@
 #include "building_sheet.h"
 #include "colony.h"
 #include "command.h"
+#include "game_map.h"
 #include "player.h"
 #include "research.h"
 #include "scenario.h"
@@ -340,11 +341,58 @@ static void sendSelfDestruct(const std::vector<int>& sel) { // case 20
         if ((g_units[id].owner & 0x0F) == me) unitDoSelfDestruct(id);
 }
 
+// sub_4241D0 (pacote 0x15): centro das unidades vivas (x com a volta, a partir
+// da 1ª) e cada uma vai p/ o ponto espelhado: pos + (pos − centro), y preso a
+// [0, (H−1)*32]. Ordem de mover (ação 2) com 1 ponto, [ordem+0x34] &= ~1.
+static void sendScatter(const std::vector<int>& sel) {
+    const int off = g_gameMap.internalXOffset() * 32;
+    const int pxW = g_gameMap.internalWidth() * 32, pxMask = pxW - 1;
+    auto wrap = [&](int d) {                                 // padrão com dword_54EBBC
+        const int h = pxMask / 2;
+        if (-h >= d) return d + pxW;
+        if (h < d) return -((-d) & pxMask);
+        return d;
+    };
+    auto alive = [](int id) { return g_units[id].id != -1 && !(g_units[id].flags & UNIT_DEAD); };
+    size_t i0 = 0;
+    while (i0 < sel.size() && !alive(sel[i0])) ++i0;
+    if (i0 == sel.size()) return;
+    const int x0 = unitOX(g_units[sel[i0]]) + off;
+    int dxSum = 0, ySum = unitOY(g_units[sel[i0]]), n = 1;
+    for (size_t i = i0 + 1; i < sel.size(); ++i) {
+        if (!alive(sel[i])) continue;
+        dxSum += wrap(unitOX(g_units[sel[i]]) + off - x0);
+        ySum += unitOY(g_units[sel[i]]);
+        ++n;
+    }
+    const int cx = (x0 + dxSum / n) & pxMask, cy = ySum / n;
+    const int H = g_gameMap.height();
+    for (int id : sel) {
+        if (!alive(id)) continue;
+        UnitRecord& u = g_units[id];
+        const int ux = unitOX(u) + off, uy = unitOY(u);
+        const int dx = wrap(ux - cx);
+        const int tx = (ux + dx) & pxMask;
+        int ty = uy + (uy - cy);
+        if (ty < 0) ty = 0;
+        else if (H * 32 <= ty) ty = (H - 1) * 32;
+        const int px = tx - off;
+        u.action = 2; u.field20 = 1; u.field3C = 0;
+        u.hasOrder = true;
+        u.order = OrderBlock{};
+        u.order.count = 1;
+        u.order.waypoints.push_back(packLocation((px >> 5) & (g_gameMap.width() - 1), ty >> 5));
+        u.routeDirs.clear(); u.routeIdx = 0;
+    }
+}
+
 UiClick uiCommandClick(int cmd, const std::vector<int>& sel) {
     switch (cmd) {
         case UC_STOP: sendStop(sel); return UiClick::DONE;              // sub_455540 (pacote 5)
         case UC_SELF_DESTRUCT: sendSelfDestruct(sel); return UiClick::DONE;   // sub_4555F0 (0x14)
         case UC_MOVE: return UiClick::TARGET;                           // sub_451260 (modo 7)
+        case UC_STAND_GROUND: return UiClick::TARGET;                   // sub_4518E0 (modo 7)
+        case UC_SCATTER: sendScatter(sel); return UiClick::DONE;        // sub_4556B0 (0x15)
         // IDLE (pacote 0x12) / ACTIVATE (0x13). O IDLE do original confirma antes
         // quando o prédio guarda metal (smelter/armazém: "All metal in storage
         // will be lost...") — diálogo ainda não portado.
@@ -355,6 +403,16 @@ UiClick uiCommandClick(int cmd, const std::vector<int>& sel) {
 }
 
 bool uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int tileY) {
+    if (cmd == UC_STAND_GROUND) {                            // sub_451900: pacote 0x26, armados (0x10)
+        const int me = TethysGame::localPlayer();
+        CommandPacket pkt;
+        pkt.type = 0x26;
+        pkt.waypoints.push_back(packLocation(tileX, tileY));
+        for (int id : sel)
+            if ((g_units[id].owner & 0x0F) == me && (g_units[id].flags & UNIT_ARMED)) pkt.unitIds.push_back(id);
+        if (!pkt.unitIds.empty()) processCommandPacket(me, pkt);
+        return true;
+    }
     if (cmd != UC_MOVE) return false;
     // sub_451280: no chão → pacote 2 (mover). Garagem/doca (pacotes 3/4) pendentes.
     const int me = TethysGame::localPlayer();

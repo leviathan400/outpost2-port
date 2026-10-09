@@ -426,6 +426,26 @@ static int runCmdTest(const std::string& mapName) {
             std::printf("[CmdTest] t=%3d tile=(%d,%d) px=%d acao=%d f20=%d sub=%d passo=%d\n", t, r.pixelX >> 5, r.pixelY >> 5,
                         r.pixelX, r.action, r.field20, r.field22, r.stepTicks);
     }
+    // Espalhar: 3 Lynx lado a lado; Ficar parado: o 1º anda 6 tiles e segura.
+    std::vector<int> grp;
+    for (int k = 0; k < 3; ++k) {
+        op2::Unit v;
+        if (op2::TethysGame::CreateUnit(v, op2::mapLynx, op2::LOCATION{sx + k, sy + 3}, op2::g_units[cc].owner & 0x0F, 0x3D))
+            grp.push_back(v.id());
+    }
+    std::printf("[CmdTest] Espalhar: %d\n", (int)op2::uiCommandClick(op2::UC_SCATTER, grp));
+    for (int id : grp) {
+        const op2::UnitRecord& r = op2::g_units[id];
+        std::printf("[CmdTest]   %d de (%d,%d) -> (%d,%d)\n", id, r.pixelX >> 5, r.pixelY >> 5,
+                    op2::unpackLocX(r.order.waypoints.back()), op2::unpackLocY(r.order.waypoints.back()));
+    }
+    for (int t = 0; t < 150; ++t) gs.onIdle(renderer, 0.2501f / 4.0f);
+    const std::vector<int> one{grp[0]};
+    std::printf("[CmdTest] Ficar parado: %d\n", (int)op2::uiCommandClick(op2::UC_STAND_GROUND, one));
+    op2::uiCommandTarget(op2::UC_STAND_GROUND, one, (op2::g_units[grp[0]].pixelX >> 5) - 6, op2::g_units[grp[0]].pixelY >> 5);
+    for (int t = 0; t < 300; ++t) gs.onIdle(renderer, 0.2501f / 4.0f);
+    const op2::UnitRecord& g0 = op2::g_units[grp[0]];
+    std::printf("[CmdTest] apos: tile=(%d,%d) acao=0x%X f20=%d sub=%d\n", g0.pixelX >> 5, g0.pixelY >> 5, g0.action, g0.field20, g0.field22);
     renderer.shutdown(); SDL_Quit();
     return 0;
 }

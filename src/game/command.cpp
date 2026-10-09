@@ -99,7 +99,9 @@ static void setUnitMoveOrder(UnitRecord& u, int count,
 void processCommandPacket(int owner, const CommandPacket& pkt) {
     // Dispatcher sub_40E210 — caso MOVE (loc_40E2C0). Aplica a ordem a cada
     // unidade do packet cujo dono confere e que aceita comando.
-    if (pkt.type != CMD_MOVE) return;   // outros casos: passos futuros
+    // Casos 2-4 e 38-40 (loc_40E2C0): ordem de movimento com a ação = tipo.
+    // Portados: 2 (mover) e 0x26 (ficar parado).
+    if (pkt.type != CMD_MOVE && pkt.type != 0x26) return;
 
     const int numUnits = static_cast<int>(pkt.unitIds.size());
     for (int idx = 0; idx < numUnits; ++idx) {
