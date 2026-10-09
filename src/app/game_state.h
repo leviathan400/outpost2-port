@@ -73,6 +73,12 @@ private:
     bool m_dragging = false;       // arrastando caixa de seleção?
     int  m_dragSX = 0, m_dragSY = 0;   // início da caixa (coords nativas)
     int  m_mouseNX = 0, m_mouseNY = 0; // mouse atual (coords nativas)
+    int  m_targetCmd = -1;         // comando em modo de mira (UiCommand) ou -1
+
+    // Botoeira do veículo (sub_46D540): botões montados p/ a seleção atual.
+    struct CmdButton { int cmd; int l, t, r, b; int iconRaw; std::string tip; char hotkey; };
+    std::vector<CmdButton> commandButtons() const;
+    void clickCommand(int cmd);
 
     int viewportW() const;         // largura da área de jogo (tela - painel)
     // X de tela de um pixel de mundo, tratando o WRAP horizontal do mapa

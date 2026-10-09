@@ -196,6 +196,7 @@ bool loadTechTree(const std::string& fileName, int maxTechLevel) {   // sub_4733
     for (int type = 1; type <= 0x72; ++type) {
         int id = 0;
         if (const StructSheetDesc* d = structSheet(type)) id = d->researchTopic;
+        else if (const StructSheetDesc* w = wallSheet(type)) id = w->researchTopic;
         else if (const WeaponSheetDesc* w = weaponSheet(type)) id = w->researchTopic;
         else id = vehicleResearchTopic(type);
         const int i = id ? techIndex(id) : -1;

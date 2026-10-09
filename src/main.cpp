@@ -24,6 +24,7 @@
 #include "game/weapon.h"
 #include "game/trigger.h"
 #include "game/disaster.h"
+#include "game/commands.h"
 #include "game/messages.h"
 #include "game/research.h"
 #include "game/building_sheet.h"
@@ -365,6 +366,68 @@ static int runPaneShot(const std::string& mapName, const std::string& outPath, i
     std::printf("[PaneShot] %s\n", ok ? outPath.c_str() : "falha");
     renderer.shutdown(); SDL_Quit();
     return ok ? 0 : 1;
+}
+
+// --cmdshot <map> <out.bmp> <map_id> [qtd] [carga]: cria `qtd` unidades do tipo
+// ao lado do CC, seleciona-as e grava o painel com a botoeira (mouse no botão 1).
+static int runCmdShot(const std::string& mapName, const std::string& outPath, int type, int count, int cargo) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 cmdshot", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    int cc = -1;
+    for (int i = 1; i < (int)op2::g_units.size(); ++i)
+        if (op2::g_units[i].id != -1 && op2::g_units[i].type == op2::mapCommandCenter) { cc = i; break; }
+    if (cc < 0) return 3;
+    std::vector<int> sel;
+    for (int k = 0; k < count; ++k) {
+        op2::Unit u;
+        op2::LOCATION l{(op2::g_units[cc].pixelX >> 5) + 3 + k, (op2::g_units[cc].pixelY >> 5) + 3};
+        if (op2::TethysGame::CreateUnit(u, static_cast<op2::map_id>(type), l, op2::g_units[cc].owner & 0x0F, cargo))
+            sel.push_back(u.id());
+    }
+    gs.setSelection(sel);
+    gs.setMouse(op2::Renderer::NATIVE_WIDTH - 216 + 28 + 22, 135 + 46 + 0x3C + 57 + 22);
+    for (int i = 0; i < 10; ++i) gs.onIdle(renderer, 0.05f);
+    bool ok = writeBmp32(outPath, renderer.getFramebuffer(),
+                         op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+    std::printf("[CmdShot] tipo 0x%02X x%d -> %s\n", type, (int)sel.size(), ok ? outPath.c_str() : "falha");
+    renderer.shutdown(); SDL_Quit();
+    return ok ? 0 : 1;
+}
+
+// --cmdtest <map>: Lynx anda por "Mover" (mira) e recebe "Parar" no caminho.
+static int runCmdTest(const std::string& mapName) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 cmdtest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    int cc = -1;
+    for (int i = 1; i < (int)op2::g_units.size(); ++i)
+        if (op2::g_units[i].id != -1 && op2::g_units[i].type == op2::mapCommandCenter) { cc = i; break; }
+    if (cc < 0) return 3;
+    op2::Unit u;
+    const int sx = (op2::g_units[cc].pixelX >> 5) + 3, sy = (op2::g_units[cc].pixelY >> 5) + 4;
+    op2::TethysGame::CreateUnit(u, op2::mapLynx, op2::LOCATION{sx, sy}, op2::g_units[cc].owner & 0x0F, 0x3D);
+    const std::vector<int> sel{u.id()};
+    std::printf("[CmdTest] Mover: %d\n", (int)op2::uiCommandClick(op2::UC_MOVE, sel));
+    op2::uiCommandTarget(op2::UC_MOVE, sel, sx + 12, sy);
+    for (int t = 0; t < 120; ++t) {
+        if (t == 60) std::printf("[CmdTest] Parar: %d\n", (int)op2::uiCommandClick(op2::UC_STOP, sel));
+        gs.onIdle(renderer, 0.2501f / 4.0f);
+        const op2::UnitRecord& r = op2::g_units[u.id()];
+        if (t % 10 == 9 || (t > 58 && t < 72))
+            std::printf("[CmdTest] t=%3d tile=(%d,%d) px=%d acao=%d f20=%d sub=%d passo=%d\n", t, r.pixelX >> 5, r.pixelY >> 5,
+                        r.pixelX, r.action, r.field20, r.field22, r.stepTicks);
+    }
+    renderer.shutdown(); SDL_Quit();
+    return 0;
 }
 
 // --colonytest <map>: base mínima (CC + Tokamak e Agridome encostados + Lab
@@ -1083,6 +1146,11 @@ int main(int argc, char* argv[]) {
             return runStructTest(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--paneshot") == 0 && i + 2 < argc)
             return runPaneShot(argv[i + 1], argv[i + 2], i + 3 < argc ? atoi(argv[i + 3]) : 0);
+        if (std::strcmp(argv[i], "--cmdshot") == 0 && i + 3 < argc)
+            return runCmdShot(argv[i + 1], argv[i + 2], (int)std::strtol(argv[i + 3], nullptr, 0),
+                              i + 4 < argc ? atoi(argv[i + 4]) : 1, i + 5 < argc ? (int)std::strtol(argv[i + 5], nullptr, 0) : 0);
+        if (std::strcmp(argv[i], "--cmdtest") == 0 && i + 1 < argc)
+            return runCmdTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--quaketest") == 0 && i + 1 < argc)
             return runQuakeTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--disastertest") == 0 && i + 3 < argc)

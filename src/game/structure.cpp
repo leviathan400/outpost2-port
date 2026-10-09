@@ -2,6 +2,7 @@
 
 #include "building_sheet.h"
 #include "colony.h"
+#include "commands.h"
 #include "disaster.h"
 #include "messages.h"
 #include <cstdio>
@@ -465,6 +466,9 @@ static bool vehicleTick(int id) {
             vehicleDeath(id);                                   // loc_43D8A3
         }
     }
+    // Ação 5 (Parar, pacote 5): o veículo no meio de um passo espera (sub_44D530)
+    // e então zera a ação/sub-estado e solta os alvos (sub_43ACA0 case 5).
+    if (r.field20 && r.action == 5 && r.stepTicks == 0) unitFinishStop(id);
     {   // def_43B312: armado (0x10 xor 0x80), sem 0x20000/0x80000 → vt[5] da arma.
         UnitRecord& u = g_units[id];
         if ((((u.flags << 24) ^ (u.flags << 27)) & 0x80000000u) && !(u.flags & 0xA0000u))

@@ -63,6 +63,9 @@ inline int armorValue(int armorClass) {
 
 // Descritor da estrutura (map_id 0x15..0x3A) ou nullptr.
 const StructSheetDesc* structSheet(int type);
+// TUBE/WALL/WALL_LAVA/WALL_MICROBE (0x11..0x14): linhas do building.txt (custo,
+// facção +0x1F4, Research Topic +0x1E4) — descritores próprios no original.
+const StructSheetDesc* wallSheet(int type);
 
 // Parte de VEÍCULOS de sub_445070 (VEHICLES.TXT), só as colunas usadas até
 // aqui: col 4 Hit Points → bloco+0x00, col 6 Move Points → +0x24 (Move_Speed),

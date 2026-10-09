@@ -1,0 +1,280 @@
+#include "commands.h"
+
+#include <cctype>
+#include <cstdio>
+#include <cstring>
+
+#include "building_sheet.h"
+#include "colony.h"
+#include "command.h"
+#include "player.h"
+#include "research.h"
+#include "scenario.h"
+#include "structure.h"
+#include "tethys_game.h"
+#include "unit.h"
+
+namespace op2 {
+
+const std::vector<int>& uiCommandsSingle() {                 // off_4E2C30
+    static const std::vector<int> k = {
+        UC_MOVE, UC_STOP, UC_BUILD_KIT, UC_BUILD_MINE, UC_WALL, UC_LAVA_WALL, UC_MICROBE_WALL, UC_TUBE,
+        UC_REMOVE_WALL, UC_BULLDOZE, UC_ATTACK, UC_ORE_ROUTE, UC_STAND_GROUND, UC_GUARD, UC_PATROL,
+        UC_SELF_DESTRUCT, UC_DUMP_CARGO, UC_REPAIR, UC_TAKE_OVER, UC_DISMANTLE, UC_TRANSFER, UC_SALVAGE,
+    };
+    return k;
+}
+const std::vector<int>& uiCommandsMulti() {                  // off_4E2C88
+    static const std::vector<int> k = {
+        UC_MOVE, UC_STOP, UC_ATTACK, UC_STAND_GROUND, UC_GUARD, UC_PATROL, UC_SELF_DESTRUCT, UC_SCATTER,
+        UC_TRANSFER, UC_ORE_ROUTE, UC_REPAIR,
+    };
+    return k;
+}
+
+static const UnitRecord* first(const std::vector<int>& sel) {
+    if (sel.empty() || sel[0] <= 0 || sel[0] >= static_cast<int>(g_units.size())) return nullptr;
+    return &g_units[sel[0]];
+}
+static int typeOf(int id) { return g_units[id].type; }
+static bool anyFlag(const std::vector<int>& sel, uint32_t f) {
+    for (int id : sel) if (g_units[id].flags & f) return true;
+    return false;
+}
+
+// Tipo do muro de cada instância ([this+4]): concreto 0x12, lava 0x13,
+// micróbio 0x14, tubo 0x11.
+static int wallTypeOf(int cmd) {
+    switch (cmd) {
+        case UC_WALL: return 0x12;
+        case UC_LAVA_WALL: return 0x13;
+        case UC_MICROBE_WALL: return 0x14;
+        default: return 0x11;
+    }
+}
+
+bool uiCommandAvailable(int cmd, const std::vector<int>& sel) {
+    const int n = static_cast<int>(sel.size());
+    const UnitRecord* u = first(sel);
+    const int me = TethysGame::localPlayer();
+    switch (cmd) {
+        case UC_MOVE:                                       // loc_4511D0
+            return n && (u->flags & 0x42u);
+        case UC_STOP:                                       // loc_455420
+            if (n > 1) return true;
+            if (!n) return false;
+            if (u->type >= 1 && u->type <= 0x0F) return true;
+            return u->action == 9 || u->action == 0x24;
+        case UC_BUILD_KIT:                                  // loc_451A20: ConVec com kit
+            return n == 1 && u->type == mapConVec && u->cargo != 0;
+        case UC_BUILD_MINE: {                               // loc_451E70
+            if (n != 1) return false;
+            const int stats = static_cast<int8_t>(u->owner) >> 4;
+            int topicType;
+            if (u->type == 9) topicType = 0x15;              // Robo-Miner → mina (off_4E1394)
+            else if (u->type == 0x0A) topicType = 0x2C;      // GeoCon → geotérmica (off_4E13F0)
+            else return false;
+            return researchHas(stats, researchTopicIndex(topicType)) || TethysGame::cheatFlag(1);
+        }
+        case UC_WALL: case UC_LAVA_WALL: case UC_MICROBE_WALL: case UC_TUBE: {   // sub_4524D0
+            if (n != 1 || u->type != mapEarthworker) return false;
+            const StructSheetDesc* d = wallSheet(wallTypeOf(cmd));
+            const uint32_t own = d ? d->ownerFlags : 0;
+            if (g_playerData[me].isEden ? !(own & 0x1000) : !(own & 0x800)) return false;
+            return researchHas(me, researchTopicIndex(wallTypeOf(cmd)));
+        }
+        case UC_REMOVE_WALL:                                // loc_452AB0
+            return n == 1 && u->type == mapEarthworker;
+        case UC_BULLDOZE:                                   // loc_4536D0
+            return n == 1 && u->type == mapRoboDozer;
+        case UC_ATTACK:                                     // sub_452F90
+            for (int id : sel) {
+                const UnitRecord& r = g_units[id];
+                if (r.flags & 0x50u) return true;
+                if (r.flags & 0x80u) return structureOperational(r) && r.action != 0x24;
+            }
+            return false;
+        case UC_ORE_ROUTE: {                                // sub_453E80: só caminhões vazios
+            if (!n) return false;
+            bool ok = true;
+            for (int id : sel) if (typeOf(id) != mapCargoTruck || g_units[id].cargo != 0) ok = false;
+            return ok;
+        }
+        case UC_STAND_GROUND: case UC_GUARD: case UC_PATROL:   // sub_451820 / 453410 / 454450
+            return n && anyFlag(sel, UNIT_ARMED);
+        case UC_SELF_DESTRUCT:                              // sub_4555A0
+            return true;
+        case UC_DUMP_CARGO:                                 // loc_455710
+            return n == 1 && (u->type == mapCargoTruck || u->type == mapConVec) && u->cargo != 0;
+        case UC_REPAIR:                                     // sub_4547E0
+            if (!n) return false;
+            for (int id : sel) {
+                const int t = typeOf(id);
+                if (t == mapConVec || t == mapRepairVehicle) return n == 1;
+                if (t != mapSpider) return false;
+            }
+            return true;
+        case UC_TAKE_OVER:                                  // loc_454BA0
+            return n == 1 && u->type == mapSpider;
+        case UC_DISMANTLE:                                  // loc_454F50
+            return n == 1 && u->type == mapConVec;
+        case UC_TRANSFER:                                   // sub_455A20
+            // trapaça dword_56DE58, ou Trade Center (+0x114 = estatística 0x24) numa
+            // partida multijogador (sub_4027D0 — sem rede no port: falso).
+            return n && TethysGame::cheatFlag(0);
+        case UC_SALVAGE:                                    // sub_453A20: GORF operando (+0x17C)
+            return n == 1 && g_colony[me].stat(ST_GORF_GRP + 4) != 0 && u->type == mapCargoTruck && u->cargo == 0;
+        case UC_SCATTER:                                    // loc_455650
+            return n > 1;
+        default: return false;
+    }
+}
+
+static UiCommandDesc iconDesc(int icon, int slot, const char* tip) {
+    UiCommandDesc d;
+    d.iconRaw = icon; d.slot = slot; d.tip = tip;
+    return d;
+}
+static UiCommandDesc textDesc(const char* label, const char* tip) {
+    UiCommandDesc d;
+    d.label = label; d.tip = tip;
+    return d;
+}
+
+UiCommandDesc uiCommandDescribe(int cmd, const std::vector<int>& sel) {
+    const UnitRecord* u = first(sel);
+    const bool vehicleLike = u && (u->flags & 0x42u);
+    const int me = TethysGame::localPlayer();
+    switch (cmd) {
+        case UC_MOVE: return iconDesc(0x48F, 1, "&Move the vehicle");
+        case UC_STOP:                                       // sub_4554B0
+            return vehicleLike ? iconDesc(0x48C, 2, "St&op") : textDesc("ST&OP", "St&op");
+        case UC_BUILD_KIT: return iconDesc(0x47F, 4, "&Build structure kit");
+        case UC_BUILD_MINE:                                 // sub_451F50
+            return iconDesc(0x47F, 3, u && u->type == 9 ? "Build mi&ne or magma well" : "Build g&eothermal power plant");
+        case UC_WALL: case UC_LAVA_WALL: case UC_MICROBE_WALL: case UC_TUBE: {   // sub_452590..sub_4529F0
+            static const char* const kTip[4] = {"Build Concrete &Wall", "Build L&ava Wall", "Build Micro&be Wall", "Build T&ube"};
+            const int k = cmd == UC_WALL ? 0 : cmd == UC_LAVA_WALL ? 1 : cmd == UC_MICROBE_WALL ? 2 : 3;
+            const int icon = k == 0 ? 0x490 : k == 3 ? 0x48E : 0x48A;
+            const int slot = k == 0 ? 4 : k == 3 ? 3 : 5;
+            const uint8_t* blk = unitStatBlock(wallTypeOf(cmd), me);
+            int common = 0, rare = 0;
+            if (blk) { std::memcpy(&common, blk + 0x0C, 4); std::memcpy(&rare, blk + 0x10, 4); }
+            char buf[0x32];
+            if (rare) std::snprintf(buf, sizeof(buf), "%s: %i %s, %i %s", kTip[k], common, "Common", rare, "Rare");
+            else std::snprintf(buf, sizeof(buf), "%s: %i %s", kTip[k], common, "Common");
+            return iconDesc(icon, slot, buf);
+        }
+        case UC_REMOVE_WALL: return iconDesc(0x482, 6, "Remo&ve Wall/Tube");
+        case UC_BULLDOZE: return iconDesc(0x483, 3, "Bulldo&ze region");
+        case UC_ATTACK:                                     // sub_453040: Guard Post = texto
+            if (u && u->type == 0x17) return textDesc("&ATTACK", "&Attack a unit or location");
+            return iconDesc(0x47E, 4, "&Attack a unit or location");
+        case UC_ORE_ROUTE: return iconDesc(0x486, 3, "S&et an ore-hauling route");
+        case UC_STAND_GROUND: return iconDesc(0x48B, 6, "Sta&nd ground");
+        case UC_GUARD: return iconDesc(0x481, 5, "G&uard a structure or vehicle");
+        case UC_PATROL: return iconDesc(0x486, 3, "S&et a route to patrol");
+        case UC_SELF_DESTRUCT: return iconDesc(0x489, 9, "Self &Destruct");
+        case UC_DUMP_CARGO: return iconDesc(0x484, 6, "D&ump vehicle's cargo");
+        case UC_REPAIR: return iconDesc(0x488, 3, "R&epair a structure or vehicle");
+        case UC_TAKE_OVER: return iconDesc(0x487, 4, "Ta&ke over a vehicle by reprogramming");
+        case UC_DISMANTLE: return iconDesc(0x482, 5, "Disma&ntle/Recycle a structure");
+        case UC_TRANSFER:                                   // sub_455AA0
+            return vehicleLike ? iconDesc(0x48D, 8, "Transfer to another player (&X)")
+                               : textDesc("&TRANSFER", "Transfer to another player (&X)");
+        case UC_SALVAGE: return iconDesc(0x618, 4, "Sal&vage rubble in a region");
+        case UC_SCATTER: return iconDesc(0x480, 7, "Sca&tter");
+        default: return UiCommandDesc{};
+    }
+}
+
+char uiCommandHotkey(const UiCommandDesc& d) {
+    const std::string& s = d.tip;
+    for (size_t i = 0; i + 1 < s.size(); ++i)
+        if (s[i] == '&') return static_cast<char>(std::toupper(static_cast<unsigned char>(s[i + 1])));
+    return 0;
+}
+
+// vt[29] dos veículos (sub_44B620): viva, sem 0x80000 (EMP) nem 0x20000, sub-estado != 0x0A.
+static bool commandable(const UnitRecord& r) {
+    return r.id != -1 && !((r.flags | (r.flags << 2)) & 0x80000u) && r.field22 != 0x0A;
+}
+
+void unitResetCombat(int id) {                               // sub_43A910
+    UnitRecord& u = g_units[id];
+    auto drop = [](int ref) {
+        if (ref > 0 && ref < static_cast<int>(g_units.size()) && g_units[ref].refCount) --g_units[ref].refCount;
+    };
+    if (u.flags & UNIT_ARMED) {
+        if (u.hasTarget() && u.targetIsUnit()) drop(u.target4C);
+        u.flags &= ~(0x400000u | 0x2000u);
+        u.field4E = 0x7FFF;                                  // (+0x52 = 0x7FFF: 2º alvo não modelado)
+    }
+    if (u.lastAttacker) { drop(u.lastAttacker); u.lastAttacker = 0; }
+    u.field4A = 0x7FFF;
+}
+
+void unitFinishStop(int id) {                                // sub_43ACA0 case 5
+    UnitRecord& u = g_units[id];
+    u.action = 0;
+    u.field22 = 0;
+    if (u.flags & UNIT_ARMED) {
+        if (u.field4E != 0x7FFF) {
+            if (u.targetIsUnit() && u.target4C > 0 && u.target4C < static_cast<int>(g_units.size()) &&
+                g_units[u.target4C].refCount)
+                --g_units[u.target4C].refCount;
+            u.field4E = 0x7FFF;
+        }
+        u.field4A = 0x7FFF;
+    }
+    // (prédio: vt[48] — sub-estado/produção — entra com os botões de prédio.)
+    u.hasOrder = false;
+    u.order = OrderBlock{};
+    u.routeDirs.clear();
+    u.routeIdx = 0;
+    u.field20 = 0;
+}
+
+// Pacote com a lista dos selecionados (sub_41A7E0) despachado pelo comando do
+// jogador local (sub_40E210). Casos portados aqui: 5 parar, 0x14 autodestruir.
+static void sendStop(const std::vector<int>& sel) {         // case 5
+    const int me = TethysGame::localPlayer();
+    for (int id : sel) {
+        UnitRecord& r = g_units[id];
+        if ((r.owner & 0x0F) != me || !commandable(r)) continue;
+        r.action = 5;
+        r.field20 = 1;
+        r.field3C = 0;
+        if (r.flags & UNIT_ARMED) unitResetCombat(id);
+    }
+}
+static void sendSelfDestruct(const std::vector<int>& sel) { // case 20
+    const int me = TethysGame::localPlayer();
+    for (int id : sel)
+        if ((g_units[id].owner & 0x0F) == me) unitDoSelfDestruct(id);
+}
+
+UiClick uiCommandClick(int cmd, const std::vector<int>& sel) {
+    switch (cmd) {
+        case UC_STOP: sendStop(sel); return UiClick::DONE;              // sub_455540 (pacote 5)
+        case UC_SELF_DESTRUCT: sendSelfDestruct(sel); return UiClick::DONE;   // sub_4555F0 (0x14)
+        case UC_MOVE: return UiClick::TARGET;                           // sub_451260 (modo 7)
+        default: return UiClick::NOT_PORTED;
+    }
+}
+
+bool uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int tileY) {
+    if (cmd != UC_MOVE) return false;
+    // sub_451280: no chão → pacote 2 (mover). Garagem/doca (pacotes 3/4) pendentes.
+    const int me = TethysGame::localPlayer();
+    CommandPacket pkt;
+    pkt.type = CMD_MOVE;
+    pkt.waypoints.push_back(packLocation(tileX, tileY));
+    for (int id : sel)
+        if ((g_units[id].owner & 0x0F) == me && (g_units[id].flags & UNIT_VEHICLE)) pkt.unitIds.push_back(id);
+    if (!pkt.unitIds.empty()) processCommandPacket(me, pkt);
+    // (som 0x56.)
+    return true;
+}
+
+} // namespace op2

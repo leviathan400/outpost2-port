@@ -44,6 +44,11 @@ const StructSheetDesc* structSheet(int type) {
     return &s_desc[type];
 }
 
+const StructSheetDesc* wallSheet(int type) {
+    if (type < 0x11 || type > 0x14 || !s_desc[type].loaded) return nullptr;
+    return &s_desc[type];
+}
+
 // Tokenizador de coluna (sub_4112F0): separador = TAB; tira a aspa inicial, a
 // aspa final vira espaço; valor numérico = atoi(texto).
 struct SheetCol { std::string text; int value = 0; };
@@ -161,8 +166,11 @@ bool loadBuildingSheet() {
         const size_t thisRow = row++;
         // Coluna 0: Code_Name → descritor pelo GetName (loc_445127).
         int type = -1;
-        for (int t = 0x15; t <= 0x3A; ++t)
-            if (c[0].text == structureCodeName(t)) { type = t; break; }
+        // (o original procura em 1..0x72; aqui 0x11..0x14 = TUBE/WALL* e os prédios)
+        for (int t = 0x11; t <= 0x14 && type < 0; ++t)
+            if (c[0].text == unitCodeName(t)) type = t;
+        for (int t = 0x15; t <= 0x3A && type < 0; ++t)
+            if (c[0].text == structureCodeName(t)) type = t;
         if (type < 0) continue;                      // loc_44563F: linha ignorada
         StructSheetDesc& d = s_desc[type];
         StructPlayerStats& s = d.player[0];
@@ -205,7 +213,7 @@ bool loadBuildingSheet() {
         d.loaded = true;
     }
     // loc_445EDA: bloco do jogador 0 copiado p/ os jogadores 1..6.
-    for (int t = 0x15; t <= 0x3A; ++t)
+    for (int t = 0x11; t <= 0x3A; ++t)
         for (int pl = 1; pl < 7; ++pl) s_desc[t].player[pl] = s_desc[t].player[0];
     s_loaded = true;
     return true;
@@ -281,7 +289,7 @@ static OtherDesc s_other[0x73];
 
 uint8_t* unitStatBlock(int type, int player) {
     if (player < 0 || player > 6 || type < 1 || type > 0x72) return nullptr;
-    if (type >= 0x15 && type <= 0x3A && s_desc[type].loaded)
+    if (type >= 0x11 && type <= 0x3A && s_desc[type].loaded)
         return reinterpret_cast<uint8_t*>(&s_desc[type].player[player]);
     if (type >= 1 && type <= 0x10) return reinterpret_cast<uint8_t*>(&s_veh[type].player[player]);
     if (s_weap[type].loaded) return reinterpret_cast<uint8_t*>(&s_weap[type].player[player]);

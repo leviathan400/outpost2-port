@@ -28,6 +28,7 @@
 #include "../game/trigger.h"
 #include "../game/research.h"
 #include "../game/disaster.h"
+#include "../game/commands.h"
 #include "../game/scenario.h"
 #include "../mission/mission.h"
 #include "../gfx/artfile.h"
@@ -696,14 +697,11 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
                 }
             }
         }
-        if (e.key.keysym.sym == SDLK_s) {   // Stop: cancela a ordem dos selecionados
-            for (int id : m_selected) {
-                if (id > 0 && id < (int)g_units.size()) {
-                    UnitRecord& r = g_units[id];
-                    r.field20 = 0; r.action = 0; r.hasOrder = false;
-                    r.order = OrderBlock{}; r.routeDirs.clear();   // o passo em curso termina
-                }
-            }
+        // Atalhos dos botões de comando (letra após o '&' da dica).
+        if (k >= SDLK_a && k <= SDLK_z) {
+            const char key = static_cast<char>('A' + (k - SDLK_a));
+            for (const CmdButton& b : commandButtons())
+                if (b.hotkey == key) { clickCommand(b.cmd); break; }
         }
     }
     if (e.type == SDL_MOUSEMOTION) {
@@ -724,7 +722,19 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
                 else structureDoActivate(m_selected[0]);
             }
         }
-        if (e.button.button == SDL_BUTTON_LEFT && inView) {
+        if (e.button.button == SDL_BUTTON_LEFT && !inView) {
+            for (const CmdButton& b : commandButtons())
+                if (nx >= b.l && nx < b.r && ny >= b.t && ny < b.b) { clickCommand(b.cmd); break; }
+        }
+        if (e.button.button == SDL_BUTTON_LEFT && inView && m_targetCmd >= 0) {
+            // Modo de mira: o clique escolhe o alvo (vt[3] do comando).
+            int tileX = (m_camX + nx) / 32, tileY = (m_camY + ny) / 32;
+            if (g_gameMap.ok()) tileX &= (g_gameMap.width() - 1);
+            uiCommandTarget(m_targetCmd, m_selected, tileX, tileY);
+            m_targetCmd = -1;
+        } else if (e.button.button == SDL_BUTTON_RIGHT && m_targetCmd >= 0) {
+            m_targetCmd = -1;                                // cancela a mira
+        } else if (e.button.button == SDL_BUTTON_LEFT && inView) {
             m_dragging = true; m_dragSX = nx; m_dragSY = ny;
         } else if (e.button.button == SDL_BUTTON_RIGHT && inView && !m_selected.empty()) {
             // Mover os SELECIONADOS para o tile clicado (pipeline real + espiral).
@@ -746,6 +756,45 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
         if (dx < 4 && dy < 4) selectAt(nx, ny, false);   // clique = seleção simples
         else selectBox(m_dragSX, m_dragSY, nx, ny);        // caixa = multi-seleção
         m_dragging = false;
+    }
+}
+
+// sub_46D540: lista dos 22 (1 unidade) ou dos 11 (várias); cada comando
+// disponível vira um botão na posição do descritor, numa grade 3x3 de 46 px:
+// x = 28 + 46*col, y = topo do quadro + 0x3C + 57 + 46*lin. Só p/ a botoeira de
+// veículo (painel off_4D5B28); prédios usam os botões de texto do quadro.
+std::vector<GameState::CmdButton> GameState::commandButtons() const {
+    std::vector<CmdButton> out;
+    if (m_selected.empty()) return out;
+    const UnitRecord& u = g_units[m_selected[0]];
+    if (u.id == -1 || !(u.flags & 0x42u) || (u.owner & 0x0F) != TethysGame::localPlayer()) return out;
+    const std::vector<int>& list = m_selected.size() == 1 ? uiCommandsSingle() : uiCommandsMulti();
+    const int px0 = viewportW();
+    const int top = kMiniMapH + kTabsH + 0x3C + 57;       // dword_57556C + dword_578F4C + 0x3C
+    for (int cmd : list) {
+        if (!uiCommandAvailable(cmd, m_selected)) continue;
+        const UiCommandDesc d = uiCommandDescribe(cmd, m_selected);
+        if (d.slot < 1 || d.slot > 9 || !d.iconRaw) continue;
+        const int row = (d.slot - 1) / 3, col = (d.slot - 1) % 3;
+        CmdButton b;
+        b.cmd = cmd;
+        b.l = px0 + 28 + 46 * col; b.t = top + 46 * row;
+        b.r = b.l + 44; b.b = b.t + 44;
+        b.iconRaw = d.iconRaw;
+        b.tip = d.tip;
+        b.hotkey = uiCommandHotkey(d);
+        out.push_back(b);
+    }
+    return out;
+}
+
+void GameState::clickCommand(int cmd) {                  // vt[1] do comando
+    switch (uiCommandClick(cmd, m_selected)) {
+        case UiClick::TARGET: m_targetCmd = cmd; break;
+        case UiClick::DONE: m_targetCmd = -1; break;
+        case UiClick::NOT_PORTED:
+            postMessage(-1, -1, "Comando ainda nao portado", 0);
+            break;
     }
 }
 
@@ -936,6 +985,40 @@ void GameState::renderPanel(Renderer& renderer) {
         drawUnitInfoPane(fb, VW, VH, pane, m_selected[0], static_cast<int>(m_selected.size()), me);
     else if (m_mission)
         drawObjectives(fb, VW, VH, pane.l, pane.t, pane.r, pane.b);
+    // Botoeira do veículo (sub_46D540): ícones verdes do op2_art (anim crua − 0x65).
+    {
+        const std::vector<CmdButton> btns = commandButtons();
+        const CmdButton* hover = nullptr;
+        for (const CmdButton& b : btns) {
+            const int anim = b.iconRaw - 0x65;
+            if (g_art.ok() && anim >= 0 && anim < g_art.numAnimations()) {
+                // O hotspot dos ícones de UI não é o centro: posiciona pelo bbox.
+                const ArtAnimation& an = g_art.animation(anim);
+                int x0 = 1 << 20, y0 = 1 << 20;
+                for (const auto& pic : an.frames.empty() ? std::vector<ArtPicture>{} : an.frames[0].pics) {
+                    x0 = std::min(x0, static_cast<int>(pic.x)); y0 = std::min(y0, static_cast<int>(pic.y));
+                }
+                if (x0 == (1 << 20)) x0 = y0 = 0;
+                blitArtFrame(fb, VW, VH, anim, 0, b.l - x0 + static_cast<int>(an.header[5]),
+                             b.t - y0 + static_cast<int>(an.header[6]), -1, px0, 0, VW, VH);
+            }
+            const bool over = m_mouseNX >= b.l && m_mouseNX < b.r && m_mouseNY >= b.t && m_mouseNY < b.b;
+            if (over) hover = &b;
+            if (over || b.cmd == m_targetCmd) renderer.drawRect(b.l - 1, b.t - 1, b.r - b.l + 2, b.b - b.t + 2,
+                                                               b.cmd == m_targetCmd ? 0xFFFFFF60 : 0xFFE0E0E0);
+        }
+        // Dica (sem o '&'). PROVISÓRIO: caixa junto ao cursor — o desenho do
+        // gerenciador de dicas do original (dword_5750D8) ainda não foi portado.
+        if (hover) {
+            std::string t;
+            for (char ch : hover->tip) if (ch != '&') t += ch;
+            const int w = Font::getTextWidth(t) + 8, h = 14;
+            int tx = std::min(m_mouseNX + 4, VW - w - 2), ty = m_mouseNY - h - 4;
+            renderer.fillRect(tx, ty, w, h, 0xFF101810);
+            renderer.drawRect(tx, ty, w, h, 0xFF40C040);
+            Font::drawText(fb, VW, VH, t, tx + 4, ty + 2, 0xFFE0FFE0, false);
+        }
+    }
     if (m_selected.size() == 1) {
         PaneButton b;
         if (infoPaneButton(pane, m_selected[0], me, b)) {
