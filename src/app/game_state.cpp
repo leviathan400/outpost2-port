@@ -160,6 +160,7 @@ bool GameState::load(const std::string& mapName) {
     loadBuildingSheet();
     loadVehicleSheet();
     loadWeaponSheet();
+    loadSpaceSheet();
     loadMoraleSheet();
     resetMessages();
     resetUnits();

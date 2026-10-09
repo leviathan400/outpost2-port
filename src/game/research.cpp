@@ -194,11 +194,7 @@ bool loadTechTree(const std::string& fileName, int maxTechLevel) {   // sub_4733
         for (int q : s_techs[i]->requires) s_techs[q]->dependents.push_back(i);
     // Research Topic dos descritores (desc+0x1E4) → índice (0 se não existe).
     for (int type = 1; type <= 0x72; ++type) {
-        int id = 0;
-        if (const StructSheetDesc* d = structSheet(type)) id = d->researchTopic;
-        else if (const StructSheetDesc* w = wallSheet(type)) id = w->researchTopic;
-        else if (const WeaponSheetDesc* w = weaponSheet(type)) id = w->researchTopic;
-        else id = vehicleResearchTopic(type);
+        const int id = unitResearchTopic(type);
         const int i = id ? techIndex(id) : -1;
         s_topicIndex[type] = i == -1 ? 0 : i;
     }

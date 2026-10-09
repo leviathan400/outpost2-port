@@ -47,6 +47,7 @@ struct StructSheetDesc {
     uint8_t  resourcePriority = 0;        // +0x2A0
     int      researchTopic = 0;           // +0x1E4
     const char* displayName = "";         // +0x1F8 (tabela fixa @0x4E9440 pela LINHA)
+    const char* produceName = "";         // +0x220 nome na lista de produção (@0x4E94E8 pela LINHA)
     StructPlayerStats player[7];          // desc+8 + p*0x44
     int32_t overflow[17] = {};            // além do 7º bloco (gravações de melhoria)
     int explosionSize() const { return static_cast<int>((flags24C >> 7) & 3); }
@@ -143,5 +144,19 @@ void reloadSheets();
 
 // WEAPONS.TXT col 13 (Research Topic, desc+0x1E4) pelo Code_Name; 0 se não houver.
 int weaponResearchTopic(const char* codeName);
+
+// SPACE.TXT (parte espacial de sub_445070): itens 0x58..0x6E (satélites,
+// módulos da nave, cargas, SULV/RLV/míssil EMP, bens de consumo). Colunas:
+// 2 Owner → +0x1F4, 3 Common → bloco+0x0C, 4 Rare → +0x10, 5 Build Time →
+// +0x14, 6 Research Topic → +0x1E4; nome +0x1F8 da tabela fixa @off_4E9604.
+bool loadSpaceSheet();
+
+// Campos do descritor off_4E1340[type] p/ QUALQUER tipo carregado das
+// planilhas (prédios, paredes, veículos — incl. os pacotes 0x70/0x71 —,
+// armas e itens espaciais):
+uint32_t unitOwnerFlags(int type);        // +0x1F4 (0x800 Plymouth, 0x1000 Eden)
+const char* unitDisplayName(int type);    // +0x1F8 ("" se não há)
+const char* unitProduceName(int type);    // +0x220 (só prédios/paredes; "" nos demais)
+int unitResearchTopic(int type);          // +0x1E4 (ID da tecnologia; 0 = nenhuma)
 
 } // namespace op2

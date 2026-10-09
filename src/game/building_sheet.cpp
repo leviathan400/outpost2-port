@@ -28,6 +28,45 @@ static const char* const kBuildingRowNames[] = {
     "Recreation Facility", "Consumer Factory", "Forum", "Trade Center", "Light Tower",
     "Magma Well", "Common Ore Mine", "Rare Ore Mine",
 };
+// +0x220 ("Produce List Name"): tabela fixa @0x4E94E8, também pela LINHA.
+static const char* const kBuildingProduceNames[] = {
+    "Command Center", "Tokamak", "MHD Generator", "Geothermal Plant", "Solar Power Array",
+    "Factory, Structure", "Guard Post", "Smelter, Common Ore", "Storage, Common", "Lab, Advanced",
+    "Lab, Standard", "Lab, Basic", "Smelter, Rare Ore", "Storage, Rare", "Factory, Vehicle",
+    "University", "Nursery", "Agridome", "Robot Command Center", "Spaceport",
+    "Medical Center", "Factory, Arachnid", "DIRT", "Garage", "GORF",
+    "Residence, Advanced", "Residence", "Residence, Reinforced", "Observatory", "Meteor Defense",
+    "Recreation Facility", "Factory, Consumer", "Forum", "Trade Center", "Light Tower",
+    "Magma Well", "Mine, Common Ore", "Mine, Rare Ore", "Tube", "Wall", "Wall, Lava", "Wall, Microbe",
+};
+// Itens espaciais (SPACE.TXT): tabela fixa @off_4E9604 pela LINHA.
+static const char* const kSpaceRowNames[] = {
+    "EDWARD Satellite", "Solar Satellite", "Ion Drive Module", "Fusion Drive Module",
+    "Command Module", "Fueling Systems", "Habitat Ring", "Sensor Package", "Skydock",
+    "Stasis Systems", "Orbital Package", "Phoenix Module", "Rare Metals Cargo",
+    "Common Metals Cargo", "Food Cargo", "Evacuation Module", "Children Module", "SULV", "RLV",
+    "EMP Missile", "Impulse Items", "Wares", "Luxury Wares",
+};
+// Campos +0x1F4/+0x1F8/+0x1E4 dos tipos sem descritor próprio no port
+// (veículos 1..0x10, pacotes 0x70/0x71, itens espaciais 0x58..0x6E).
+static uint32_t s_xOwner[0x73] = {};
+static const char* s_xName[0x73] = {};
+static int s_xTopic[0x73] = {};
+// Blocos dos demais tipos (paredes, espaçonaves, desastres...): pacotes e
+// itens espaciais recebem custo/tempo das planilhas; o resto, só melhorias.
+struct OtherDesc { int32_t block[7][17] = {}; int32_t overflow[17] = {}; };
+static OtherDesc s_other[0x73];
+
+// Coluna Owner (switch sobre o 1º caractere): B/b ambos, E/e Eden, P/p Plymouth.
+static uint32_t ownerColumn(const std::string& t) {
+    switch (t.empty() ? 0 : t[0]) {
+        case 'B': case 'b': return 0x800 | 0x1000;
+        case 'E': case 'e': return 0x1000;
+        case 'P': case 'p': return 0x800;
+        default: return 0;
+    }
+}
+
 static const char* const kVehicleRowNames[] = {
     "GeoCon", "Robo-Miner", "Tiger", "Cargo Truck", "Panther", "Lynx", "ConVec",
     "Earthworker", "Repair Vehicle", "Robo-Dozer", "Evacuation Transport", "Robo-Surveyor",
@@ -103,6 +142,7 @@ static int s_vehTopic[0x11] = {};
 int vehicleResearchTopic(int type) { return (type >= 1 && type <= 0x10) ? s_vehTopic[type] : 0; }
 int vehicleTrackClass(int type) { return (type >= 1 && type <= 0x10) ? s_vehTrack[type] : 0; }
 static bool s_vehLoaded = false;
+static bool s_spaceLoaded = false;
 
 const VehPlayerStats* vehicleSheet(int type, int player) {
     if (type < 1 || type > 0x10 || player < 0 || player > 6) return nullptr;
@@ -123,9 +163,25 @@ bool loadVehicleSheet() {
             const char* n = vehicleCodeName(t);
             if (n && c[0].text == n) { type = t; break; }
         }
-        if (type < 0) continue;   // ex. SCORPION_PACK: sem descritor próprio
+        if (type < 0) {
+            // Pacotes de aracnídeos (SPIDER_PACK 0x70 / SCORPION_PACK 0x71): no
+            // original casam com o próprio descritor como qualquer tipo; aqui
+            // guardamos só o que a produção usa (nome, dono, custo, tempo, tópico).
+            const int t = unitTypeFromCodeName(c[0].text.c_str());
+            if (t != 0x70 && t != 0x71) continue;
+            if (thisRow < sizeof(kVehicleRowNames) / sizeof(kVehicleRowNames[0]))
+                s_xName[t] = kVehicleRowNames[thisRow];
+            s_xOwner[t] = ownerColumn(c[3].text);                    // +0x1F4
+            s_xTopic[t] = c[16].value;                               // +0x1E4
+            int32_t* b = s_other[t].block[0];
+            b[3] = c[8].value; b[4] = c[9].value; b[5] = c[10].value; // +0x0C/+0x10/+0x14
+            for (int pl = 1; pl < 7; ++pl)
+                for (int k = 0; k < 17; ++k) s_other[t].block[pl][k] = b[k];
+            continue;
+        }
         if (thisRow < sizeof(kVehicleRowNames) / sizeof(kVehicleRowNames[0]))
             s_vehName[type] = kVehicleRowNames[thisRow];
+        s_xOwner[type] = ownerColumn(c[3].text);                     // +0x1F4
         switch (c[2].text.empty() ? 0 : c[2].text[0]) {            // desc+0x1E8
             case 'H': case 'h': s_vehTrack[type] = 4; break;
             case 'L': case 'l': s_vehTrack[type] = 0; break;
@@ -176,6 +232,8 @@ bool loadBuildingSheet() {
         StructPlayerStats& s = d.player[0];
         if (thisRow < sizeof(kBuildingRowNames) / sizeof(kBuildingRowNames[0]))
             d.displayName = kBuildingRowNames[thisRow];
+        if (thisRow < sizeof(kBuildingProduceNames) / sizeof(kBuildingProduceNames[0]))
+            d.produceName = kBuildingProduceNames[thisRow];
         // col 1 Produce List Name (+0x220), col 2 Building Name (+0x1F8, vem de
         // uma tabela fixa de nomes) — texto, não usados aqui.
         d.sizeX = c[3].value;                                      // +0x248
@@ -283,10 +341,6 @@ bool loadWeaponSheet() {
     return true;
 }
 
-// Blocos dos demais tipos (paredes, espaçonaves, desastres...): só melhorias.
-struct OtherDesc { int32_t block[7][17] = {}; int32_t overflow[17] = {}; };
-static OtherDesc s_other[0x73];
-
 uint8_t* unitStatBlock(int type, int player) {
     if (player < 0 || player > 6 || type < 1 || type > 0x72) return nullptr;
     if (type >= 0x11 && type <= 0x3A && s_desc[type].loaded)
@@ -301,12 +355,64 @@ void reloadSheets() {
     for (auto& v : s_veh) v = VehDesc{};
     for (auto& w : s_weap) w = WeaponSheetDesc{};
     for (auto& o : s_other) o = OtherDesc{};
+    for (int t = 0; t < 0x73; ++t) { s_xOwner[t] = 0; s_xName[t] = nullptr; s_xTopic[t] = 0; }
     for (int& t : s_vehTrack) t = 0;
     for (int& t : s_vehTopic) t = 0;
-    s_loaded = s_vehLoaded = s_weapLoaded = false;
+    s_loaded = s_vehLoaded = s_weapLoaded = s_spaceLoaded = false;
     loadBuildingSheet();
     loadVehicleSheet();
     loadWeaponSheet();
+    loadSpaceSheet();
+}
+
+bool loadSpaceSheet() {
+    if (s_spaceLoaded) return true;
+    std::vector<std::string> lines;
+    if (!readSheetLines("space.txt", lines)) return false;
+    size_t row = 0;
+    for (size_t li = 2; li < lines.size(); ++li) {
+        std::vector<SheetCol> c = splitRow(lines[li]);
+        if (c.size() < 7 || c[0].text.empty()) continue;
+        const int type = unitTypeFromCodeName(c[0].text.c_str());   // GetName de 1..0x72
+        if (type < 0 || type >= 0x73) continue;
+        if (row < sizeof(kSpaceRowNames) / sizeof(kSpaceRowNames[0])) s_xName[type] = kSpaceRowNames[row];
+        ++row;
+        s_xOwner[type] |= ownerColumn(c[2].text);                    // +0x1F4
+        int32_t* b = s_other[type].block[0];
+        b[3] = c[3].value;                                           // +0x0C Common
+        b[4] = c[4].value;                                           // +0x10 Rare
+        b[5] = c[5].value;                                           // +0x14 Build Time
+        s_xTopic[type] = c[6].value;                                 // +0x1E4
+        for (int pl = 1; pl < 7; ++pl)
+            for (int k = 0; k < 17; ++k) s_other[type].block[pl][k] = b[k];
+    }
+    s_spaceLoaded = true;
+    return true;
+}
+
+uint32_t unitOwnerFlags(int type) {
+    if (type < 0 || type >= 0x73) return 0;
+    if (type >= 0x11 && type <= 0x3A && s_desc[type].loaded) return s_desc[type].ownerFlags;
+    if (s_weap[type].loaded) return s_weap[type].ownerFlags;
+    return s_xOwner[type];
+}
+const char* unitDisplayName(int type) {
+    if (type < 0 || type >= 0x73) return "";
+    if (type >= 0x11 && type <= 0x3A && s_desc[type].loaded) return s_desc[type].displayName;
+    if (type >= 1 && type <= 0x10) return vehicleDisplayName(type);
+    if (s_weap[type].loaded) return s_weap[type].displayName;
+    return s_xName[type] ? s_xName[type] : "";
+}
+const char* unitProduceName(int type) {
+    if (type >= 0x11 && type <= 0x3A && s_desc[type].loaded) return s_desc[type].produceName;
+    return "";
+}
+int unitResearchTopic(int type) {
+    if (type < 0 || type >= 0x73) return 0;
+    if (type >= 0x11 && type <= 0x3A && s_desc[type].loaded) return s_desc[type].researchTopic;
+    if (s_weap[type].loaded) return s_weap[type].researchTopic;
+    if (type >= 1 && type <= 0x10) return s_vehTopic[type];
+    return s_xTopic[type];
 }
 
 // WEAPONS.TXT (parte de armas de sub_445070) — por ora só a coluna 13
