@@ -468,6 +468,34 @@ void GameState::onIdle(Renderer& renderer, float dt) {
             }
             continue;
         }
+        if (isEffect && r.type == 0x53) {
+            // Fumarola (vt[6] sub_405840): some sob um Geothermal Plant (0x2C) ou
+            // com uma unidade no tile; frame = tick % último frame da anim 0x9F; a
+            // cada 100 ticks, gêiser 0x3C (o som sai no desenho → só visível).
+            const int tx = (unitOX(r) >> 5) & (g_gameMap.width() - 1), ty = unitOY(r) >> 5;
+            const int occ = g_gameMap.cellOccupant(tx, ty);
+            if (occ > 0 && occ < static_cast<int>(g_units.size())) {
+                const UnitRecord& o = g_units[occ];
+                if (o.id != -1 && (o.type == 0x2C ||
+                    (((unitOX(o) >> 5) & (g_gameMap.width() - 1)) == tx && (unitOY(o) >> 5) == ty)))
+                    continue;
+            }
+            const int anim = 0x9F - 0x65;
+            if (g_art.ok() && anim < g_art.numAnimations()) {
+                const int last = static_cast<int>(g_art.animation(anim).frames.size()) - 1;
+                drawSprite(anim, last > 0 ? TethysGame::tick() % last : 0, ucx, ucy, -1);
+            }
+            if (TethysGame::tick() % 100 == 0 && onScreen(ucx, ucy)) drawSound(static_cast<int>(i), unitOX(r), unitOY(r), 0x3C);
+            continue;
+        }
+        if (isEffect && r.type == 0x50 && (r.flags & 0x2000u) && (r.flags & 0x40000u) &&
+            r.dsAux > 0 && r.dsAux < static_cast<int>(g_units.size()) && onScreen(ucx, ucy)) {
+            // sub_44A9A0: ao desenhar o laser da defesa, 0x47 na defesa e 0x4E no
+            // meteoro destruído (0x10000).
+            const UnitRecord& d = g_units[r.dsAux];
+            drawSound(static_cast<int>(i), unitOX(d), unitOY(d), 0x47);
+            if (r.flags & 0x10000u) drawSound(static_cast<int>(i), unitOX(r), unitOY(r), 0x4E);
+        }
         if (isEffect && isDisaster(r.type)) {
             // Meteoro / raio / tornado (vt[6]); terremoto e erupção não desenham.
             std::vector<WeaponDrawOp> ops;
@@ -779,7 +807,7 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
             if (buildNow) produceBuildIt();
         }
         if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_students.isOpen())
-            paneHit = m_students.click(kColX, kPaneWinY, nx, ny);
+            paneHit = m_students.click(kColX, kPaneWinY, nx, ny);   // LESS/MORE: 0x57 lá dentro
         if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_research.isOpen()) {
             bool dbl = false;
             paneHit = m_research.click(kColX, kPaneWinY, infoPaneRect(), nx, ny, e.button.clicks >= 2, dbl);
@@ -969,7 +997,23 @@ void GameState::produceBuildIt() {
     m_produce.close();
 }
 
+// Som tocado no desenho (vt[6]) do original: uma vez por tick por unidade/som,
+// já que aqui há vários quadros por tick.
+void GameState::drawSound(int unitId, int x, int y, int id) {
+    const uint32_t t = TethysGame::tick();
+    if (t != m_drawSoundTick) { m_drawSoundTick = t; m_drawSounds.clear(); }
+    const long long key = (static_cast<long long>(unitId) << 16) | id;
+    if (std::find(m_drawSounds.begin(), m_drawSounds.end(), key) != m_drawSounds.end()) return;
+    m_drawSounds.push_back(key);
+    soundPlayAt(x, y, id);
+}
+
+bool GameState::onScreen(int sx, int sy) const {
+    return sx > -64 && sx < viewportW() + 64 && sy > -64 && sy < viewportH() + 64;
+}
+
 void GameState::clickCommand(int cmd) {                  // vt[1] do comando
+    soundPlay(0x57);                                      // sub_40A960: botão solto dentro
     if (cmd == kCmdBuildIt) { produceBuildIt(); return; }
     if (cmd == kCmdStatus || cmd == kCmdCancel) { closePanes(); return; }
     if (cmd == kCmdAssign) {                                // botão volta ao painel no modo 1

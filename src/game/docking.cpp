@@ -131,7 +131,11 @@ static void exchangeWithBay(UnitRecord& u) {
 
 void dockTransferTick(int vehicleId) {                    // sub_43DE50 case 13
     UnitRecord& u = g_units[vehicleId];
-    // (sons 0x40/0x3E em frames específicos — áudio não portado)
+    // Sons pelo contador [+0x3C] (antes do decremento): 1ª fase 0x51 → garra
+    // 0x40, 0x25 → porta 0x3E; 2ª fase 0x4D → porta 0x3E, 0x1C → garra 0x40.
+    const bool second = (u.flags & 0x1000000u) != 0;
+    if (u.field3C == (second ? 0x4D : 0x51)) soundPlayAt(unitOX(u), unitOY(u), second ? 0x3E : 0x40);
+    if (u.field3C == (second ? 0x1C : 0x25)) soundPlayAt(unitOX(u), unitOY(u), second ? 0x40 : 0x3E);
     if (--u.field3C != 0) return;
     if (u.flags & 0x1000000u) {                           // fim da 2ª fase
         u.flags &= ~(0x40000u | 0x80000u);

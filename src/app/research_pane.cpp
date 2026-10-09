@@ -1,4 +1,5 @@
 #include "research_pane.h"
+#include "../audio/sound.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -148,8 +149,8 @@ bool ResearchPane::click(int winL, int winT, const PaneRect& pane, int x, int y,
     if (!m_open) return false;
     auto in = [&](const PaneRect& r) { return x >= r.l && x < r.r && y >= r.t && y < r.b; };
     if (m_mode == 1) {
-        if (in(lessRect(winL, winT))) { less(); return true; }
-        if (in(moreRect(winL, winT))) { more(); return true; }
+        if (in(lessRect(winL, winT))) { soundPlay(0x57); less(); return true; }
+        if (in(moreRect(winL, winT))) { soundPlay(0x57); more(); return true; }
         const ListBoxLayout L = teaserLayout(pane);
         const int n = static_cast<int>(teaserLines(L.list.r - L.list.l - 8).size());
         if (in(L.up)) { m_top = std::max(0, m_top - L.rows); return true; }
@@ -224,8 +225,8 @@ void StudentsPane::draw(uint32_t* fb, int fbW, int fbH, int winL, int winT, cons
 bool StudentsPane::click(int winL, int winT, int x, int y) {
     if (!m_open) return false;
     if (y < winT + 0x91 || y >= winT + 0x91 + 25) return false;
-    if (x >= winL + 9 && x < winL + 96) { less(); return true; }
-    if (x >= winL + 96 && x < winL + 183) { more(); return true; }
+    if (x >= winL + 9 && x < winL + 96) { soundPlay(0x57); less(); return true; }
+    if (x >= winL + 96 && x < winL + 183) { soundPlay(0x57); more(); return true; }
     return false;
 }
 

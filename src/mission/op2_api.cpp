@@ -26,6 +26,7 @@
 #include "../game/unit.h"
 #include "../game/walls.h"
 #include "../game/disaster.h"
+#include "../audio/sound.h"
 
 namespace op2 {
 
@@ -164,7 +165,11 @@ void __fastcall T_SetTornado(int x, int y, int duration, int endX, int endY, int
 }
 // ?SetLavaSpeed (sub_432DE0 → sub_49E240).
 void __fastcall T_SetLavaSpeed(int speed) { setLavaSpeed(speed); }
-// ?SetMusicPlayList (sub_451090): sem áudio no port.
+// ?AddGameSound(som, jogador): sub_47F020 com máscara 1<<jogador (−1 = todos).
+void __fastcall T_AddGameSound(int sound, int) { soundPlay(sound); }
+// ?AddMapSound(som, LOCATION): sub_47EE00(x<<5, y<<5) — x interno.
+void __fastcall T_AddMapSound(int sound, ApiLoc loc) { soundPlayAt(portX(loc.x) << 5, loc.y << 5, sound); }
+// ?SetMusicPlayList (sub_451090): a música vem de op2.clm (ausente) — não portada.
 void __fastcall T_SetMusicPlayList(int, int, int*) {}
 
 // ---- GameMap ------------------------------------------------------------------------
@@ -444,6 +449,8 @@ const std::map<std::string, void*>& table() {
         {"?SetLavaSpeed@TethysGame@@SIXH@Z", reinterpret_cast<void*>(&T_SetLavaSpeed)},
         {"?SetLavaPossible@GameMap@@SIXULOCATION@@H@Z", reinterpret_cast<void*>(&M_SetLavaPossible)},
         {"?SetMusicPlayList@TethysGame@@SIXHHPAW4SongIds@@@Z", reinterpret_cast<void*>(&T_SetMusicPlayList)},
+        {"?AddGameSound@TethysGame@@SIXHH@Z", reinterpret_cast<void*>(&T_AddGameSound)},
+        {"?AddMapSound@TethysGame@@SIXHULOCATION@@@Z", reinterpret_cast<void*>(&T_AddMapSound)},
         {"?InitialSetTile@GameMap@@SIXULOCATION@@H@Z", reinterpret_cast<void*>(&M_InitialSetTile)},
         {"?SetTile@GameMap@@SIXULOCATION@@H@Z", reinterpret_cast<void*>(&M_SetTile)},
         {"?SetCellType@GameMap@@SIXULOCATION@@H@Z", reinterpret_cast<void*>(&M_SetCellType)},

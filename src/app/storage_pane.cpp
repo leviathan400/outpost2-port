@@ -1,4 +1,5 @@
 #include "storage_pane.h"
+#include "../audio/sound.h"
 
 #include <string>
 
@@ -156,7 +157,7 @@ bool StoragePane::click(int winL, int winT, int x, int y) {
     if (!m_open) return false;
     for (int i = 0; i < bays(); ++i) {
         const PaneRect r = bayRect(winL, winT, i);
-        if (x >= r.l && x < r.r && y >= r.t && y < r.b) { pressBay(i); return true; }
+        if (x >= r.l && x < r.r && y >= r.t && y < r.b) { soundPlay(0x57); pressBay(i); return true; }
     }
     return false;
 }

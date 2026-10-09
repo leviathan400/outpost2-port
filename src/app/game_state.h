@@ -72,6 +72,10 @@ private:
     std::string m_mapName;
     TerrainRenderer m_terrain;   // desenha sobre o g_gameMap (singleton do engine)
     int m_camX = 0, m_camY = 0;
+    uint32_t m_drawSoundTick = 0xFFFFFFFFu;     // sons de desenho já tocados neste tick
+    std::vector<long long> m_drawSounds;
+    void drawSound(int unitId, int x, int y, int id);
+    bool onScreen(int sx, int sy) const;
     int m_maxX = 0, m_maxY = 0;
     float m_tickAccum = 0.0f;     // acumulador p/ avançar o tick de simulação
     float m_tickPeriod = 0.05f;   // s/tick: 1/clamp(GameSpeed*4, 4, 40) (sub_49BF80)

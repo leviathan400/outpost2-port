@@ -187,7 +187,7 @@ void conVecBuildStart(int id) {                           // sub_43DE50 case 2
     // (sub_4030E0: grupo de IA [+0x6A]; revelação do mapa dword_574C88 — pendentes)
     structureStartBuild(bld, id);                         // ação 0x21, duração com o [+0x3C] da ConVec
     u.field3C = b.buildTime;                              // [esi+3Ch] = [edi+5Ch]
-    // (sub_42F000; som 3)
+    soundPlayAt(unitOX(g_units[bld]), unitOY(g_units[bld]), 3);   // (sub_42F000 pendente)
     u.field23 = u.field22;
     u.field22 = 0;
 }
