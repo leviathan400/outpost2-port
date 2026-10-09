@@ -78,6 +78,9 @@ private:
     // Botoeira do veículo (sub_46D540): botões montados p/ a seleção atual.
     struct CmdButton { int cmd; int l, t, r, b; int iconRaw; std::string tip; char hotkey; };
     std::vector<CmdButton> commandButtons() const;
+    // Botões de texto do prédio (sub_459F70 + layout sub_458D10). wide = arte 0x97.
+    struct TextButton { int cmd; int l, t, r, b; bool wide; std::string label, tip; char hotkey; };
+    std::vector<TextButton> structureButtons() const;
     void clickCommand(int cmd);
 
     int viewportW() const;         // largura da área de jogo (tela - painel)

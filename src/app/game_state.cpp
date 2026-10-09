@@ -678,7 +678,8 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
         //   K = Unit::DoDeath (Kill(1))  B = reinicia a construcao (sub_43DE50)
         //   O = poe o predio OPERANDO (sub_483810 — o que a economia faria)
         const SDL_Keycode k = e.key.keysym.sym;
-        if (k == SDLK_d || k == SDLK_h || k == SDLK_k || k == SDLK_b || k == SDLK_o) {
+        const bool ctrl = (SDL_GetModState() & KMOD_CTRL) != 0;
+        if (ctrl && (k == SDLK_d || k == SDLK_h || k == SDLK_k || k == SDLK_b || k == SDLK_o)) {
             for (int id : std::vector<int>(m_selected)) {
                 if (id <= 0 || id >= (int)g_units.size()) continue;
                 UnitRecord& r = g_units[id];
@@ -698,10 +699,14 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
             }
         }
         // Atalhos dos botões de comando (letra após o '&' da dica).
-        if (k >= SDLK_a && k <= SDLK_z) {
+        if (!ctrl && k >= SDLK_a && k <= SDLK_z) {
             const char key = static_cast<char>('A' + (k - SDLK_a));
+            bool done = false;
             for (const CmdButton& b : commandButtons())
-                if (b.hotkey == key) { clickCommand(b.cmd); break; }
+                if (b.hotkey == key) { clickCommand(b.cmd); done = true; break; }
+            if (!done)
+                for (const TextButton& b : structureButtons())
+                    if (b.hotkey == key) { clickCommand(b.cmd); break; }
         }
     }
     if (e.type == SDL_MOUSEMOTION) {
@@ -712,15 +717,9 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
         m_mouseNX = nx; m_mouseNY = ny;
         bool inView = nx < viewportW() && ny < Renderer::NATIVE_HEIGHT - kStatusBarH;
         // Botão de comando do quadro (IDLE / ACTIVATE → CommandPacket 0x12 / 0x13).
-        if (e.button.button == SDL_BUTTON_LEFT && !inView && m_selected.size() == 1) {
-            const PaneRect pane{viewportW() + 4, kMiniMapH + kTabsH,
-                                Renderer::NATIVE_WIDTH - 4, Renderer::NATIVE_HEIGHT - 2};
-            PaneButton b;
-            if (infoPaneButton(pane, m_selected[0], TethysGame::localPlayer(), b) &&
-                nx >= b.rc.l && nx < b.rc.r && ny >= b.rc.t && ny < b.rc.b) {
-                if (b.command == 0x12) structureDoIdle(m_selected[0]);
-                else structureDoActivate(m_selected[0]);
-            }
+        if (e.button.button == SDL_BUTTON_LEFT && !inView) {
+            for (const TextButton& b : structureButtons())
+                if (nx >= b.l && nx < b.r && ny >= b.t && ny < b.b) { clickCommand(b.cmd); break; }
         }
         if (e.button.button == SDL_BUTTON_LEFT && !inView) {
             for (const CmdButton& b : commandButtons())
@@ -784,6 +783,40 @@ std::vector<GameState::CmdButton> GameState::commandButtons() const {
         b.tip = d.tip;
         b.hotkey = uiCommandHotkey(d);
         out.push_back(b);
+    }
+    return out;
+}
+
+// sub_459F70: com 1 prédio selecionado, os comandos disponíveis da lista de 12
+// (até 4) viram botões de texto; sub_458D10 os dispõe a partir de x = 9, de
+// baixo p/ cima (altura H = 25, largura W = 87): 1 → largo embaixo; 2 → lado a
+// lado; 3 → dois em cima + largo embaixo; 4 → 2x2. PROVISÓRIO: base = fundo do
+// quadro (dword_5750EC[+0x40]) e x relativo ao painel.
+std::vector<GameState::TextButton> GameState::structureButtons() const {
+    std::vector<TextButton> out;
+    if (m_selected.size() != 1) return out;
+    const UnitRecord& u = g_units[m_selected[0]];
+    if (u.id == -1 || !(u.flags & UNIT_BUILDING) || (u.owner & 0x0F) != TethysGame::localPlayer()) return out;
+    for (int cmd : uiCommandsStructure()) {
+        if (out.size() == 4) break;
+        if (!uiCommandAvailable(cmd, m_selected)) continue;
+        const UiCommandDesc d = uiCommandDescribe(cmd, m_selected);
+        TextButton b{};
+        b.cmd = cmd; b.label = d.label; b.tip = d.tip; b.hotkey = uiCommandHotkey(d);
+        out.push_back(b);
+    }
+    const int W = 87, H = 25, x0 = viewportW() + 9, bottom = Renderer::NATIVE_HEIGHT - 2;
+    const int n = static_cast<int>(out.size());
+    for (int i = 0; i < n; ++i) {
+        TextButton& b = out[i];
+        const bool twoRows = n >= 3;
+        const int row = twoRows ? (i < 2 ? 0 : 1) : 1;           // 0 = de cima
+        const int col = (n == 1 || (n == 3 && i == 2)) ? 0 : (i % 2);
+        b.wide = n == 1 || (n == 3 && i == 2);
+        b.l = x0 + col * W;
+        b.t = bottom - (row == 0 ? 2 * H : H);
+        b.r = b.l + (b.wide ? 175 : W);
+        b.b = b.t + H;
     }
     return out;
 }
@@ -1019,14 +1052,20 @@ void GameState::renderPanel(Renderer& renderer) {
             Font::drawText(fb, VW, VH, t, tx + 4, ty + 2, 0xFFE0FFE0, false);
         }
     }
-    if (m_selected.size() == 1) {
-        PaneButton b;
-        if (infoPaneButton(pane, m_selected[0], me, b)) {
-            renderer.fillRect(b.rc.l, b.rc.t, b.rc.r - b.rc.l, b.rc.b - b.rc.t, 0xFF0D0F09);
-            renderer.drawRect(b.rc.l, b.rc.t, b.rc.r - b.rc.l, b.rc.b - b.rc.t, 0xFF70281F);
-            Font::drawTextCentered(fb, VW, VH, b.label, (b.rc.l + b.rc.r) / 2,
-                                   b.rc.t + (b.rc.b - b.rc.t) / 2 - 4, 0xFFE04030, false);
+    // Botões de texto do prédio: arte 0x98 (87x25) / 0x97 larga (175x25), frame 0
+    // normal e 1 aceso (PROVISÓRIO: aceso com o mouse em cima; cor do texto a confirmar).
+    for (const TextButton& b : structureButtons()) {
+        const bool over = m_mouseNX >= b.l && m_mouseNX < b.r && m_mouseNY >= b.t && m_mouseNY < b.b;
+        const int anim = b.wide ? 0x97 - 0x65 : 0x98 - 0x65;
+        if (g_art.ok() && anim < g_art.numAnimations()) {
+            const ArtAnimation& an = g_art.animation(anim);
+            blitArtFrame(fb, VW, VH, anim, over ? 1 : 0, b.l + static_cast<int>(an.header[5]),
+                         b.t + static_cast<int>(an.header[6]), -1, px0, 0, VW, VH);
         }
+        std::string t;
+        for (char ch : b.label) if (ch != '&') t += ch;
+        Font::drawTextCentered(fb, VW, VH, t, (b.l + b.r) / 2, b.t + (b.b - b.t) / 2 - 4,
+                               over ? 0xFFFF7050 : 0xFFE04030, false);
     }
 
     // --- Barra de status sob a visão do mapa ---

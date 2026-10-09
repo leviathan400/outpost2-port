@@ -32,6 +32,14 @@ const std::vector<int>& uiCommandsMulti() {                  // off_4E2C88
     return k;
 }
 
+const std::vector<int>& uiCommandsStructure() {              // off_4E2D38 (+ sub_4581C0)
+    static const std::vector<int> k = {
+        UC_IDLE, UC_ACTIVATE, UC_ATTACK, UC_BUILD, UC_ASSIGN_SCIENTISTS, UC_STOP_RESEARCH,
+        UC_STOP_TRAINING, UC_ASSIGN_STUDENTS, UC_STOP, UC_STORAGE, UC_DETONATE, UC_LAUNCH_PAD,
+    };
+    return k;
+}
+
 static const UnitRecord* first(const std::vector<int>& sel) {
     if (sel.empty() || sel[0] <= 0 || sel[0] >= static_cast<int>(g_units.size())) return nullptr;
     return &g_units[sel[0]];
@@ -126,6 +134,75 @@ bool uiCommandAvailable(int cmd, const std::vector<int>& sel) {
             return n == 1 && g_colony[me].stat(ST_GORF_GRP + 4) != 0 && u->type == mapCargoTruck && u->cargo == 0;
         case UC_SCATTER:                                    // loc_455650
             return n > 1;
+        // ---- prédios ----------------------------------------------------------------
+        case UC_IDLE: {                                     // sub_455BA0
+            if (n != 1) return false;
+            const int a = u->action;
+            if (a == 0x21 || a == 0x22 || a == 0x16 || a == 9 || a == 0x17) return false;
+            if (u->flags & 0x40000u) return false;
+            const int t = u->type;
+            if (t == 0x15 || t == 0x16 || t == 0x18 || t == 0x2A) return false;   // minas etc.
+            if (t == mapCommandCenter && g_colony[u->owner & 0x0F].stat(ST_CC_OP) <= 1) return false;
+            return a != 0x12;
+        }
+        case UC_ACTIVATE:                                   // sub_455F00
+            return n == 1 && !(u->flags & 0x40000u) && u->action == 0x12;
+        case UC_BUILD: {                                    // sub_456000
+            if (n != 1) return false;
+            const int a = u->action;
+            if (a == 0x21 || a == 0x22 || a == 0x12 || a == 9 || (u->flags & 0x40000u)) return false;
+            if (!structureOperational(*u)) return false;
+            const int np = TethysGame::noPlayers() - 1 > 0 ? TethysGame::noPlayers() - 1 : 0;
+            static const int kVehLimit[6] = {200, 160, 115, 90, 77, 65};   // dword_4E98D0
+            static const int kBldLimit[6] = {250, 175, 100, 75, 50, 48};   // dword_4E98E8
+            auto emptyBay = [&]() {                         // vt[65]: alguma baia vazia
+                const StructSheetDesc* d = structSheet(u->type);
+                const int bays = d ? d->player[(u->owner >> 4) & 0x0F].storageBays : 0;
+                for (int i = 0; i < bays && i < 6; ++i) if (!u->bayType[i]) return true;
+                return false;
+            };
+            switch (u->type) {
+                case 0x2D: case 0x30:
+                    return kVehLimit[np < 6 ? np : 5] > static_cast<int>(colonyVehicles(me).size());
+                case 0x2E: return true;
+                case 0x2F:
+                    if (kBldLimit[np < 6 ? np : 5] <= g_colony[me].structCount) return false;
+                    return emptyBay();
+                case 0x37: return u->padCargo == 0 || emptyBay();
+                default: return false;
+            }
+        }
+        case UC_ASSIGN_SCIENTISTS: {                        // loc_4562C0 + sub_431FF0
+            if (n != 1) return false;
+            const int a = u->action;
+            if (a == 0x21 || a == 0x22 || a == 0x12 || (u->flags & 0x40000u)) return false;
+            if (u->type != 0x21 && u->type != 0x31 && u->type != 0x32) return false;
+            return (u->flags & 0x2000u) && (u->flags & 0x4000u) && !(u->flags & 0xC0000u);
+        }
+        case UC_STOP_RESEARCH:                              // sub_457F50
+            return n == 1 && u->action == 0x16;
+        case UC_STOP_TRAINING:                              // sub_458090
+            return n == 1 && u->action == 0x17;
+        case UC_ASSIGN_STUDENTS: {                          // sub_456420
+            if (n != 1) return false;
+            const int a = u->action;
+            if (a == 0x21 || a == 0x22 || a == 0x12 || (u->flags & 0x40000u) || a == 0x17) return false;
+            if (!g_colony[me].workersLeft) return false;    // +0xA4 trabalhadores sobrando
+            return u->type == 0x26 && structureOperational(*u);
+        }
+        case UC_STORAGE: {                                  // loc_456560
+            if (n != 1) return false;
+            if (u->action == 0x21 || u->action == 0x22 || (u->flags & 0x40000u)) return false;
+            const int t = u->type;
+            if (t == 0x19 || t == 0x1A) return structureOperational(*u);
+            if (t == 0x27 || t == 0x29 || t == 0x2F || (t >= 0x36 && t <= 0x38)) return u->action != 0x12;
+            return false;
+        }
+        case UC_DETONATE:                                   // loc_457DB0
+            if (n != 1 || u->type != 0x17 || u->action == 0x12) return false;
+            return (u->cargo == 0x43 || u->cargo == 0x44) && structureOperational(*u);
+        case UC_LAUNCH_PAD:                                 // loc_4566C0
+            return n == 1 && u->type == 0x37 && structureOperational(*u) && u->padCargo != 0;
         default: return false;
     }
 }
@@ -184,6 +261,15 @@ UiCommandDesc uiCommandDescribe(int cmd, const std::vector<int>& sel) {
                                : textDesc("&TRANSFER", "Transfer to another player (&X)");
         case UC_SALVAGE: return iconDesc(0x618, 4, "Sal&vage rubble in a region");
         case UC_SCATTER: return iconDesc(0x480, 7, "Sca&tter");
+        case UC_IDLE: return textDesc("&IDLE", "&Idle this structure");
+        case UC_ACTIVATE: return textDesc("&ACTIVATE", "&Activate the structure");
+        case UC_BUILD: return textDesc("&BUILD", "Select Something to &Build");
+        case UC_ASSIGN_SCIENTISTS: return textDesc("&ASSIGN", "&Assign Scientists");
+        case UC_ASSIGN_STUDENTS: return textDesc("&ASSIGN", "&Assign Students");
+        case UC_STOP_RESEARCH: case UC_STOP_TRAINING: return textDesc("ST&OP", "St&op");
+        case UC_STORAGE: return textDesc("&STORAGE", "View &Storage");
+        case UC_DETONATE: return textDesc("&DETONATE", "&Detonate this tower");
+        case UC_LAUNCH_PAD: return textDesc("L&AUNCH PAD", "View L&aunch Pad");
         default: return UiCommandDesc{};
     }
 }
@@ -259,6 +345,11 @@ UiClick uiCommandClick(int cmd, const std::vector<int>& sel) {
         case UC_STOP: sendStop(sel); return UiClick::DONE;              // sub_455540 (pacote 5)
         case UC_SELF_DESTRUCT: sendSelfDestruct(sel); return UiClick::DONE;   // sub_4555F0 (0x14)
         case UC_MOVE: return UiClick::TARGET;                           // sub_451260 (modo 7)
+        // IDLE (pacote 0x12) / ACTIVATE (0x13). O IDLE do original confirma antes
+        // quando o prédio guarda metal (smelter/armazém: "All metal in storage
+        // will be lost...") — diálogo ainda não portado.
+        case UC_IDLE: if (!sel.empty()) structureDoIdle(sel[0]); return UiClick::DONE;
+        case UC_ACTIVATE: if (!sel.empty()) structureDoActivate(sel[0]); return UiClick::DONE;
         default: return UiClick::NOT_PORTED;
     }
 }

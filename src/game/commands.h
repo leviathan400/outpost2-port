@@ -23,12 +23,19 @@ enum UiCommand {
     UC_MOVE, UC_STOP, UC_BUILD_KIT, UC_BUILD_MINE, UC_WALL, UC_LAVA_WALL, UC_MICROBE_WALL, UC_TUBE,
     UC_REMOVE_WALL, UC_BULLDOZE, UC_ATTACK, UC_ORE_ROUTE, UC_STAND_GROUND, UC_GUARD, UC_PATROL,
     UC_SELF_DESTRUCT, UC_DUMP_CARGO, UC_REPAIR, UC_TAKE_OVER, UC_DISMANTLE, UC_TRANSFER, UC_SALVAGE,
-    UC_SCATTER, UC_COUNT
+    UC_SCATTER,
+    // Prédios (botões de texto do quadro off_4D5220):
+    UC_IDLE, UC_ACTIVATE, UC_BUILD, UC_ASSIGN_SCIENTISTS, UC_STOP_RESEARCH, UC_STOP_TRAINING,
+    UC_ASSIGN_STUDENTS, UC_STORAGE, UC_DETONATE, UC_LAUNCH_PAD,
+    UC_COUNT
 };
 
 // Listas na ordem do original.
 const std::vector<int>& uiCommandsSingle();   // off_4E2C30 (22)
 const std::vector<int>& uiCommandsMulti();    // off_4E2C88 (11)
+// Quadro do prédio (off_4D5220 [+0xBC]/[+0xC0] = off_4E2D38, 12 comandos; até
+// 4 viram botões de texto, sub_459F70 / layout sub_458D10).
+const std::vector<int>& uiCommandsStructure();
 
 struct UiCommandDesc {
     int iconRaw = 0;        // [+0x00] animação crua do ícone (0 = botão de texto)
