@@ -10,6 +10,7 @@
 #include "../gfx/artfile.h"
 #include "../core/config.h"
 #include "../res/res_manager.h"
+#include "../audio/sound.h"
 
 namespace op2 {
 
@@ -42,6 +43,7 @@ bool TApp::init() {
         return false;
     }
     m_sdlReady = true;
+    soundInit();                                  // sub_47E020 (unk_56C610)
 
     m_renderer = new Renderer();
     if (!m_renderer->init("Outpost 2: Divided Destiny", 1280, 960, false)) {
@@ -118,6 +120,7 @@ void TApp::shutdown() {
     delete m_shell; m_shell = nullptr;
     m_cur = nullptr;
     if (m_renderer) { m_renderer->shutdown(); delete m_renderer; m_renderer = nullptr; }
+    soundShutdown();
     if (m_sdlReady) { SDL_Quit(); m_sdlReady = false; }
     std::cout << "[TApp] encerrado." << std::endl;
 }

@@ -1,4 +1,5 @@
 #include "messages.h"
+#include "../audio/sound.h"
 
 #include <SDL.h>
 #include <cctype>
@@ -79,8 +80,14 @@ static bool messageAllowed(int id, int x, int y) {
 }
 
 void postMessage(int x, int y, const char* text, int soundId) {
-    if (soundId >= 0x5E && soundId < 0xE4 && !messageAllowed(soundId, x, y)) return;
-    // (som: sub_47F060 posicional p/ vozes / sub_47F020 — áudio não portado)
+    // Sem som → beep 0x5B; vozes do Savant (0x5E..0xE3) passam pelo filtro e
+    // vão p/ a fila (sub_47F060); o resto toca direto (sub_47F020).
+    if (soundId >= 0x5E && soundId < 0xE4) {
+        if (!messageAllowed(soundId, x, y)) return;
+        soundVoice(soundId, x, y);
+    } else {
+        soundPlay(soundId ? soundId : 0x5B);
+    }
     const int slot = (s_start + s_count) & 0x3F;
     if (s_count == 0x40) s_start = (s_start + 1) & 0x3F; else ++s_count;
     GameMessage& m = s_ring[slot];

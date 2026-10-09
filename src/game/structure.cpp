@@ -1,4 +1,5 @@
 #include "structure.h"
+#include "../audio/sound.h"
 
 #include "building_sheet.h"
 #include "colony.h"
@@ -177,11 +178,19 @@ void structureStartBuild(int id, int builderId) {
 }
 
 // sub_4831A0(arg=1): tira o prédio do mapa — terraplana o footprint e espalha
-// o entulho. (O tratamento da unidade acoplada, as explosões que causam dano
-// 0x4A/0x56/0x57 e o som sub_47EE00 dependem de subsistemas ainda não portados.)
+// o entulho. (O tratamento da unidade acoplada e as explosões que causam dano
+// 0x4A/0x56/0x57 dependem de subsistemas ainda não portados.)
 static void structureRemoveFromMap(UnitRecord& r, bool destroyed) {
     if (!g_gameMap.ok()) return;
     const StructSheetDesc* d = structSheet(r.type);
+    if (destroyed) {
+        // Som: com explosão (+0x24C bits 7-8) e não desmontado → 0x39 (Tokamak
+        // 0x3B); senão o id 0.
+        int snd = 0;
+        if (d && d->explosionSize() && !(r.flags & UNIT_DISMANTLED))
+            snd = r.type == mapTokamak ? 0x3B : 0x39;
+        soundPlayAt(unitOX(r), unitOY(r), snd);
+    }
     int w = d ? d->sizeX : 1, h = d ? d->sizeY : 1;
     const int mask = g_gameMap.width() - 1;
     // sub_408880: retângulo do footprint.
@@ -309,10 +318,18 @@ static void structureUpdateState(int id) {
     if (r.action == ACT_BUILD || r.action == ACT_DISMANTLE) return;
     const int hp = structureMaxHP(r);
     const int dmg = r.damage;
-    // As transições 1→2 e (0/≥3)→1 tocam um alerta, sub_47EE00(unk_56C610, x, y,
-    // 2 ou 1) — gerenciador de som, ainda não portado.
-    if (hp * 6 / 10 <= dmg) { r.state34 = 0x20000; return; }  // dano >= 60%
-    if (hp * 3 / 10 <= dmg) { r.state34 = 0x10000; return; }  // dano >= 30%
+    // As transições 1→2 e (0/≥3)→1 tocam um alerta (sons 2 / 1).
+    const uint32_t old = r.state34;
+    if (hp * 6 / 10 <= dmg) {                                    // dano >= 60%
+        r.state34 = 0x20000;
+        if (old == 0x10000) soundPlayAt(unitOX(r), unitOY(r), 2);
+        return;
+    }
+    if (hp * 3 / 10 <= dmg) {                                    // dano >= 30%
+        r.state34 = 0x10000;
+        if (old != 0x10000 && old != 0x20000) soundPlayAt(unitOX(r), unitOY(r), 1);
+        return;
+    }
     const uint32_t state = (r.state34 >> 16) & 0xFFFF;
     if (state == 1 || state == 2) { r.state34 = 0; return; }     // reparado
     if (state == 0) { structureAmbientTick(id); return; }        // vt+0x94

@@ -1,4 +1,5 @@
 #include "docking.h"
+#include "../audio/sound.h"
 
 #include "building_sheet.h"
 #include "game_map.h"
@@ -95,7 +96,7 @@ bool processBayTransfer(int owner, int buildingId, int bay) {   // sub_40E210 ca
     u.field3C = (g_art.ok() && anim >= 0 && anim < g_art.numAnimations())
                     ? static_cast<int>(g_art.animation(anim).frames.size()) : 1;
     if (u.field3C <= 0) u.field3C = 1;
-    // (som 0x3F na posição do veículo — áudio não portado)
+    soundPlayAt(unitOX(u), unitOY(u), 0x3F);
     return true;
 }
 
@@ -136,7 +137,8 @@ void dockTransferTick(int vehicleId) {                    // sub_43DE50 case 13
         u.flags &= ~(0x40000u | 0x80000u);
         u.field23 = u.field22;
         u.field22 = 0;
-        // [+0x54]/[+0x56] = 0; som 0x3F.
+        // [+0x54]/[+0x56] = 0.
+        soundPlayAt(unitOX(u), unitOY(u), 0x3F);
         return;
     }
     // Meio: o caminhão (tipo 1) usa vt[0x98] (minério — não portado); os demais sub_411050.

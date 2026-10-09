@@ -1,4 +1,5 @@
 #include "research_lab.h"
+#include "../audio/sound.h"
 
 #include <cstdio>
 
@@ -162,9 +163,10 @@ void universityTrainStart(int univId) {                 // sub_43ACA0 case 23 ([
 void universityTrainFinish(int univId) {                // jpt_43B312 case 23
     UnitRecord& r = g_units[univId];
     const int p = ownerOf(r);
-    // (som 0x3A p/ o jogador local)
-    if (p == TethysGame::localPlayer())
-        postMessage(r.pixelX + 16, r.pixelY + 16, "Scientist training completed", 0x3A);
+    if (p == TethysGame::localPlayer()) {                   // 0x3A + sub_439180 (beep)
+        soundPlay(0x3A);
+        postMessage(r.pixelX + 16, r.pixelY + 16, "Scientist training completed", 0);
+    }
     const int n = r.extraWorkers;
     g_playerData[p].workers -= n;                        // dword_56E370
     g_playerData[p].scientists += n;                     // dword_56E374

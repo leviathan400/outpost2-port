@@ -1,4 +1,5 @@
 #include "weapon.h"
+#include "../audio/sound.h"
 
 #include "command.h"
 #include "commands.h"
@@ -37,7 +38,7 @@ enum DrawKind { DRAW_PROJECTILE /*sub_4A2D50*/, DRAW_LASER /*sub_4A3420*/,
 struct WeaponClass {
     int type;
     int rangeMode;          // desc+0x250: 1 = sem linha de visada no teste de alcance
-    int fireSound, impactSound;   // desc+0x254 / +0x258 (sem áudio no port)
+    int fireSound, impactSound;   // desc+0x254 / +0x258
     Launch launch;
     Finder finder;
     DrawKind draw;
@@ -922,6 +923,7 @@ static void explode(int pid) {
     const int R = d->radius;
     const int rt = (R + 31) >> 5;
     const int ix = p.impactX, iy = p.impactY;
+    if (const WeaponClass* c = classOf(p.type)) soundPlayAt(ix, iy, c->impactSound);   // desc+0x258
     const int x0 = (ix >> 5) - rt, x1 = (ix >> 5) + rt;
     int y0 = (iy >> 5) - rt; if (y0 <= 0) y0 = 0;
     int y1 = (iy >> 5) + rt; if (y1 > g_gameMap.height() - 1) y1 = g_gameMap.height() - 1;
@@ -1009,7 +1011,8 @@ void weaponProjectileAction(int id) {                         // case 54
     }
     if (p.field23 == 0x13) {
         if (!sourceReady(p.sourceId)) { p.field22 = SUB_REMOVE; p.field3C = 1; return; }
-        // (som de disparo desc+0x254 em (x,y) — sub_47EE00; sem áudio no port.)
+        if (const WeaponClass* c = classOf(p.type))      // sub_43ACA0: desc+0x254
+            soundPlayAt(unitOX(p), unitOY(p), c->fireSound);
         p.field22 = (p.flags & UNIT_IN_FLIGHT) ? 0x0F : SUB_WAIT;
         return;
     }
@@ -1138,7 +1141,16 @@ void vehicleDeath(int id) {
     if (v.lastAttacker > 0 && v.lastAttacker < static_cast<int>(g_units.size()) &&
         ((g_units[v.lastAttacker].owner ^ v.owner) & 0x0F)) {
         moraleEnemyVehicleKilled(ownerOf(g_units[v.lastAttacker]));   // sub_44FD40
-        // (estatísticas 0x1CC/0x1C4 do jogador e som 0x4D — sem áudio no port.)
+        // (estatísticas 0x1CC/0x1C4 do jogador — pendente.)
+    }
+    // Som da morte (sub_43ACA0): com atacante 0x4D; senão pela carga — Starflare
+    // (0x41) 0x4F / Tiger 0x4B, Supernova (0x42) 0x4B / Tiger 0x4A, outros 0x4E.
+    {
+        int snd = 0x4E;
+        if (v.lastAttacker) snd = 0x4D;
+        else if (v.cargo == 0x41) snd = v.type == mapTiger ? 0x4B : 0x4F;
+        else if (v.cargo == 0x42) snd = v.type == mapTiger ? 0x4A : 0x4B;
+        soundPlayAt(unitOX(v), unitOY(v), snd);
     }
     if (ownerOf(v) == TethysGame::localPlayer() && maxHPOf(v) == v.damage) {
         char msg[100];

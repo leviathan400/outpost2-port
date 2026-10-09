@@ -1,4 +1,5 @@
 #include "disaster.h"
+#include "../audio/sound.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -205,7 +206,7 @@ static void earthquakeTick(int id) {                         // sub_413790
         q.field3C = mag * 8 - 1;
         q.quakeAmp = mag * 4 + 0x1E;
         q.quakeDir = 0x100 - TethysGame::getRand(0x200);
-        // (som 0x50 em (x,y) — sem áudio no port.)
+        soundPlayAt(unitOX(q), unitOY(q), 0x50);
         postAt(q, kFmtQuakeHit, 0x96);
         disasterMorale(kEarthquake);
         return;
@@ -248,7 +249,7 @@ static void earthquakeTick(int id) {                         // sub_413790
         }
     }
     UnitRecord& qq = g_units[id];
-    // (a cada 3 passos, som 0x50.)
+    if (qq.field3C % 3 == 0) soundPlayAt(unitOX(qq), unitOY(qq), 0x50);   // a cada 3 passos
     if ((qq.flags & 0x10000u) && qq.field3C == 0) {          // 2ª onda (réplica)
         qq.flags &= ~0x10000u;
         qq.field3C = mag * 8 - 1;
@@ -307,7 +308,7 @@ static void meteorImpact(int id) {
     UnitRecord& m = g_units[id];
     const int sz = static_cast<int16_t>(m.cargo);
     m.flags &= ~0x40000u;
-    // (som do impacto: 0x4E / 0x4D / 0x4A pelo tamanho.)
+    soundPlayAt(unitOX(m), unitOY(m), sz == 0 ? 0x4E : sz == 1 ? 0x4D : 0x4A);   // impacto pelo tamanho
     // Dano base: bloco do jogador 0 do descritor 0x50 (off_4E1480): tamanho 0
     // → +0x0C, 1 → +0x2C, 2 → +0x28.
     const WeaponSheetDesc* wd = weaponSheet(kMeteor);
@@ -364,7 +365,7 @@ static void meteorTick(int id) {                             // sub_44A210
         if (sz < 0 || sz > 2) m.cargo = static_cast<uint16_t>(TethysGame::getRand(3));
         m.dsTX = static_cast<int16_t>(ix(m) >> 5);
         m.dsTY = static_cast<int16_t>(iy(m) >> 5);
-        // (som 0x54 em (x,y).)
+        soundPlayAt(unitOX(m), unitOY(m), 0x54);
         postAt(m, kFmtMeteorHit, 0x93);
         // Começa 40 ticks antes, acima e à direita (vt[32] desce 15 px x 11 px por tick).
         m.pixelX = toPX((ix(m) + 0x258) & iPxMask());
@@ -379,7 +380,7 @@ static void meteorTick(int id) {                             // sub_44A210
     if (--m.field3C == 2) meteorDefense(id);
     UnitRecord& q = g_units[id];
     if (q.field3C == 1) q.flags &= ~(0x40000u | 0x10000u);
-    // (passos pares > 2: som 0x54.)
+    if (!(q.field3C & 1) && q.field3C > 2) soundPlayAt(unitOX(q), unitOY(q), 0x54);   // passos pares > 2
     if (q.field3C == 0) meteorImpact(id);
 }
 
@@ -609,13 +610,13 @@ static void tornadoTick(int id) {                            // sub_48F430
         T.field22 = SUB_DRIFT;
         T.flags |= 0x2000u;
         T.field3C = static_cast<int16_t>(T.cargo) * 8 - 1;
-        // (som 0x51.)
+        soundPlayAt(unitOX(T), unitOY(T), 0x51);
         postAt(T, kFmtVortexHit, 0x8D);
         disasterMorale(kTornado);
         return;
     }
     if (--T.field3C == 0) { killUnit(id, 30); return; }
-    // (a cada 3 passos, som 0x51.)
+    if (T.field3C % 3 == 0) soundPlayAt(unitOX(T), unitOY(T), 0x51);   // a cada 3 passos
     if (now - T.dsTick > artLastFrameRaw(0x4BE) + 30) tornadoDamage(id);   // já pousou
     tornadoSteer(id);
 }
@@ -782,7 +783,7 @@ static void microbeRetile(int cx, int cy) {
                 const bool live = u.id != -1 && !(u.flags & UNIT_DEAD);
                 const bool go = live || ((u.flags & UNIT_BUILDING) && !(u.flags & 0x40000u));
                 if (go) {
-                    // (som 0x53 em (x,y).)
+                    soundPlayAt(unitOX(u), unitOY(u), 0x53);
                     if (u.flags & UNIT_BUILDING) {
                         if (!(u.flags & 0x40000u)) {
                             colonyStaffKilled(occ);

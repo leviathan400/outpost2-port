@@ -1,4 +1,5 @@
 #include "trigger.h"
+#include "../audio/sound.h"
 
 #include <cstdio>
 #include <cstring>
@@ -606,8 +607,8 @@ void missionTriggerTick(MissionScript* mission) {          // sub_403110
         for (int p = 0; p < n; ++p)
             if (win & (1u << p)) winners |= g_playerData[p].allyMask;   // sub_490C80
         const bool mp = isMultiplayerType(mission);
-        if (winners & (1u << local)) endGame(mp ? 7 : 3, 2);   // som 0x87
-        else endGame(mp ? 8 : 4, 2);                          // som 0x86
+        if (winners & (1u << local)) { endGame(mp ? 7 : 3, 2); soundVoice(0x87, -1, -1); }
+        else { endGame(mp ? 8 : 4, 2); soundVoice(0x86, -1, -1); }
     }
     // 5) Derrota: FailureCondition habilitada com o bit do jogador local.
     for (int id : s_failure) {

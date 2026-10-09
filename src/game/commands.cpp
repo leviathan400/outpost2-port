@@ -1,4 +1,5 @@
 #include "commands.h"
+#include "../audio/sound.h"
 
 #include <cctype>
 #include <cstdio>
@@ -462,10 +463,12 @@ UiClick uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int til
             s_patrol.stage = 1;
             s_patrol.start = static_cast<int>(s_patrol.pts.size());   // [+0xC] = [+0xE] = fila
             s_patrol.pts.push_back(patrolPoint(tileX, tileY));
-            s_hint = "Set path to final patrol point";       // (som 0x59)
+            s_hint = "Set path to final patrol point";
+            soundPlay(0x59);
             return UiClick::TARGET;                          // mira de novo (7 - n pontos)
         }
-        s_patrol.pts.push_back(patrolPoint(tileX, tileY));   // 2º clique: ponto final (som 0x59)
+        s_patrol.pts.push_back(patrolPoint(tileX, tileY));   // 2º clique: ponto final
+        soundPlay(0x59);
         s_hint.clear();
         // Pacote 0x28: unidades selecionadas (sub_41A7E0, máscara -1), os
         // pontos e as palavras [+0xE]/[+0x10]. (Som 0x56.)
@@ -478,6 +481,7 @@ UiClick uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int til
             if ((g_units[id].owner & 0x0F) == me && (g_units[id].flags & UNIT_VEHICLE)) pkt.unitIds.push_back(id);
         if (!pkt.unitIds.empty()) processCommandPacket(me, pkt);
         s_patrol = {};
+        soundPlay(0x56);
         return UiClick::DONE;
     }
     if (cmd == UC_STAND_GROUND) {                            // sub_451900: pacote 0x26, armados (0x10)
@@ -488,6 +492,7 @@ UiClick uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int til
         for (int id : sel)
             if ((g_units[id].owner & 0x0F) == me && (g_units[id].flags & UNIT_ARMED)) pkt.unitIds.push_back(id);
         if (!pkt.unitIds.empty()) processCommandPacket(me, pkt);
+        soundPlay(0x56);
         return UiClick::DONE;
     }
     if (cmd == UC_ATTACK) {                                  // sub_453130: pacote 0x24 (armados 0x10|0x80)
@@ -503,10 +508,15 @@ UiClick uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int til
             !(g_units[occ].flags & UNIT_DEAD))
             tgt = static_cast<uint32_t>(occ) | 0xFFFF0000u;
         if (!ids.empty()) processAttackPacket(me, 0x24, ids, {}, tgt);
+        soundPlay(0x56);
         return UiClick::DONE;
     }
     if (cmd == UC_BUILD_KIT) { sendBuildKit(sel, tileX, tileY); return UiClick::DONE; }   // sub_451B30
-    if (cmd == UC_GUARD) { processGuardTarget(TethysGame::localPlayer(), sel, tileX, tileY); return UiClick::DONE; }
+    if (cmd == UC_GUARD) {
+        processGuardTarget(TethysGame::localPlayer(), sel, tileX, tileY);
+        soundPlay(0x56);
+        return UiClick::DONE;
+    }
     if (cmd != UC_MOVE) return UiClick::NOT_PORTED;
     // sub_451280: no chão → pacote 2 (mover). Garagem/doca (pacotes 3/4) pendentes.
     const int me = TethysGame::localPlayer();
@@ -516,7 +526,7 @@ UiClick uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int til
     for (int id : sel)
         if ((g_units[id].owner & 0x0F) == me && (g_units[id].flags & UNIT_VEHICLE)) pkt.unitIds.push_back(id);
     if (!pkt.unitIds.empty()) processCommandPacket(me, pkt);
-    // (som 0x56.)
+    soundPlay(0x56);
     return UiClick::DONE;
 }
 

@@ -16,6 +16,7 @@
 #include "../gfx/ui_font.h"
 #include "../res/res_manager.h"
 #include "../core/config.h"
+#include "../audio/sound.h"
 #include "../game/tethys_game.h"
 #include "../game/player.h"
 #include "../game/unit.h"
@@ -253,6 +254,10 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         missionTriggerTick(currentMission());    // triggers, AIProc, vitória/derrota (sub_403110)
         tickMovement();                          // move as unidades pela rota do pathfinder
         tickUnits();                             // predios + efeitos (sub_43AC30)
+        if ((TethysGame::tick() & 3) == 2) {     // sub_47EA60: listener = centro da vista
+            soundSetListener(m_camX + viewportW() / 2, m_camY + viewportH() / 2);
+            soundUpdate();                       // sub_47F250: fila de vozes
+        }
         m_tickAccum -= kTickPeriod;
         // Fim de jogo (TethysGame +0x98): chegado o tick, a partida acaba e
         // volta ao shell.
@@ -677,7 +682,10 @@ void GameState::selectAt(int nx, int ny, bool additive) {
         int dx = ucx - nx, dy = ucy - ny, d2 = dx * dx + dy * dy;
         if (d2 < bestD2) { bestD2 = d2; best = i; }
     }
-    if (best) m_selected.push_back(best);
+    if (best) {
+        m_selected.push_back(best);
+        soundPlay(unitSelectSound(g_units[best].type));   // sub_41AAA0: desc+0x1F0
+    }
 }
 
 void GameState::selectBox(int x0, int y0, int x1, int y1) {
@@ -695,6 +703,9 @@ void GameState::selectBox(int x0, int y0, int x1, int y1) {
         if (ucx >= bx0 && ucx <= bx1 && ucy >= by0 && ucy <= by1)
             m_selected.push_back(i);
     }
+    // sub_41AAA0: 1 unidade → som dela (desc+0x1F0); várias → 0x55.
+    if (m_selected.size() == 1) soundPlay(unitSelectSound(g_units[m_selected[0]].type));
+    else if (!m_selected.empty()) soundPlay(0x55);
 }
 
 void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
@@ -808,7 +819,7 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
                 Unit u(id);
                 if (u.IsLive() && u.OwnerID() == me && u.IsVehicle()) pkt.unitIds.push_back(id);
             }
-            if (!pkt.unitIds.empty()) processCommandPacket(me, pkt);
+            if (!pkt.unitIds.empty()) { processCommandPacket(me, pkt); soundPlay(0x56); }
         }
     }
     if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT && m_dragging) {

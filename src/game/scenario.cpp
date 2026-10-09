@@ -1,4 +1,5 @@
 #include "scenario.h"
+#include "../audio/sound.h"
 
 #include <cstring>
 #include <cstdio>
@@ -433,7 +434,7 @@ void unitDoInfect(int id) {                                  // ?DoInfect
     UnitRecord& r = g_units[id];
     if (r.id == -1 || (r.flags & UNIT_DEAD) || !(r.flags & UNIT_BUILDING)) return;
     if (TethysGame::noPlayers() > 1) return;
-    // (som 0x53 em (x,y).)
+    soundPlayAt(unitOX(r), unitOY(r), 0x53);
     colonyStaffKilled(id);
     UnitRecord& b = g_units[id];
     b.flags |= 0x40000u;

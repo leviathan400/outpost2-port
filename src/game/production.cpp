@@ -1,4 +1,5 @@
 #include "production.h"
+#include "../audio/sound.h"
 
 #include <cstdio>
 
@@ -175,10 +176,11 @@ bool processProducePacket(int owner, int factoryId, int type, int weapon, int gr
     if (f.flags & 0x20000u) return false;
     if (!structureOperational(f)) return false;              // vt+0xA0
     PlayerData& pd = g_playerData[ownerLo(f)];
-    // Sem minério / comida: som 0x58 p/ o jogador local (áudio não portado).
-    if (pd.rareOre < rare || pd.ore < common) return false;
+    // Sem minério / comida: som 0x58 p/ o jogador local.
+    const bool local = ownerLo(f) == TethysGame::localPlayer();
+    if (pd.rareOre < rare || pd.ore < common) { if (local) soundPlay(0x58); return false; }
     if (type == 0x66) {                                      // Food Cargo
-        if (pd.foodStored < 10000) return false;
+        if (pd.foodStored < 10000) { if (local) soundPlay(0x58); return false; }
         pd.foodStored -= 10000;
     }
     // (0x69..0x6B exigem também a palavra [+0x74] == 0 — campo não portado.)

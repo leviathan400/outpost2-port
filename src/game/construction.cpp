@@ -1,4 +1,5 @@
 #include "construction.h"
+#include "../audio/sound.h"
 
 #include "building_sheet.h"
 #include "command.h"
@@ -68,7 +69,7 @@ void sendBuildKit(const std::vector<int>& sel, int tileX, int tileY) {   // sub_
     int l, t, r, b;
     kitPlacementRect(w, h, tileX, tileY, l, t, r, b);
     const uint32_t loc = packLocation(r, b);             // canto inferior direito do anel
-    // (som 0x56)
+    soundPlay(0x56);
     for (int id : sel) {                                 // case 6
         if (!valid(id)) continue;
         UnitRecord& u = g_units[id];
