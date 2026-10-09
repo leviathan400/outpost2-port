@@ -10,6 +10,7 @@
 #include "location.h"
 #include "produce_pane.h"
 #include "objectives_pane.h"
+#include "storage_pane.h"
 #include "game_frame.h"
 
 namespace op2 {
@@ -96,6 +97,7 @@ private:
     // Painel de produção (BUILD da fábrica) e seus botões (sub_4682C0).
     ProducePane m_produce;
     ObjectivesPane m_objectives;   // aba de objetivos (sem seleção)
+    StoragePane m_storage;         // STORAGE (baias)
     static constexpr int kCmdGameOptions = -4;
     static constexpr int kCmdBuildIt = -2, kCmdStatus = -3;
     PaneRect infoPaneRect() const;

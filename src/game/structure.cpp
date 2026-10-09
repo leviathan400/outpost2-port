@@ -3,6 +3,7 @@
 #include "building_sheet.h"
 #include "colony.h"
 #include "production.h"
+#include "docking.h"
 #include "commands.h"
 #include "disaster.h"
 #include "messages.h"
@@ -494,6 +495,9 @@ static bool vehicleTick(int id) {
     switch (u.field22) {
         case SUB_WAIT: case 9:
             if (--u.field3C == 0) { u.field23 = u.field22; u.field22 = 0; }
+            return false;
+        case 0x0D:                        // loc_43E424: troca de carga na doca
+            dockTransferTick(id);
             return false;
         case SUB_REMOVE:
             return true;

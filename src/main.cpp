@@ -31,6 +31,7 @@
 #include "game/colony.h"
 #include "game/structure_anim.h"
 #include "game/production.h"
+#include "game/docking.h"
 #include "gfx/artfile.h"
 #include "app/tapp.h"
 #include "app/game_state.h"
@@ -608,6 +609,27 @@ static int runProduceTest(const std::string& mapName, const std::string& prefix)
     for (t = 0; t < 6000 && s.action == 9; ++t) gs.onIdle(renderer, 0.2501f / 4.0f);
     std::printf("[Produce] kit pronto em t=%d: baias %d %d %d %d %d %d | %s\n", t, s.bayType[0], s.bayType[1],
                 s.bayType[2], s.bayType[3], s.bayType[4], s.bayType[5], op2::statusBarText().c_str());
+    // Doca: ConVec parada na célula da doca da Structure Factory pega o kit da baia 0.
+    {
+        int dx = 0, dy = 0;
+        const bool hasDock = op2::dockCell(sf.id(), dx, dy);
+        op2::Unit cv;
+        op2::TethysGame::CreateUnit(cv, op2::mapConVec, op2::LOCATION{dx, dy}, 0);
+        const op2::UnitRecord& c = op2::g_units[cv.id()];
+        std::printf("[Produce] doca=%d (%d,%d) convec em (%d,%d) na doca=%d disponivel=%d\n", hasDock, dx, dy,
+                    c.pixelX >> 5, c.pixelY >> 5, op2::dockedVehicle(sf.id()), (int)op2::bayTransferAvailable(sf.id(), 0));
+        gs.setSelection({sf.id()});
+        gs.pressCommand(op2::UC_STORAGE);
+        for (int i = 0; i < 3; ++i) gs.onIdle(renderer, 0.05f);
+        writeBmp32(prefix + "_storage.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        op2::sendBayTransfer(sf.id(), 0);
+        std::printf("[Produce] troca: convec sub=0x%X tempo=%d\n", c.field22, c.field3C);
+        int tt = 0;
+        for (; tt < 400 && c.field22 == 0x0D; ++tt) gs.onIdle(renderer, 0.2501f / 4.0f);
+        std::printf("[Produce] apos %d: convec carga=0x%X sub=0x%X | baia0=0x%X\n", tt, c.cargo, c.field22, s.bayType[0]);
+        for (int i = 0; i < 3; ++i) gs.onIdle(renderer, 0.05f);
+        writeBmp32(prefix + "_storage2.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+    }
     renderer.shutdown(); SDL_Quit();
     return made ? 0 : 4;
 }

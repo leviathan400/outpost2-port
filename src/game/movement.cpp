@@ -161,7 +161,9 @@ static void stepUnit(int id) {
     const bool moving = u.action == CMD_MOVE || u.action == 0x26 || u.action == 0x24 ||
                         u.action == 0x25 || u.action == 0x28;
     if (u.field20 != 1 || !moving || !u.hasOrder || u.order.waypoints.empty()) {
-        u.field22 = 0;                                          // parado: não anima
+        // Parado: sai do sub-estado de movimento (1). Os demais sub-estados
+        // (espera 6, troca na doca 0x0D...) são do laço da unidade (sub_43DE50).
+        if (u.field22 == 1) u.field22 = 0;
         return;
     }
 

@@ -710,6 +710,9 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
                 }
             }
         }
+        // STORAGE: Alt+1..6 = botão da baia (sub_40A900(0x31 + i)).
+        if ((SDL_GetModState() & KMOD_ALT) && k >= SDLK_1 && k <= SDLK_6 && m_storage.isOpen())
+            m_storage.pressBay(static_cast<int>(k - SDLK_1));
         // Atalhos dos botões de comando (letra após o '&' da dica).
         if (!ctrl && k >= SDLK_a && k <= SDLK_z) {
             const char key = static_cast<char>('A' + (k - SDLK_a));
@@ -737,6 +740,8 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
             paneHit = m_produce.click(infoPaneRect(), nx, ny, e.button.clicks >= 2, buildNow);
             if (buildNow) produceBuildIt();
         }
+        if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_storage.isOpen())
+            paneHit = m_storage.click(kColX, kPaneWinY, nx, ny);
         if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_selected.empty() && m_mission)
             paneHit = m_objectives.click(infoPaneRect(), nx, ny);
         // Botão de comando do quadro (IDLE / ACTIVATE → CommandPacket 0x12 / 0x13).
@@ -830,6 +835,12 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
     if (m_selected.size() != 1) return out;
     const UnitRecord& u = g_units[m_selected[0]];
     if (u.id == -1 || !(u.flags & UNIT_BUILDING) || (u.owner & 0x0F) != TethysGame::localPlayer()) return out;
+    if (m_storage.isOpen()) {
+        // sub_463170: só "&STATUS" (o LAUNCH do modo plataforma ainda não).
+        TextButton b{};
+        b.cmd = kCmdStatus; b.label = "&STATUS"; b.tip = "Back to Structure &Status"; b.hotkey = 'S';
+        out.push_back(b);
+    }
     if (m_produce.isOpen()) {
         // sub_4682C0: "&BUILD IT" (desabilitado até escolher um item pagável) e
         // "&STATUS" — ambos voltam ao painel de status (dword_564A80).
@@ -842,7 +853,7 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
         out.push_back(b);
     }
     for (int cmd : uiCommandsStructure()) {
-        if (m_produce.isOpen()) break;
+        if (m_produce.isOpen() || m_storage.isOpen()) break;
         if (out.size() == 4) break;
         if (!uiCommandAvailable(cmd, m_selected)) continue;
         const UiCommandDesc d = uiCommandDescribe(cmd, m_selected);
@@ -879,10 +890,19 @@ void GameState::produceBuildIt() {
 
 void GameState::clickCommand(int cmd) {                  // vt[1] do comando
     if (cmd == kCmdBuildIt) { produceBuildIt(); return; }
-    if (cmd == kCmdStatus) { m_produce.close(); return; }
+    if (cmd == kCmdStatus) { m_produce.close(); m_storage.close(); return; }
+    if (cmd == UC_STORAGE && m_selected.size() == 1) {      // loc_456640 → painel dword_5650F0
+        if (StoragePane::supports(g_units[m_selected[0]].type)) {
+            m_produce.close();
+            m_storage.open(m_selected[0]);
+        } else {
+            postMessage(-1, -1, "STORAGE deste predio ainda nao portado", 0);
+        }
+        return;
+    }
     if (cmd == kCmdGameOptions) { postMessage(-1, -1, "Game Options ainda nao portado", 0); return; }
     if (cmd == UC_BUILD) {                                // sub_456250 → painel de produção
-        if (m_selected.size() == 1) m_produce.open(m_selected[0]);
+        if (m_selected.size() == 1) { m_storage.close(); m_produce.open(m_selected[0]); }
         m_targetCmd = -1;
         return;
     }
@@ -1081,8 +1101,11 @@ void GameState::renderPanel(Renderer& renderer) {
 
     // --- Quadro de informação da seleção (classe de painel @off_4D5220) ---
     m_produce.update(m_selected);
+    m_storage.update(m_selected);
     if (m_produce.isOpen())
         m_produce.draw(fb, VW, VH, pane, m_mouseNX, m_mouseNY);
+    else if (m_storage.isOpen())
+        m_storage.draw(fb, VW, VH, kColX, kPaneWinY, pane, kPaneBottom - 2 - 25, m_mouseNX, m_mouseNY);
     else if (!m_selected.empty())
         drawUnitInfoPane(fb, VW, VH, pane, m_selected[0], static_cast<int>(m_selected.size()), me);
     else if (m_mission)
