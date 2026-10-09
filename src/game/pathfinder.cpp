@@ -1,4 +1,5 @@
 #include "pathfinder.h"
+#include "weapon.h"
 
 #include "game_map.h"
 #include "terrain_cost.h"
@@ -16,6 +17,7 @@ static constexpr int kSentinel = static_cast<int>(0x80000000);
 
 void pfResetContext() {               // sub_438100
     g_pf.unitId = 0;
+    g_pf.goalMode = 0;
     g_pf.targetX = g_pf.targetY = kSentinel;
     g_pf.target2X = g_pf.target2Y = kSentinel;
 }
@@ -27,6 +29,7 @@ void pfInitStack() {                   // sub_438130
 void pfPush() {                        // sub_438180: empilha o ctx atual e reinicia alvos
     g_pfStack.push_back(g_pf);
     g_pf.unitId = 0;
+    g_pf.goalMode = 0;
     g_pf.targetX = g_pf.targetY = kSentinel;
     g_pf.target2X = g_pf.target2Y = kSentinel;
 }
@@ -52,6 +55,11 @@ void pfSetContext(int unitId) {        // sub_438260
 void pfSetTarget(int x, int y)  { g_pf.targetX = x;  g_pf.targetY = y;  }   // sub_438290
 void pfSetTarget2(int x, int y) { g_pf.target2X = x; g_pf.target2Y = y; }   // sub_4382A0
 void pfSetRadius(int r)         { g_pf.radius2 = r * r; }                    // sub_4382B0
+void pfSetGoal(int mode, int x, int y, int dist) {
+    g_pf.goalMode = mode;
+    pfSetTarget(x, y);
+    if (mode == 1 || mode == 2) { pfSetTarget2(x, y); pfSetRadius(dist); }
+}
 
 // ---- Helpers de ocupação ----------------------------------------------------
 
@@ -473,7 +481,15 @@ int pfMoveCost(int x, int y) {         // sub_438390
     }
 
     // Célula-alvo → custo negativo (prioridade).
-    if (x == g_pf.targetX && y == g_pf.targetY) base = -base;
+    bool goal = x == g_pf.targetX && y == g_pf.targetY;
+    if (!goal && (g_pf.goalMode == 1 || g_pf.goalMode == 2)) {   // sub_4384D0 / sub_438660
+        const int dx = pfWrapDX(g_pf.target2X - x), dy = g_pf.target2Y - y;
+        if (dx * dx + dy * dy <= g_pf.radius2) {
+            if (g_pf.goalMode == 1 || (dx == 0 && dy == 0)) goal = true;
+            else goal = mapLineOfSight(x, y, g_pf.target2X, g_pf.target2Y) != 0;   // sub_436EA0
+        }
+    }
+    if (goal) base = -base;
 
     uint32_t occ = cell & GameMap::CELL_OCCUPANCY;
     if (occ == 0) return base;

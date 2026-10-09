@@ -22,6 +22,10 @@ struct PfContext {
     int target2X = static_cast<int>(0x80000000); // dword_54F03C
     int target2Y = static_cast<int>(0x80000000); // dword_54F040
     int radius2  = 0;                // dword_54F044 (raio²)
+    // Objetivo da busca ([mov+0xCC], sub_4401F0 escolhe a função de custo):
+    // 0 tile exato (sub_438390); 1 até o raio de target2 (sub_4384D0);
+    // 2 até o raio e com linha de visada (sub_438660); 3 (sub_438850, pendente).
+    int goalMode = 0;
 };
 
 extern PfContext g_pf;                 // contexto atual (dword_54F030...)
@@ -36,6 +40,9 @@ void pfSetContext(int unitId);         // sub_438260: define ctx (classe/tubo da
 void pfSetTarget(int x, int y);        // sub_438290: dword_54F034/38
 void pfSetTarget2(int x, int y);       // sub_4382A0: dword_54F03C/40
 void pfSetRadius(int r);               // sub_4382B0: dword_54F044 = r*r
+// sub_4401F0: arma o objetivo — modo 0 só o alvo; 1/2 também target2 = alvo e
+// raio = dist (sub_4382A0/sub_4382B0).
+void pfSetGoal(int mode, int x, int y, int dist);
 
 // --- Primitivas de célula ---------------------------------------------------
 // canEnter (sub_4382C0): 1 = a unidade do contexto pode entrar em (x,y); 0 = não.

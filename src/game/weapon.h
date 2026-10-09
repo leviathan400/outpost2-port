@@ -91,5 +91,7 @@ int artLastFrameRaw(int raw);                // sub_404C70 (nFrames-1, animaçã
 const int8_t* artFrameOffsets(int raw, int frame);   // sub_404DF0 (bytes x1,y1,x2,y2)
 // sub_48BAE0 + sub_48B6F0: tile queimado p/ o tile dado (0 = nenhum).
 int scorchTileFor(int tile);
+// sub_436EA0: linha de visada entre tiles do port (≠0 = livre).
+int mapLineOfSight(int x0, int y0, int x1, int y1);
 
 } // namespace op2

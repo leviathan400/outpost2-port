@@ -604,7 +604,9 @@ void unitOrderAttack(int id, int type, const std::vector<uint32_t>& wps, uint32_
     if (type == 0x25) d = moving ? R >> 1 : R - 1;
     else d = R - (moving ? 2 : 0) - adj;
     if (d <= 1) d = 1;
-    u.order.field40 = d;                                     // (o executor de rota do port ainda não usa)
+    u.order.field40 = d;
+    const WeaponClass* wc = classOf(static_cast<int16_t>(u.cargo));
+    u.order.multiFlag = wc ? wc->rangeMode : 0;              // [ordem+0x3C] = desc+0x250 (modo do objetivo)
     u.order.waypoints.push_back(targetWaypoint(u, tgt));
     u.routeDirs.clear(); u.routeIdx = 0;
 }
@@ -1112,6 +1114,7 @@ static int scorchTile(int tile) {
 }
 
 int scorchTileFor(int tile) { return scorchTile(tile); }
+int mapLineOfSight(int x0, int y0, int x1, int y1) { return lineOfSight(x0, y0, x1, y1); }
 
 void vehicleDeath(int id) {
     UnitRecord& r = g_units[id];

@@ -132,7 +132,13 @@ static void stepUnit(int id) {
     int curX = u.pixelX >> 5, curY = u.pixelY >> 5;
     int destX = unpackLocX(u.order.waypoints.back());
     int destY = unpackLocY(u.order.waypoints.back());
-    if (curX == destX && curY == destY) {                 // chegou ao destino
+    // Último ponto (sub_44C2F0 → vt[31] sub_44C350): modo [ordem+0x3C] e
+    // distância [ordem+0x40] viram o objetivo da busca ([mov+0xCC/+0xD0]);
+    // sub_4401F0: custo negativo na própria célula = já chegou.
+    pfSetContext(id);
+    pfSetGoal(u.order.multiFlag, destX, destY, u.order.field40);
+    const bool arrived = pfMoveCost(curX, curY) < 0;
+    if (arrived) {                                        // chegou ao destino
         // Mover (casos 2-4 de jpt_43B312) zera a ação; 0x26 não tem tratamento
         // por tick (def_43B312): a ação fica 0x26 (posição mantida).
         u.field20 = 0; u.field22 = 0;
@@ -145,8 +151,6 @@ static void stepUnit(int id) {
 
     // (Re)computa a rota se necessário (rota real do pathfinder).
     if (u.routeIdx >= static_cast<int>(u.routeDirs.size())) {
-        pfSetContext(id);
-        pfSetTarget(destX, destY);
         SearchContext sc; sc.unitId = id;
         sc.startX = curX; sc.startY = curY; sc.destX = destX; sc.destY = destY;
         int dirs[600]; int reached = 0;
@@ -156,7 +160,7 @@ static void stepUnit(int id) {
         if (n == 0) { u.field22 = 0; return; }            // sem rota: parado, não anima
     }
 
-    pfSetTarget(destX, destY);
+    pfSetGoal(u.order.multiFlag, destX, destY, u.order.field40);
     if (!setupStep(id, u.routeDirs[u.routeIdx] & 7)) {
         u.routeDirs.clear(); u.routeIdx = 0; u.field22 = 0;
         return;
