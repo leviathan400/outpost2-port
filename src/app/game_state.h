@@ -9,6 +9,7 @@
 #include "../game/terrain_renderer.h"
 #include "location.h"
 #include "produce_pane.h"
+#include "game_frame.h"
 
 namespace op2 {
 
@@ -43,13 +44,22 @@ public:
     int shakeX() const { return m_shakeX; }
     int shakeY() const { return m_shakeY; }
 
-    // Painel de comando à direita (216 px, medido na tela original 640x480):
-    // minimapa (y 0..134), linha de 6 abas (135..180) e o quadro de informação
-    // (181..479). Barra de status de 22 px sob a visão do mapa.
-    static constexpr int kPanelW = 216;
-    static constexpr int kMiniMapH = 135;
-    static constexpr int kTabsH = 46;
-    static constexpr int kStatusBarH = 22;
+    // Layout da janela do jogo em 640x480 (sub_499E80 / sub_4998D0): moldura
+    // com título de 22 px e bordas de 12 → área cliente 616x446 em (12,22):
+    //   vista (0,0) 416x416 [(W-200)&~31, H&~31]; filete de 8 px; minimapa
+    //   (vista+8, 0) 192x128; faixa de 6; janela do quadro (vista+8, 0x86)
+    //   192 x resto, com as abas no topo e o conteúdo 42 px abaixo
+    //   (sub_45CB00); barra de status sob a vista.
+    static constexpr int kClientX = 12, kClientY = 22, kClientW = 616, kClientH = 446;
+    static constexpr int kViewX = kClientX, kViewY = kClientY, kViewW = 416, kViewH = 416;
+    static constexpr int kColX = kClientX + kViewW + 8;       // 436
+    static constexpr int kColW = 0xC0;                        // 192
+    static constexpr int kMiniMapY = kClientY, kMiniMapH = 0x80;
+    static constexpr int kPaneWinY = kClientY + 0x86;         // 156: janela do quadro (abas)
+    static constexpr int kPaneTop = kPaneWinY + 42;           // 198: conteúdo
+    static constexpr int kPaneBottom = kClientY + kClientH;   // 468
+    static constexpr int kStatusY = kViewY + kViewH;          // 438
+    static constexpr int kStatusH = kClientH - kViewH;        // 30
 
 private:
     void loadSettings();
@@ -91,7 +101,9 @@ private:
     std::vector<TextButton> structureButtons() const;
     void clickCommand(int cmd);
 
-    int viewportW() const;         // largura da área de jogo (tela - painel)
+    int viewportW() const;         // largura da vista do mapa (416)
+    int viewportH() const { return kViewH; }   // altura da vista (416)
+    GameFrame m_frame;             // moldura (bitmaps do OUT2RES.DLL)
     // X de tela de um pixel de mundo, tratando o WRAP horizontal do mapa
     // (o engine faz o mapa dar a volta em X; unidades do outro lado da emenda
     // precisam aparecer no lado certo da câmera).

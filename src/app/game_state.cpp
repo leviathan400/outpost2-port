@@ -5,6 +5,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 
 #include "tapp.h"
 #include "info_pane.h"
@@ -72,8 +73,8 @@ bool GameState::loadMap(const std::string& mapName) {
         return false;
     }
     const int VW = Renderer::NATIVE_WIDTH, VH = Renderer::NATIVE_HEIGHT;
-    m_maxX = m_terrain.mapPixelWidth() - VW;
-    m_maxY = m_terrain.mapPixelHeight() - VH;
+    m_maxX = m_terrain.mapPixelWidth() - viewportW();
+    m_maxY = m_terrain.mapPixelHeight() - viewportH();
     if (m_maxY < 0) m_maxY = 0;
     // começa na área jogável (clipRect), como o jogo
     m_camX = g_gameMap.clipRect().x1 * 32;
@@ -122,7 +123,7 @@ bool GameState::loadMission(const std::string& dllName) {
     int cx, cy;
     if (takeCenterViewRequest(cx, cy)) {           // CenterViewOn
         m_camX = cx - viewportW() / 2;
-        m_camY = cy - (Renderer::NATIVE_HEIGHT - kStatusBarH) / 2;
+        m_camY = cy - viewportH() / 2;
         clampCamera();
     }
     return ok != 0;
@@ -206,8 +207,8 @@ bool GameState::load(const std::string& mapName) {
     }
 
     // Centraliza a câmera na base inicial (como CenterViewOn do jogo).
-    m_camX = cx * 32 - Renderer::NATIVE_WIDTH / 2;
-    m_camY = cy * 32 - Renderer::NATIVE_HEIGHT / 2;
+    m_camX = cx * 32 - viewportW() / 2;
+    m_camY = cy * 32 - viewportH() / 2;
     clampCamera();
 
     std::cout << "[GameState] mapa " << mapName << " carregado ("
@@ -265,7 +266,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         int cx, cy;
         if (takeCenterViewRequest(cx, cy)) {
             m_camX = cx - viewportW() / 2;
-            m_camY = cy - (Renderer::NATIVE_HEIGHT - kStatusBarH) / 2;
+            m_camY = cy - viewportH() / 2;
             clampCamera();
         }
     }
@@ -365,7 +366,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     auto drawSprite = [&](int animIdx, int frameIdx, int cx, int cy, int playerColor) {
         return blitArtFrame(renderer.getFramebuffer(), Renderer::NATIVE_WIDTH, Renderer::NATIVE_HEIGHT,
                             animIdx, frameIdx, cx, cy, playerColor,
-                            0, 0, viewportW(), Renderer::NATIVE_HEIGHT - kStatusBarH);
+                            0, 0, viewportW(), viewportH());
     };
 
     // Passe de sombra (sub_49E8C0): vt[30] das unidades com 0x10000000 — a
@@ -517,14 +518,15 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         if (r.id == -1 || (r.flags & UNIT_DEAD)) continue;
         // Centrada na posição INTERPOLADA (casa com o sprite durante o deslize).
         int ucx = screenXOf(r.pixelX) + 16, ucy = r.pixelY + 16 - m_camY;
-        if (ucx < -16 || ucx > viewportW() + 16 || ucy < -16 || ucy > Renderer::NATIVE_HEIGHT + 16)
+        if (ucx < -16 || ucx > viewportW() + 16 || ucy < -16 || ucy > viewportH() + 16)
             continue;
         renderer.drawRect(ucx - 15, ucy - 15, 30, 30, 0xFF40FF40);   // verde (selecionado)
     }
     // Caixa de arrasto (multi-seleção).
     if (m_dragging) {
-        int x0 = std::min(m_dragSX, m_mouseNX), y0 = std::min(m_dragSY, m_mouseNY);
-        int w = std::abs(m_mouseNX - m_dragSX), h = std::abs(m_mouseNY - m_dragSY);
+        const int mvx = m_mouseNX - kViewX, mvy = m_mouseNY - kViewY;   // mouse na vista
+        int x0 = std::min(m_dragSX, mvx), y0 = std::min(m_dragSY, mvy);
+        int w = std::abs(mvx - m_dragSX), h = std::abs(mvy - m_dragSY);
         renderer.drawRect(x0, y0, w, h, 0xFF40FF40);
     }
 
@@ -532,14 +534,22 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     // Fim de jogo (sub_49CAC0): letreiro sobre a vista até o tick de encerramento.
     // (O original usa a fonte grande do quadro de detalhe — aqui a fonte do port.)
     if (gameEndCode()) {
-        const int cy = (Renderer::NATIVE_HEIGHT - kStatusBarH) / 2;
+        const int cy = viewportH() / 2;
         Font::drawTextCentered(renderer.getFramebuffer(), Renderer::NATIVE_WIDTH, Renderer::NATIVE_HEIGHT,
                                gameEndText(gameEndCode()), viewportW() / 2, cy, 0xFFFFE070, true);
     }
     // vt[6] do terremoto (sub_413560): tremor p/ o próximo quadro, pelo centro da vista.
     disasterShake(m_camX + (viewportW() / 32) * 16,
-                  m_camY + ((Renderer::NATIVE_HEIGHT - kStatusBarH) / 32) * 16,
+                  m_camY + (viewportH() / 32) * 16,
                   m_frameSkip, m_shakeX, m_shakeY);
+    // A vista foi desenhada na origem: vai p/ o seu lugar na área cliente
+    // (12,22); o resto da tela é a moldura e a coluna direita (renderPanel).
+    {
+        uint32_t* fb = renderer.getFramebuffer();
+        const int VW = Renderer::NATIVE_WIDTH;
+        for (int y = kViewH - 1; y >= 0; --y)
+            std::memmove(&fb[(y + kViewY) * VW + kViewX], &fb[y * VW], sizeof(uint32_t) * kViewW);
+    }
     renderPanel(renderer);
 
     // Overlay: relógio (Tick/Time) + uma amostra do RNG — prova visível de que o
@@ -578,7 +588,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     renderer.present();
 }
 
-int GameState::viewportW() const { return Renderer::NATIVE_WIDTH - kPanelW; }
+int GameState::viewportW() const { return kViewW; }
 
 // Feixes das armas instantâneas: Bresenham com bloco 2x2 por ponto, como
 // sub_41E8F0 (laser: OR 0x7C00 = vermelho máximo em RGB555) e loc_41ECE0
@@ -586,7 +596,7 @@ int GameState::viewportW() const { return Renderer::NATIVE_WIDTH - kPanelW; }
 // 0x30003 a cada ponto aceso e volta ao início a cada falha do padrão).
 void GameState::drawBeam(Renderer& renderer, const WeaponDrawOp& op) {
     uint32_t* fb = renderer.getFramebuffer();
-    const int VW = Renderer::NATIVE_WIDTH, clipW = viewportW(), clipH = Renderer::NATIVE_HEIGHT - kStatusBarH;
+    const int VW = Renderer::NATIVE_WIDTH, clipW = viewportW(), clipH = viewportH();
     auto c555 = [](uint32_t w) {
         const uint32_t r = (w >> 10) & 31, g = (w >> 5) & 31, b = w & 31;
         return 0xFF000000u | (((r << 3) | (r >> 2)) << 16) | (((g << 3) | (g >> 2)) << 8) | ((b << 3) | (b >> 2));
@@ -717,7 +727,9 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
     if (e.type == SDL_MOUSEBUTTONDOWN) {
         int nx, ny; renderer.screenToNative(e.button.x, e.button.y, nx, ny);
         m_mouseNX = nx; m_mouseNY = ny;
-        bool inView = nx < viewportW() && ny < Renderer::NATIVE_HEIGHT - kStatusBarH;
+        // Vista do mapa em (kViewX, kViewY); vx/vy = coordenadas dentro dela.
+        const int vx = nx - kViewX, vy = ny - kViewY;
+        bool inView = vx >= 0 && vx < viewportW() && vy >= 0 && vy < viewportH();
         // Painel de produção: lista e setas (sub_4683F0 / sub_4683B0 / sub_430910-60).
         bool paneHit = false;
         if (e.button.button == SDL_BUTTON_LEFT && !inView && m_produce.isOpen()) {
@@ -736,14 +748,14 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
         }
         if (e.button.button == SDL_BUTTON_LEFT && inView && m_targetCmd >= 0) {
             // Modo de mira: o clique escolhe o alvo (vt[3] do comando).
-            int tileX = (m_camX + nx) / 32, tileY = (m_camY + ny) / 32;
+            int tileX = (m_camX + vx) / 32, tileY = (m_camY + vy) / 32;
             if (g_gameMap.ok()) tileX &= (g_gameMap.width() - 1);
             if (uiCommandTarget(m_targetCmd, m_selected, tileX, tileY) != UiClick::TARGET)
                 m_targetCmd = -1;                            // Patrulhar: 2 cliques
         } else if (e.button.button == SDL_BUTTON_RIGHT && m_targetCmd >= 0) {
             m_targetCmd = -1;                                // cancela a mira
         } else if (e.button.button == SDL_BUTTON_LEFT && inView) {
-            m_dragging = true; m_dragSX = nx; m_dragSY = ny;
+            m_dragging = true; m_dragSX = vx; m_dragSY = vy;
         } else if (e.button.button == SDL_BUTTON_RIGHT && inView && !m_selected.empty()) {
             // Mover os SELECIONADOS para o tile clicado (pipeline real + espiral).
             int tileX = (m_camX + nx) / 32, tileY = (m_camY + ny) / 32;
@@ -760,9 +772,10 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
     }
     if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT && m_dragging) {
         int nx, ny; renderer.screenToNative(e.button.x, e.button.y, nx, ny);
-        int dx = std::abs(nx - m_dragSX), dy = std::abs(ny - m_dragSY);
-        if (dx < 4 && dy < 4) selectAt(nx, ny, false);   // clique = seleção simples
-        else selectBox(m_dragSX, m_dragSY, nx, ny);        // caixa = multi-seleção
+        const int vx = nx - kViewX, vy = ny - kViewY;     // coordenadas na vista
+        int dx = std::abs(vx - m_dragSX), dy = std::abs(vy - m_dragSY);
+        if (dx < 4 && dy < 4) selectAt(vx, vy, false);   // clique = seleção simples
+        else selectBox(m_dragSX, m_dragSY, vx, vy);        // caixa = multi-seleção
         m_dragging = false;
     }
 }
@@ -777,8 +790,8 @@ std::vector<GameState::CmdButton> GameState::commandButtons() const {
     const UnitRecord& u = g_units[m_selected[0]];
     if (u.id == -1 || !(u.flags & 0x42u) || (u.owner & 0x0F) != TethysGame::localPlayer()) return out;
     const std::vector<int>& list = m_selected.size() == 1 ? uiCommandsSingle() : uiCommandsMulti();
-    const int px0 = viewportW();
-    const int top = kMiniMapH + kTabsH + 0x3C + 57;       // dword_57556C + dword_578F4C + 0x3C
+    const int px0 = kColX;                                // janela do quadro
+    const int top = kPaneTop + 0x3C + 57;                 // dword_57556C + dword_578F4C + 0x3C
     for (int cmd : list) {
         if (!uiCommandAvailable(cmd, m_selected)) continue;
         const UiCommandDesc d = uiCommandDescribe(cmd, m_selected);
@@ -826,7 +839,7 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
         b.cmd = cmd; b.label = d.label; b.tip = d.tip; b.hotkey = uiCommandHotkey(d);
         out.push_back(b);
     }
-    const int W = 87, H = 25, x0 = viewportW() + 9, bottom = Renderer::NATIVE_HEIGHT - 2;
+    const int W = 87, H = 25, x0 = kColX + 9, bottom = kPaneBottom - 2;
     const int n = static_cast<int>(out.size());
     for (int i = 0; i < n; ++i) {
         TextButton& b = out[i];
@@ -843,7 +856,7 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
 }
 
 PaneRect GameState::infoPaneRect() const {
-    return PaneRect{viewportW() + 4, kMiniMapH + kTabsH, Renderer::NATIVE_WIDTH - 4, Renderer::NATIVE_HEIGHT - 2};
+    return PaneRect{kColX, kPaneTop, kColX + kColW, kPaneBottom};
 }
 
 // BUILD IT (sub_467D50): item escolhido → sub_456B50 (pacote 9); volta ao status.
@@ -953,23 +966,24 @@ void GameState::drawObjectives(uint32_t* fb, int fbW, int fbH, int l, int t, int
 
 void GameState::renderPanel(Renderer& renderer) {
     const int VW = Renderer::NATIVE_WIDTH, VH = Renderer::NATIVE_HEIGHT;
-    const int px0 = viewportW();                 // início do painel (x)
+    const int px0 = kColX;                       // coluna direita (x)
     uint32_t* fb = renderer.getFramebuffer();
     const int me = TethysGame::localPlayer();
 
-    // Fundo do painel + bordas (moldura clara/escura, como o original).
-    renderer.fillRect(px0, 0, kPanelW, VH, 0xFF000000);
-    for (int y = 0; y < VH; ++y) {
-        fb[y * VW + px0] = 0xFFDCDCE0;
-        fb[y * VW + px0 + 1] = 0xFF5C5C5F;
-        fb[y * VW + px0 + 3] = 0xFFB9B9BB;
-    }
+    // Moldura da janela (sub_499E80) e fundo da área cliente (sub_499BC0).
+    if (!m_frame.ok()) m_frame.load();
+    renderer.fillRect(kViewX + kViewW, kClientY, VW - kViewX - kViewW, VH - kClientY, 0xFF000000);
+    renderer.fillRect(kClientX, kStatusY, VW - kClientX, VH - kStatusY, 0xFF000000);
+    renderer.fillRect(0, 0, VW, kClientY, 0xFF000000);
+    renderer.fillRect(0, 0, kClientX, VH, 0xFF000000);
+    m_frame.drawNonClient(fb, VW, VH, VW, VH, true);
+    m_frame.drawClient(fb, VW, VH, kClientX, kClientY, kClientW, kClientH, kViewW, kViewH);
 
-    // --- Minimapa (y 0..kMiniMapH) ---
+    // --- Minimapa (janela 192x128 em vista+8, 0) ---
     // Cores reais do terreno (média de cada tile, sub_48B320) escurecidas por
     // coluna pela faixa de luz (sub_48EC70 + tabelas de sub_586193), como o
     // original. Prédios de todos os jogadores; veículos inimigos só na luz.
-    const int mmX0 = px0 + 6, mmY0 = 2, mmW = kPanelW - 12, mmH = kMiniMapH - 4;
+    const int mmX0 = kColX, mmY0 = kMiniMapY, mmW = kColW, mmH = kMiniMapH;
     int mw = g_gameMap.ok() ? g_gameMap.width() : 64;
     int mh = g_gameMap.ok() ? g_gameMap.height() : 64;
     int sc = std::max(1, std::min(mmW / mw, mmH / mh));
@@ -1019,10 +1033,9 @@ void GameState::renderPanel(Renderer& renderer) {
     }
     {
         int vx = mmX + (m_camX / 32) * sc, vy = mmY + (m_camY / 32) * sc;
-        int vw = (viewportW() / 32) * sc, vh = ((VH - kStatusBarH) / 32) * sc;
+        int vw = (viewportW() / 32) * sc, vh = (viewportH() / 32) * sc;
         renderer.drawRect(vx, vy, vw, vh, 0xFFFFFFFF);
     }
-    for (int x = px0; x < VW; ++x) fb[(kMiniMapH - 1) * VW + x] = 0xFFFFFFFC;
 
     // --- Janela do quadro (dword_5750D8): abas no topo + painel atual ---
     // sub_45C940: 6 abas encostadas, x = 1 + soma das larguras (sub_404D30 =
@@ -1032,11 +1045,8 @@ void GameState::renderPanel(Renderer& renderer) {
     // emblema da facção centrado (anim crua 0x99 Eden / 0x540 Plymouth).
     const PaneRect pane = infoPaneRect();
     {
-        const int winT = pane.t - 42;                       // topo da janela = topo das abas
+        const int winT = kPaneWinY;                         // topo da janela = topo das abas
         const int winL = pane.l, winW = pane.r - pane.l, winH = pane.b - winT;
-        // PROVISÓRIO: a bandeja metálica em volta das abas é da "skin" do ODASL
-        // (bitmaps do OUT2RES.DLL) — por ora preto.
-        renderer.fillRect(px0 + 4, kMiniMapH, kPanelW - 4, winT - kMiniMapH, 0xFF000000);
         renderer.fillRect(winL, winT, winW, winH, 0xFF000000);
         if (g_art.ok()) {
             const bool eden = g_playerData[me < kMaxPlayers ? me : 0].isEden != 0;
@@ -1060,7 +1070,7 @@ void GameState::renderPanel(Renderer& renderer) {
                 const ArtAnimation& an = g_art.animation(anim);
                 // Botão (sub_40AEE0): sub_403E00 com o hotspot no canto do retângulo.
                 blitArtFrame(fb, VW, VH, anim, k == current ? 1 : 0, winL + x, winT, -1,
-                             px0, kMiniMapH, VW, pane.t);
+                             kColX, kPaneWinY, kColX + kColW, pane.t);
                 x += static_cast<int>(an.header[3]) - static_cast<int>(an.header[1]);
             }
         }
@@ -1117,26 +1127,39 @@ void GameState::renderPanel(Renderer& renderer) {
                                b.disabled ? 0xFF603020 : over ? 0xFFFF7050 : 0xFFE04030, false);
     }
 
-    // --- Barra de status sob a visão do mapa ---
+    // --- Barra de status sob a vista (sub_4998D0 / sub_499A30) ---
+    // Retângulos na área cliente: linha 1 em y = (H & ~31) + 6, linha 2 12 px
+    // abaixo; contadores de minério em x = vista - 0x51 + 8 (ícone 211 comum /
+    // 210 raro + número em branco); texto à esquerda até vista - 0x51.
     {
-        const int sy = VH - kStatusBarH, sw = viewportW();
-        renderer.fillRect(0, sy, sw, kStatusBarH, 0xFF141416);
-        for (int x = 0; x < sw; ++x) { fb[sy * VW + x] = 0xFFFFFFFF; fb[(sy + 1) * VW + x] = 0xFF87868A; }
-        // Coordenadas do tile sob o mouse. PROVISÓRIO: exibidas 1-based no
-        // sistema do port — o deslocamento exato que o original aplica (o engine
-        // guarda mapas pequenos com x+32) ainda não foi rastreado.
-        if (m_mouseNX < viewportW() && m_mouseNY < sy) {
-            int tx = (m_camX + m_mouseNX) / 32, ty = (m_camY + m_mouseNY) / 32;
+        const int y1 = kClientY + kViewH + 6, y2 = y1 + 12;
+        const int oreX = kClientX + kViewW - 0x51 + 8;
+        const PlayerData& pd = g_playerData[me < kMaxPlayers ? me : 0];
+        char num[16];
+        m_frame.drawPiece(fb, VW, VH, 23, oreX, y1 + 2);                 // 211 (comum)
+        std::snprintf(num, sizeof(num), "%d", pd.ore);
+        Font::drawText(fb, VW, VH, num, oreX + m_frame.width(23) + 2, y1, 0xFFFFFFFF, false);
+        // [+0xA8]: linha do minério raro. PROVISÓRIO: mostrada quando há raro.
+        if (pd.rareOre > 0) {
+            m_frame.drawPiece(fb, VW, VH, 24, oreX, y2 + 2);             // 210 (raro)
+            std::snprintf(num, sizeof(num), "%d", pd.rareOre);
+            Font::drawText(fb, VW, VH, num, oreX + m_frame.width(24) + 2, y2, 0xFFFFFFFF, false);
+        }
+        // Texto (linha 2): coordenadas do tile sob o mouse e a última mensagem
+        // (sub_49BF10) ou a ajuda do modo de mira (unk_575570). PROVISÓRIO: a
+        // composição exata dos dois objetos de texto ainda não foi portada.
+        int tx0 = kClientX + 2;
+        const int mvx = m_mouseNX - kViewX, mvy = m_mouseNY - kViewY;
+        if (mvx >= 0 && mvx < viewportW() && mvy >= 0 && mvy < viewportH()) {
+            int tx = (m_camX + mvx) / 32, ty = (m_camY + mvy) / 32;
             if (g_gameMap.ok()) tx &= (g_gameMap.width() - 1);
             char c[32]; std::snprintf(c, sizeof(c), "%d,%d", tx + 1, ty + 1);
-            Font::drawText(fb, VW, VH, c, 4, sy + 2, 0xFFE0E0E0, false);
+            Font::drawText(fb, VW, VH, c, tx0, y1, 0xFFE0E0E0, false);
         }
-        // Última mensagem (sub_49BF10: maiúsculas).
-        Font::drawText(fb, VW, VH, statusBarText(), 4, sy + 13, 0xFFE8E8E8, false);
-        // Ajuda do modo de mira (sub_411BF0 em unk_575570). PROVISÓRIO: na linha
-        // das coordenadas — a posição real do texto desse objeto não foi medida.
-        if (m_targetCmd >= 0 && !uiCommandHint().empty())
-            Font::drawText(fb, VW, VH, uiCommandHint(), 60, sy + 2, 0xFFE8E8E8, false);
+        const std::string& msg = (m_targetCmd >= 0 && !uiCommandHint().empty()) ? uiCommandHint() : statusBarText();
+        std::string clipped = msg;
+        while (!clipped.empty() && tx0 + Font::getTextWidth(clipped) > oreX - 8) clipped.pop_back();
+        Font::drawText(fb, VW, VH, clipped, tx0, y2, 0xFFE8E8E8, false);
     }
 }
 

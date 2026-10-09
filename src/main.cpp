@@ -392,7 +392,7 @@ static int runCmdShot(const std::string& mapName, const std::string& outPath, in
             sel.push_back(u.id());
     }
     gs.setSelection(sel);
-    gs.setMouse(op2::Renderer::NATIVE_WIDTH - 216 + 28 + 22, 135 + 46 + 0x3C + 57 + 22);
+    gs.setMouse(op2::GameState::kColX + 28 + 22, op2::GameState::kPaneTop + 0x3C + 57 + 22);
     for (int i = 0; i < 10; ++i) gs.onIdle(renderer, 0.05f);
     bool ok = writeBmp32(outPath, renderer.getFramebuffer(),
                          op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
@@ -574,8 +574,8 @@ static int runProduceTest(const std::string& mapName, const std::string& prefix)
     gs.setSelection({vf.id()});
     gs.pressCommand(op2::UC_BUILD);
     const std::vector<uint32_t> vitems = op2::factoryProduceList(vf.id());
-    const int listY0 = op2::GameState::kMiniMapH + op2::GameState::kTabsH + 0x21 + 2;   // topo do quadro + 33 + 2
-    gs.setMouse(op2::Renderer::NATIVE_WIDTH - 216 + 40, listY0 + 2 * 15 + 5);
+    const int listY0 = op2::GameState::kPaneTop + 0x21 + 2;   // topo do quadro + 33 + 2
+    gs.setMouse(op2::GameState::kColX + 40, listY0 + 2 * 15 + 5);
     for (int i = 0; i < 4; ++i) gs.onIdle(renderer, 0.05f);
     writeBmp32(prefix + "_list.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
     // Produz o Lynx/Laser (1o combo de chassi) pelo pacote 9.
