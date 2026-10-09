@@ -79,6 +79,9 @@ void processAttackPacket(int owner, int type, const std::vector<int>& ids,
 // sub_43ACA0: ramo [+0x20] dos casos 36/37 e o tick da ação 0x24 (jpt_43B312 case 36).
 void weaponAttackStart(int id);
 void weaponAttackTick(int id);
+void weaponGuardTick(int id);                     // case 37 (ação 0x25)
+// sub_4534F0: pacote 0x25 c/ a unidade aliada sob o clique (ou nenhuma).
+void processGuardTarget(int me, const std::vector<int>& sel, int tileX, int tileY);
 
 // Utilitários compartilhados com os desastres:
 int8_t  dirCos(uint8_t dir);                 // byte_4E9AF8 (cos * 64)

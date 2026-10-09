@@ -402,6 +402,7 @@ UiClick uiCommandClick(int cmd, const std::vector<int>& sel) {
         case UC_MOVE: return UiClick::TARGET;                           // sub_451260 (modo 7)
         case UC_STAND_GROUND: return UiClick::TARGET;                   // sub_4518E0 (modo 7)
         case UC_ATTACK: return UiClick::TARGET;                         // sub_4530D0
+        case UC_GUARD: return UiClick::TARGET;                          // sub_4534D0 (modo 7)
         case UC_SCATTER: sendScatter(sel); return UiClick::DONE;        // sub_4556B0 (0x15)
         // IDLE (pacote 0x12) / ACTIVATE (0x13). O IDLE do original confirma antes
         // quando o prédio guarda metal (smelter/armazém: "All metal in storage
@@ -438,6 +439,7 @@ bool uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int tileY)
         if (!ids.empty()) processAttackPacket(me, 0x24, ids, {}, tgt);
         return true;
     }
+    if (cmd == UC_GUARD) { processGuardTarget(TethysGame::localPlayer(), sel, tileX, tileY); return true; }
     if (cmd != UC_MOVE) return false;
     // sub_451280: no chão → pacote 2 (mover). Garagem/doca (pacotes 3/4) pendentes.
     const int me = TethysGame::localPlayer();

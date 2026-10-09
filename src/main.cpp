@@ -468,6 +468,31 @@ static int runCmdTest(const std::string& mapName) {
             if (f.flags & op2::UNIT_DEAD) break;
         }
     }
+    // Guardar: Lynx nosso guarda a ConVec; um Lynx do jogador 1 chega perto dela.
+    {
+        op2::resetUnits();
+        const int gx = sx, gy = sy - 4;
+        op2::Unit cv, gd, en;
+        const int me = op2::TethysGame::localPlayer();
+        op2::TethysGame::CreateUnit(cv, op2::mapConVec, op2::LOCATION{gx, gy}, me, 0);
+        op2::TethysGame::CreateUnit(gd, op2::mapLynx, op2::LOCATION{gx - 8, gy}, me, 0x3D);
+        const std::vector<int> s1{gd.id()};
+        std::printf("[CmdTest] Guardar: %d\n", (int)op2::uiCommandClick(op2::UC_GUARD, s1));
+        op2::uiCommandTarget(op2::UC_GUARD, s1, gx, gy);
+        for (int t = 0; t < 900; ++t) {
+            if (t == 200) op2::TethysGame::CreateUnit(en, op2::mapLynx, op2::LOCATION{gx + 3, gy}, 1, 0x3D);
+            gs.onIdle(renderer, 0.2501f / 4.0f);
+            const op2::UnitRecord& a = op2::g_units[gd.id()];
+            const op2::UnitRecord& c = op2::g_units[cv.id()];
+            if (t % 25 == 0 && t < 520) {
+                const op2::UnitRecord* e = en.id() > 0 ? &op2::g_units[en.id()] : nullptr;
+                std::printf("[CmdTest] t=%3d guarda id=%d (%d,%d) vivo=%d acao=0x%X sub=%d arma=%08X dano=%d | inimigo (%d,%d) arma=%08X dano=%d\n",
+                            t, a.id, a.pixelX >> 5, a.pixelY >> 5, !(a.flags & op2::UNIT_DEAD), a.action, a.field22,
+                            a.target(), a.damage, e ? e->pixelX >> 5 : -1, e ? e->pixelY >> 5 : -1,
+                            e ? e->target() : 0, e ? e->damage : -1);
+            }
+        }
+    }
     renderer.shutdown(); SDL_Quit();
     return 0;
 }

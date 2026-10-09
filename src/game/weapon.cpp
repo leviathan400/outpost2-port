@@ -704,6 +704,58 @@ void weaponAttackTick(int id) {                              // sub_43ACA0 jpt_4
     addRef(u.target4C);
 }
 
+void weaponGuardTick(int id) {                               // sub_43ACA0 jpt_43B312 case 37
+    UnitRecord& u = g_units[id];
+    u.flags |= 0x400000u;
+    const int gi = u.guardLo;
+    const bool gUnit = (u.guardTarget() & 0x80000000u) != 0;
+    const bool gAlive = gi > 0 && gi < static_cast<int>(g_units.size()) && g_units[gi].id != -1 &&
+                        !(g_units[gi].flags & UNIT_DEAD);
+    if (!gAlive || !gUnit) {                                  // guarda desfeita
+        if (!gAlive && gUnit) { dropRef(gi); u.guardHi = 0x7FFF; }
+        if (u.orderTarget() & 0x80000000u) { dropRef(u.orderLo); u.field4A = 0x7FFF; }
+        u.flags &= ~0x400000u;
+        u.action = 0;
+        return;
+    }
+    UnitRecord& g = g_units[gi];
+    if (g.lastAttacker && TethysGame::tick() - g.lastAttackTick < 0x96) {
+        const int ai = g.lastAttacker;
+        const UnitRecord& a = g_units[ai];
+        if (a.id != -1 && !(a.flags & UNIT_DEAD)) {
+            const int ao = ownerOf(a);
+            if (ao < kMaxPlayers && (g_playerData[ao].allyMask & (1u << ownerOf(u)))) return;
+            unitOrderAttack(id, 0x24, {}, static_cast<uint32_t>(ai) | 0xFFFF0000u, 0, 1);
+            return;
+        }
+        dropRef(ai);                                          // atacante morto
+        g.lastAttacker = 0;
+        u.field22 = SUB_WAIT; u.field3C = 4;
+        return;
+    }
+    if (inRangeTo(u, u.orderTarget())) {                      // perto do guardado: espera
+        u.field22 = SUB_WAIT; u.field3C = 0x28;
+        if (g.lastAttacker) { dropRef(g.lastAttacker); g.lastAttacker = 0; }
+        return;
+    }
+    unitOrderAttack(id, 0x25, {}, u.guardTarget(), 0, 0);    // longe: vai até ele
+    u.field3C = 0x28;
+}
+
+void processGuardTarget(int me, const std::vector<int>& sel, int tileX, int tileY) {   // sub_4534F0
+    std::vector<int> ids;
+    for (int id : sel)
+        if ((g_units[id].owner & 0x0F) == me && (g_units[id].flags & UNIT_ARMED)) ids.push_back(id);
+    // Alvo: unidade sob o clique se o dono dela é aliado do jogador; senão 0.
+    uint32_t tgt = 0xFFFF0000u;
+    const int occ = g_gameMap.cellOccupant(tileX & tileMask(), tileY);
+    if (occ > 0 && occ < static_cast<int>(g_units.size()) && g_units[occ].id != -1) {
+        const int ow = ownerOf(g_units[occ]);
+        if (ow < kMaxPlayers && (g_playerData[ow].allyMask & (1u << me))) tgt = static_cast<uint32_t>(occ) | 0xFFFF0000u;
+    }
+    if (!ids.empty()) processAttackPacket(me, 0x25, ids, {}, tgt);
+}
+
 void weaponAutoEngage(int id) {                               // sub_485340
     UnitRecord& u = g_units[id];
     const WeaponClass* c = classOf(static_cast<int16_t>(u.cargo));
