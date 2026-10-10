@@ -35,6 +35,7 @@
 #include "game/construction.h"
 #include "game/mining.h"
 #include "game/earthwork.h"
+#include "game/ai_group.h"
 #include "game/scenario.h"
 #include "game/commands.h"
 #include "game/research_lab.h"
@@ -1195,6 +1196,49 @@ static int runCombatTest(const std::string& mapName, const std::string& prefix) 
 
 // --missiontest <DLL> <out.bmp>: carrega a missão pela DLL (loadMission),
 // roda ~200 ticks e grava a tela; lista unidades e objetivos.
+// IA: carrega a missão, manda os veículos do jogador 0 a um ponto (tile do
+// port) e acompanha os grupos inimigos.
+static int runAiTest(const std::string& dll, int tx, int ty, int ticks) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 aitest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    for (int k = 0; k < 40; ++k) gs.onIdle(renderer, 0.2501f / 4.0f);
+    op2::CommandPacket pkt;
+    pkt.type = op2::CMD_MOVE;
+    pkt.waypoints.push_back(op2::packLocation(tx, ty));
+    for (size_t i = 1; i < op2::g_units.size(); ++i) {
+        const op2::UnitRecord& r = op2::g_units[i];
+        if (r.id != -1 && (r.owner & 0x0F) == 0 && (r.flags & op2::UNIT_VEHICLE) && (r.flags & op2::UNIT_ARMED))
+            pkt.unitIds.push_back(static_cast<int>(i));
+    }
+    std::printf("[AiTest] %d veiculos armados do jogador 0 -> (%d,%d)\n", (int)pkt.unitIds.size(), tx, ty);
+    op2::processCommandPacket(0, pkt);
+    for (int k = 0; k < ticks; ++k) {
+        gs.onIdle(renderer, 0.2501f / 4.0f);
+        if (k % 500 == 499) {
+            int hp0 = 0, dead0 = 0, hp2 = 0, dead2 = 0;
+            for (size_t i = 1; i < op2::g_units.size(); ++i) {
+                const op2::UnitRecord& r = op2::g_units[i];
+                if (r.id == -1 || !(r.flags & op2::UNIT_VEHICLE)) continue;
+                const int o = r.owner & 0x0F;
+                if (o == 0) { if (r.flags & op2::UNIT_DEAD) ++dead0; else hp0 += r.damage; }
+                if (o == 2) { if (r.flags & op2::UNIT_DEAD) ++dead2; else hp2 += r.damage; }
+            }
+            std::printf("[AiTest] t=%d jogador0 dano=%d mortos=%d | jogador2 dano=%d mortos=%d\n", k + 1, hp0, dead0, hp2,
+                        dead2);
+            op2::aiGroupsDump();
+        }
+    }
+    renderer.shutdown();
+    SDL_Quit();
+    return 0;
+}
+
 static int runMissionTest(const std::string& dll, const std::string& outPath, int ticks) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
     op2::g_ResManager.init(".");
@@ -1224,6 +1268,7 @@ static int runMissionTest(const std::string& dll, const std::string& outPath, in
         }
         std::printf("[MissionTest] unidades danificadas=%d mortas=%d\n", hurt, dead);
     }
+    op2::aiGroupsDump();
     for (const std::string& o : op2::missionObjectives()) std::printf("[MissionTest] objetivo: %s\n", o.c_str());
     {   // pesquisa do jogador 0: nº de tecnologias e alguns blocos melhorados
         int n = 0, up = 0;
@@ -1751,6 +1796,8 @@ int main(int argc, char* argv[]) {
             return runQuakeTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--disastertest") == 0 && i + 3 < argc)
             return runDisasterTest(argv[i + 1], argv[i + 2], argv[i + 3]);
+        if (std::strcmp(argv[i], "--aitest") == 0 && i + 4 < argc)
+            return runAiTest(argv[i + 1], atoi(argv[i + 2]), atoi(argv[i + 3]), atoi(argv[i + 4]));
         if (std::strcmp(argv[i], "--missiontest") == 0 && i + 2 < argc)
             return runMissionTest(argv[i + 1], argv[i + 2], i + 3 < argc ? atoi(argv[i + 3]) : 200);
         if (std::strcmp(argv[i], "--combattest") == 0 && i + 2 < argc)

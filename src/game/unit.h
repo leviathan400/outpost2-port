@@ -181,6 +181,9 @@ struct UnitRecord {
     // Obras (src/game/earthwork.cpp; retângulo em buildL..buildB = [+0x62..+0x68]):
     // Earthworker célula atual +0x6C/+0x6E e código de percurso +0x70; dozer +0x6A.
     int16_t  wallCurX = 0, wallCurY = -1;
+    // Grupo de IA (src/game/ai_group.cpp): +0x30 stub do grupo (0xFF = nenhum).
+    uint8_t  groupStub = 0xFF;
+    int16_t  empTicks = 0;         // +0x56 (contador do EMP; usado pela escolha do Spider)
     uint8_t  wallCode = 0, dozeCode = 0;
     int16_t  target4C = 0;         // +0x4C alvo: id da unidade ou x do tile
                                    // (+0x4E field4E: 0xFFFF = unidade, y do tile, 0x7FFF = nenhum)

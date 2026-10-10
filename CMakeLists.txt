@@ -62,6 +62,7 @@ add_executable(outpost2_modern
     src/audio/sound.cpp
     src/game/mining.cpp
     src/game/earthwork.cpp
+    src/game/ai_group.cpp
     src/game/unit_names.cpp
     src/mission/pe_loader.cpp
     src/mission/mission.cpp

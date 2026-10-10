@@ -1,4 +1,5 @@
 #include "movement.h"
+#include "trigger.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -192,7 +193,7 @@ static void stepUnit(int id) {
                 // Mover (casos 2-4 de jpt_43B312) zera a ação; 0x26 não tem tratamento
                 // por tick (def_43B312): a ação fica 0x26 (posição mantida).
                 // Atacar/guardar (0x24/0x25) seguem no tick da ação (jpt_43B312 casos 36/37).
-                if (u.action == CMD_MOVE) u.action = 0;
+                if (u.action == CMD_MOVE) { u.action = 0; specialTargetCheck(id); }   // sub_44D5B0
                 u.hasOrder = false; u.order = OrderBlock{};
                 return;
             }
@@ -229,7 +230,7 @@ static void stepUnit(int id) {
                     u.field20 = 0; u.field22 = 0; u.field23 = 1;
                     u.routeDirs.clear(); u.routeIdx = 0;
                     if (u.action == 0x28 || u.action == 0x27) return;
-                    if (u.action == CMD_MOVE) u.action = 0;
+                    if (u.action == CMD_MOVE) { u.action = 0; specialTargetCheck(id); }   // sub_44D5B0
                     u.hasOrder = false; u.order = OrderBlock{};
                     return;
                 }

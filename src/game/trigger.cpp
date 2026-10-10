@@ -8,22 +8,18 @@
 
 #include "building_sheet.h"
 #include "colony.h"
+#include "game_map.h"
 #include "player.h"
 #include "scenario.h"
 #include "tethys_game.h"
 #include "unit.h"
+#include "ai_group.h"
 #include "../mission/mission.h"
 
 namespace op2 {
 
 // ---- Tabela de stubs (dword_56B71C[255], último usado dword_56B718) -----------
 static const int kMaxStubs = 0xFF;
-
-struct Stub {
-    virtual ~Stub() = default;
-    int id = 0xFF;          // +0x04
-    int enabled = 0;        // +0x08
-};
 
 // FuncReference (off_4E3C58; sub_475710): nome copiado (+0x20), origem (+0x1C:
 // 1 = script da missão) e endereço resolvido (+0x24).
@@ -36,7 +32,7 @@ struct FuncReference : Stub {
 enum TriggerKind {
     TK_TIME, TK_RESEARCH, TK_VICTORY, TK_FAILURE,
     TK_COUNT, TK_KIT, TK_BUILDING_COUNT, TK_VEHICLE_COUNT, TK_ESCAPE, TK_SET,
-    TK_RESOURCE, TK_EVAC, TK_OPERATIONAL,
+    TK_RESOURCE, TK_EVAC, TK_OPERATIONAL, TK_RECT, TK_SPECIAL,
 };
 
 // _Trigger (off_4E9E50) e derivadas. Campos +0x30/+0x34 conforme a classe.
@@ -56,6 +52,7 @@ static int s_lastStub = 0;
 // Listas de instâncias (inserção na cabeça): _Trigger (dword_4E9E64),
 // VictoryCondition (dword_4EA0C4), FailureCondition (dword_4EA0E4).
 static std::vector<int> s_triggers, s_victory, s_failure;
+static std::vector<int> s_special;   // SpecialTargetTrigger (dword_4EA084, inserção na cabeça)
 
 static int s_endCode = 0;      // TethysGame +0x9C (dword_56DEF4)
 static int s_endTick = 0x7FFFFFFF;   // TethysGame +0x98
@@ -69,6 +66,8 @@ void resetTriggers() {
     for (Stub*& s : s_stubs) { delete s; s = nullptr; }
     s_lastStub = 0;
     s_triggers.clear(); s_victory.clear(); s_failure.clear();
+    aiGroupsReset();
+    s_special.clear();
     s_endCode = 0;
     s_endTick = 0x7FFFFFFF;
 }
@@ -86,6 +85,9 @@ static int allocStub(Stub* s) {
     delete s;
     return 0xFF;
 }
+
+int stubAllocate(Stub* s) { return allocStub(s); }
+Stub* stubObject(int idx) { return idx >= 0 && idx < kMaxStubs ? s_stubs[idx] : nullptr; }
 
 static Trigger* trig(int stub) {
     if (stub < 0 || stub >= kMaxStubs) return nullptr;
@@ -223,6 +225,74 @@ int createEscapeTrigger(int bEnabled, int bOneShot, int player, int x, int y, in
         }
     }
     return id;
+}
+
+int createRectTrigger(int bEnabled, int bOneShot, int player, int x, int y, int w, int h, const char* func) {
+    const int fr = createFuncRef(func);
+    if (fr == 0xFF) return 0xFF;
+    const int id = newTrigger(TK_RECT, bEnabled, bOneShot, fr, nullptr);
+    if (Trigger* t = trig(id)) {                                     // sub_492AC0
+        t->f30 = x << 5; t->f34 = y << 5; t->f38 = w << 5; t->f3C = h << 5;
+        if (player >= 0) {
+            t->f40 = static_cast<int>(1u << player);
+            t->playerMask = static_cast<uint32_t>(t->f40) ^ 0x3Fu;
+        } else {
+            t->f40 = -1;
+        }
+    }
+    return id;
+}
+
+int createSpecialTargetTrigger(int bEnabled, int bOneShot, int targetUnit, int sourceType, const char* func) {
+    const int fr = createFuncRef(func);
+    if (fr == 0xFF) return 0xFF;
+    const int id = newTrigger(TK_SPECIAL, bEnabled, bOneShot, fr, nullptr);
+    if (Trigger* t = trig(id)) {                                     // sub_495130
+        if (targetUnit > 0 && targetUnit < static_cast<int>(g_units.size()))
+            g_units[targetUnit].flags |= 0x2000000u;
+        t->f30 = targetUnit; t->f38 = sourceType; t->f34 = -1; t->f3C = 0;
+        s_special.insert(s_special.begin(), id);
+    }
+    return id;
+}
+int specialTargetSource(int stub) {
+    const Trigger* t = trig(stub);
+    return t && t->kind == TK_SPECIAL ? t->f34 : -1;
+}
+
+// Vizinha (4 direções) com alvo especial: id do alvo (0 = nenhum).
+static int specialNeighbor(const UnitRecord& u) {
+    const int x = u.pixelX >> 5, y = u.pixelY >> 5, mask = g_gameMap.width() - 1;
+    const int cand[4][2] = {{(x - 1) & mask, y}, {(x + 1) & mask, y}, {x, y - 1}, {x, y + 1}};
+    for (const auto& c : cand) {
+        if (c[1] < 0 || c[1] >= g_gameMap.height()) continue;
+        const int o = g_gameMap.cellOccupant(c[0], c[1]);
+        if (o > 0 && o < static_cast<int>(g_units.size()) && (g_units[o].flags & 0x2000000u)) return o;
+    }
+    return 0;
+}
+bool specialTargetCheck(int unitId) {                                // sub_44D5B0
+    UnitRecord& u = g_units[unitId];
+    if (u.flags & 0x40u) return false;
+    if (!specialNeighbor(u)) return false;
+    u.action = 0x10; u.field20 = 1; u.field3C = 0;
+    return true;
+}
+void specialTargetArrive(int unitId) {                               // sub_44D7D0 → sub_495170
+    const UnitRecord& u = g_units[unitId];
+    const int x = u.pixelX >> 5, y = u.pixelY >> 5, mask = g_gameMap.width() - 1;
+    const int cand[4][2] = {{(x - 1) & mask, y}, {(x + 1) & mask, y}, {x, y - 1}, {x, y + 1}};
+    for (const auto& c : cand) {
+        if (c[1] < 0 || c[1] >= g_gameMap.height()) continue;
+        const int o = g_gameMap.cellOccupant(c[0], c[1]);
+        if (o <= 0 || o >= static_cast<int>(g_units.size()) || !(g_units[o].flags & 0x2000000u)) continue;
+        for (int id : s_special) {
+            Trigger* t = trig(id);
+            if (!t || t->f30 != o || t->f38 != u.type) continue;
+            t->f34 = unitId; t->f3C = 1;
+            return;
+        }
+    }
 }
 
 int createSetTrigger(int bEnabled, int bOneShot, int total, int needed, const char* func, const int* stubs) {
@@ -444,6 +514,18 @@ static bool hasFired(Trigger& t) {
             t.playerMask = 0x3F;
             return true;
         }
+        case TK_RECT: {                                       // sub_492B10
+            std::vector<int> found;
+            mapUnitsInRect(t.f30, t.f34, t.f38, t.f3C, static_cast<uint32_t>(t.f40), 0xFFFFFFFFu, found);
+            if (found.empty()) return false;
+            if (t.f40 == -1) t.playerMask = 0x3Fu; else t.playerMask |= static_cast<uint32_t>(t.f40);
+            return true;
+        }
+        case TK_SPECIAL:                                      // sub_495150
+            if (!t.f3C) return false;
+            t.f3C = 0;
+            t.playerMask = 0x3Fu;
+            return true;
         case TK_ESCAPE: {                                     // sub_4937A0
             t.playerMask = 0;
             std::vector<int> found;
@@ -580,7 +662,9 @@ void missionTriggerTick(MissionScript* mission) {          // sub_403110
         if (auto fn = triggerCallback(*t)) fire.push_back(fn);
     }
     for (auto fn : fire) fn();
-    // 2) Grupos (dword_4E4194) e IA (dword_4E0B64) — não portados.
+    // 2) "Strategy" (dword_4E4194, vt[9]) — não portado; grupos (dword_4E0B64):
+    //    vt[12], DeleteWhenEmpty e vt[13].
+    aiGroupsTick();
     // 3) AIProc da missão.
     if (mission && mission->aiProc) mission->aiProc();
     // 4) Vitória: todas as VictoryConditions com o bit do jogador humano.

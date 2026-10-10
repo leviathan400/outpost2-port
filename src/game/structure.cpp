@@ -1,6 +1,7 @@
 #include "structure.h"
 #include "mining.h"
 #include "earthwork.h"
+#include "trigger.h"
 #include "../audio/sound.h"
 
 #include "building_sheet.h"
@@ -530,6 +531,8 @@ static bool vehicleTick(int id) {
     else if (r.field20 && (r.action == 7 || r.action == 1 || r.action == 8) && !r.hasOrder) earthworkStart(id);   // jpt_43AD56 1/7/8
     else if (!r.field20 && r.field22 == 0 && r.action == 8) removeWallTick(id);       // case 8
     else if (r.field20 && r.action == 0x0E) dumpCargoStart(id);                       // jpt_43AD56 14
+    else if (r.field20 && r.action == 0x10) { r.field22 = SUB_WAIT; r.field3C = 0x3C; r.field20 = 0; }   // 16
+    else if (!r.field20 && r.field22 == 0 && r.action == 0x10) { specialTargetArrive(id); g_units[id].action = 0; }
     else if (!r.field20 && r.field22 == 0 && r.action == 0x0E) dumpCargoTick(id);     // case 14
     else if (!r.field20 && r.field22 == 0 && r.action == 7) wallBuildTick(id);        // case 7
     else if (!r.field20 && r.field22 == 0 && r.action == 1) bulldozeTick(id);         // case 1

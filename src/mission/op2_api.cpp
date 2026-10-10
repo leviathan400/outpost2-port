@@ -26,6 +26,9 @@
 #include "../game/unit.h"
 #include "../game/walls.h"
 #include "../game/disaster.h"
+#include "../game/ai_group.h"
+#include "../game/commands.h"
+#include "../game/structure.h"
 #include "../audio/sound.h"
 
 namespace op2 {
@@ -169,6 +172,13 @@ void __fastcall T_SetLavaSpeed(int speed) { setLavaSpeed(speed); }
 void __fastcall T_AddGameSound(int sound, int) { soundPlay(sound); }
 // ?AddMapSound(som, LOCATION): sub_47EE00(x<<5, y<<5) — x interno.
 void __fastcall T_AddMapSound(int sound, ApiLoc loc) { soundPlayAt(portX(loc.x) << 5, loc.y << 5, sound); }
+// ?AddMessage(Unit, msg, jogador, som): mensagem na posição [+0x14]/[+0x18] da unidade.
+// (Unit vai na pilha: ECX = msg, EDX = jogador.)
+void __fastcall T_AddMessageUnit(char* msg, int toPlayer, int unit, int sound) {
+    if (toPlayer != -1 && toPlayer != TethysGame::localPlayer()) return;
+    if (unit <= 0 || unit >= static_cast<int>(g_units.size())) return;
+    postMessage(unitOX(g_units[unit]), unitOY(g_units[unit]), msg, sound);
+}
 // ?SetMusicPlayList (sub_451090): a música vem de op2.clm (ausente) — não portada.
 void __fastcall T_SetMusicPlayList(int, int, int*) {}
 
@@ -264,6 +274,92 @@ int __fastcall E_InRectGetNext(void* self, void*, int* unit) {
 void __fastcall U_PutInGarage(int* u, void*, int bay, int x, int y) {
     std::cerr << "[Mission] PutInGarage(unidade " << *u << ", baia " << bay << ", " << x << "," << y
               << "): garagem nao portada" << std::endl;
+}
+
+// ---- Grupos (ScGroup / FightGroup) -------------------------------------------------------
+// CreateFightGroup(_Player por valor): retorno oculto em ECX, _Player (12 bytes) na pilha.
+int* __fastcall G_CreateFightGroup(int* ret, DllPlayer p) { *ret = aiCreateGroup(GK_FIGHT, p.playerNum); return ret; }
+void __fastcall SG_AddUnits(int* self, void*, DllUnitBlock* b) {
+    if (b) aiAddUnitsFromBlock(*self, b->table, b->numUnits, portX);
+}
+void __fastcall SG_TakeUnit(int* self, void*, int unit) { aiTakeUnit(*self, unit); }
+void __fastcall SG_RemoveUnit(int* self, void*, int unit) { aiRemoveUnit(*self, unit); }
+void __fastcall SG_SetLights(int* self, void*, int on) { aiSetLights(*self, on); }
+void __fastcall SG_SetDeleteWhenEmpty(int* self, void*, int on) { aiSetDeleteWhenEmpty(*self, on); }
+int  __fastcall SG_TotalUnitCount(int* self, void*) { return aiTotalUnitCount(*self); }
+int  __fastcall SG_UnitCount(int* self, void*, int cls) { return aiUnitCount(*self, cls); }
+// MAP_RECT (tiles internos) → px internos do grupo.
+void __fastcall FG_SetRect(int* self, void*, int* r) { aiFightSetRect(*self, r[0], r[1], r[2], r[3]); }
+void __fastcall FG_AddGuardedRect(int* self, void*, int* r) { aiFightAddGuardedRect(*self, r[0], r[1], r[2], r[3]); }
+void __fastcall FG_ClearGuardedRects(int* self, void*) { aiFightClearGuardedRects(*self); }
+void __fastcall FG_SetAttackType(int* self, void*, int type) { aiFightSetAttackType(*self, type); }
+void __fastcall FG_SetTargetUnit(int* self, void*, int unit) { aiFightSetTargetUnit(*self, unit); }
+void __fastcall FG_SetTargetGroup(int* self, void*, int grp) { aiFightSetTargetGroup(*self, grp); }
+void __fastcall FG_SetFollowMode(int* self, void*, int m) { aiFightSetFollowMode(*self, m); }
+void __fastcall FG_SetCombineFire(int* self, void*) { aiFightSetCombineFire(*self, true); }
+void __fastcall FG_ClearCombineFire(int* self, void*) { aiFightSetCombineFire(*self, false); }
+void __fastcall FG_DoGuardRect(int* self, void*) { aiFightSetMode(*self, 0); }
+void __fastcall FG_DoPatrolOnly(int* self, void*) { aiFightSetMode(*self, 1); }
+void __fastcall FG_DoGuardGroup(int* self, void*) { aiFightSetMode(*self, 2); }
+void __fastcall FG_DoGuardUnit(int* self, void*) { aiFightSetMode(*self, 3); }
+void __fastcall FG_DoAttackUnit(int* self, void*) { aiFightSetMode(*self, 4); }
+void __fastcall FG_DoAttackEnemy(int* self, void*) { aiFightSetMode(*self, 5); }
+void __fastcall FG_DoExitMap(int* self, void*) { aiFightSetMode(*self, 6); }
+// PatrolRoute {int recomeço; LOCATION* pontos (x = −1 encerra, até 8)}.
+void __fastcall FG_SetPatrolMode(int* self, void*, int* route) {
+    int xs[8], ys[8], n = 0;
+    const ApiLoc* pts = reinterpret_cast<const ApiLoc*>(static_cast<intptr_t>(route[1]));
+    while (pts && n < 8 && pts[n].x != -1) { xs[n] = portX(pts[n].x); ys[n] = pts[n].y; ++n; }
+    aiFightSetPatrol(*self, n, route[0], xs, ys);
+}
+void __fastcall FG_ClearPatrolMode(int* self, void*) { aiFightClearPatrol(*self); }
+// _Player::SetDefaultGroup(ScGroup&) / AllyWith(j): pacote 0x32 (alterna o bit
+// do remetente na máscara de aliança de j).
+void __fastcall P_SetDefaultGroup(DllPlayer* self, void*, int* grp) { aiSetDefaultGroup(self->playerNum, grp ? *grp : 0xFF); }
+void __fastcall P_AllyWith(DllPlayer* self, void*, int j) {
+    if (j >= 0 && j < kMaxPlayers) g_playerData[j].allyMask ^= 1u << self->playerNum;
+}
+// Unit::DoIdle / DoUnIdle (pacotes 0x12 / 0x13), SetDamage ([+0x1E]),
+// DoTransfer (pacote 0x18 → vt[0x68]).
+void __fastcall U_DoIdle(int* u, void*) {
+    if (*u > 0 && *u < static_cast<int>(g_units.size()) && g_units[*u].id != -1 && !(g_units[*u].flags & UNIT_DEAD))
+        structureDoIdle(*u);
+}
+void __fastcall U_DoUnIdle(int* u, void*) {
+    if (*u > 0 && *u < static_cast<int>(g_units.size()) && g_units[*u].id != -1 && !(g_units[*u].flags & UNIT_DEAD))
+        structureDoActivate(*u);
+}
+void __fastcall U_SetDamage(int* u, void*, int dmg) {
+    if (*u > 0 && *u < static_cast<int>(g_units.size())) g_units[*u].damage = static_cast<int16_t>(dmg);
+}
+void __fastcall U_DoTransfer(int* u, void*, int player) {
+    if (*u <= 0 || *u >= static_cast<int>(g_units.size())) return;
+    UnitRecord& r = g_units[*u];
+    if (r.id == -1 || (r.flags & UNIT_DEAD) || player < 0 || player >= kMaxPlayers) return;
+    // vt[0x68] (veículo, sub_44CB60): solta alvos, cancela 31/36/37/39, troca de lista e de dono.
+    if (r.flags & UNIT_ARMED) unitResetCombat(*u);
+    if (r.action == 31 || r.action == 36 || r.action == 37 || r.action == 39) {
+        r.action = 0; r.field20 = 1; r.field3C = 0;
+    }
+    const int old = r.owner & 0x0F;
+    if (r.flags & UNIT_VEHICLE) colonyVehicleRemoved(*u);
+    r.owner = static_cast<uint8_t>((r.owner & 0xF0) | (player & 0x0F));
+    if (r.flags & UNIT_VEHICLE) colonyVehicleAdded(*u);
+    colonyMarkDirty(old);
+    colonyMarkDirty(player);
+}
+// Triggers Rect / SpecialTarget.
+int* __fastcall TR_CreateRectTrigger(int* ret, int bEnabled, int bOneShot, int player, int x, int y, int w, int h,
+                                     const char* fn) {
+    *ret = createRectTrigger(bEnabled, bOneShot, player, x, y, w, h, fn);
+    return ret;
+}
+int* __fastcall TR_CreateSpecialTarget(int* ret, int bEnabled, int bOneShot, int* target, int sourceType, const char* fn) {
+    *ret = createSpecialTargetTrigger(bEnabled, bOneShot, target ? *target : 0, sourceType, fn);
+    return ret;
+}
+void __fastcall TR_GetSpecialTargetData(int* trig, int* unit) {
+    if (unit) *unit = trig ? specialTargetSource(*trig) : -1;
 }
 
 // ---- UnitBlock / ScStub -----------------------------------------------------------------
@@ -449,6 +545,42 @@ const std::map<std::string, void*>& table() {
         {"?SetLavaSpeed@TethysGame@@SIXH@Z", reinterpret_cast<void*>(&T_SetLavaSpeed)},
         {"?SetLavaPossible@GameMap@@SIXULOCATION@@H@Z", reinterpret_cast<void*>(&M_SetLavaPossible)},
         {"?SetMusicPlayList@TethysGame@@SIXHHPAW4SongIds@@@Z", reinterpret_cast<void*>(&T_SetMusicPlayList)},
+        {"?AddMessage@TethysGame@@SIXVUnit@@PADHH@Z", reinterpret_cast<void*>(&T_AddMessageUnit)},
+        {"?CreateFightGroup@@YI?AVFightGroup@@V_Player@@@Z", reinterpret_cast<void*>(&G_CreateFightGroup)},
+        {"?AddUnits@ScGroup@@QAEXAAVUnitBlock@@@Z", reinterpret_cast<void*>(&SG_AddUnits)},
+        {"?TakeUnit@ScGroup@@QAEXVUnit@@@Z", reinterpret_cast<void*>(&SG_TakeUnit)},
+        {"?RemoveUnit@ScGroup@@QAEXVUnit@@@Z", reinterpret_cast<void*>(&SG_RemoveUnit)},
+        {"?SetLights@ScGroup@@QAEXH@Z", reinterpret_cast<void*>(&SG_SetLights)},
+        {"?SetDeleteWhenEmpty@ScGroup@@QAEXH@Z", reinterpret_cast<void*>(&SG_SetDeleteWhenEmpty)},
+        {"?TotalUnitCount@ScGroup@@QAEHXZ", reinterpret_cast<void*>(&SG_TotalUnitCount)},
+        {"?UnitCount@ScGroup@@QAEHW4UnitClassifactions@@@Z", reinterpret_cast<void*>(&SG_UnitCount)},
+        {"?SetRect@FightGroup@@QAEXAAUMAP_RECT@@@Z", reinterpret_cast<void*>(&FG_SetRect)},
+        {"?AddGuardedRect@FightGroup@@QAEXAAUMAP_RECT@@@Z", reinterpret_cast<void*>(&FG_AddGuardedRect)},
+        {"?ClearGuarderdRects@FightGroup@@QAEXXZ", reinterpret_cast<void*>(&FG_ClearGuardedRects)},
+        {"?SetAttackType@FightGroup@@QAEXW4map_id@@@Z", reinterpret_cast<void*>(&FG_SetAttackType)},
+        {"?SetTargetUnit@FightGroup@@QAEXVUnit@@@Z", reinterpret_cast<void*>(&FG_SetTargetUnit)},
+        {"?SetTargetGroup@FightGroup@@QAEXVScGroup@@@Z", reinterpret_cast<void*>(&FG_SetTargetGroup)},
+        {"?SetFollowMode@FightGroup@@QAEXH@Z", reinterpret_cast<void*>(&FG_SetFollowMode)},
+        {"?SetCombineFire@FightGroup@@QAEXXZ", reinterpret_cast<void*>(&FG_SetCombineFire)},
+        {"?ClearCombineFire@FightGroup@@QAEXXZ", reinterpret_cast<void*>(&FG_ClearCombineFire)},
+        {"?DoGuardRect@FightGroup@@QAEXXZ", reinterpret_cast<void*>(&FG_DoGuardRect)},
+        {"?DoPatrolOnly@FightGroup@@QAEXXZ", reinterpret_cast<void*>(&FG_DoPatrolOnly)},
+        {"?DoGuardGroup@FightGroup@@QAEXXZ", reinterpret_cast<void*>(&FG_DoGuardGroup)},
+        {"?DoGuardUnit@FightGroup@@QAEXXZ", reinterpret_cast<void*>(&FG_DoGuardUnit)},
+        {"?DoAttackUnit@FightGroup@@QAEXXZ", reinterpret_cast<void*>(&FG_DoAttackUnit)},
+        {"?DoAttackEnemy@FightGroup@@QAEXXZ", reinterpret_cast<void*>(&FG_DoAttackEnemy)},
+        {"?DoExitMap@FightGroup@@QAEXXZ", reinterpret_cast<void*>(&FG_DoExitMap)},
+        {"?SetPatrolMode@FightGroup@@QAEXAAUPatrolRoute@@@Z", reinterpret_cast<void*>(&FG_SetPatrolMode)},
+        {"?ClearPatrolMode@FightGroup@@QAEXXZ", reinterpret_cast<void*>(&FG_ClearPatrolMode)},
+        {"?SetDefaultGroup@_Player@@QAEXAAVScGroup@@@Z", reinterpret_cast<void*>(&P_SetDefaultGroup)},
+        {"?AllyWith@_Player@@QAEXH@Z", reinterpret_cast<void*>(&P_AllyWith)},
+        {"?DoIdle@Unit@@QAEXXZ", reinterpret_cast<void*>(&U_DoIdle)},
+        {"?DoUnIdle@Unit@@QAEXXZ", reinterpret_cast<void*>(&U_DoUnIdle)},
+        {"?SetDamage@Unit@@QAEXH@Z", reinterpret_cast<void*>(&U_SetDamage)},
+        {"?DoTransfer@Unit@@QAEXH@Z", reinterpret_cast<void*>(&U_DoTransfer)},
+        {"?CreateRectTrigger@@YI?AVTrigger@@HHHHHHHPBD@Z", reinterpret_cast<void*>(&TR_CreateRectTrigger)},
+        {"?CreateSpecialTarget@@YI?AVTrigger@@HHAAVUnit@@W4map_id@@PBD@Z", reinterpret_cast<void*>(&TR_CreateSpecialTarget)},
+        {"?GetSpecialTargetData@@YIXAAVTrigger@@AAVUnit@@@Z", reinterpret_cast<void*>(&TR_GetSpecialTargetData)},
         {"?AddGameSound@TethysGame@@SIXHH@Z", reinterpret_cast<void*>(&T_AddGameSound)},
         {"?AddMapSound@TethysGame@@SIXHULOCATION@@@Z", reinterpret_cast<void*>(&T_AddMapSound)},
         {"?InitialSetTile@GameMap@@SIXULOCATION@@H@Z", reinterpret_cast<void*>(&M_InitialSetTile)},

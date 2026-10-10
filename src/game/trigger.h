@@ -22,6 +22,17 @@ namespace op2 {
 
 struct MissionScript;
 
+// ScStub (base de triggers e grupos): [+4] stubIndex, [+8] habilitado.
+struct Stub {
+    virtual ~Stub() = default;
+    int id = 0xFF;          // +0x04
+    int enabled = 0;        // +0x08
+};
+// sub_47B460: aloca o próximo índice livre (0xFF se a tabela encheu).
+int stubAllocate(Stub* s);
+// Objeto do stub (dword_56B71C[idx]) ou nullptr.
+Stub* stubObject(int idx);
+
 // Reinicia a tabela de stubs e as listas (sub_47AB00 / início de jogo).
 void resetTriggers();
 
@@ -37,6 +48,18 @@ int createCountTrigger(int bEnabled, int bOneShot, int player, int type, int car
 int createKitTrigger(int bEnabled, int bOneShot, int player, int type, int count, const char* func);
 int createBuildingCountTrigger(int bEnabled, int bOneShot, int player, int count, int compare, const char* func);
 int createVehicleCountTrigger(int bEnabled, int bOneShot, int player, int count, int compare, const char* func);
+// RectTrigger (off_4E9EF0, sub_492AC0/sub_492B10): alguma unidade do jogador
+// (−1 = qualquer) no retângulo (tiles INTERNOS).
+int createRectTrigger(int bEnabled, int bOneShot, int player, int x, int y, int w, int h, const char* func);
+// SpecialTargetTrigger (off_4EA070, sub_495130/sub_495150): o alvo ganha a flag
+// 0x2000000; dispara quando uma unidade do tipo `sourceType` termina um
+// movimento ao lado dele e espera 60 ticks (ação 0x10, sub_44D5B0/sub_44D7D0).
+int createSpecialTargetTrigger(int bEnabled, int bOneShot, int targetUnit, int sourceType, const char* func);
+int specialTargetSource(int stub);                   // GetSpecialTargetData ([+0x34])
+// sub_44D5B0: ao fim do movimento, começa a ação 0x10 se há alvo especial ao lado.
+bool specialTargetCheck(int unitId);
+// sub_44D7D0: fim da espera da ação 0x10.
+void specialTargetArrive(int unitId);
 // EscapeTrigger (off_4E9F90): retângulo em tiles INTERNOS do original.
 int createEscapeTrigger(int bEnabled, int bOneShot, int player, int x, int y, int w, int h, int refValue,
                         int type, int cargoType, int cargoAmount, const char* func);
