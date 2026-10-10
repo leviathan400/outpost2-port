@@ -34,6 +34,7 @@
 #include "game/docking.h"
 #include "game/construction.h"
 #include "game/mining.h"
+#include "game/earthwork.h"
 #include "game/scenario.h"
 #include "game/commands.h"
 #include "game/research_lab.h"
@@ -536,6 +537,95 @@ static int runCmdTest(const std::string& mapName) {
 // painel BUILD (screenshot), pacote 9 e entrega (veículo e kit na baia).
 // Ciclo do minério: Robo-Miner instala a mina no beacon; caminhão faz a rota
 // mina → smelter → mina; imprime cargas, estoque e estado do caminhão.
+// Obras: Earthworker faz um tubo e um muro; Robo-Dozer terraplana 3x3.
+static int runEarthTest(const std::string& mapName, const std::string& prefix) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 earthtest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    op2::resetUnits();
+    const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
+    int bx = -1, by = -1;
+    for (int y = 3; y < H - 14 && bx < 0; ++y)
+        for (int x = 3; x < W - 26 && bx < 0; ++x) {
+            bool ok = true;
+            for (int dy = -1; dy <= 11 && ok; ++dy)
+                for (int dx = -2; dx <= 22 && ok; ++dx)
+                    if (!op2::g_gameMap.isPassable(op2::LOCATION{x + dx, y + dy})) ok = false;
+            if (ok) { bx = x; by = y; }
+        }
+    if (bx < 0) { std::printf("[Earth] sem area livre\n"); return 3; }
+    op2::Unit cc, ew, dz;
+    op2::TethysGame::CreateUnit(cc, op2::mapCommandCenter, op2::LOCATION{bx, by}, 0);
+    op2::TethysGame::CreateUnit(ew, op2::mapEarthworker, op2::LOCATION{bx + 4, by + 4}, 0);
+    op2::TethysGame::CreateUnit(dz, op2::mapRoboDozer, op2::LOCATION{bx + 12, by + 6}, 0);
+    op2::Unit tk;
+    op2::TethysGame::CreateUnit(tk, op2::mapTokamak, op2::LOCATION{bx + 4, by + 8}, 0);
+    op2::placeBuilding(0x19, bx, by + 2, 0);                  // Common Storage encostado (capacidade)
+    op2::placeBuilding(0x1A, bx - 2, by + 2, 0);              // Rare Storage
+    op2::PlayerData& pd = op2::g_playerData[0];
+    pd.workers = 20; pd.scientists = 5;
+    op2::TethysGame::setCheatFlag(1, 1);
+    for (int t = 0; t < 10; ++t) gs.onIdle(renderer, 0.2501f / 4.0f);
+    pd.ore = 3000; pd.rareOre = 500;
+    auto ct = [](int x, int y) { return (int)(op2::g_gameMap.rawCell(x, y) & 0x1F); };
+    auto run = [&](const op2::UnitRecord& u, int maxT, const char* tag) {
+        int t = 0;
+        for (; t < maxT && u.action != 0; ++t) gs.onIdle(renderer, 0.2501f / 4.0f);
+        std::printf("[Earth] %s: t=%d acao=%d pos=(%d,%d) minerio=%d raro=%d | %s\n", tag, t, u.action,
+                    u.pixelX >> 5, u.pixelY >> 5, pd.ore, pd.rareOre, op2::statusBarText().c_str());
+    };
+    const op2::UnitRecord& e = op2::g_units[ew.id()];
+    // Tubo: do lado direito do CC, 6 tiles p/ a direita (arrasto restringido).
+    const std::vector<int> selE{ew.id()};
+    const int tx0 = bx + 2, ty0 = by;
+    int ex = (tx0 + 5) * 32 + 16, ey = ty0 * 32 + 20;
+    op2::wallDragConstrain(tx0 * 32 + 16, ty0 * 32 + 16, ex, ey);
+    std::printf("[Earth] arrasto tubo: fim (%d,%d) tiles\n", ex >> 5, ey >> 5);
+    op2::uiCommandClick(op2::UC_TUBE, selE);
+    std::printf("[Earth] tubo aceito=%d\n", (int)op2::uiCommandArea(op2::UC_TUBE, selE, tx0, ty0, (ex >> 5) + 1, ty0 + 1));
+    for (int t = 0; t < 1200; ++t) {
+        gs.onIdle(renderer, 0.2501f / 4.0f);
+        if (t % 40 == 0 && t >= 440)
+            std::printf("[Earth]   t=%d pos=(%d,%d) f20=%d f22=%d f23=%d ordem=%d cel=(%d,%d) cod=0x%X dirs=%d espera=%d\n", t,
+                        e.pixelX >> 5, e.pixelY >> 5, e.field20, e.field22, e.field23, (int)e.hasOrder,
+                        e.wallCurX, e.wallCurY, e.wallCode, (int)e.routeDirs.size(), e.field3C);
+    }
+    run(e, 6000, "tubo");
+    std::printf("[Earth] celulas:");
+    for (int x = tx0; x <= tx0 + 6; ++x) std::printf(" %02X", ct(x, ty0));
+    std::printf("\n");
+    // Muro: 4 tiles na vertical, longe dos prédios.
+    const int wx = bx + 8, wy0 = by + 1;
+    op2::uiCommandArea(op2::UC_WALL, selE, wx, wy0, wx + 1, wy0 + 4);
+    run(e, 8000, "muro");
+    std::printf("[Earth] celulas:");
+    for (int y = wy0; y < wy0 + 4; ++y) std::printf(" %02X", ct(wx, y));
+    std::printf("\n");
+    // Dozer 3x3.
+    const op2::UnitRecord& d = op2::g_units[dz.id()];
+    const std::vector<int> selD{dz.id()};
+    const int dx0 = bx + 14, dy0 = by + 2;
+    std::printf("[Earth] antes:");
+    for (int y = dy0; y < dy0 + 3; ++y) for (int x = dx0; x < dx0 + 3; ++x) std::printf(" %02X", ct(x, y));
+    std::printf("\n");
+    std::printf("[Earth] dozer aceito=%d\n", (int)op2::uiCommandArea(op2::UC_BULLDOZE, selD, dx0, dy0, dx0 + 3, dy0 + 3));
+    run(d, 8000, "dozer");
+    std::printf("[Earth] depois:");
+    for (int y = dy0; y < dy0 + 3; ++y) for (int x = dx0; x < dx0 + 3; ++x) std::printf(" %02X", ct(x, y));
+    std::printf("\n");
+    gs.setCamera(bx * 32 - 64, by * 32 - 96);
+    gs.onIdle(renderer, 0.0f);
+    writeBmp32(prefix + "_earth.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+    renderer.shutdown();
+    SDL_Quit();
+    return 0;
+}
+
 static int runOreTest(const std::string& mapName, const std::string& prefix) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
     op2::g_ResManager.init(".");
@@ -1611,6 +1701,8 @@ int main(int argc, char* argv[]) {
             return runMissionTest(argv[i + 1], argv[i + 2], i + 3 < argc ? atoi(argv[i + 3]) : 200);
         if (std::strcmp(argv[i], "--combattest") == 0 && i + 2 < argc)
             return runCombatTest(argv[i + 1], argv[i + 2]);
+        if (std::strcmp(argv[i], "--earthtest") == 0 && i + 2 < argc)
+            return runEarthTest(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--oretest") == 0 && i + 2 < argc)
             return runOreTest(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--producetest") == 0 && i + 2 < argc)

@@ -33,6 +33,8 @@ void mineFootprint(int& w, int& h);
 // sub_44C410: gira [+0x1C] rumo ao alvo (no máximo Turn Rate por tick); true = virado.
 struct UnitRecord;
 bool unitTurnTo(UnitRecord& u, unsigned char target);
+// sub_4389E0: a célula (x,y) aceita obra? (contexto do pathfinder = self)
+bool buildCellOk(int self, int x, int y);
 // Tick da ação 6 (sub-estado 0, sem [+0x20]).
 void conVecBuildTick(int id);
 // Sub-estado 2 (sub_43DE50 case 2): cria o prédio.

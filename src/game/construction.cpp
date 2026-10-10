@@ -131,6 +131,7 @@ static bool cellOkInterior(int self, int x, int y) {
     if (isDockOfBuilding(x, y)) return false;
     return pfCanEnter(x, y) != 0;                         // sub_4382C0
 }
+bool buildCellOk(int self, int x, int y) { return cellOkInterior(self, x, y); }
 static bool cellOkRing(int self, int moveClass, int x, int y) {
     if (y < 0 || y >= g_gameMap.height()) return false;
     const uint32_t c = g_gameMap.rawCell(x, y);

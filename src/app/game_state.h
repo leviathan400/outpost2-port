@@ -93,6 +93,9 @@ private:
     int  m_dragSX = 0, m_dragSY = 0;   // início da caixa (coords nativas)
     int  m_mouseNX = 0, m_mouseNY = 0; // mouse atual (coords nativas)
     int  m_targetCmd = -1;         // comando em modo de mira (UiCommand) ou -1
+    bool m_areaDrag = false;       // arrastando a área de um comando (muro/terraplanar)
+    int  m_areaSX = 0, m_areaSY = 0;   // início do arrasto (pixel do mundo)
+    void areaRect(int ex, int ey, int& x1, int& y1, int& x2, int& y2) const;
 
     // Botoeira do veículo (sub_46D540): botões montados p/ a seleção atual.
     struct CmdButton { int cmd; int l, t, r, b; int iconRaw; std::string tip; char hotkey; };

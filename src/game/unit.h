@@ -178,6 +178,10 @@ struct UnitRecord {
     uint16_t cargoRequest = 0;
     uint8_t  dockLoad = 0;
     int16_t  routeMineIdx = 0, routeSmelterIdx = 0, routeMine = 0, routeSmelter = 0;
+    // Obras (src/game/earthwork.cpp; retângulo em buildL..buildB = [+0x62..+0x68]):
+    // Earthworker célula atual +0x6C/+0x6E e código de percurso +0x70; dozer +0x6A.
+    int16_t  wallCurX = 0, wallCurY = -1;
+    uint8_t  wallCode = 0, dozeCode = 0;
     int16_t  target4C = 0;         // +0x4C alvo: id da unidade ou x do tile
                                    // (+0x4E field4E: 0xFFFF = unidade, y do tile, 0x7FFF = nenhum)
     // Projétil (unidades de arma 0x3B..0x57):

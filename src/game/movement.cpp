@@ -160,7 +160,8 @@ static void stepUnit(int id) {
     // loc_43ADAD — e a aproximação de atacar/guardar (0x24/0x25).
     const bool moving = u.action == CMD_MOVE || u.action == 0x26 || u.action == 0x24 ||
                         u.action == 0x25 || u.action == 0x27 || u.action == 0x28 ||
-                        u.action == 6;   // 6: ConVec indo à obra; 0x27: rota de minério
+                        u.action == 6 || u.action == 7 || u.action == 1;   // 6: ConVec indo à obra;
+                        // 0x27: rota de minério; 7: Earthworker; 1: Robo-Dozer
     if (u.field20 != 1 || !moving || !u.hasOrder || u.order.waypoints.empty()) {
         // Parado: sai do sub-estado de movimento (1). Os demais sub-estados
         // (espera 6, troca na doca 0x0D...) são do laço da unidade (sub_43DE50).
@@ -177,6 +178,8 @@ static void stepUnit(int id) {
     for (int guard = 0;; ++guard) {
         if (ob.curWaypoint > ob.countMinus1) ob.curWaypoint = ob.countMinus1;
         waypointGoal(ob, destX, destY, mode, dist);      // sub_44C2F0
+        // sub_4401F0 case 3: o alvo da busca é a casa à esquerda ([+0x14] − 1).
+        if (mode == 3) destX = (destX - 1) & (g_gameMap.width() - 1);
         pfSetContext(id);
         pfSetGoal(mode, destX, destY, dist);
         if (pfMoveCost(curX, curY) < 0) {                // sub_440550: chegou ao objetivo
@@ -210,6 +213,26 @@ static void stepUnit(int id) {
             if (n == 0) {
                 // loc_44C16D: sem rota p/ um ponto intermediário → o próximo.
                 if (ob.curWaypoint < ob.countMinus1 && guard < 64) { ++ob.curWaypoint; continue; }
+                // sub_4401F0: as vizinhas enteráveis passam pela função de custo
+                // (objetivo = negativo) — uma vizinha-objetivo vira o próximo passo.
+                {
+                    int goalDir = -1;
+                    for (int d = 0; d < 8 && goalDir < 0; ++d) {
+                        const int nx = (curX + kDir8[d].dx) & (g_gameMap.width() - 1), ny = curY + kDir8[d].dy;
+                        if (pfCanEnter(nx, ny) && pfMoveCost(nx, ny) < 0) goalDir = d;
+                    }
+                    if (goalDir >= 0) { u.routeDirs.assign(1, goalDir); u.routeIdx = 0; break; }
+                }
+                // No destino da busca do último ponto (modo 3: a casa ao lado,
+                // que pode ser um tubo e não contar como objetivo): chegou.
+                if (ob.curWaypoint == ob.countMinus1 && curX == destX && curY == destY) {
+                    u.field20 = 0; u.field22 = 0; u.field23 = 1;
+                    u.routeDirs.clear(); u.routeIdx = 0;
+                    if (u.action == 0x28 || u.action == 0x27) return;
+                    if (u.action == CMD_MOVE) u.action = 0;
+                    u.hasOrder = false; u.order = OrderBlock{};
+                    return;
+                }
                 u.field22 = 0; return;                    // sem rota: parado, não anima
             }
         }

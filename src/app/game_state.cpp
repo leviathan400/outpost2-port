@@ -12,6 +12,7 @@
 #include "../game/production.h"
 #include "../game/construction.h"
 #include "../game/mining.h"
+#include "../game/earthwork.h"
 #include "../gfx/renderer.h"
 #include "../gfx/font.h"
 #include "../gfx/ui_font.h"
@@ -581,6 +582,14 @@ void GameState::onIdle(Renderer& renderer, float dt) {
             renderer.drawRect(sx, sy, w * 32, h * 32, 0xFF40FF40);
         }
     }
+    // Área em arrasto (muro/tubo: reta de até 8 tiles; terraplanar: retângulo).
+    // PROVISÓRIO: contorno; o cursor/realce do original não foi portado.
+    if (m_areaDrag && m_targetCmd >= 0) {
+        int x1, y1, x2, y2;
+        areaRect(m_camX + m_mouseNX - kViewX, m_camY + m_mouseNY - kViewY, x1, y1, x2, y2);
+        const int sx = screenXOf(x1 * 32), sy = y1 * 32 - m_camY;
+        renderer.drawRect(sx, sy, (x2 - x1) * 32, (y2 - y1) * 32, 0xFF40FF40);
+    }
     // Caixa de arrasto (multi-seleção).
     if (m_dragging) {
         const int mvx = m_mouseNX - kViewX, mvy = m_mouseNY - kViewY;   // mouse na vista
@@ -835,7 +844,11 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
             for (const CmdButton& b : commandButtons())
                 if (nx >= b.l && nx < b.r && ny >= b.t && ny < b.b) { clickCommand(b.cmd); break; }
         }
-        if (e.button.button == SDL_BUTTON_LEFT && inView && m_targetCmd >= 0) {
+        if (e.button.button == SDL_BUTTON_LEFT && inView && m_targetCmd >= 0 && uiCommandIsArea(m_targetCmd)) {
+            // Área (sub_41B550 modos 1/4): o arrasto começa aqui e termina ao soltar.
+            m_areaDrag = true;
+            m_areaSX = m_camX + vx; m_areaSY = m_camY + vy;
+        } else if (e.button.button == SDL_BUTTON_LEFT && inView && m_targetCmd >= 0) {
             // Modo de mira: o clique escolhe o alvo (vt[3] do comando).
             int tileX = (m_camX + vx) / 32, tileY = (m_camY + vy) / 32;
             if (g_gameMap.ok()) tileX &= (g_gameMap.width() - 1);
@@ -859,6 +872,14 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
             if (!pkt.unitIds.empty()) { processCommandPacket(me, pkt); soundPlay(0x56); }
         }
     }
+    if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT && m_areaDrag) {
+        m_areaDrag = false;
+        int nx, ny; renderer.screenToNative(e.button.x, e.button.y, nx, ny);
+        int x1, y1, x2, y2;
+        areaRect(m_camX + nx - kViewX, m_camY + ny - kViewY, x1, y1, x2, y2);
+        if (m_targetCmd >= 0 && uiCommandArea(m_targetCmd, m_selected, x1, y1, x2, y2) != UiClick::TARGET)
+            m_targetCmd = -1;
+    }
     if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT && m_dragging) {
         int nx, ny; renderer.screenToNative(e.button.x, e.button.y, nx, ny);
         const int vx = nx - kViewX, vy = ny - kViewY;     // coordenadas na vista
@@ -866,6 +887,23 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
         if (dx < 4 && dy < 4) selectAt(vx, vy, false);   // clique = seleção simples
         else selectBox(m_dragSX, m_dragSY, vx, vy);        // caixa = multi-seleção
         m_dragging = false;
+    }
+}
+
+// Retângulo do arrasto em tiles (x2/y2 exclusivos): muro/tubo passa pela reta
+// de sub_41C410; terraplanar é o retângulo dos dois cantos.
+void GameState::areaRect(int ex, int ey, int& x1, int& y1, int& x2, int& y2) const {
+    int sx = m_areaSX, sy = m_areaSY;
+    if (uiCommandIsLine(m_targetCmd)) wallDragConstrain(sx, sy, ex, ey);
+    const int ax = sx >> 5, ay = sy >> 5, bx = ex >> 5, by = ey >> 5;
+    x1 = std::min(ax, bx); x2 = std::max(ax, bx) + 1;
+    y1 = std::min(ay, by); y2 = std::max(ay, by) + 1;
+    if (y1 < 0) y1 = 0;
+    if (g_gameMap.ok()) {
+        if (y2 > g_gameMap.height()) y2 = g_gameMap.height();
+        const int m = g_gameMap.width() - 1;
+        const int w = x2 - x1;
+        x1 &= m; x2 = x1 + w;
     }
 }
 

@@ -59,6 +59,9 @@ void pfSetGoal(int mode, int x, int y, int dist) {
     g_pf.goalMode = mode;
     pfSetTarget(x, y);
     if (mode == 1 || mode == 2) { pfSetTarget2(x, y); pfSetRadius(dist); }
+    // Modo 3 (sub_4401F0 case 3): o próprio alvo já vem deslocado p/ x − 1
+    // (ver movement.cpp) e também é o ponto de referência dos vizinhos.
+    if (mode == 3) pfSetTarget2(x, y);
 }
 
 // ---- Helpers de ocupação ----------------------------------------------------
@@ -463,6 +466,8 @@ int pfMoveCost(int x, int y) {         // sub_438390
     uint32_t cell = g_gameMap.rawCell(x, y);
 
     int base;
+    // Modo 3 (sub_438850): parede/tubo bloqueia sem exceção.
+    if (g_pf.goalMode == 3 && (cell & GameMap::CELL_WALLBITS)) return PF_BLOCKED;
     if (cell & GameMap::CELL_WALLBITS) {              // 0xA8000000
         int gate;
         if (cell & GameMap::CELL_HARDBLOCK) {         // 0x28000000
@@ -488,6 +493,11 @@ int pfMoveCost(int x, int y) {         // sub_438390
             if (g_pf.goalMode == 1 || (dx == 0 && dy == 0)) goal = true;
             else goal = mapLineOfSight(x, y, g_pf.target2X, g_pf.target2Y) != 0;   // sub_436EA0
         }
+    }
+    if (!goal && g_pf.goalMode == 3) {                // ao lado do alvo (4 vizinhos)
+        const int dy = g_pf.target2Y - y, dx = pfWrapDX(x - g_pf.target2X);
+        if (dy == -1 || dy == 1) goal = dx == 1;
+        else if (dy == 0) goal = dx == 0 || dx == 2;
     }
     if (goal) base = -base;
 

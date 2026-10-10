@@ -9,6 +9,7 @@
 #include "colony.h"
 #include "construction.h"
 #include "mining.h"
+#include "earthwork.h"
 #include "command.h"
 #include "game_map.h"
 #include "player.h"
@@ -452,6 +453,9 @@ UiClick uiCommandClick(int cmd, const std::vector<int>& sel) {
         case UC_GUARD: return UiClick::TARGET;                          // sub_4534D0 (modo 7)
         case UC_BUILD_KIT: return UiClick::TARGET;                      // sub_451AC0 (modo 2, área do kit)
         case UC_BUILD_MINE: return UiClick::TARGET;                     // sub_451FC0 (modo 2, área da mina)
+        case UC_WALL: case UC_LAVA_WALL: case UC_MICROBE_WALL: case UC_TUBE:   // sub_452640 (modo 4)
+        case UC_BULLDOZE:                                               // sub_453760 (modo 1)
+            return UiClick::TARGET;
         case UC_ORE_ROUTE:                                              // sub_453F50 (modo 3)
             s_ore = {};
             s_hint = "Set path to mine";
@@ -468,6 +472,18 @@ UiClick uiCommandClick(int cmd, const std::vector<int>& sel) {
         case UC_ACTIVATE: if (!sel.empty()) structureDoActivate(sel[0]); return UiClick::DONE;
         default: return UiClick::NOT_PORTED;
     }
+}
+
+bool uiCommandIsLine(int cmd) {
+    return cmd == UC_WALL || cmd == UC_LAVA_WALL || cmd == UC_MICROBE_WALL || cmd == UC_TUBE;
+}
+bool uiCommandIsArea(int cmd) { return uiCommandIsLine(cmd) || cmd == UC_BULLDOZE; }
+
+UiClick uiCommandArea(int cmd, const std::vector<int>& sel, int x1, int y1, int x2, int y2) {
+    const bool ok = cmd == UC_BULLDOZE ? sendBulldoze(sel, x1, y1, x2, y2)          // sub_453780
+                                       : sendBuildWall(sel, x1, y1, x2, y2, wallTypeOf(cmd));   // sub_452660
+    if (!ok) { soundPlay(0x58); return UiClick::TARGET; }   // sub_41AAA0: recusado
+    return UiClick::DONE;
 }
 
 UiClick uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int tileY) {

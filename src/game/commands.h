@@ -57,6 +57,11 @@ UiClick uiCommandClick(int cmd, const std::vector<int>& sel);
 // vt[3]: alvo no tile (x,y do port). DONE = comando enviado; TARGET = segue
 // no modo de mira (Patrulhar pede 2 pontos); NOT_PORTED = não portado.
 UiClick uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int tileY);
+// Comandos de ÁREA (arrastar): muro/tubo (modo 4, reta) e terraplanar (modo 1).
+bool uiCommandIsArea(int cmd);
+bool uiCommandIsLine(int cmd);
+// Fim do arrasto: retângulo em tiles com x2/y2 exclusivos. TARGET = recusado (0x58).
+UiClick uiCommandArea(int cmd, const std::vector<int>& sel, int x1, int y1, int x2, int y2);
 // Texto de ajuda do modo de mira (sub_411BF0 em unk_575570), ex. "Set path to
 // initial patrol point"; vazio se o comando não tem.
 const std::string& uiCommandHint();
