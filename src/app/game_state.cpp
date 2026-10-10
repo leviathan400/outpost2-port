@@ -441,6 +441,21 @@ void GameState::onIdle(Renderer& renderer, float dt) {
                 if (isTankChassis(r.type)) {
                     // sub_484A90 (tanques): só em movimento; (id + tick/2) % nF.
                     if (r.field22 == 1 && nf > 0) frame = (((int)i + (int)(TethysGame::tick() >> 1)) % nf + nf) % nf;
+                } else if (r.type == mapRoboSurveyor || r.type == mapRoboMiner || r.type == mapGeoCon ||
+                           r.type == mapRoboDozer || r.type == mapEvacuationTransport ||
+                           r.type == mapRepairVehicle || r.type == mapEarthworker) {
+                    // vt[8] sub_44C7B0 (Robo-Surveyor/Miner/Dozer, GeoCon, Evacuation
+                    // Transport, Repair, Earthworker; o caminhão em truckFrame — tipos
+                    // tirados das vtables): cicla com QUALQUER ação
+                    // ([+0x21] != 0) — parado trabalhando também (o bico do
+                    // Earthworker, a lâmina do Dozer). Doca (0x0D): conta do início.
+                    if (r.field22 == 0x0D && nf > 0) {
+                        const int f = (TethysGame::tick() - r.dockTick) & 0xFFFF;
+                        frame = f < nf - 1 ? f : nf - 2 > 0 ? nf - 2 : 0;
+                    } else if (r.action && nf > 0) {
+                        const int t = (int)(TethysGame::tick() >> ((r.flags & 0x10000) ? 1 : 0)) + (int)i;
+                        frame = ((t % nf) + nf) % nf;
+                    }
                 } else {
                     bool animating = (r.field22 == 1) || (r.action == 0x1D) || (r.action == 0x1C);
                     if (animating && nf > 0) {

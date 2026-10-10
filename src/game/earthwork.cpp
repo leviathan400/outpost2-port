@@ -428,7 +428,7 @@ void wallBuildTick(int id) {                                 // jpt_43B312 case 
     }
     v.action = 0; v.wallCurY = -1;                           // [+0x6E] = 0xFFFF
     if (built) soundPlayAt(unitOX(v), unitOY(v), 3);
-    if (ownerOf(v) == TethysGame::localPlayer() && built)
+    if (ownerOf(v) == TethysGame::localPlayer())          // (o original avisa mesmo sem assentar)
         postMessage(unitOX(v), unitOY(v), static_cast<int16_t>(v.cargo) == 0x11 ? "Tube completed" : "Wall completed",
                     static_cast<int16_t>(v.cargo) == 0x11 ? 0xA4 : 0xA3);
 }
