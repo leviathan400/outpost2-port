@@ -549,6 +549,21 @@ static int runEarthTest(const std::string& mapName, const std::string& prefix) {
     if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
     gs.onActivate();
     op2::resetUnits();
+    {   // Minimapa: clique no canto inferior direito -> vista centrada lá.
+        SDL_Event ev{};
+        ev.type = SDL_MOUSEBUTTONDOWN; ev.button.button = SDL_BUTTON_LEFT; ev.button.clicks = 1;
+        ev.button.x = (op2::GameState::kColX + op2::GameState::kColW - 4) * 2;
+        ev.button.y = (op2::GameState::kMiniMapY + op2::GameState::kMiniMapH - 4) * 2;
+        gs.handleEvent(renderer, ev);
+        gs.onIdle(renderer, 0.0f);
+        const int c1x = gs.camX(), c1y = gs.camY();
+        ev.button.x = (op2::GameState::kColX + 60) * 2; ev.button.y = (op2::GameState::kMiniMapY + 64) * 2;
+        gs.handleEvent(renderer, ev);
+        gs.onIdle(renderer, 0.0f);
+        std::printf("[Mini] canto -> cam (%d,%d) | meio -> cam (%d,%d) mapa %dx%d\n", c1x, c1y, gs.camX(), gs.camY(),
+                    op2::g_gameMap.width(), op2::g_gameMap.height());
+        gs.setCamera(0, 0);
+    }
     const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
     int bx = -1, by = -1;
     for (int y = 3; y < H - 14 && bx < 0; ++y)
@@ -723,8 +738,8 @@ static int runOreTest(const std::string& mapName, const std::string& prefix) {
     for (t = 0; t < 6000; ++t) {
         gs.onIdle(renderer, 0.2501f / 4.0f);
         if (tr.cargo != lastCargo || (tr.field22 == 0x0D) != (lastSub == 0x0D)) {
-            std::printf("[Ore] t=%d caminhao (%d,%d) acao=0x%X sub=%d carga=%d tipo=%d | estoque=%d cargas=%d\n\n", t,
-                        tr.pixelX >> 5, tr.pixelY >> 5, tr.action, tr.field22, (tr.cargo >> 4) & 0xFFF, tr.cargo & 15,
+            std::printf("[Ore] t=%d caminhao (%d,%d) px(%d,%d) rot=%d acao=0x%X sub=%d carga=%d tipo=%d | estoque=%d cargas=%d\n\n", t,
+                        tr.pixelX >> 5, tr.pixelY >> 5, tr.pixelX, tr.pixelY, tr.rotation, tr.action, tr.field22, (tr.cargo >> 4) & 0xFFF, tr.cargo & 15,
                         pd.ore, op2::g_units[mine].mineLink);
             lastCargo = tr.cargo; lastSub = tr.field22;
         }

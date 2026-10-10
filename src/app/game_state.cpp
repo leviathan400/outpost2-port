@@ -272,6 +272,15 @@ void GameState::onIdle(Renderer& renderer, float dt) {
             return;
         }
     }
+    // Minimapa segurado (sub_4587B0 → sub_41F9E0): relê o cursor e centra a vista.
+    if (m_miniDrag) {
+        if (!(SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON(SDL_BUTTON_LEFT))) {
+            m_miniDrag = false;
+        } else {
+            int px, py;
+            if (miniToWorld(m_mouseNX, m_mouseNY, px, py)) requestCenterView(px, py);
+        }
+    }
     {   // CenterViewOn pedido pelo script.
         int cx, cy;
         if (takeCenterViewRequest(cx, cy)) {
@@ -704,6 +713,22 @@ void GameState::drawBeam(Renderer& renderer, const WeaponDrawOp& op) {
     }
 }
 
+// sub_48D860, zoom 0: ponto da janela do minimapa → pixel do mundo (tile << 5,
+// o canto do tile). Fora do mapa (ou nos botões do topo, que são janelas filhas)
+// não converte.
+bool GameState::miniToWorld(int nx, int ny, int& px, int& py) const {
+    if (!g_gameMap.ok()) return false;
+    const int mx = nx - kColX, my = ny - kMiniMapY;
+    if (mx < 0 || mx >= kColW || my < 0 || my >= kMiniMapH) return false;
+    const int n = g_gameMap.internalXOffset() ? 3 : 4;              // botões (sub_458930)
+    if (my < 16 && mx >= kColW / 2 - 0x20 && mx < kColW / 2 - 0x20 + 16 * n) return false;
+    const int mw = g_gameMap.width(), mh = g_gameMap.height();
+    const int tx = mx * mw / kColW, ty = my * mh / kMiniMapH;
+    px = tx << 5;
+    py = ty << 5;
+    return true;
+}
+
 int GameState::screenXOf(int worldPixelX) const {
     int sx = worldPixelX - m_camX;
     if (!g_gameMap.ok()) return sx;
@@ -819,6 +844,15 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
         bool inView = vx >= 0 && vx < viewportW() && vy >= 0 && vy < viewportH();
         // Painel de produção: lista e setas (sub_4683F0 / sub_4683B0 / sub_430910-60).
         bool paneHit = false;
+        // Minimapa (sub_4583D0 case 513): ponto válido → arrasto da vista.
+        if (e.button.button == SDL_BUTTON_LEFT && !inView) {
+            int px, py;
+            if (miniToWorld(nx, ny, px, py)) {
+                m_miniDrag = true;
+                requestCenterView(px, py);
+                paneHit = true;
+            }
+        }
         if (e.button.button == SDL_BUTTON_LEFT && !inView && m_produce.isOpen()) {
             bool buildNow = false;
             paneHit = m_produce.click(infoPaneRect(), nx, ny, e.button.clicks >= 2, buildNow);
@@ -871,6 +905,12 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
             }
             if (!pkt.unitIds.empty()) { processCommandPacket(me, pkt); soundPlay(0x56); }
         }
+    }
+    if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT && m_miniDrag) {
+        // case 514: ponto final, depois solta (flags 2, sem 1|4).
+        int px, py;
+        if (miniToWorld(m_mouseNX, m_mouseNY, px, py)) requestCenterView(px, py);
+        m_miniDrag = false;
     }
     if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT && m_areaDrag) {
         m_areaDrag = false;

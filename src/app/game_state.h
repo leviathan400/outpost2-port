@@ -45,6 +45,8 @@ public:
     ResearchPane& researchPaneForTest() { return m_research; }
     void setMouse(int nx, int ny) { m_mouseNX = nx; m_mouseNY = ny; }
     void setCamera(int x, int y) { m_camX = x; m_camY = y; }
+    int camX() const { return m_camX; }
+    int camY() const { return m_camY; }
     int shakeX() const { return m_shakeX; }
     int shakeY() const { return m_shakeY; }
 
@@ -93,7 +95,11 @@ private:
     int  m_dragSX = 0, m_dragSY = 0;   // início da caixa (coords nativas)
     int  m_mouseNX = 0, m_mouseNY = 0; // mouse atual (coords nativas)
     int  m_targetCmd = -1;         // comando em modo de mira (UiCommand) ou -1
-    bool m_areaDrag = false;       // arrastando a área de um comando (muro/terraplanar)
+    bool m_areaDrag = false;
+    // Minimapa (sub_4583D0/sub_4587B0/sub_41F9E0): botão apertado nele = flags 1|4
+    // de dword_57489C; enquanto segurado, a vista centra no ponto (sub_408120).
+    bool m_miniDrag = false;
+    bool miniToWorld(int nx, int ny, int& px, int& py) const;   // sub_48D860 (zoom 0)       // arrastando a área de um comando (muro/terraplanar)
     int  m_areaSX = 0, m_areaSY = 0;   // início do arrasto (pixel do mundo)
     void areaRect(int ex, int ey, int& x1, int& y1, int& x2, int& y2) const;
     static constexpr int kCmdLoad = -12, kCmdUnload = -13;   // STORAGE de recursos
