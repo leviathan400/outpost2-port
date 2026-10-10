@@ -527,7 +527,10 @@ static bool vehicleTick(int id) {
     else if (!r.field20 && r.field22 == 0 && r.action == 0x28) unitPatrolTick(id);   // case 40
     else if (!r.field20 && r.field22 == 0 && r.action == 6) conVecBuildTick(id);      // case 6
     else if (!r.field20 && r.field22 == 0 && r.action == 0x27) oreRouteTick(id);      // case 39
-    else if (r.field20 && (r.action == 7 || r.action == 1) && !r.hasOrder) earthworkStart(id);   // jpt_43AD56 1/7
+    else if (r.field20 && (r.action == 7 || r.action == 1 || r.action == 8) && !r.hasOrder) earthworkStart(id);   // jpt_43AD56 1/7/8
+    else if (!r.field20 && r.field22 == 0 && r.action == 8) removeWallTick(id);       // case 8
+    else if (r.field20 && r.action == 0x0E) dumpCargoStart(id);                       // jpt_43AD56 14
+    else if (!r.field20 && r.field22 == 0 && r.action == 0x0E) dumpCargoTick(id);     // case 14
     else if (!r.field20 && r.field22 == 0 && r.action == 7) wallBuildTick(id);        // case 7
     else if (!r.field20 && r.field22 == 0 && r.action == 1) bulldozeTick(id);         // case 1
     {   // def_43B312: armado (0x10 xor 0x80), sem 0x20000/0x80000 → vt[5] da arma.

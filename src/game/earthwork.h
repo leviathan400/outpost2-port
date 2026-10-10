@@ -36,7 +36,15 @@ bool sendBulldoze(const std::vector<int>& sel, int x1, int y1, int x2, int y2);
 // sub_41C410: restringe o fim do arrasto (pixels) a uma reta de até 8 tiles.
 void wallDragConstrain(int sx, int sy, int& ex, int& ey);
 
-void earthworkStart(int id);     // jpt_43AD56 casos 1 e 7 ([+0x20] = 1)
+// Remover muro/tubo (off_4D4C38): clique (modo 3) num muro 0x17..0x19 ou num
+// tubo 0x1A sem prédio (sub_452B60) → pacote 8 (sub_452D10) → vt[0x94] da
+// Earthworker (sub_423500: ação 8, ponto e célula em [+0x62..+0x68]).
+// Ação 8: vai p/ o lado (modo 3), gira, espera ProductionRate×375/128/2 (tubo:
+// poeira 0x619) e destrói (sub_4A25F0); tubo custa 100 de dano à máquina.
+bool sendRemoveWall(const std::vector<int>& sel, int tileX, int tileY);
+void removeWallTick(int id);     // jpt_43B312 case 8
+
+void earthworkStart(int id);     // jpt_43AD56 casos 1, 7 e 8 ([+0x20] = 1)
 void wallBuildTick(int id);      // jpt_43B312 case 7
 void bulldozeTick(int id);       // jpt_43B312 case 1
 

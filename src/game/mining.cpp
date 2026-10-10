@@ -377,6 +377,150 @@ static int truckDockStatus(const UnitRecord& u) {
     }
 }
 
+// ---- Docas: quem atraca e STORAGE de recursos --------------------------------
+bool vehicleCanDock(int vehicleId, int buildingId, bool ownerCheck) {   // sub_44DA80
+    if (!valid(vehicleId) || !valid(buildingId)) return false;
+    const UnitRecord& v = g_units[vehicleId];
+    const UnitRecord& b = g_units[buildingId];
+    if (ownerCheck && ownerOf(v) != ownerOf(b)) return false;
+    if (v.type == mapSpider || v.type == mapScorpion) return false;
+    const StructSheetDesc* d = structSheet(b.type);
+    const uint32_t f = d ? d->flags24C : 0;
+    if (f & 0x04) return true;                                 // Docking All
+    if (v.type == mapConVec) return (f & 0x10) != 0;           // Docking CV
+    if (v.type != mapCargoTruck || !(f & 0x08)) return false;  // Docking Truck
+    const int kind = cargoKind(v), p = ownerOf(v);
+    const PlayerData& pd = g_playerData[p];
+    switch (b.type) {
+        case 0x15: case 0x16: case 0x2A: return kind == 0;
+        case 0x19: return kind == 0 || (kind == 4 && pd.ore < capOf(p, false));
+        case 0x1A: return kind == 0 || (kind == 5 && capOf(p, true) > pd.rareOre);
+        case 0x27: return kind == 0 || kind == 1;
+        case 0x36: return kind == 0 || ((kind == 2 || kind == 4) && smelterCanAccept(buildingId, 1));
+        case 0x37: return kind == 0 || kind == 8 || kind == 9;
+        case 0x38: return kind == 0 || ((kind == 3 || kind == 5) && smelterCanAccept(buildingId, 1));
+        case 0x39:
+            if (kind == 6) return pd.ore < capOf(p, false);
+            if (kind == 7) return capOf(p, true) > pd.rareOre;
+            return false;
+        default: return false;
+    }
+}
+
+const char* truckCargoName(const UnitRecord& u) {             // sub_406210
+    static const char* const kNames[8] = {"(empty)", "Food", "Common Ore", "Rare Ore", "Common Metals",
+                                           "Rare Metals", "Common Rubble", "Rare Rubble"};
+    const int k = cargoKind(u);
+    if (k < 8) return kNames[k];
+    if (k == 8) return unitDisplayName(cargoAmount(u));       // módulo/carga espacial
+    return "";
+}
+
+int storageStock(int buildingId) {                             // [+0x6A4]
+    const UnitRecord& b = g_units[buildingId];
+    const PlayerData& pd = g_playerData[ownerOf(b)];
+    switch (b.type) {
+        case 0x19: case 0x36: return pd.ore;
+        case 0x1A: case 0x38: return pd.rareOre;
+        case 0x27: return pd.foodStored;
+        default: return 0;
+    }
+}
+
+static bool vehCommandable(const UnitRecord& r) {
+    return r.id != -1 && !((r.flags | (r.flags << 2)) & 0x80000u) && r.field22 != 0x0A;
+}
+static int truckCap(const UnitRecord& v) {                     // bloco+0x38 (Cargo Capacity)
+    const VehPlayerStats* vs = vehicleSheet(v.type, statsOf(v));
+    return vs ? vs->cargo : 0;
+}
+
+bool storageLoadAvailable(int b) {                             // sub_456EC0
+    const int vid = dockedVehicle(b);
+    if (!vid) return false;
+    const UnitRecord& v = g_units[vid];
+    if (!vehCommandable(v) || (v.flags & 0x40000u) || v.field22 == 0x0D || v.cargo != 0) return false;
+    if (!vehicleCanDock(vid, b, true)) return false;
+    const UnitRecord& bl = g_units[b];
+    const PlayerData& pd = g_playerData[TethysGame::localPlayer()];
+    switch (bl.type) {
+        case 0x27: return truckCap(v) <= pd.foodStored;
+        case 0x36: return truckCap(v) <= pd.ore;
+        case 0x38: return truckCap(v) <= pd.rareOre;
+        default: return structureOperational(bl);
+    }
+}
+
+bool storageUnloadAvailable(int b) {                           // sub_4570D0
+    const int vid = dockedVehicle(b);
+    if (!vid) return false;
+    const UnitRecord& v = g_units[vid];
+    if (v.field22 == 0x0D || v.cargo == 0) return false;
+    if (!vehicleCanDock(vid, b, true)) return false;
+    if (!vehCommandable(v) || (v.flags & 0x40000u)) return false;
+    const UnitRecord& bl = g_units[b];
+    switch (bl.type) {
+        case 0x27: return true;
+        case 0x36: return cargoKind(v) == 2 ? structureOperational(bl) : true;
+        case 0x38: return cargoKind(v) == 3 ? structureOperational(bl) : true;
+        default: return structureOperational(bl);
+    }
+}
+
+// Pacotes 0x0B / 0x0C (sub_40E210 casos 11/12): prédio vivo, veículo atracado
+// comandável e sem 0x40000. (Anel anti-duplicata [jogador+0xBD8]: rede.)
+static int dockedForPacket(int b) {
+    if (!valid(b) || (g_units[b].flags & UNIT_DEAD)) return 0;
+    const int vid = dockedVehicle(b);
+    if (!vid) return 0;
+    const UnitRecord& v = g_units[vid];
+    if (!vehCommandable(v) || (v.flags & 0x40000u)) return 0;
+    return vid;
+}
+
+void storageLoad(int b) {                                      // sub_423F70
+    const int vid = dockedForPacket(b);
+    if (!vid || g_units[vid].type != mapCargoTruck) return;
+    UnitRecord& v = g_units[vid];
+    const PlayerData& pd = g_playerData[ownerOf(g_units[b])];
+    const int cap = truckCap(v);
+    switch (g_units[b].type) {
+        case 0x19: case 0x36: if (cap <= pd.ore) truckDockBegin(v, 4, cap, 0); break;
+        case 0x1A: case 0x38: if (cap <= pd.rareOre) truckDockBegin(v, 5, cap, 0); break;
+        case 0x27: if (cap <= pd.foodStored) truckDockBegin(v, 1, cap, 0); break;
+        default: break;
+    }
+}
+
+void storageUnload(int b) {                                    // sub_424120 → vt[0x94](0,0,0)
+    const int vid = dockedForPacket(b);
+    if (!vid || g_units[vid].type != mapCargoTruck) return;
+    truckDockBegin(g_units[vid], 0, 0, 0);
+}
+
+// ---- Despejar carga -----------------------------------------------------------
+void sendDumpCargo(int id) {                                   // sub_40E210 case 14
+    if (!valid(id)) return;
+    UnitRecord& u = g_units[id];
+    if (ownerOf(u) != TethysGame::localPlayer() || !vehCommandable(u)) return;
+    u.action = 0x0E; u.field20 = 1; u.field3C = 0;
+}
+
+void dumpCargoStart(int id) {                                  // jpt_43AD56 case 14
+    UnitRecord& u = g_units[id];
+    u.field3C = artLastFrameRaw(0x7BC);
+    if (u.field3C <= 0) u.field3C = 1;
+    u.dockTick = static_cast<int16_t>(TethysGame::tick());     // [+0x5E]
+    soundPlayAt(unitOX(u), unitOY(u), 0x45);
+    u.action = 0x0E; u.field22 = SUB_WAIT; u.field20 = 0;
+}
+
+void dumpCargoTick(int id) {                                   // jpt_43B312 case 14
+    UnitRecord& u = g_units[id];
+    u.cargo = 0;
+    u.action = 0;
+}
+
 // ---- Rota ---------------------------------------------------------------------
 int oreRouteTarget(int stage, int mineId, int truckOwner, int tileX, int tileY) {   // sub_454290
     const int b = buildingAtTile(tileX, tileY, truckOwner);

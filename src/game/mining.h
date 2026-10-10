@@ -59,4 +59,24 @@ void sendOreRoute(const std::vector<int>& sel, const std::vector<uint32_t>& pts,
                   int mineIdx, int smelterIdx, int mineId, int smelterId);
 void oreRouteTick(int truckId);                   // jpt_43B312 case 39
 
+// sub_44DA80: o veículo pode atracar no prédio (com a carga atual)?
+bool vehicleCanDock(int vehicleId, int buildingId, bool ownerCheck);
+// sub_406210: nome da carga do caminhão ("(empty)", "Common Ore"...).
+const char* truckCargoName(const UnitRecord& u);
+
+// STORAGE de recursos (dword_5650F0 com [+0x6C0] = 0): armazéns 0x19/0x1A,
+// smelters 0x36/0x38 e Agridome 0x27.
+int  storageStock(int buildingId);              // [+0x6A4]: metal comum/raro ou comida
+bool storageLoadAvailable(int buildingId);      // sub_456EC0 (comando dword_564A68)
+bool storageUnloadAvailable(int buildingId);    // sub_4570D0 (comando dword_564A5C)
+void storageLoad(int buildingId);               // pacote 0x0B → sub_423F70
+void storageUnload(int buildingId);             // pacote 0x0C → sub_424120
+
+// Despejar carga (comando off_4D4EA0 sub_4557B0: confirmação → pacote 0x0E,
+// só a 1ª unidade): ação 0x0E (jpt_43AD56 case 14: espera o último frame da
+// anim 0x7BC, som 0x45, [+0x5E] = tick, sub-estado 6; case 14: carga = 0).
+void sendDumpCargo(int unitId);
+void dumpCargoStart(int unitId);
+void dumpCargoTick(int unitId);
+
 } // namespace op2

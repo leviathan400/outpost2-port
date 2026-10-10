@@ -10,6 +10,8 @@
 #include "../game/building_sheet.h"
 #include "../game/colony.h"
 #include "../game/docking.h"
+#include "../game/mining.h"
+#include "../game/tethys_game.h"
 #include "../game/player.h"
 #include "../game/structure.h"
 #include "../game/structure_anim.h"
@@ -26,6 +28,24 @@ static bool edenBuilt(const UnitRecord& r) {          // [+0x44] & 0x1000
     const int o = r.owner & 0x0F;
     return o < kMaxPlayers && g_playerData[o].isEden != 0;
 }
+
+bool StoragePane::resourceMode() const {                 // sub_462FC0
+    const int t = g_units[m_bld].type;
+    return t != 0x2F && t != 0x37 && t != 0x29;
+}
+// sub_463170: LOAD com estoque e caminhão vazio; UNLOAD com carga.
+bool StoragePane::loadEnabled() const {
+    if (!m_open || !resourceMode()) return false;
+    const int v = dockedVehicle(m_bld);
+    return storageStock(m_bld) != 0 && (!v || g_units[v].cargo == 0) && storageLoadAvailable(m_bld);
+}
+bool StoragePane::unloadEnabled() const {
+    if (!m_open || !resourceMode()) return false;
+    const int v = dockedVehicle(m_bld);
+    return v && g_units[v].cargo != 0 && storageUnloadAvailable(m_bld);
+}
+void StoragePane::load() { if (loadEnabled()) storageLoad(m_bld); }
+void StoragePane::unload() { if (unloadEnabled()) storageUnload(m_bld); }
 
 int StoragePane::bays() const {
     const UnitRecord& b = g_units[m_bld];
@@ -91,7 +111,7 @@ void StoragePane::draw(uint32_t* fb, int fbW, int fbH, int winL, int winT, const
     // Título (unk_578F08, verde).
     drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.t + 1, pane.r - 0xD, pane.t + 20},
                    unitTitle(b), 0xFF00FF00u, true);
-    const int n = bays();
+    const int n = resourceMode() ? 0 : bays();
     for (int i = 0; i < n; ++i) {
         const PaneRect r = bayRect(winL, winT, i);
         const int icon = bayIcon(b, i);
@@ -122,7 +142,10 @@ void StoragePane::draw(uint32_t* fb, int fbW, int fbH, int winL, int winT, const
                          ? g_playerData[u.owner & 0x0F].colorNumber : 0, bx, by, bx + 0x2C, by + 0x2C);
         const std::string vname = unitTitle(u);
         const int cargo = static_cast<int16_t>(u.cargo);
-        if (cargo) {
+        if (resourceMode()) {                                // loc_46425A
+            if (!(u.cargo & 0x0F)) text = vname + " is empty";
+            else text = vname + " with " + std::to_string((u.cargo >> 4) & 0xFFF) + " " + truckCargoName(u);
+        } else if (cargo) {
             const std::string cname = cargo == 0x17 ? unitDisplayName(u.kitWeapon) : unitDisplayName(cargo);
             text = cname + " carried in " + vname;
         } else {
@@ -146,6 +169,22 @@ void StoragePane::draw(uint32_t* fb, int fbW, int fbH, int winL, int winT, const
     }
     drawMarkupText(fb, fbW, fbH, PaneRect{winL + 0x47, by, pane.r - 4, by + 0x2C},
                    wrapText(text, pane.r - 4 - (winL + 0x47)), 0xFF00FF00u);
+    if (resourceMode()) {
+        // "Stored <recurso>:<R>N" (Agridome) ou + "<L>Storage Capacity:<R>cap"
+        // (capacidade da colônia). PROVISÓRIO: bloco logo acima da doca.
+        const int p = b.owner & 0x0F;
+        std::string s;
+        if (b.type == 0x27) s = "Stored Food:<R>" + std::to_string(storageStock(m_bld));
+        else {
+            const bool rare = b.type == 0x1A || b.type == 0x38;
+            const int cap = rare ? g_colony[p].rareCapacity : g_colony[p].oreCapacity;
+            s = std::string("Stored ") + (rare ? "Rare Metals" : "Common Metals") + ":<R>" +
+                std::to_string(storageStock(m_bld)) + "\n<L>Storage Capacity:<R>" + std::to_string(cap);
+        }
+        const int lines = b.type == 0x27 ? 1 : 2;
+        const int top = by - 8 - lines * markupLineHeight();
+        drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, top, pane.r - 0xD, by - 8}, s, 0xFF00FF00u);
+    }
 }
 
 void StoragePane::pressBay(int bay) {

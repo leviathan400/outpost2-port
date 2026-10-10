@@ -618,6 +618,13 @@ static int runEarthTest(const std::string& mapName, const std::string& prefix) {
     std::printf("[Earth] depois:");
     for (int y = dy0; y < dy0 + 3; ++y) for (int x = dx0; x < dx0 + 3; ++x) std::printf(" %02X", ct(x, y));
     std::printf("\n");
+    // Remover: 1 célula do muro e a última do tubo.
+    std::printf("[Earth] remover muro aceito=%d\n", (int)op2::uiCommandTarget(op2::UC_REMOVE_WALL, selE, wx, wy0 + 3));
+    run(e, 3000, "remover muro");
+    std::printf("[Earth] remover tubo aceito=%d\n", (int)op2::uiCommandTarget(op2::UC_REMOVE_WALL, selE, tx0 + 5, ty0));
+    run(e, 3000, "remover tubo");
+    std::printf("[Earth] muro: %02X %02X | tubo: %02X %02X | dano da maquina=%d\n", ct(wx, wy0 + 2), ct(wx, wy0 + 3),
+                ct(tx0 + 4, ty0), ct(tx0 + 5, ty0), e.damage);
     gs.setCamera(bx * 32 - 64, by * 32 - 96);
     gs.onIdle(renderer, 0.0f);
     writeBmp32(prefix + "_earth.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
@@ -730,6 +737,53 @@ static int runOreTest(const std::string& mapName, const std::string& prefix) {
             writeBmp32(prefix + "_route" + std::to_string(t) + ".bmp", renderer.getFramebuffer(),
                        op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
         }
+    }
+    // STORAGE de recursos: 2º caminhão parado na doca do smelter → LOAD / UNLOAD.
+    {
+        op2::UnitRecord& t1 = op2::g_units[truck.id()];
+        t1.action = 0; t1.field20 = 0; t1.field22 = 0; t1.hasOrder = false;   // tira o 1º da rota
+        for (int k = 0; k < 400 && t1.field22 != 0; ++k) gs.onIdle(renderer, 0.2501f / 4.0f);
+        op2::g_gameMap.clearUnitOccupancy(t1.pixelX >> 5, t1.pixelY >> 5);
+        t1.pixelX = (sdx + 6) << 5;                                     // afasta o 1º
+        op2::Unit t2;
+        op2::TethysGame::CreateUnit(t2, op2::mapCargoTruck, op2::LOCATION{sdx + 3, sdy + 2}, 0);
+        op2::UnitRecord& tt = op2::g_units[t2.id()];
+        op2::g_gameMap.clearUnitOccupancy(tt.pixelX >> 5, tt.pixelY >> 5);
+        tt.pixelX = sdx << 5; tt.pixelY = sdy << 5;
+        op2::g_gameMap.setUnitOccupancy(sdx, sdy, t2.id());
+        std::printf("[Ore] doca do smelter: veiculo=%d (2o caminhao=%d)\n", op2::dockedVehicle(sm.id()), t2.id());
+        gs.setSelection({sm.id()});
+        gs.pressCommand(op2::UC_STORAGE);
+        for (int k = 0; k < 4; ++k) gs.onIdle(renderer, 0.05f);
+        writeBmp32(prefix + "_storage.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH,
+                   op2::Renderer::NATIVE_HEIGHT);
+        const int s0 = pd.ore;
+        std::printf("[Ore] LOAD disponivel=%d UNLOAD=%d estoque=%d\n", (int)op2::storageLoadAvailable(sm.id()),
+                    (int)op2::storageUnloadAvailable(sm.id()), s0);
+        gs.pressCommand(-12);                               // kCmdLoad
+        int k = 0;
+        for (; k < 600 && (tt.field22 == 0x0D || k == 0); ++k) gs.onIdle(renderer, 0.2501f / 4.0f);
+        std::printf("[Ore] apos LOAD (t=%d): carga=%d tipo=%d estoque %d -> %d\n", k, (tt.cargo >> 4) & 0xFFF,
+                    tt.cargo & 15, s0, pd.ore);
+        gs.pressCommand(-13);                               // kCmdUnload
+        for (k = 0; k < 600 && (tt.field22 == 0x0D || k == 0); ++k) gs.onIdle(renderer, 0.2501f / 4.0f);
+        std::printf("[Ore] apos UNLOAD (t=%d): carga=%d estoque=%d\n", k, (tt.cargo >> 4) & 0xFFF, pd.ore);
+        for (int q = 0; q < 4; ++q) gs.onIdle(renderer, 0.05f);
+        writeBmp32(prefix + "_storage2.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH,
+                   op2::Renderer::NATIVE_HEIGHT);
+        // Despejar: carrega de novo, DUMP CARGO → confirmação → YES.
+        gs.pressCommand(-12);
+        for (k = 0; k < 600 && (tt.field22 == 0x0D || k == 0); ++k) gs.onIdle(renderer, 0.2501f / 4.0f);
+        const int s1 = pd.ore;
+        gs.setSelection({t2.id()});
+        gs.pressCommand(op2::UC_DUMP_CARGO);
+        for (int q = 0; q < 4; ++q) gs.onIdle(renderer, 0.05f);
+        writeBmp32(prefix + "_dump.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH,
+                   op2::Renderer::NATIVE_HEIGHT);
+        gs.pressCommand(-9);                                   // kCmdYes
+        for (k = 0; k < 600 && (tt.action == 0x0E || k == 0); ++k) gs.onIdle(renderer, 0.2501f / 4.0f);
+        std::printf("[Ore] despejo (t=%d): carga=%d acao=%d estoque=%d (antes %d)\n", k, (tt.cargo >> 4) & 0xFFF,
+                    tt.action, pd.ore, s1);
     }
     std::printf("[Ore] fim: estoque %d -> %d, cargas da mina=%d, caminhao acao=0x%X\n\n", ore0, pd.ore,
                 op2::g_units[mine].mineLink, tr.action);

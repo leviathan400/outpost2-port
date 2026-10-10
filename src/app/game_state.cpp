@@ -913,7 +913,7 @@ void GameState::areaRect(int ex, int ey, int& x1, int& y1, int& x2, int& y2) con
 // veículo (painel off_4D5B28); prédios usam os botões de texto do quadro.
 std::vector<GameState::CmdButton> GameState::commandButtons() const {
     std::vector<CmdButton> out;
-    if (m_selected.empty()) return out;
+    if (m_selected.empty() || m_confirm.isOpen()) return out;   // confirmação no lugar da botoeira
     const UnitRecord& u = g_units[m_selected[0]];
     if (u.id == -1 || !(u.flags & 0x42u) || (u.owner & 0x0F) != TethysGame::localPlayer()) return out;
     const std::vector<int>& list = m_selected.size() == 1 ? uiCommandsSingle() : uiCommandsMulti();
@@ -954,7 +954,9 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
     }
     if (m_selected.size() != 1) return out;
     const UnitRecord& u = g_units[m_selected[0]];
-    if (u.id == -1 || !(u.flags & UNIT_BUILDING) || (u.owner & 0x0F) != TethysGame::localPlayer()) return out;
+    if (u.id == -1 || (u.owner & 0x0F) != TethysGame::localPlayer()) return out;
+    // Confirmação (dword_564EA8) vale p/ prédio e veículo (despejo de carga).
+    if (!(u.flags & UNIT_BUILDING) && !m_confirm.isOpen()) return out;
     if (m_confirm.isOpen()) {                                // sub_45C200: &YES / &NO
         TextButton b{};
         b.cmd = kCmdYes; b.label = "&YES"; b.tip = "&YES: Confirm command"; b.hotkey = 'Y';
@@ -991,7 +993,20 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
             out.push_back(b);
         }
     }
-    if (m_storage.isOpen()) {
+    if (m_storage.isOpen() && m_storage.resourceMode()) {
+        // sub_463170 (recursos): L&OAD / &UNLOAD (dword_564A68 / dword_564A5C) e &STATUS.
+        TextButton b{};
+        b.cmd = kCmdLoad; b.label = "L&OAD"; b.tip = "L&oad Truck"; b.hotkey = 'O';
+        b.disabled = !m_storage.loadEnabled();
+        out.push_back(b);
+        b = TextButton{};
+        b.cmd = kCmdUnload; b.label = "&UNLOAD"; b.tip = "&Unload Truck"; b.hotkey = 'U';
+        b.disabled = !m_storage.unloadEnabled();
+        out.push_back(b);
+        b = TextButton{};
+        b.cmd = kCmdStatus; b.label = "&STATUS"; b.tip = "Back to Structure &Status"; b.hotkey = 'S';
+        out.push_back(b);
+    } else if (m_storage.isOpen()) {
         // sub_463170: só "&STATUS" (o LAUNCH do modo plataforma ainda não).
         TextButton b{};
         b.cmd = kCmdStatus; b.label = "&STATUS"; b.tip = "Back to Structure &Status"; b.hotkey = 'S';
@@ -1062,6 +1077,8 @@ bool GameState::onScreen(int sx, int sy) const {
 void GameState::clickCommand(int cmd) {                  // vt[1] do comando
     soundPlay(0x57);                                      // sub_40A960: botão solto dentro
     if (cmd == kCmdBuildIt) { produceBuildIt(); return; }
+    if (cmd == kCmdLoad) { m_storage.load(); return; }       // pacote 0x0B
+    if (cmd == kCmdUnload) { m_storage.unload(); return; }   // pacote 0x0C
     if (cmd == kCmdStatus || cmd == kCmdCancel) { closePanes(); return; }
     if (cmd == kCmdAssign) {                                // botão volta ao painel no modo 1
         if (m_research.isOpen() && m_research.assignEnabled()) m_research.open(m_research.lab(), 1);
@@ -1070,9 +1087,16 @@ void GameState::clickCommand(int cmd) {                  // vt[1] do comando
     if (cmd == kCmdTopics) { if (m_research.isOpen()) m_research.open(m_research.lab(), 0); return; }
     if (cmd == kCmdStart) { m_research.start(); return; }
     if (cmd == kCmdStartClass) { m_students.start(); return; }
-    if (cmd == kCmdYes) {                                   // confirma: pacote 5 (parar) c/ a seleção
+    if (cmd == kCmdYes) {                                   // confirma o comando guardado
+        const int c = m_confirm.command();
         m_confirm.close();
-        uiCommandClick(UC_STOP, m_selected);
+        if (c == UC_DUMP_CARGO) { if (!m_selected.empty()) sendDumpCargo(m_selected[0]); }   // pacote 0x0E
+        else uiCommandClick(UC_STOP, m_selected);           // pacote 5 (parar)
+        return;
+    }
+    if (cmd == UC_DUMP_CARGO && m_selected.size() == 1) {   // sub_4557B0(0): pergunta antes
+        closePanes();
+        m_confirm.open(m_selected[0], "Are you sure you want to dump this cargo?", UC_DUMP_CARGO);
         return;
     }
     if (cmd == kCmdNo) { m_confirm.close(); return; }
@@ -1315,8 +1339,12 @@ void GameState::renderPanel(Renderer& renderer) {
         m_research.draw(fb, VW, VH, kColX, kPaneWinY, pane, m_mouseNX, m_mouseNY);
     else if (m_produce.isOpen())
         m_produce.draw(fb, VW, VH, pane, m_mouseNX, m_mouseNY);
-    else if (m_storage.isOpen())
-        m_storage.draw(fb, VW, VH, kColX, kPaneWinY, pane, kPaneBottom - 2 - 25, m_mouseNX, m_mouseNY);
+    else if (m_storage.isOpen()) {
+        // A caixa da doca fica 0x33 acima da fileira de botões mais alta.
+        int topBtn = kPaneBottom - 2 - 25;
+        for (const TextButton& b : structureButtons()) topBtn = std::min(topBtn, b.t);
+        m_storage.draw(fb, VW, VH, kColX, kPaneWinY, pane, topBtn, m_mouseNX, m_mouseNY);
+    }
     else if (!m_selected.empty())
         drawUnitInfoPane(fb, VW, VH, pane, m_selected[0], static_cast<int>(m_selected.size()), me);
     else if (m_mission)

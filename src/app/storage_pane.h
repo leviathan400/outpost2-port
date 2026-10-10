@@ -17,13 +17,24 @@ namespace op2 {
 //   sub_4637B0  título, nome do item de cada baia (ou "Empty Bay") sob o ícone,
 //               "Alt+N" à direita dele, e a caixa da doca (veículo ou vazia) com
 //               o texto ("X is empty", "Y carried in X", "Dock is empty...").
-// O modo de recursos ([+0x6C0] = 0: armazéns/fundições com LOAD/UNLOAD de
-// caminhão) entra com a mineração.
+// Modo de recursos ([+0x6C0] = 0, armazéns 0x19/0x1A, smelters 0x36/0x38,
+// Agridome 0x27): botões L&OAD / &UNLOAD / &STATUS (sub_458D10, 3 botões),
+// "Stored <recurso>:" (+ "Storage Capacity:" nos de metal) e a doca com
+// "<caminhão> is empty" / "<caminhão> with N <carga>" (sub_4637B0).
 class StoragePane {
 public:
     bool isOpen() const { return m_open; }
     int  building() const { return m_bld; }
-    static bool supports(int type) { return type == 0x2F || type == 0x37; }
+    static bool supports(int type) {
+        return type == 0x2F || type == 0x37 || type == 0x19 || type == 0x1A || type == 0x27 ||
+               type == 0x36 || type == 0x38;
+    }
+    // [+0x6C0] = 0: recursos (armazéns, smelters, Agridome) com LOAD/UNLOAD.
+    bool resourceMode() const;
+    bool loadEnabled() const;        // estoque, caminhão vazio e sub_456EC0
+    bool unloadEnabled() const;      // caminhão com carga e sub_4570D0
+    void load();                     // pacote 0x0B
+    void unload();                   // pacote 0x0C
     void open(int buildingId) { m_open = true; m_bld = buildingId; }
     void close() { m_open = false; }
     void update(const std::vector<int>& sel);

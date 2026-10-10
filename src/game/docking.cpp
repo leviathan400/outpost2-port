@@ -48,7 +48,8 @@ int dockedVehicle(int buildingId) {                       // sub_483010
     const uint32_t f = structSheet(g_units[buildingId].type)->flags24C;
     if (f & 0x04) return v;                              // Docking All
     if ((f & 0x10) && u.type == mapConVec) return v;     // Docking CV
-    // Docking Truck: Cargo Truck + sub_44DA80(prédio, 1) — caminhões ainda não portados.
+    // Docking Truck: Cargo Truck + sub_44DA80(prédio, 1).
+    if (u.type == mapCargoTruck && vehicleCanDock(v, buildingId, true)) return v;
     return 0;
 }
 

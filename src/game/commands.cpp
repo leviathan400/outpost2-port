@@ -455,6 +455,7 @@ UiClick uiCommandClick(int cmd, const std::vector<int>& sel) {
         case UC_BUILD_MINE: return UiClick::TARGET;                     // sub_451FC0 (modo 2, área da mina)
         case UC_WALL: case UC_LAVA_WALL: case UC_MICROBE_WALL: case UC_TUBE:   // sub_452640 (modo 4)
         case UC_BULLDOZE:                                               // sub_453760 (modo 1)
+        case UC_REMOVE_WALL:                                            // sub_452B40 (modo 3)
             return UiClick::TARGET;
         case UC_ORE_ROUTE:                                              // sub_453F50 (modo 3)
             s_ore = {};
@@ -488,6 +489,10 @@ UiClick uiCommandArea(int cmd, const std::vector<int>& sel, int x1, int y1, int 
 
 UiClick uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int tileY) {
     if (cmd == UC_BUILD_MINE) { sendBuildMine(sel, tileX, tileY); return UiClick::DONE; }   // sub_452010
+    if (cmd == UC_REMOVE_WALL) {                             // sub_452B60 + sub_452D10
+        if (!sendRemoveWall(sel, tileX, tileY)) { soundPlay(0x58); return UiClick::TARGET; }
+        return UiClick::DONE;
+    }
     if (cmd == UC_ORE_ROUTE) {                               // sub_454290 + sub_453FA0
         const UnitRecord* u = first(sel);
         if (!u) return UiClick::DONE;

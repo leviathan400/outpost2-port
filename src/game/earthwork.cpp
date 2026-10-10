@@ -14,6 +14,7 @@
 #include "tethys_game.h"
 #include "unit.h"
 #include "walls.h"
+#include "structure.h"
 #include "weapon.h"
 
 namespace op2 {
@@ -272,8 +273,86 @@ void wallDragConstrain(int sx, int sy, int& ex, int& ey) {   // sub_41C410
 }
 
 // ---- Ações ---------------------------------------------------------------------
-void earthworkStart(int id) {                                // jpt_43AD56 casos 1 / 7
+// Retoma: [+0x23] = [+0x22], [+0x22] = 1 (ou já no objetivo).
+static void moveOn(UnitRecord& u, int r) {
+    if (r == 2) { u.field23 = 1; u.field22 = 0; u.field20 = 0; return; }
+    u.field23 = u.field22; u.field22 = 1; u.field20 = 1;
+}
+
+bool sendRemoveWall(const std::vector<int>& sel, int tileX, int tileY) {   // sub_452B60 + sub_452D10
+    tileX &= wmask();
+    if (tileY < 0 || tileY >= g_gameMap.height()) return false;
+    const int ct = static_cast<int>(g_gameMap.rawCell(tileX, tileY) & 0x1F);
+    bool ok = ct >= 0x17 && ct <= 0x19;
+    if (!ok && ct == 0x1A) {                                 // tubo: sem prédio no ponto
+        ok = true;
+        for (size_t i = 1; i < g_units.size() && ok; ++i) {
+            const UnitRecord& b = g_units[i];
+            if (b.id == -1 || !(b.flags & UNIT_BUILDING)) continue;
+            int w, h; buildingFootprint(b.type, w, h);
+            const int l = ((b.pixelX >> 5) - (w >> 1)) & wmask(), t = (b.pixelY >> 5) - (h >> 1);
+            if (tileY >= t && tileY < t + h && ((tileX - l) & wmask()) < w) ok = false;
+        }
+    }
+    if (!ok) return false;
+    soundPlay(0x56);
+    const int me = TethysGame::localPlayer();
+    for (int id : sel) {                                     // case 8 → vt[0x94]
+        if (!valid(id)) continue;
+        UnitRecord& u = g_units[id];
+        if (ownerOf(u) != me || !commandable(u) || u.type != mapEarthworker) continue;
+        u.action = 8; u.field20 = 1; u.field3C = 0;         // sub_423500
+        u.hasOrder = false;
+        u.buildL = u.buildR = static_cast<int16_t>(tileX);
+        u.buildT = u.buildB = static_cast<int16_t>(tileY);
+    }
+    return true;
+}
+
+void removeWallTick(int id) {                                // jpt_43B312 case 8
     UnitRecord& u = g_units[id];
+    const int bx = u.buildL & wmask(), by = u.buildT;
+    if (u.field23 == 1) {
+        const int ux = (u.pixelX >> 5) & wmask(), uy = u.pixelY >> 5;
+        const bool adj = bx == ux ? std::abs(uy - by) == 1 : (uy == by && std::abs(wrapD(bx - ux)) == 1);
+        if (!adj) { u.action = 0; u.field22 = 0; }           // (o original segue mesmo assim)
+        if (!unitTurnTo(u, dirOfVec(wrapD(bx - ux), by - uy))) return;
+        int wait;
+        if (TethysGame::cheatFlag(5)) wait = 2;              // dword_56DE6C
+        else {
+            const VehPlayerStats* vs = vehicleSheet(mapEarthworker, ownerOf(u));
+            wait = (vs ? vs->productionRate : 0) * 375 / 128 / 2;
+        }
+        u.field3C = wait > 0 ? wait : 1;
+        if ((g_gameMap.rawCell(bx, by) & 0x1F) == 0x1A) {    // tubo: poeira (0x72, anim 0x619)
+            const int e = createAmbientAnim(u.pixelX, u.pixelY + 1, 0x619, 1, 10);
+            if (e) { g_units[e].action = ACT_DIE; g_units[e].field20 = 1; g_units[e].field3C = u.field3C; }
+        }
+        g_units[id].field22 = 0x0A;
+        return;
+    }
+    if (u.field23 != 0x0A) return;
+    u.action = 0;
+    if (destroyWallOrTube(bx, by) != 1) return;              // sub_4A25F0
+    UnitRecord& v = g_units[id];
+    v.damage = static_cast<int16_t>(v.damage + 100);         // [+0x1E] += 0x64
+    const VehPlayerStats* vs = vehicleSheet(v.type, (v.owner >> 4) & 0x0F);
+    const int hp = vs ? vs->hitPoints : 0;
+    if (hp <= v.damage) {
+        v.damage = static_cast<int16_t>(hp);
+        v.flags |= UNIT_DEAD;                                // 0x20000
+        killUnit(id, 5);                                     // sub_43A890(5)
+    }
+}
+
+void earthworkStart(int id) {                                // jpt_43AD56 casos 1 / 7 / 8
+    UnitRecord& u = g_units[id];
+    if (u.action == 8) {                                     // case 8: ao lado da célula (modo 3)
+        const int r = goTo(id, u.buildL & wmask(), u.buildT, 3);
+        moveOn(g_units[id], r);
+        g_units[id].field23 = r == 2 ? 1 : 0;
+        return;
+    }
     const int r = u.action == 7 ? startArea(id, u.wallCode, &u.wallCurX, &u.wallCurY)
                                 : startArea(id, u.dozeCode, nullptr, nullptr);
     UnitRecord& v = g_units[id];
@@ -284,12 +363,6 @@ void earthworkStart(int id) {                                // jpt_43AD56 casos
     }
     if (r == 2) { v.field23 = 1; v.field22 = 0; v.field20 = 0; return; }
     v.field22 = 1; v.field20 = 1;                            // (port: [+0x20] mantém o movimento)
-}
-
-// Retoma: [+0x23] = [+0x22], [+0x22] = 1 (ou já no objetivo).
-static void moveOn(UnitRecord& u, int r) {
-    if (r == 2) { u.field23 = 1; u.field22 = 0; u.field20 = 0; return; }
-    u.field23 = u.field22; u.field22 = 1; u.field20 = 1;
 }
 
 void wallBuildTick(int id) {                                 // jpt_43B312 case 7

@@ -81,13 +81,16 @@ private:
 class ConfirmPane {
 public:
     bool isOpen() const { return m_open; }
-    void open(int unitId, const std::string& msg) { m_open = true; m_unit = unitId; m_msg = msg; }
+    // cmd = comando executado no YES (dword_56500C: STOP de pesquisa/treino, despejo...).
+    void open(int unitId, const std::string& msg, int cmd = -1) { m_open = true; m_unit = unitId; m_msg = msg; m_cmd = cmd; }
+    int command() const { return m_cmd; }
     void close() { m_open = false; }
     void update(const std::vector<int>& sel);
     void draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane) const;
 private:
     bool m_open = false;
     int m_unit = 0;
+    int m_cmd = -1;
     std::string m_msg;
 };
 

@@ -96,6 +96,7 @@ private:
     bool m_areaDrag = false;       // arrastando a área de um comando (muro/terraplanar)
     int  m_areaSX = 0, m_areaSY = 0;   // início do arrasto (pixel do mundo)
     void areaRect(int ex, int ey, int& x1, int& y1, int& x2, int& y2) const;
+    static constexpr int kCmdLoad = -12, kCmdUnload = -13;   // STORAGE de recursos
 
     // Botoeira do veículo (sub_46D540): botões montados p/ a seleção atual.
     struct CmdButton { int cmd; int l, t, r, b; int iconRaw; std::string tip; char hotkey; };
