@@ -257,11 +257,20 @@ struct UnitRecord {
     bool targetIsUnit() const { return (field4E & 0x8000) != 0; }
 };
 
+// Prédio (sub_4369E0): [+0x14] = (x*2 + (largura & 1)) * 16 — meio tile só nas
+// dimensões ímpares; nas pares o centro cai na borda do tile central.
+int buildingCenterOfsX(map_id type);
+int buildingCenterOfsY(map_id type);
+
 // Posição no sentido do original ([+0x14]/[+0x18] = centro): o port guarda o
-// canto do tile p/ veículos/prédios/efeitos (+16 = centro); projéteis já guardam
-// o pixel do original.
-inline int unitOX(const UnitRecord& r) { return r.rawPixel ? r.pixelX : r.pixelX + 16; }
-inline int unitOY(const UnitRecord& r) { return r.rawPixel ? r.pixelY : r.pixelY + 16; }
+// canto do tile p/ veículos/prédios/efeitos (+16 = centro; prédio: ver acima);
+// projéteis já guardam o pixel do original.
+inline int unitOX(const UnitRecord& r) {
+    return r.rawPixel ? r.pixelX : r.pixelX + ((r.flags & UNIT_BUILDING) ? buildingCenterOfsX(r.type) : 16);
+}
+inline int unitOY(const UnitRecord& r) {
+    return r.rawPixel ? r.pixelY : r.pixelY + ((r.flags & UNIT_BUILDING) ? buildingCenterOfsY(r.type) : 16);
+}
 
 // Lista de unidades ordenada por Y — dword_54EC0C. Slot 0 é a sentinela.
 // Inserção (sub_439910 @439A46): antes do 1º nó com y >= y novo. Reordenação

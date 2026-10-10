@@ -381,13 +381,7 @@ void unitBlockSort(MissionUnitRecord* table, int& numUnits, int ranges[16][2]) {
     }
 }
 
-void unitOrigPixel(const UnitRecord& r, int& x, int& y) {
-    if (!(r.flags & UNIT_BUILDING)) { x = unitOX(r); y = unitOY(r); return; }
-    int w = 1, h = 1;
-    buildingFootprint(r.type, w, h);
-    x = ((r.pixelX >> 5) * 2 + (w & 1)) << 4;
-    y = ((r.pixelY >> 5) * 2 + (h & 1)) << 4;
-}
+void unitOrigPixel(const UnitRecord& r, int& x, int& y) { x = unitOX(r); y = unitOY(r); }
 
 void mapRectIterInit(MapRectIter& it, int x, int y, int w, int h, uint32_t playerMask, uint32_t flagMask) {
     const int pxW = g_gameMap.internalWidth() * 32;             // [GameMap+8]

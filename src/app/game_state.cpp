@@ -417,10 +417,11 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         if (pass != (isBld ? 0 : isEffect ? 2 : 1)) continue;
         // Sombras pela opção do INI da classe (dword_575634 / dword_575638).
         setArtShadows(isBld ? m_stationaryShadows : m_mobileShadows);
-        // Centro da unidade na tela (pixelX/Y é o canto do tile; +16 = centro).
+        // Centro da unidade na tela = [+0x14]/[+0x18] do original (unitOX/OY:
+        // canto do tile + 16; prédio só nas dimensões ímpares — sub_4369E0).
         // Usa a posição INTERPOLADA (não o tile), p/ casar com o deslize.
-        int ucx = screenXOf(r.pixelX) + 16;   // wrap horizontal do mapa
-        int ucy = r.pixelY + 16 - m_camY;
+        int ucx = screenXOf(unitOX(r));       // wrap horizontal do mapa
+        int ucy = unitOY(r) - m_camY;
 
         bool drew = false;
         if ((r.flags & UNIT_VEHICLE) && hasVehicleAnim(r.type)) {
@@ -590,7 +591,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         const UnitRecord& r = g_units[id];
         if (r.id == -1 || (r.flags & UNIT_DEAD)) continue;
         // Centrada na posição INTERPOLADA (casa com o sprite durante o deslize).
-        int ucx = screenXOf(r.pixelX) + 16, ucy = r.pixelY + 16 - m_camY;
+        int ucx = screenXOf(unitOX(r)), ucy = unitOY(r) - m_camY;
         if (ucx < -16 || ucx > viewportW() + 16 || ucy < -16 || ucy > viewportH() + 16)
             continue;
         renderer.drawRect(ucx - 15, ucy - 15, 30, 30, 0xFF40FF40);   // verde (selecionado)
@@ -770,7 +771,7 @@ void GameState::selectAt(int nx, int ny, bool additive) {
         const UnitRecord& r = g_units[i];
         if (r.id == -1 || (r.flags & UNIT_DEAD)) continue;
         if ((r.owner & 0x0F) != me) continue;
-        int ucx = screenXOf(r.pixelX) + 16, ucy = r.pixelY + 16 - m_camY;
+        int ucx = screenXOf(unitOX(r)), ucy = unitOY(r) - m_camY;
         int dx = ucx - nx, dy = ucy - ny, d2 = dx * dx + dy * dy;
         if (d2 < bestD2) { bestD2 = d2; best = i; }
     }

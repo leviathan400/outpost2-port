@@ -199,7 +199,7 @@ void conVecBuildTick(int id) {                            // jpt_43B312 case 6
             }
         if (ok) { u.field22 = 2; u.field3C = cost; return; }
         if (ownerOf(u) == TethysGame::localPlayer())
-            postMessage(u.pixelX + 16, u.pixelY + 16, "Building command not successful", 0x9E);
+            postMessage(unitOX(u), unitOY(u), "Building command not successful", 0x9E);
         u.action = 0; u.field22 = 0;
         return;
     }
@@ -235,7 +235,7 @@ void conVecBuildTick(int id) {                            // jpt_43B312 case 6
             }
         if (ok) { u.field22 = 2; u.field3C = cost; return; }
         if (ownerOf(u) == TethysGame::localPlayer())
-            postMessage(u.pixelX + 16, u.pixelY + 16, "Building command not successful", 0x9E);
+            postMessage(unitOX(u), unitOY(u), "Building command not successful", 0x9E);
         u.action = 0; u.field22 = 0;
         return;
     }

@@ -121,7 +121,7 @@ void labResearchFinish(int labId) {                     // jpt_43B312 case 22
         const Tech* t = techAt(r.labTopic);
         char msg[100];
         std::snprintf(msg, sizeof(msg), "%s research completed", t ? t->name.c_str() : "");
-        postMessage(r.pixelX + 16, r.pixelY + 16, msg, r.type == 0x21 ? 0x69 : 0x5F);
+        postMessage(unitOX(r), unitOY(r), msg, r.type == 0x21 ? 0x69 : 0x5F);
     }
     researchMarkComplete(p, r.labTopic);                 // sub_473830
     moraleNewTech(p);                                    // sub_44F840 (NEW_TECH_BORN)
@@ -165,7 +165,7 @@ void universityTrainFinish(int univId) {                // jpt_43B312 case 23
     const int p = ownerOf(r);
     if (p == TethysGame::localPlayer()) {                   // 0x3A + sub_439180 (beep)
         soundPlay(0x3A);
-        postMessage(r.pixelX + 16, r.pixelY + 16, "Scientist training completed", 0);
+        postMessage(unitOX(r), unitOY(r), "Scientist training completed", 0);
     }
     const int n = r.extraWorkers;
     g_playerData[p].workers -= n;                        // dword_56E370

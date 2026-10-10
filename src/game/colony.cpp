@@ -702,8 +702,8 @@ static void allocate(int p) {
     const bool local = (p == TethysGame::localPlayer());
     if (local) {
         const int disabled = c.structCount - c.activeCount - c.inactiveCount;
-        const int dx = firstDisabled ? g_units[firstDisabled].pixelX + 16 : 0;
-        const int dy = firstDisabled ? g_units[firstDisabled].pixelY + 16 : 0;
+        const int dx = firstDisabled ? unitOX(g_units[firstDisabled]) : 0;
+        const int dy = firstDisabled ? unitOY(g_units[firstDisabled]) : 0;
         if (disabled - buildingNotOp > 1) {
             char msg[64]; std::snprintf(msg, sizeof(msg), "%i Structures Disabled", disabled);
             postMessage(dx, dy, msg, 0xA1);

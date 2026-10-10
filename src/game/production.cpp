@@ -274,7 +274,7 @@ void factoryProduceFinish(int factoryId) {                   // jpt_43B312 case 
                 const int snd = type == 3 ? 0x65 : type == 4 ? 0x66 : 0x62;
                 const std::string name = n == 1 ? unitTitle(v) : (type == 3 ? "Spider Pack" : "Scorpion Pack");
                 std::snprintf(msg, sizeof(msg), "%s produced", name.c_str());
-                postMessage(v.pixelX + 16, v.pixelY + 16, msg, snd);
+                postMessage(unitOX(v), unitOY(v), msg, snd);
             }
         }
         f.produceType = 0;
@@ -285,7 +285,7 @@ void factoryProduceFinish(int factoryId) {                   // jpt_43B312 case 
         moraleConsumerGoods(ownerLo(f), type);               // sub_44FA10
         if (ownerLo(f) == me) {
             std::snprintf(msg, sizeof(msg), "%s produced", unitDisplayName(type));
-            postMessage(f.pixelX + 16, f.pixelY + 16, msg, 0x63);
+            postMessage(unitOX(f), unitOY(f), msg, 0x63);
         }
     } else {
         factoryStoreProduct(f, type);                        // vt[0x100](tipo, -1)
@@ -299,7 +299,7 @@ void factoryProduceFinish(int factoryId) {                   // jpt_43B312 case 
                 if (type == 0x58 || type == 0x59) snd = 0xAF;
                 else if (type >= 0x5A && type <= 0x68) snd = 0xAE;
             }
-            postMessage(f.pixelX + 16, f.pixelY + 16, msg, snd);
+            postMessage(unitOX(f), unitOY(f), msg, snd);
         }
     }
     f.produceType = 0;

@@ -59,6 +59,17 @@ static const struct { int w, h; } kBuildingFootprint[] = {
     { 2, 2 },  // 0x3A TOKAMAK
 };
 
+int buildingCenterOfsX(map_id type) {
+    int w, h;
+    buildingFootprint(type, w, h);
+    return (w & 1) << 4;
+}
+int buildingCenterOfsY(map_id type) {
+    int w, h;
+    buildingFootprint(type, w, h);
+    return (h & 1) << 4;
+}
+
 void buildingFootprint(map_id type, int& w, int& h) {
     w = 1; h = 1;
     if (type >= kFirstBuilding && type <= kLastBuilding) {

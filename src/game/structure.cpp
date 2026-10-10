@@ -302,8 +302,7 @@ static void structureAmbientTick(int id) {
     if (!structureOperational(r)) return;                       // vt+0xA0 da classe
     const int variant = static_cast<int8_t>(structureAmbientVariant(r.type, isEdenTable(r)));
     if (variant == 0) return;
-    // [+0x14]/[+0x18] no original = centro do tile (no port pixel é o canto).
-    const int cx = r.pixelX + 16, cy = r.pixelY + 16, k = id * 8;
+    const int cx = unitOX(r), cy = unitOY(r), k = id * 8;      // [+0x14]/[+0x18]
     if ((cy + k + TethysGame::tick()) % 100 != 0) return;
     if (r.ambientCursor == 0) {
         int i = (cx + k) % 11;
@@ -330,7 +329,13 @@ static void structureUpdateState(int id) {
         r.state34 = 0x30000u | static_cast<uint32_t>(nFm1 & 0xFFFF);
         const StructSheetDesc* d = structSheet(r.type);
         int w = d ? d->sizeX : 1, h = d ? d->sizeY : 1;
-        createAmbientAnim(r.pixelX, r.pixelY, explosionAnimRaw(w, h), 2, nFm1 * 2 - 6);
+        // sub_4466B0(0x72, [+0x14], [+0x18]): no centro exato do prédio.
+        const int ox = unitOX(r), oy = unitOY(r);
+        const int e = createAmbientAnim(r.pixelX, r.pixelY, explosionAnimRaw(w, h), 2, nFm1 * 2 - 6);
+        if (e) {                                                 // (r pode ter sido realocado)
+            UnitRecord& x = g_units[e];
+            x.pixelX = ox; x.pixelY = oy; x.rawPixel = true;
+        }
         return;
     }
     if (r.action == ACT_BUILD || r.action == ACT_DISMANTLE) return;
@@ -413,7 +418,7 @@ static void actionTick(int id) {
                 if ((r.owner & 0x0F) == TethysGame::localPlayer()) {     // "%s completed"
                     char msg[100];
                     std::snprintf(msg, sizeof(msg), "%s completed", unitTitle(r).c_str());
-                    postMessage(r.pixelX + 16, r.pixelY + 16, msg, 0x5E);
+                    postMessage(unitOX(r), unitOY(r), msg, 0x5E);
                 }
                 moraleStructureBuilt(r.owner & 0x0F, r.type);   // sub_44F790 (CC_BORN)
             }
@@ -440,7 +445,7 @@ static void actionTick(int id) {
                     if ((r.owner & 0x0F) == TethysGame::localPlayer()) { // "%s destroyed"
                         char msg[100];
                         std::snprintf(msg, sizeof(msg), "%s destroyed", unitTitle(r).c_str());
-                        postMessage(r.pixelX + 16, r.pixelY + 16, msg, 0x67);
+                        postMessage(unitOX(r), unitOY(r), msg, 0x67);
                     }
                 }
             } else if ((r.flags & UNIT_VEHICLE) || (r.flags & 0x40)) {

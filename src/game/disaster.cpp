@@ -167,13 +167,7 @@ static int armorOf(const UnitRecord& t) {
     return 256;
 }
 // Pixel do prédio no original (sub_4369E0): ((tile*2 + (tam & 1)) << 4).
-static void origPixel(const UnitRecord& t, int& x, int& y) {
-    if (!(t.flags & UNIT_BUILDING)) { x = unitOX(t); y = unitOY(t); return; }
-    int w = 1, h = 1;
-    if (const StructSheetDesc* d = structSheet(t.type)) { w = d->sizeX; h = d->sizeY; }
-    x = ((t.pixelX >> 5) * 2 + (w & 1)) << 4;
-    y = ((t.pixelY >> 5) * 2 + (h & 1)) << 4;
-}
+static void origPixel(const UnitRecord& t, int& x, int& y) { x = unitOX(t); y = unitOY(t); }
 // Unidade viva e danificável na célula ([+0x04] != -1, sem 0x20000, com 0x400).
 static int damageableIn(uint32_t cell) {
     const int occ = static_cast<int>((cell & 0x7FF0000u) >> 16);
