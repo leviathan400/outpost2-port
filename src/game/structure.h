@@ -42,7 +42,12 @@ int createAmbientAnim(int pixelX, int pixelY, int animRaw, int div, int delay);
 
 // Animação/frame de uma unidade-efeito AMBIENT_ANIM (sub_405160). Retorna false
 // se não deve ser desenhada (antes do atraso, ou escondida).
-bool effectAnimFrame(const UnitRecord& r, int& anim, int& frame);
+// shadowPass: o passe vt[30] (sub_405080) desenha só os com a flag 0x10000000;
+// o normal (sub_405160) só os sem ela.
+bool effectAnimFrame(const UnitRecord& r, int& anim, int& frame, bool shadowPass = false);
+// TethysGame::PlaceMarker: AMBIENT_ANIM permanente (sub_405000 arg_10 = 1).
+// type 0 = DNA (0x749, no passe de sombra), 1 = beacon (0x879), 2 = círculo (0x87A).
+int createMarker(int pixelX, int pixelY, int type);
 
 // Laço de unidades não-veículo (prédios e efeitos) — sub_43AC30. Os veículos
 // seguem em tickMovement() (vt[1]/vt[2] de veículo ainda não portados).

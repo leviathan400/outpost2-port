@@ -96,6 +96,24 @@ int playerCanAccumulateOre(int p, signed char* c) {          // ?canAccumulateOr
     return 1;
 }
 
+int playerCanAccumulateRareOre(int p, signed char* c) {      // ?canAccumulateRareOre (+8)
+    if (c[4] != -1) return c[4];
+    const PlayerData& d = g_playerData[p];
+    if (!d.canAccumulateRareOre && !playerHasVehicle(p, 9, -1) && !vehicleFactoryOrBuild(p, c)) { c[4] = 0; return 0; }
+    if (!playerHasVehicle(p, 1, -1) && !vehicleFactoryOrBuild(p, c)) { c[4] = 0; return 0; }
+    // +0x168 = total de smelters de raro (estatística ST_RSMELT_GRP).
+    if (!g_colony[p].stat(ST_RSMELT_GRP) && !playerCanBuildBuilding(p, c)) { c[4] = 0; return 0; }
+    c[4] = 1;
+    return 1;
+}
+
+int playerCanBuildSpace(int p, signed char* c) {             // ?canBuildSpace (+6)
+    if (c[2] != -1) return c[2];
+    if (playerHasBuilding(p, 0x37) || playerHasVehicle(p, 2, 0x37)) { c[2] = 1; return 1; }   // Spaceport (ou kit)
+    c[2] = static_cast<signed char>(playerCanBuildBuilding(p, c));
+    return c[2];
+}
+
 int playerCanDoResearch(int p, signed char* c, int techID) { // ?canDoResearch (+9..+11)
     const Tech* t = techAt(techIndex(techID));
     const int lab = t ? t->lab : 0;

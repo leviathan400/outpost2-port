@@ -122,11 +122,26 @@ int createAmbientAnim(int pixelX, int pixelY, int animRaw, int div, int delay) {
     return u.id();
 }
 
-bool effectAnimFrame(const UnitRecord& r, int& anim, int& frame) {
+int createMarker(int pixelX, int pixelY, int type) {
+    Unit u;
+    if (!createUnit(u, mapAmbientAnim, LOCATION{pixelX >> 5, pixelY >> 5}, 6)) return 0;
+    UnitRecord& e = g_units[u.id()];
+    e.owner = static_cast<uint8_t>((e.owner & 0xF6) | 6);
+    int raw = 0, shadow = 0;
+    if (type == 0) { raw = 0x749; shadow = 1; }
+    else if (type == 1) raw = 0x879;
+    else if (type == 2) raw = 0x87A;
+    e.effectAnim = (1u << 24) + static_cast<uint32_t>(raw);     // divisor 0 → 1
+    e.effectStart = TethysGame::tick();
+    if (shadow) e.flags |= UNIT_EFFECT_HIDDEN; else e.flags &= ~UNIT_EFFECT_HIDDEN;
+    return u.id();                                              // arg_10 = 1: não morre
+}
+
+bool effectAnimFrame(const UnitRecord& r, int& anim, int& frame, bool shadowPass) {
     const int raw = static_cast<int>(r.effectAnim & 0xFFFFFF);
     const int div = static_cast<int8_t>(r.effectAnim >> 24);
     const int elapsed = TethysGame::tick() - r.effectStart;
-    if (elapsed < 0 || (r.flags & UNIT_EFFECT_HIDDEN) || div == 0) return false;
+    if (elapsed < 0 || ((r.flags & UNIT_EFFECT_HIDDEN) != 0) != shadowPass || div == 0 || raw == 0) return false;
     anim = raw - kAnimBias;
     const int nF = animLastFrameRaw(raw) + 1;
     frame = (elapsed / div) % nF;

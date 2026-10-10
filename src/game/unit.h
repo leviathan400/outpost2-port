@@ -183,7 +183,11 @@ struct UnitRecord {
     int16_t  wallCurX = 0, wallCurY = -1;
     // Grupo de IA (src/game/ai_group.cpp): +0x30 stub do grupo (0xFF = nenhum).
     uint8_t  groupStub = 0xFF;
-    int16_t  empTicks = 0;         // +0x56 (contador do EMP; usado pela escolha do Spider)
+    int16_t  empTicks = 0;
+    // Destroço (Wreckage 0x54, vt off_4CF400): +0x58 máscara de quem descobriu,
+    // +0x5C tecnologia (vt[0xA0]).
+    uint32_t wreckMask = 0;
+    int      wreckTech = 0;         // +0x56 (contador do EMP; usado pela escolha do Spider)
     uint8_t  wallCode = 0, dozeCode = 0;
     int16_t  target4C = 0;         // +0x4C alvo: id da unidade ou x do tile
                                    // (+0x4E field4E: 0xFFFF = unidade, y do tile, 0x7FFF = nenhum)

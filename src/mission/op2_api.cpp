@@ -84,6 +84,13 @@ int  __fastcall P_CanBuildVehicle(DllPlayer* p, void*, int arg) {
 int  __fastcall P_CanAccumulateOre(DllPlayer* p, void*) {
     return playerCanAccumulateOre(p->playerNum, p->checkValue);
 }
+int  __fastcall P_CanAccumulateRareOre(DllPlayer* p, void*) {
+    return playerCanAccumulateRareOre(p->playerNum, p->checkValue);
+}
+int  __fastcall P_CanBuildSpace(DllPlayer* p, void*) { return playerCanBuildSpace(p->playerNum, p->checkValue); }
+int  __fastcall P_RareOre(DllPlayer* p, void*) { return g_playerData[p->playerNum].rareOre; }   // +0x24
+// GetDefaultGroup: ScGroup por valor (retorno oculto na pilha) = stub do grupo padrão.
+int* __fastcall P_GetDefaultGroup(DllPlayer* p, void*, int* ret) { *ret = aiDefaultGroup(p->playerNum); return ret; }
 int  __fastcall P_CanDoResearch(DllPlayer* p, void*, int techID) {
     return playerCanDoResearch(p->playerNum, p->checkValue, techID);
 }
@@ -145,6 +152,39 @@ void __fastcall T_AddMessage(int x, int y, char* msg, int toPlayer, int sound) {
     postMessage(x - g_gameMap.internalXOffset() * 32, y, msg, sound);
 }
 int  __fastcall T_GetRand(int n)                    { return TethysGame::getRand(n); }
+int  __fastcall T_Tick()                            { return static_cast<int>(TethysGame::tick()); }
+int  __fastcall T_Time()                            { return static_cast<int>(TethysGame::tick()) >> 2; }
+// PlaceMarker(Unit&, x, y, tipo): AMBIENT_ANIM em (x<<5, y<<5) (sub_4466B0(0x72)).
+int  __fastcall T_PlaceMarker(int* unit, int x, int y, int type) {
+    const int id = createMarker(portX(x) << 5, y << 5, type);
+    if (!id) return 0;
+    *unit = id;
+    return 1;
+}
+// Destroço (vt off_4CF400): vt[0x98] sub_405B10 descobre p/ o jogador p.
+static void wreckDiscover(int id, int p) {
+    UnitRecord& w = g_units[id];
+    const uint32_t old = w.wreckMask;
+    w.wreckMask |= 1u << p;
+    if (old == w.wreckMask || p != TethysGame::localPlayer()) return;
+    postMessage(unitOX(w), unitOY(w), "Wreckage Discovered", TethysGame::tick() > 0 ? 0x97 : 0);
+}
+// vt[0x9C] sub_405B80: algum descobridor i aliado de p.
+static bool wreckDiscovered(const UnitRecord& w, int p) {
+    for (int i = 0; i < TethysGame::noPlayers(); ++i)
+        if ((w.wreckMask >> i & 1u) && (g_playerData[i].allyMask >> p & 1u)) return true;
+    return false;
+}
+// CreateWreck(x, y, tecnologia, visível): sub_4466B0(0x54, dono 6); visível →
+// descoberto por todos; senão pelos jogadores de computador (+0x28 == 0).
+int  __fastcall T_CreateWreck(int x, int y, int tech, int visible) {
+    Unit u;
+    if (!createUnit(u, static_cast<map_id>(0x54), LOCATION{portX(x), y}, 6)) return 0;
+    g_units[u.id()].wreckTech = tech;                            // vt[0xA0] sub_405BE0
+    for (int i = 0; i < TethysGame::noPlayers(); ++i)
+        if (visible || !g_playerData[i].isHuman) wreckDiscover(u.id(), i);
+    return 1;
+}
 void __fastcall T_SetCheatUnlimitedResources(int v) { TethysGame::setCheatFlag(0, v); }
 void __fastcall T_SetCheatProduceAll(int v)         { TethysGame::setCheatFlag(1, v); }
 void __fastcall T_SetCheatFastUnits(int v)          { TethysGame::setCheatFlag(4, v); }
@@ -234,6 +274,13 @@ int  __fastcall U_IsLive(int* u, void*) {                                     //
 }
 void __fastcall U_DoInfect(int* u, void*)        { unitDoInfect(*u); }
 int  __fastcall U_GetType(int* u, void*)         { return g_units[*u].type; }
+int  __fastcall U_OwnerID(int* u, void*)         { return g_units[*u].owner & 0x0F; }   // [+0x1D] & 0xF
+// isDiscovered: só destroço (0x54) → vt[0x9C](0).
+int  __fastcall U_IsDiscovered(int* u, void*) {
+    if (*u <= 0 || *u >= static_cast<int>(g_units.size())) return 0;
+    const UnitRecord& r = g_units[*u];
+    return r.type == 0x54 && wreckDiscovered(r, 0) ? 1 : 0;
+}
 int  __fastcall U_GetCargo(int* u, void*)        { return static_cast<int16_t>(g_units[*u].cargo); }   // movsx [+0x24]
 void __fastcall U_DoSelfDestruct(int* u, void*)  { unitDoSelfDestruct(*u); }
 int  __fastcall U_HasOccupiedBay(int* u, void*)  { return unitHasOccupiedBay(*u); }
@@ -372,6 +419,44 @@ void __fastcall SS_Dtor(int* stub, void*) { *stub = 0xFF; }   // ??1ScStub: [thi
 int* __fastcall SS_Ctor(int* stub, void*) { *stub = 0xFF; return stub; }   // ??0ScStub
 int  __fastcall TRG_HasFired(int* stub, void*, int player) { return triggerHasFired(*stub, player) ? 1 : 0; }
 int  __fastcall SS_IsInitialized(int* stub, void*) { return *stub != 0xFF ? 1 : 0; }
+// Trigger::Enable / Disable: vt[3] / vt[4] do objeto do stub (dword_56B71C[idx]).
+void __fastcall TRG_Enable(int* stub, void*)  { stubEnable(*stub, true); }
+void __fastcall TRG_Disable(int* stub, void*) { stubEnable(*stub, false); }
+
+// PlayerVehicleEnum (4 bytes no objeto da DLL: só o cursor) e
+// PlayerBuildingEnum (8 bytes: cursor + tipo; 0 = todos). As listas do jogador
+// (dword_56EEF8 veículos, dword_56EEF4 prédios) viram índice*8 + jogador.
+void* __fastcall E_PlayerVehicleCtor(void* self, void*, int player) {
+    *static_cast<int*>(self) = player & 7;
+    return self;
+}
+int __fastcall E_PlayerVehicleGetNext(void* self, void*, int* unit) {
+    int& cur = *static_cast<int*>(self);
+    const std::vector<int>& L = colonyVehicles(cur & 7);
+    const int pos = cur >> 3;
+    if (pos >= static_cast<int>(L.size())) return 0;
+    *unit = L[pos];
+    cur += 8;
+    return 1;
+}
+void* __fastcall E_PlayerBuildingCtor(void* self, void*, int player, int type) {
+    int* e = static_cast<int*>(self);
+    e[0] = player & 7;
+    e[1] = type;
+    return self;
+}
+int __fastcall E_PlayerBuildingGetNext(void* self, void*, int* unit) {
+    int* e = static_cast<int*>(self);
+    const std::vector<int>& L = colonyStructures(e[0] & 7);
+    for (int pos = e[0] >> 3; pos < static_cast<int>(L.size()); ++pos) {
+        if (e[1] != 0 && g_units[L[pos]].type != e[1]) continue;
+        *unit = L[pos];
+        e[0] = ((pos + 1) << 3) | (e[0] & 7);
+        return 1;
+    }
+    e[0] = (static_cast<int>(L.size()) << 3) | (e[0] & 7);
+    return 0;
+}
 
 // PlayerUnitEnum(jogador): lista de veículos (+0xC1C), na ordem.
 struct ApiPlayerEnum { int player; int pos; };
@@ -508,6 +593,24 @@ const std::map<std::string, void*>& table() {
         {"??0InRectEnumerator@@QAE@ABUMAP_RECT@@@Z", reinterpret_cast<void*>(&E_InRectCtor)},
         {"?GetNext@InRectEnumerator@@QAEHAAVUnit@@@Z", reinterpret_cast<void*>(&E_InRectGetNext)},
         {"??0ScStub@@QAE@XZ", reinterpret_cast<void*>(&SS_Ctor)},
+        {"??0ScGroup@@QAE@XZ", reinterpret_cast<void*>(&SS_Ctor)},
+        {"??0Trigger@@QAE@XZ", reinterpret_cast<void*>(&SS_Ctor)},
+        {"?Enable@Trigger@@QAEXXZ", reinterpret_cast<void*>(&TRG_Enable)},
+        {"?Disable@Trigger@@QAEXXZ", reinterpret_cast<void*>(&TRG_Disable)},
+        {"??0PlayerVehicleEnum@@QAE@H@Z", reinterpret_cast<void*>(&E_PlayerVehicleCtor)},
+        {"?GetNext@PlayerVehicleEnum@@QAEHAAVUnit@@@Z", reinterpret_cast<void*>(&E_PlayerVehicleGetNext)},
+        {"??0PlayerBuildingEnum@@QAE@HW4map_id@@@Z", reinterpret_cast<void*>(&E_PlayerBuildingCtor)},
+        {"?GetNext@PlayerBuildingEnum@@QAEHAAVUnit@@@Z", reinterpret_cast<void*>(&E_PlayerBuildingGetNext)},
+        {"?canAccumulateRareOre@_Player@@QAEHXZ", reinterpret_cast<void*>(&P_CanAccumulateRareOre)},
+        {"?canBuildSpace@_Player@@QAEHXZ", reinterpret_cast<void*>(&P_CanBuildSpace)},
+        {"?RareOre@_Player@@QBEHXZ", reinterpret_cast<void*>(&P_RareOre)},
+        {"?GetDefaultGroup@_Player@@QAE?AVScGroup@@XZ", reinterpret_cast<void*>(&P_GetDefaultGroup)},
+        {"?Tick@TethysGame@@SIHXZ", reinterpret_cast<void*>(&T_Tick)},
+        {"?Time@TethysGame@@SIHXZ", reinterpret_cast<void*>(&T_Time)},
+        {"?PlaceMarker@TethysGame@@SIHAAVUnit@@HHH@Z", reinterpret_cast<void*>(&T_PlaceMarker)},
+        {"?CreateWreck@TethysGame@@SIHHHW4map_id@@H@Z", reinterpret_cast<void*>(&T_CreateWreck)},
+        {"?OwnerID@Unit@@QBEHXZ", reinterpret_cast<void*>(&U_OwnerID)},
+        {"?isDiscovered@Unit@@QBEHXZ", reinterpret_cast<void*>(&U_IsDiscovered)},
         {"?HasFired@Trigger@@QAEHH@Z", reinterpret_cast<void*>(&TRG_HasFired)},
         {"?CreateFailureCondition@@YI?AVTrigger@@HHAAV1@PBD@Z", reinterpret_cast<void*>(&TR_CreateFailureCondition)},
         {"?CreateCountTrigger@@YI?AVTrigger@@HHHW4map_id@@0HW4compare_mode@@PBD@Z", reinterpret_cast<void*>(&TR_CreateCountTrigger)},

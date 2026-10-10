@@ -119,6 +119,8 @@ bool playerHasVehicle(int player, int type, int cargo);
 int playerCanBuildBuilding(int player, signed char* cache);
 int playerCanBuildVehicle(int player, signed char* cache, int arg);
 int playerCanAccumulateOre(int player, signed char* cache);
+int playerCanAccumulateRareOre(int player, signed char* cache);
+int playerCanBuildSpace(int player, signed char* cache);
 int playerCanDoResearch(int player, signed char* cache, int techID);
 int playerSpaceCount(int player, int type);   // sub_490800 (só 0x6A/0x59/0x58)
 int playerSpaceHas(int player, int type);     // sub_490780

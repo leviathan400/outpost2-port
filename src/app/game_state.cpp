@@ -392,6 +392,12 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     // poeira do tornado — antes de tudo.
     for (size_t i = 1; i < g_units.size(); ++i) {
         const UnitRecord& r = g_units[i];
+        if (r.id != -1 && r.type == mapAmbientAnim && (r.flags & UNIT_EFFECT_HIDDEN)) {   // sub_405080
+            int anim, frame;
+            if (effectAnimFrame(r, anim, frame, true) && g_art.ok() && anim < g_art.numAnimations())
+                drawSprite(anim, frame, screenXOf(r.pixelX) + 16, r.pixelY + 16 - m_camY, -1);
+            continue;
+        }
         if (r.id == -1 || !isDisaster(r.type)) continue;
         std::vector<WeaponDrawOp> ops;
         disasterDrawOps((int)i, true, ops);
