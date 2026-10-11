@@ -30,6 +30,7 @@
 #include "game/building_sheet.h"
 #include "game/colony.h"
 #include "game/missile.h"
+#include "game/repair.h"
 #include "game/structure_anim.h"
 #include "game/production.h"
 #include "game/docking.h"
@@ -599,6 +600,54 @@ static int runEarthTest(const std::string& mapName, const std::string& prefix) {
         gs.onIdle(renderer, 0.0f);
         writeBmp32(prefix + "_overlay.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH,
                    op2::Renderer::NATIVE_HEIGHT);
+        op2::resetUnits();
+    }
+    {   // Reparo (0x1C), desmonte (0x1E) e tomada (0x1D).
+        op2::Player[1].GoPlymouth();
+        op2::Unit cc, tk, lab, rv, cv, sp, enemy, trk;
+        op2::TethysGame::CreateUnit(cc, op2::mapCommandCenter, op2::LOCATION{12, 12}, 0);
+        op2::TethysGame::CreateUnit(tk, static_cast<op2::map_id>(0x3A), op2::LOCATION{15, 12}, 0);
+        lab = op2::Unit(op2::placeBuilding(0x21, 12, 15, 0));   // Basic Lab encostado
+        op2::placeBuilding(0x36, 16, 15, 0);                     // Smelter (capacidade de minério)
+        op2::TethysGame::CreateUnit(rv, op2::mapRepairVehicle, op2::LOCATION{20, 16}, 0);
+        op2::TethysGame::CreateUnit(trk, op2::mapCargoTruck, op2::LOCATION{22, 16}, 0);
+        op2::TethysGame::CreateUnit(cv, op2::mapConVec, op2::LOCATION{20, 18}, 0);
+        op2::TethysGame::CreateUnit(sp, op2::mapSpider, op2::LOCATION{26, 14}, 0);
+        op2::TethysGame::CreateUnit(enemy, op2::mapLynx, op2::LOCATION{29, 14}, 1, static_cast<op2::map_id>(0x41));
+        op2::g_playerData[0].workers = 40; op2::g_playerData[0].scientists = 10; op2::g_playerData[0].ore = 3000;
+        op2::colonyMarkDirty(0);
+        for (int t = 0; t < 20; ++t) gs.onIdle(renderer, 0.2501f / 4.0f);
+        op2::g_units[lab.id()].damage = 300;
+        op2::g_units[trk.id()].damage = 150;
+        op2::g_playerData[0].ore = 3000;
+        const int ore0 = op2::g_playerData[0].ore;
+        op2::processRepairPacket(0, 0x1C, {rv.id()}, {}, static_cast<uint32_t>(lab.id()) | 0xFFFF0000u);
+        op2::unitApplyEMP(enemy.id(), 0x60);
+        op2::processRepairPacket(0, 0x1D, {sp.id()}, {}, static_cast<uint32_t>(enemy.id()) | 0xFFFF0000u);
+        int lastAct = -1, lastSub = -1;
+        for (int t = 0; t < 900; ++t) {
+            gs.onIdle(renderer, 0.2501f / 4.0f);
+            const op2::UnitRecord& r = op2::g_units[rv.id()];
+            if (r.action != lastAct || r.field22 != lastSub) {
+                std::printf("[Rep] t=%d repair acao=0x%X sub=%d f3C=%d | lab dano=%d | minerio %d\n", t, r.action, r.field22,
+                            r.field3C, op2::g_units[lab.id()].damage, op2::g_playerData[0].ore);
+                lastAct = r.action; lastSub = r.field22;
+            }
+            if (t == 400) op2::processRepairPacket(0, 0x1C, {rv.id()}, {}, static_cast<uint32_t>(trk.id()) | 0xFFFF0000u);
+        }
+        std::printf("[Rep] fim: lab dano=%d caminhao dano=%d minerio %d -> %d | lynx dono=%d emp=%d | msg=%s\n",
+                    op2::g_units[lab.id()].damage, op2::g_units[trk.id()].damage, ore0, op2::g_playerData[0].ore,
+                    op2::g_units[enemy.id()].owner & 15, (op2::g_units[enemy.id()].flags & op2::UNIT_EMP) != 0,
+                    op2::statusBarText().c_str());
+        // Desmonte do Lab pela ConVec (sem GORF: entulho).
+        op2::processRepairPacket(0, 0x1E, {cv.id()}, {}, static_cast<uint32_t>(lab.id()) | 0xFFFF0000u);
+        int t = 0;
+        for (; t < 3000 && op2::g_units[lab.id()].id != -1 && op2::g_units[lab.id()].type == 0x21; ++t)
+            gs.onIdle(renderer, 0.2501f / 4.0f);
+        const op2::UnitRecord& c = op2::g_units[cv.id()];
+        std::printf("[Rep] desmonte: t=%d lab vivo=%d | convec acao=0x%X sub=%d danificavel=%d | celula (12,15) tipo=0x%X\n", t,
+                    op2::g_units[lab.id()].id != -1 && op2::g_units[lab.id()].type == 0x21, c.action, c.field22,
+                    (c.flags & op2::UNIT_DAMAGEABLE) != 0, op2::g_gameMap.getCellType(op2::LOCATION{12, 15}));
         op2::resetUnits();
     }
     {   // RLV: Spaceport do jogador 1 lança (pacote 0x19), o 0 captura em órbita

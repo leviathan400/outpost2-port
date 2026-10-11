@@ -87,6 +87,10 @@ void processGuardTarget(int me, const std::vector<int>& sel, int tileX, int tile
 int8_t  dirCos(uint8_t dir);                 // byte_4E9AF8 (cos * 64)
 int8_t  dirSin(uint8_t dir);                 // byte_4E9BF8 (sen * 64)
 uint8_t dirOfVec(int dx, int dy);            // sub_45C4F0
+// vt[0x6C]: tile da unidade mais próximo de (sx, sy) (prédio: do footprint).
+void unitNearestTile(const UnitRecord& t, int sx, int sy, int& ox, int& oy);
+// sub_439810: ponto de rota do alvo (lugar: o tile; unidade: o tile mais próximo).
+uint32_t unitTargetWaypoint(const UnitRecord& u, uint32_t tgt);
 int artLastFrameRaw(int raw);                // sub_404C70 (nFrames-1, animação crua)
 const int8_t* artFrameOffsets(int raw, int frame);   // sub_404DF0 (bytes x1,y1,x2,y2)
 // sub_48BAE0 + sub_48B6F0: tile queimado p/ o tile dado (0 = nenhum).

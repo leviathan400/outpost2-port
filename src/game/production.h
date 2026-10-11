@@ -30,6 +30,8 @@ void sendProduce(int factoryId, uint32_t item);
 // sub_40E210 case 9: fábrica parada e operando, minério do dono suficiente →
 // ação 9 e desconta o custo. false se recusou.
 bool processProducePacket(int owner, int factoryId, int type, int weapon, int group);
+// sub_46E5C0: o GORF devolve 50% (60% melhorado) do custo do tipo ao dono.
+void gorfRecycle(int gorfId, int type);
 // sub_43ACA0 case 9 com [+0x20] (início): sub-estado 7 com a duração.
 void factoryProduceStart(int factoryId);
 // sub_43DE50 case 7: conta a duração só com a fábrica operando.

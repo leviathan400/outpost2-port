@@ -1,4 +1,5 @@
 #include "commands.h"
+#include "repair.h"
 #include "../audio/sound.h"
 
 #include <cctype>
@@ -466,6 +467,8 @@ UiClick uiCommandClick(int cmd, const std::vector<int>& sel) {
             s_hint = "Set path to initial patrol point";
             return UiClick::TARGET;
         case UC_SCATTER: sendScatter(sel); return UiClick::DONE;        // sub_4556B0 (0x15)
+        case UC_REPAIR: case UC_TAKE_OVER: case UC_DISMANTLE:          // sub_4548B0 etc. (modo 7)
+            return UiClick::TARGET;
         // IDLE (pacote 0x12) / ACTIVATE (0x13). O IDLE do original confirma antes
         // quando o prédio guarda metal (smelter/armazém: "All metal in storage
         // will be lost...") — diálogo ainda não portado.
@@ -487,7 +490,54 @@ UiClick uiCommandArea(int cmd, const std::vector<int>& sel, int x1, int y1, int 
     return UiClick::DONE;
 }
 
+static int s_curPX = 0, s_curPY = 0;
+void uiSetCursorPixel(int px, int py) { s_curPX = px; s_curPY = py; }
+
+// Unidade sob o cursor (sub_437840/sub_437890), flags & flagMask.
+static int unitUnderCursor(uint32_t flagMask) {
+    MapPointIter it;
+    mapPointIterInit(it, s_curPX + g_gameMap.internalXOffset() * 32, s_curPY, 0xFFFFFFFFu, flagMask);
+    return mapPointIterNext(it);
+}
+
+// vt[3] de REPAIR (sub_4548D0) / TAKE OVER (sub_454C50) / DISMANTLE (sub_455000):
+// alvo sob o cursor e pacote 0x1C/0x1D/0x1E com os selecionados (som 0x56).
+static void sendRepairLike(int cmd, const std::vector<int>& sel) {
+    const int me = TethysGame::localPlayer();
+    int tgt = 0;
+    if (cmd == UC_REPAIR) {
+        const int t = unitUnderCursor(0xFFFFFFFFu);
+        if (t) {
+            const UnitRecord& r = g_units[t];
+            const UnitRecord* f = sel.empty() ? nullptr : &g_units[sel[0]];
+            if ((g_playerData[r.owner & 0x0F].allyMask & (1u << me)) && r.type != 3 && r.type != 4 && f &&
+                f->id != t) {
+                if (f->type == mapConVec) { if (r.flags & UNIT_BUILDING) tgt = t; }
+                else if (f->type == mapSpider || f->type == mapRepairVehicle) tgt = t;
+            }
+        }
+    } else if (cmd == UC_TAKE_OVER) {
+        const int t = unitUnderCursor(2u);
+        if (t) {
+            const UnitRecord& r = g_units[t];
+            if (!(g_playerData[r.owner & 0x0F].allyMask & (1u << me)) && r.type != 3 && r.type != 4) tgt = t;
+        }
+    } else {
+        const int t = unitUnderCursor(4u);
+        if (t) {
+            const UnitRecord& r = g_units[t];
+            if ((r.owner & 0x0F) == me && r.action != 0x22 && r.action != 0x21 && r.type != 0x15 &&
+                r.type != 0x16 && r.type != 0x2A && r.type != 0x2C)
+                tgt = t;
+        }
+    }
+    const int type = cmd == UC_REPAIR ? 0x1C : cmd == UC_TAKE_OVER ? 0x1D : 0x1E;
+    processRepairPacket(me, type, sel, {}, static_cast<uint32_t>(tgt) | 0xFFFF0000u);
+    soundPlay(0x56);
+}
+
 UiClick uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int tileY) {
+    if (cmd == UC_REPAIR || cmd == UC_TAKE_OVER || cmd == UC_DISMANTLE) { sendRepairLike(cmd, sel); return UiClick::DONE; }
     if (cmd == UC_BUILD_MINE) { sendBuildMine(sel, tileX, tileY); return UiClick::DONE; }   // sub_452010
     if (cmd == UC_REMOVE_WALL) {                             // sub_452B60 + sub_452D10
         if (!sendRemoveWall(sel, tileX, tileY)) { soundPlay(0x58); return UiClick::TARGET; }

@@ -18,6 +18,7 @@
 #include "mining.h"
 #include "pathfinder.h"
 #include "production.h"
+#include "repair.h"
 #include "structure.h"
 #include "walls.h"
 #include "player.h"
@@ -625,21 +626,6 @@ void fightThink(Group& g) {
 }
 
 // sub_42B360: DeleteWhenEmpty — true = apagar o grupo.
-// sub_46E5C0: o GORF devolve 50% (60% melhorado: bloco +0x1D do GORF, nibble
-// alto) do custo do tipo (bloco do nibble baixo: comum +0x0C, raro +0x10).
-void gorfRecycle(int gorf, int type) {
-    const UnitRecord& gr = g_units[gorf];
-    const int p = ownerOf(gr);
-    const uint8_t* b = unitStatBlock(type, p);
-    if (!b) return;
-    int common, rare;
-    std::memcpy(&common, b + 0x0C, 4);
-    std::memcpy(&rare, b + 0x10, 4);
-    const uint8_t* gb = unitStatBlock(0x39, (gr.owner >> 4) & 0x0F);
-    const int pct = (gb && gb[0x1D]) ? 60 : 50;
-    g_playerData[p].ore += common * pct / 100;
-    g_playerData[p].rareOre += rare * pct / 100;
-}
 
 // ================================================================================
 // TargCount (+0x2E4, sub_42C1F0): tabela ordenada {tipo, arma, alvo, atual};
@@ -1274,6 +1260,54 @@ void buildReinforce(Group& g) {                                     // sub_426E1
     if (!b.empty()) assignFactories(g, b, sumB, 0x0B);
 }
 
+// sub_426360: os reparadores livres (classes 4..6) vão ao prédio danificado
+// mais próximo (dano > HP/16, fora de obra, lugar seguro) — pacote 0x1C.
+void buildRepair(Group& g) {
+    if (TethysGame::rng().next() > 0x0FFFFFFFu) return;
+    std::vector<Node*> rep;
+    for (Node& n : g.nodes) {
+        if (n.cls < 4) continue;
+        if (n.cls > 6 || rep.size() >= 32) break;
+        const UnitRecord& r = g_units[n.unit];
+        if (n.unit == g.conVec || (r.flags & 0xC0000u) || r.action == 0x1C) continue;
+        rep.push_back(&n);
+    }
+    if (rep.empty()) return;
+    std::vector<int> dmg;
+    auto consider = [&](const BuildRec& b) {
+        if (dmg.size() >= 32) return;
+        const int id = playerBuildingAt(g, b.rc[2], b.rc[1]);
+        if (!id) return;
+        const UnitRecord& r = g_units[id];
+        if (!r.damage) return;
+        const uint8_t* blk = unitStatBlock(r.type, (r.owner >> 4) & 0x0F);
+        int hp = 0;
+        if (blk) std::memcpy(&hp, blk, 4);
+        if (hp / 16 >= r.damage || r.action == 0x21) return;
+        int ux, uy;
+        origPos(r, ux, uy);
+        if (!siteSafe(g, ux >> 5, uy >> 5)) return;
+        dmg.push_back(id);
+    };
+    for (const BuildRec& b : g.blds) consider(b);
+    for (const BuildRec& b : g.mines) consider(b);
+    if (dmg.empty()) return;
+    for (Node* n : rep) {
+        int best = 0, bd = 0x7FFFFFFF;
+        int vx, vy;
+        origPos(g_units[n->unit], vx, vy);
+        for (int id : dmg) {
+            int bx, by;
+            origPos(g_units[id], bx, by);
+            const int dx = wrapDX(bx - vx), dy = by - vy;
+            const int d = dx * dx + dy * dy;
+            if (d < bd) { bd = d; best = id; }
+        }
+        n->tick = tick();                                    // sub_42A980
+        processRepairPacket(ownerOf(g_units[n->unit]), 0x1C, {n->unit}, {}, static_cast<uint32_t>(best) | 0xFFFF0000u);
+    }
+}
+
 void buildTubes(Group& g) {                                         // sub_426720
     if (TethysGame::rng().next() > 0x0FFFFFFFu) return;
     for (TubeRec& t : g.tubes) {
@@ -1324,8 +1358,7 @@ void buildThink(Group& g) {                                         // vt[13] su
     }
     buildMines(g);
     buildReinforce(g);
-    // sub_426360 (reparo pelos ConVecs/Spiders/Repair, pacote 0x1C): a ação de
-    // reparar ainda não foi portada.
+    buildRepair(g);
     buildTubes(g);
     for (size_t i = 0; i < g.nodes.size(); ++i) {
         Node& n = g.nodes[i];

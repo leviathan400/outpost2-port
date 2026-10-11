@@ -1,5 +1,6 @@
 #include "structure.h"
 #include "missile.h"
+#include "repair.h"
 #include "movement.h"
 #include "mining.h"
 #include "earthwork.h"
@@ -364,6 +365,40 @@ static void structureUpdateState(int id) {
     else r.state34 = (state << 16) | sub;
 }
 
+// jpt_43B312 case 34: desmonte — o frame de construção volta 1 a cada 2 ticks;
+// no 0 o prédio sai do mapa (fantasma de 1 tick); com GORF operando a obra é
+// reciclada (sub_46E5C0) e não sobra entulho (vt[0x80](0)).
+static void dismantleTick(int id) {
+    UnitRecord& r = g_units[id];
+    r.flags |= UNIT_DISMANTLED;
+    if (structureFrame(r) > 0) {
+        r.state34 = (r.state34 & 0xFFFF0000u) | ((r.state34 + 1) & 0xFFFFu);
+        r.field22 = SUB_WAIT;
+        r.field3C = 1;                                          // loc_43DCDF
+        return;
+    }
+    r.field22 = SUB_REMOVE;
+    const int ox = unitOX(r), oy = unitOY(r), raw = curAnimRaw(r);
+    const int e = createAmbientAnim(r.pixelX, r.pixelY, raw, 1, 0);
+    if (e) {
+        UnitRecord& x = g_units[e];
+        x.pixelX = ox; x.pixelY = oy; x.rawPixel = true;
+        killUnit(e, 1);
+    }
+    UnitRecord& b = g_units[id];
+    const int p = b.owner & 0x0F;
+    const bool gorf = g_colony[p].stat(ST_GORF_GRP + 4) != 0;
+    if (gorf) {
+        for (int gid : colonyStructures(p)) {
+            if (g_units[gid].type != 0x39 || !structureOperational(g_units[gid])) continue;
+            gorfRecycle(gid, b.type);
+            if (b.type == 0x17) gorfRecycle(gid, static_cast<int16_t>(b.cargo));
+            break;
+        }
+    }
+    structureRemoveFromMap(g_units[id], !gorf);
+}
+
 // sub_43ACA0 (vt[1]) — só os casos que prédios e efeitos usam.
 static void actionTick(int id) {
     UnitRecord& r = g_units[id];
@@ -464,6 +499,9 @@ static void actionTick(int id) {
             break;
         case 0x1A:                                              // case 26: lançamento
             missileActionTick(id);
+            break;
+        case ACT_DISMANTLE:                                     // case 34
+            if (r.flags & UNIT_BUILDING) dismantleTick(id);
             break;
         case 9:                                                 // produto pronto
             factoryProduceFinish(id);
@@ -567,6 +605,8 @@ static bool vehicleTick(int id) {
     else if (!r.field20 && r.field22 == 0 && r.action == 1) bulldozeTick(id);         // case 1
     else if (!r.field20 && r.field22 == 0 && (r.action == 3 || r.action == 4) && !r.hasOrder)
         moveDockArrive(id);                                                            // casos 3/4
+    else if (!r.field20 && r.field22 == 0 && r.action >= 0x1C && r.action <= 0x1E)
+        repairTick(id);                                                                // casos 28-30
     {   // def_43B312: armado (0x10 xor 0x80), sem 0x20000/0x80000 → vt[5] da arma.
         UnitRecord& u = g_units[id];
         if ((((u.flags << 24) ^ (u.flags << 27)) & 0x80000000u) && !(u.flags & 0xA0000u))
@@ -586,6 +626,9 @@ static bool vehicleTick(int id) {
             return false;
         case 0x0A:                        // loc_43E35C: espera a obra
             if (--u.field3C == 0) { u.field23 = u.field22; u.field22 = 0; }
+            return false;
+        case 8:                           // loc_43E304: espera da tomada
+            repairWait8(id);
             return false;
         case SUB_REMOVE:
             return true;

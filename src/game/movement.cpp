@@ -162,6 +162,7 @@ static void stepUnit(int id) {
     // segura a posição), 0x28 (patrulhar) — sub_43ACA0 inicia todas em
     // loc_43ADAD — e a aproximação de atacar/guardar (0x24/0x25).
     const bool moving = u.action == CMD_MOVE || u.action == 3 || u.action == 4 || u.action == 0x26 || u.action == 0x24 ||
+                        (u.action >= 0x1C && u.action <= 0x1E) ||
                         u.action == 0x25 || u.action == 0x27 || u.action == 0x28 ||
                         u.action == 6 || u.action == 7 || u.action == 1 || u.action == 8;   // 6: ConVec indo à obra;
                         // 0x27: rota de minério; 7: Earthworker; 1: Robo-Dozer

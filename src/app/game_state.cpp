@@ -943,6 +943,7 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
             // Modo de mira: o clique escolhe o alvo (vt[3] do comando).
             int tileX = (m_camX + vx) / 32, tileY = (m_camY + vy) / 32;
             if (g_gameMap.ok()) tileX &= (g_gameMap.width() - 1);
+            uiSetCursorPixel(g_gameMap.ok() ? (m_camX + vx) & (g_gameMap.width() * 32 - 1) : m_camX + vx, m_camY + vy);
             if (uiCommandTarget(m_targetCmd, m_selected, tileX, tileY) != UiClick::TARGET)
                 m_targetCmd = -1;                            // Patrulhar: 2 cliques
         } else if (e.button.button == SDL_BUTTON_RIGHT && m_targetCmd >= 0) {

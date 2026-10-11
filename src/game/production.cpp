@@ -2,6 +2,7 @@
 #include "../audio/sound.h"
 
 #include <cstdio>
+#include <cstring>
 
 #include "building_sheet.h"
 #include "colony.h"
@@ -194,6 +195,22 @@ bool processProducePacket(int owner, int factoryId, int type, int weapon, int gr
     pd.rareOre -= rare;                                      // dword_56E300
     pd.ore -= common;                                        // dword_56E2FC
     return true;
+}
+
+// sub_46E5C0: custo do tipo no bloco do dono (nibble baixo: comum +0x0C, raro
+// +0x10) * 50% — 60% com o GORF melhorado (bloco +0x1D do GORF, nibble alto).
+void gorfRecycle(int gorf, int type) {
+    const UnitRecord& gr = g_units[gorf];
+    const int p = ownerLo(gr);
+    const uint8_t* b = unitStatBlock(type, p);
+    if (!b) return;
+    int common, rare;
+    std::memcpy(&common, b + 0x0C, 4);
+    std::memcpy(&rare, b + 0x10, 4);
+    const uint8_t* gb = unitStatBlock(0x39, ownerHi(gr));
+    const int pct = (gb && gb[0x1D]) ? 60 : 50;
+    g_playerData[p].ore += common * pct / 100;
+    g_playerData[p].rareOre += rare * pct / 100;
 }
 
 void sendProduce(int factoryId, uint32_t item) {            // sub_456B50

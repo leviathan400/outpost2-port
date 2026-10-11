@@ -549,6 +549,9 @@ static uint32_t targetWaypoint(const UnitRecord& u, uint32_t tgt) {
     return packLocation(tx & tileMask(), ty);
 }
 
+void unitNearestTile(const UnitRecord& t, int sx, int sy, int& ox, int& oy) { nearestTile(t, sx, sy, ox, oy); }
+uint32_t unitTargetWaypoint(const UnitRecord& u, uint32_t tgt) { return targetWaypoint(u, tgt); }
+
 void unitOrderAttack(int id, int type, const std::vector<uint32_t>& wps, uint32_t tgt, int unitIdx, int adj) {   // sub_423850
     UnitRecord& u = g_units[id];
     if ((tgt >> 16) == 0x7FFF) tgt = (tgt & 0xFFFF) | 0xFFFF0000u;

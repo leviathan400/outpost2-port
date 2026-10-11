@@ -57,6 +57,9 @@ UiClick uiCommandClick(int cmd, const std::vector<int>& sel);
 // vt[3]: alvo no tile (x,y do port). DONE = comando enviado; TARGET = segue
 // no modo de mira (Patrulhar pede 2 pontos); NOT_PORTED = não portado.
 UiClick uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int tileY);
+// Pixel do cursor no mapa (px do port; dword_547174/78) p/ o teste de unidade
+// sob o cursor dos comandos com alvo.
+void uiSetCursorPixel(int px, int py);
 // Comandos de ÁREA (arrastar): muro/tubo (modo 4, reta) e terraplanar (modo 1).
 bool uiCommandIsArea(int cmd);
 bool uiCommandIsLine(int cmd);
