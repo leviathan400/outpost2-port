@@ -75,6 +75,17 @@ struct MapRectIter {
 void mapRectIterInit(MapRectIter& it, int x, int y, int w, int h, uint32_t playerMask, uint32_t flagMask);
 int  mapRectIterNext(MapRectIter& it);       // id da próxima unidade (0 = fim)
 
+// Unidades SOB um ponto (px INTERNOS): sub_437840 abre a faixa y ± 0x60 na
+// lista por Y; sub_437890 testa o bbox do sprite atual (vt[0x30]/vt[0x34]) e,
+// salvo flag 0x80, o pixel (vt[0x38]). Cabe no LocationEnumerator da DLL.
+struct MapPointIter {
+    int cur = 0;                            // [+0x00]
+    int y0 = 0, y1 = 0, px = 0, py = 0;     // [+0x1C] / [+0x24] / [+0x2C] / [+0x30]
+    uint32_t playerMask = 0, flagMask = 0;  // [+0x10] / [+0x14]
+};
+void mapPointIterInit(MapPointIter& it, int px, int py, uint32_t playerMask, uint32_t flagMask);
+int  mapPointIterNext(MapPointIter& it);
+
 // Unit::DoInfect (prédio; só com 1 jogador): equipe morre, 0x40000, dano de 1/3 do HP.
 void unitDoInfect(int id);
 // Unit::DoSelfDestruct → comando 0x14 (sub_40E210) → sub_43A6A0.

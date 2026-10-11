@@ -13,6 +13,9 @@
 #include "terrain_cost.h"
 #include "unit.h"
 #include "walls.h"
+#include "mining.h"
+#include "vehicle_anim.h"
+#include "../gfx/artfile.h"
 #include "../mission/mission.h"
 
 namespace op2 {
@@ -409,6 +412,73 @@ int mapRectIterNext(MapRectIter& it) {
         ux += off;
         if (uy < it.y0 || uy >= it.y1) continue;
         if ((it.x0 <= ux && ux < it.x1) || (it.wrap && it.x0 <= ux - pxW && ux - pxW < it.x1)) return id;
+    }
+    return 0;
+}
+
+void mapPointIterInit(MapPointIter& it, int px, int py, uint32_t playerMask, uint32_t flagMask) {
+    it.cur = 0;
+    it.playerMask = playerMask;
+    it.flagMask = flagMask;
+    it.y0 = py - 0x60 > 0 ? py - 0x60 : 0;
+    it.y1 = py + 0x60 < g_gameMap.height() * 32 ? py + 0x60 : g_gameMap.height() * 32;
+    it.px = px;
+    it.py = py;
+}
+
+// Anim crua desenhada agora: prédio vt[0x2C] (estado), veículo vt[0x80](direção).
+static int unitSpriteRaw(const UnitRecord& r) {
+    if (r.flags & UNIT_BUILDING) {
+        const int a = structureCurAnim(r);
+        return a >= 0 ? a + 0x65 : 0;
+    }
+    const int dir = ((r.rotation + 8) & 0xF0) >> 4;
+    if (r.type == mapCargoTruck) return truckAnimRaw(r, dir);
+    const int ow = r.owner & 0x0F;
+    const int a = vehicleAnimIndex(r.type, (dir & 15) << 4, ow < kMaxPlayers ? g_playerData[ow].isEden != 0 : true);
+    return a >= 0 ? a + 0x65 : 0;
+}
+
+// vt[0x38]: 0 = acertou. Veículo (sub_401850): sempre. Prédio (sub_401B60):
+// pixel do sprite; senão a base do estado (0x87E/0x87F/0x880, frame 0).
+static bool unitPixelHit(const UnitRecord& r, int raw, int dx, int dy) {
+    if (!(r.flags & UNIT_BUILDING)) return true;
+    if (!g_art.pixelMiss(raw - 0x65, structureFrame(r), dx, dy)) return true;
+    if (r.action == 0x2F || r.action == 0x21) return false;
+    int base = 0;
+    switch ((r.state34 >> 16) & 0xFFFF) {
+        case 0: case 5: case 6: case 7: case 8: case 9: base = 0x87E; break;
+        case 1: base = 0x87F; break;
+        case 2: base = 0x880; break;
+        default: break;
+    }
+    return base && !g_art.pixelMiss(base - 0x65, 0, dx, dy);
+}
+
+int mapPointIterNext(MapPointIter& it) {
+    const int pxMask = g_gameMap.internalWidth() * 32 - 1;
+    const int off = g_gameMap.internalXOffset() * 32;
+    for (int id = it.cur ? unitListNext(it.cur) : unitListFirst(); id != 0; id = unitListNext(id)) {
+        it.cur = id;
+        const UnitRecord& r = g_units[id];
+        const int uy = unitOY(r);
+        if (uy < it.y0) continue;                               // (sub_4374F0 começa aqui)
+        if (uy >= it.y1) return 0;
+        if (!(r.flags & 0x46u) || !(it.playerMask & (1u << (r.owner & 0x0F))) || !(r.flags & it.flagMask) ||
+            r.field22 == 0x0D || r.id == -1 || (r.flags & UNIT_DEAD))
+            continue;
+        const int raw = unitSpriteRaw(r);
+        if (!raw || raw - 0x65 >= g_art.numAnimations()) continue;
+        const uint32_t* h = g_art.animation(raw - 0x65).header;
+        const int w = static_cast<int>(h[3] - h[1]), hh = static_cast<int>(h[4] - h[2]);   // sub_404D30
+        const int ox = static_cast<int>(h[5] - h[1]), oy = static_cast<int>(h[6] - h[2]);  // sub_404D90
+        const int top = uy - oy;
+        if (top > it.py || top + hh <= it.py) continue;
+        const int left = (unitOX(r) + off - ox) & pxMask;
+        const int dx = (it.px - left) & pxMask;
+        if (dx >= w) continue;
+        if (r.flags & 0x80u) return id;
+        if (unitPixelHit(r, raw, dx, it.py - top)) return id;
     }
     return 0;
 }

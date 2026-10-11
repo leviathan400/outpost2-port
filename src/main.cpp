@@ -564,6 +564,26 @@ static int runEarthTest(const std::string& mapName, const std::string& prefix) {
                     op2::g_gameMap.width(), op2::g_gameMap.height());
         gs.setCamera(0, 0);
     }
+    {   // LocationEnumerator (sub_437890): CC 3x2 em (20,20) e caminhão em (30,20);
+        // sonda uma grade de pontos e imprime o mapa de acertos.
+        op2::Unit cc, tr;
+        op2::TethysGame::CreateUnit(cc, op2::mapCommandCenter, op2::LOCATION{20, 20}, 0);
+        op2::TethysGame::CreateUnit(tr, op2::mapCargoTruck, op2::LOCATION{30, 20}, 0);
+        for (int cx : {20 * 32, 30 * 32}) {
+            std::printf("[Loc] ponto em torno de px (%d,%d), passo 8:\n", cx + 16, 20 * 32 + 16);
+            for (int dy = -48; dy <= 48; dy += 8) {
+                std::string row;
+                for (int dx = -48; dx <= 64; dx += 8) {
+                    op2::MapPointIter it;
+                    op2::mapPointIterInit(it, cx + 16 + dx + op2::g_gameMap.internalXOffset() * 32, 20 * 32 + 16 + dy, 0xFFFFFFFFu, 0xFFFFFFFFu);
+                    const int id = op2::mapPointIterNext(it);
+                    row += id == cc.id() ? 'C' : id == tr.id() ? 'T' : id ? '?' : '.';
+                }
+                std::printf("[Loc] %s\n", row.c_str());
+            }
+        }
+        op2::resetUnits();
+    }
     const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
     int bx = -1, by = -1;
     for (int y = 3; y < H - 14 && bx < 0; ++y)

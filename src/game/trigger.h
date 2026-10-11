@@ -73,6 +73,15 @@ int createEvacTrigger(int bEnabled, int bOneShot, int player, const char* func);
 // OperationalTrigger (off_4EA090): prédios operando do tipo.
 int createOperationalTrigger(int bEnabled, int bOneShot, int player, int type, int count, int compare,
                              const char* func);
+// DamagedTrigger (off_4E9F70, sub_4934F0/sub_493510): o grupo tem menos que
+// `count` unidades (sub_42BE60(0x11)).
+int createDamagedTrigger(int bEnabled, int bOneShot, int groupStub, int count, const char* func);
+// PointTrigger (off_4E9F10, sub_492D80/sub_492DC0): unidade do jogador (−1 =
+// qualquer) sob o ponto (tiles INTERNOS; iterador sub_437840).
+int createPointTrigger(int bEnabled, int bOneShot, int player, int x, int y, const char* func);
+// OnePlayerLeftTrigger (off_4E9ED0, sub_492970): os humanos com Command Center
+// operando são todos aliados entre si.
+int createOnePlayerLeftTrigger(int bEnabled, int bOneShot, const char* func);
 // ?HasFired@Trigger: bit do jogador em [+0x20].
 bool triggerHasFired(int stub, int player);
 

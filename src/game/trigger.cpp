@@ -33,6 +33,7 @@ enum TriggerKind {
     TK_TIME, TK_RESEARCH, TK_VICTORY, TK_FAILURE,
     TK_COUNT, TK_KIT, TK_BUILDING_COUNT, TK_VEHICLE_COUNT, TK_ESCAPE, TK_SET,
     TK_RESOURCE, TK_EVAC, TK_OPERATIONAL, TK_RECT, TK_SPECIAL,
+    TK_DAMAGED, TK_POINT, TK_ONE_LEFT,
 };
 
 // _Trigger (off_4E9E50) e derivadas. Campos +0x30/+0x34 conforme a classe.
@@ -255,6 +256,44 @@ int createSpecialTargetTrigger(int bEnabled, int bOneShot, int targetUnit, int s
     }
     return id;
 }
+int createDamagedTrigger(int bEnabled, int bOneShot, int groupStub, int count, const char* func) {
+    const int fr = createFuncRef(func);
+    if (fr == 0xFF) return 0xFF;
+    const int id = newTrigger(TK_DAMAGED, bEnabled, bOneShot, fr, nullptr);
+    if (Trigger* t = trig(id)) { t->f30 = groupStub; t->f34 = count; }   // sub_4934F0
+    return id;
+}
+
+int createPointTrigger(int bEnabled, int bOneShot, int player, int x, int y, const char* func) {
+    const int fr = createFuncRef(func);
+    if (fr == 0xFF) return 0xFF;
+    const int id = newTrigger(TK_POINT, bEnabled, bOneShot, fr, nullptr);
+    if (Trigger* t = trig(id)) {                                     // sub_492D80
+        t->f30 = x << 5; t->f34 = y << 5;
+        if (player >= 0) {
+            t->f38 = static_cast<int>(1u << player);
+            t->playerMask = static_cast<uint32_t>(t->f38) ^ 0x3Fu;
+        } else {
+            t->f38 = -1;
+        }
+    }
+    return id;
+}
+
+int createOnePlayerLeftTrigger(int bEnabled, int bOneShot, const char* func) {
+    const int fr = createFuncRef(func);
+    if (fr == 0xFF) return 0xFF;
+    return newTrigger(TK_ONE_LEFT, bEnabled, bOneShot, fr, nullptr);
+}
+
+// sub_490C80: o jogador p e todo j que tem p na sua máscara de aliança.
+static uint32_t alliesOf(int p) {
+    uint32_t m = 1u << p;
+    for (int j = 0; j < TethysGame::noPlayers(); ++j)
+        if (g_playerData[j].allyMask & (1u << p)) m |= 1u << j;
+    return m;
+}
+
 int specialTargetSource(int stub) {
     const Trigger* t = trig(stub);
     return t && t->kind == TK_SPECIAL ? t->f34 : -1;
@@ -603,6 +642,29 @@ static bool hasFired(Trigger& t) {
             for (int p = 0; p < n; ++p)
                 if (compareCount(t.f3C, t.f34, count(t.f38))) { t.playerMask |= 1u << p; return true; }
             return false;
+        }
+        case TK_DAMAGED:                                      // sub_493510
+            if (!stubObject(t.f30)) return false;
+            if (aiUnitCount(t.f30, 0x11) >= t.f34) return false;
+            t.playerMask = 0x3F;
+            return true;
+        case TK_POINT: {                                      // sub_492DC0
+            MapPointIter it;
+            mapPointIterInit(it, t.f30, t.f34, static_cast<uint32_t>(t.f38), 0xFFFFFFFFu);
+            if (!mapPointIterNext(it)) return false;
+            if (t.f38 == -1) t.playerMask = 0x3Fu; else t.playerMask |= static_cast<uint32_t>(t.f38);
+            return true;
+        }
+        case TK_ONE_LEFT: {                                   // sub_492970
+            uint32_t alive = 0, allied = 0xFFFFFFFFu;
+            for (int p = 0; p < n; ++p) {
+                if (!g_playerData[p].isHuman || !g_colony[p].stat(ST_CC_OP)) continue;   // +0x28 / +0x100
+                alive |= 1u << p;
+                allied &= alliesOf(p);
+            }
+            if ((alive & allied) != alive) return false;
+            t.playerMask = allied;
+            return true;
         }
         case TK_VICTORY:                                      // sub_4957C0
         case TK_FAILURE: {                                    // sub_495A10

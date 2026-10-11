@@ -58,6 +58,10 @@ public:
     static void ForceMoraleRotten(int player);
     static void FreeMoraleLevel(int player);
     static void SetDaylightEverywhere(int on) { s_daylightEverywhere = on; }
+    // Flags do GameStartInfo (dword_56DEFC, cópia do início da partida): bit0
+    // desastres, bit1 dia/noite, bit2 moral FIXA, bits 17..20 unidades iniciais.
+    static uint32_t startFlags()            { return s_startFlags; }
+    static void     setStartFlags(uint32_t f) { s_startFlags = f; }
     static int  daylightPos()        { return s_daylightPos; }
     static int  daylightEverywhere() { return s_daylightEverywhere; }
 
@@ -81,6 +85,7 @@ private:
     static int      s_localPlayer; // dword_56DEE8
     static GameRNG  s_rng;         // unk_56B1E0
     static int      s_cheat[8];    // dword_56DE58..
+    static uint32_t s_startFlags;  // dword_56DEFC
 };
 
 } // namespace op2

@@ -29,6 +29,7 @@
 #include "../game/ai_group.h"
 #include "../game/commands.h"
 #include "../game/structure.h"
+#include "../game/command.h"
 #include "../audio/sound.h"
 
 namespace op2 {
@@ -89,6 +90,7 @@ int  __fastcall P_CanAccumulateRareOre(DllPlayer* p, void*) {
 }
 int  __fastcall P_CanBuildSpace(DllPlayer* p, void*) { return playerCanBuildSpace(p->playerNum, p->checkValue); }
 int  __fastcall P_RareOre(DllPlayer* p, void*) { return g_playerData[p->playerNum].rareOre; }   // +0x24
+int  __fastcall P_IsEden(DllPlayer* p, void*) { return g_playerData[p->playerNum].isEden; }     // +0x2C
 // GetDefaultGroup: ScGroup por valor (retorno oculto na pilha) = stub do grupo padrão.
 int* __fastcall P_GetDefaultGroup(DllPlayer* p, void*, int* ret) { *ret = aiDefaultGroup(p->playerNum); return ret; }
 int  __fastcall P_CanDoResearch(DllPlayer* p, void*, int techID) {
@@ -153,6 +155,51 @@ void __fastcall T_AddMessage(int x, int y, char* msg, int toPlayer, int sound) {
 }
 int  __fastcall T_GetRand(int n)                    { return TethysGame::getRand(n); }
 int  __fastcall T_Tick()                            { return static_cast<int>(TethysGame::tick()); }
+int  __fastcall T_NoPlayers()                       { return TethysGame::noPlayers(); }          // dword_56DEC0
+// GameStartInfo (dword_56DEFC): bit0 desastres, bit1 dia/noite, bit2 moral fixa,
+// bits 17..20 unidades iniciais.
+int  __fastcall T_CanHaveDisasters()                { return TethysGame::startFlags() & 1; }
+int  __fastcall T_UsesDayNight()                    { return (TethysGame::startFlags() & 2) >> 1; }
+int  __fastcall T_UsesMorale()                      { return (TethysGame::startFlags() & 4) ? 0 : 1; }
+int  __fastcall T_InitialUnits()                    { return (TethysGame::startFlags() & 0x1E0000) >> 17; }
+// FindEMPMissleTarget(x1, y1, x2, y2, jogador): blocos 8x8 (tiles internos) no
+// retângulo; pontua cada ocupante vivo (prédio só no seu tile central): armado
+// (0x90) do jogador +0x40, armado de outro −0x20, desarmado de outro +1. Devolve
+// o canto do melhor bloco + 3. (LOCATION por valor: ponteiro oculto em ECX.)
+ApiLoc* __fastcall T_FindEMPMissleTarget(ApiLoc* ret, int x1, int y1, int x2, int y2, int player) {
+    const int imask = g_gameMap.internalWidth() - 1;            // dword_54EBC4
+    const int off = g_gameMap.internalXOffset();
+    x1 &= ~7; y1 &= ~7;
+    x2 = ((x2 + 7) & imask) & ~7;
+    y2 = (y2 + 7) & ~7;
+    ret->x = x1 + 3; ret->y = y1 + 3;
+    if (x2 == x1 || y2 == y1) return ret;
+    int best = -1, bx = x1, by = y1;
+    int cx = x1;
+    for (;;) {
+        for (int cy = y1; cy < y2; cy += 8) {
+            int score = 0;
+            for (int x = cx; x != cx + 8; ++x)
+                for (int y = cy; y != cy + 8; ++y) {
+                    if (y < 0 || y >= g_gameMap.height()) continue;
+                    const int id = g_gameMap.cellOccupant(portX(x & imask), y);
+                    if (!id || id >= static_cast<int>(g_units.size())) continue;
+                    const UnitRecord& r = g_units[id];
+                    if (r.id == -1 || (r.flags & UNIT_DEAD)) continue;
+                    if ((r.flags & UNIT_BUILDING) &&
+                        (((unitOX(r) + off * 32) >> 5) != x || (unitOY(r) >> 5) != y)) continue;
+                    const int ow = r.owner & 0x0F;
+                    if (r.flags & 0x90u) score += ow == player ? 0x40 : -0x20;
+                    else if (ow != player) ++score;
+                }
+            if (score > best) { best = score; bx = cx; by = cy; }
+        }
+        cx = (cx + 8) & imask;
+        if (cx == x2) break;
+    }
+    ret->x = bx + 3; ret->y = by + 3;
+    return ret;
+}
 int  __fastcall T_Time()                            { return static_cast<int>(TethysGame::tick()) >> 2; }
 // PlaceMarker(Unit&, x, y, tipo): AMBIENT_ANIM em (x<<5, y<<5) (sub_4466B0(0x72)).
 int  __fastcall T_PlaceMarker(int* unit, int x, int y, int type) {
@@ -282,6 +329,21 @@ int  __fastcall U_IsDiscovered(int* u, void*) {
     return r.type == 0x54 && wreckDiscovered(r, 0) ? 1 : 0;
 }
 int  __fastcall U_GetCargo(int* u, void*)        { return static_cast<int16_t>(g_units[*u].cargo); }   // movsx [+0x24]
+// ?GetWeapon: o mesmo [+0x24] (a arma dos veículos armados).
+int  __fastcall U_GetWeapon(int* u, void*)       { return static_cast<int16_t>(g_units[*u].cargo); }
+// ?DoMove(LOCATION): viva, x em [0, larguraInterna), y em [0, altura) → pacote 2
+// (mover) do dono, um ponto (sub_40E210).
+void __fastcall U_DoMove(int* u, void*, ApiLoc loc) {
+    if (*u <= 0 || *u >= static_cast<int>(g_units.size())) return;
+    const UnitRecord& r = g_units[*u];
+    if (r.id == -1 || (r.flags & UNIT_DEAD)) return;
+    if (loc.x < 0 || loc.x >= g_gameMap.internalWidth() || loc.y < 0 || loc.y >= g_gameMap.height()) return;
+    CommandPacket pkt;
+    pkt.type = CMD_MOVE;
+    pkt.unitIds.push_back(*u);
+    pkt.waypoints.push_back(packLocation(portX(loc.x), loc.y));
+    processCommandPacket(r.owner & 0x0F, pkt);
+}
 void __fastcall U_DoSelfDestruct(int* u, void*)  { unitDoSelfDestruct(*u); }
 int  __fastcall U_HasOccupiedBay(int* u, void*)  { return unitHasOccupiedBay(*u); }
 // ?Location: ([+0x14] >> 5, [+0x18] >> 5) em tiles INTERNOS; LOCATION por valor
@@ -309,6 +371,19 @@ void* __fastcall E_InRectCtor(void* self, void*, const ApiRect* rc) {
     auto* it = new (self) MapRectIter();
     mapRectIterInit(*it, rc->x1 << 5, rc->y1 << 5, w << 5, h << 5, 0xFFFFFFFFu, 0xFFFFFFFFu);
     return self;
+}
+// LocationEnumerator(LOCATION&): unidades sob o ponto (x<<5, y<<5), sem filtro.
+static_assert(sizeof(MapPointIter) <= 52, "LocationEnumerator");
+void* __fastcall E_LocationCtor(void* self, void*, const ApiLoc* loc) {
+    auto* it = new (self) MapPointIter();
+    mapPointIterInit(*it, loc->x << 5, loc->y << 5, 0xFFFFFFFFu, 0xFFFFFFFFu);
+    return self;
+}
+int __fastcall E_LocationGetNext(void* self, void*, int* unit) {
+    const int id = mapPointIterNext(*static_cast<MapPointIter*>(self));
+    if (!id) return 0;
+    *unit = id;
+    return 1;
 }
 int __fastcall E_InRectGetNext(void* self, void*, int* unit) {
     const int id = mapRectIterNext(*static_cast<MapRectIter*>(self));
@@ -399,6 +474,18 @@ void __fastcall U_DoTransfer(int* u, void*, int player) {
 int* __fastcall TR_CreateRectTrigger(int* ret, int bEnabled, int bOneShot, int player, int x, int y, int w, int h,
                                      const char* fn) {
     *ret = createRectTrigger(bEnabled, bOneShot, player, x, y, w, h, fn);
+    return ret;
+}
+int* __fastcall TR_CreateDamagedTrigger(int* ret, int bEnabled, int bOneShot, int* group, int count, const char* fn) {
+    *ret = createDamagedTrigger(bEnabled, bOneShot, group ? *group : 0xFF, count, fn);
+    return ret;
+}
+int* __fastcall TR_CreatePointTrigger(int* ret, int bEnabled, int bOneShot, int player, int x, int y, const char* fn) {
+    *ret = createPointTrigger(bEnabled, bOneShot, player, x, y, fn);
+    return ret;
+}
+int* __fastcall TR_CreateOnePlayerLeftTrigger(int* ret, int bEnabled, int bOneShot, const char* fn) {
+    *ret = createOnePlayerLeftTrigger(bEnabled, bOneShot, fn);
     return ret;
 }
 int* __fastcall TR_CreateSpecialTarget(int* ret, int bEnabled, int bOneShot, int* target, int sourceType, const char* fn) {
@@ -610,6 +697,21 @@ const std::map<std::string, void*>& table() {
         {"?PlaceMarker@TethysGame@@SIHAAVUnit@@HHH@Z", reinterpret_cast<void*>(&T_PlaceMarker)},
         {"?CreateWreck@TethysGame@@SIHHHW4map_id@@H@Z", reinterpret_cast<void*>(&T_CreateWreck)},
         {"?OwnerID@Unit@@QBEHXZ", reinterpret_cast<void*>(&U_OwnerID)},
+        {"?IsEden@_Player@@QAEHXZ", reinterpret_cast<void*>(&P_IsEden)},
+        {"?NoPlayers@TethysGame@@SIHXZ", reinterpret_cast<void*>(&T_NoPlayers)},
+        {"?CanHaveDisasters@TethysGame@@SIHXZ", reinterpret_cast<void*>(&T_CanHaveDisasters)},
+        {"?UsesDayNight@TethysGame@@SIHXZ", reinterpret_cast<void*>(&T_UsesDayNight)},
+        {"?UsesMorale@TethysGame@@SIHXZ", reinterpret_cast<void*>(&T_UsesMorale)},
+        {"?InitialUnits@TethysGame@@SIHXZ", reinterpret_cast<void*>(&T_InitialUnits)},
+        {"?FindEMPMissleTarget@TethysGame@@SI?AULOCATION@@HHHHH@Z", reinterpret_cast<void*>(&T_FindEMPMissleTarget)},
+        {"?GetWeapon@Unit@@QBE?AW4map_id@@XZ", reinterpret_cast<void*>(&U_GetWeapon)},
+        {"?DoMove@Unit@@QAEXULOCATION@@@Z", reinterpret_cast<void*>(&U_DoMove)},
+        {"??0LocationEnumerator@@QAE@ABULOCATION@@@Z", reinterpret_cast<void*>(&E_LocationCtor)},
+        {"?GetNext@LocationEnumerator@@QAEHAAVUnit@@@Z", reinterpret_cast<void*>(&E_LocationGetNext)},
+        {"??0FightGroup@@QAE@XZ", reinterpret_cast<void*>(&SS_Ctor)},
+        {"?CreateDamagedTrigger@@YI?AVTrigger@@HHAAVScGroup@@HPBD@Z", reinterpret_cast<void*>(&TR_CreateDamagedTrigger)},
+        {"?CreatePointTrigger@@YI?AVTrigger@@HHHHHPBD@Z", reinterpret_cast<void*>(&TR_CreatePointTrigger)},
+        {"?CreateOnePlayerLeftTrigger@@YI?AVTrigger@@HHPBD@Z", reinterpret_cast<void*>(&TR_CreateOnePlayerLeftTrigger)},
         {"?isDiscovered@Unit@@QBEHXZ", reinterpret_cast<void*>(&U_IsDiscovered)},
         {"?HasFired@Trigger@@QAEHH@Z", reinterpret_cast<void*>(&TRG_HasFired)},
         {"?CreateFailureCondition@@YI?AVTrigger@@HHAAV1@PBD@Z", reinterpret_cast<void*>(&TR_CreateFailureCondition)},

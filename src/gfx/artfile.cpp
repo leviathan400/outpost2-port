@@ -158,9 +158,39 @@ void ArtFile::parseAnimations(size_t startOff) {
         }
         if (o + 4 > n) return;
         uint32_t extra = rdU32(d, o); o += 4;
-        o += static_cast<size_t>(extra) * 16;   // ExtraRecord: 4 x u32
+        if (o + static_cast<size_t>(extra) * 16 > n) return;
+        for (uint32_t k = 0; k < extra; ++k, o += 16)        // ExtraRecord: 4 x u32
+            anim.clips.push_back({static_cast<int32_t>(rdU32(d, o)), static_cast<int32_t>(rdU32(d, o + 4)),
+                                  static_cast<int32_t>(rdU32(d, o + 8)), static_cast<int32_t>(rdU32(d, o + 12))});
         m_anims.push_back(std::move(anim));
     }
+}
+
+bool ArtFile::pixelMiss(int anim, int frame, int x, int y, int clipAnim) const {
+    if (anim < 0 || anim >= numAnimations()) return true;
+    const ArtAnimation& a = m_anims[anim];
+    if (frame < 0 || frame >= static_cast<int>(a.frames.size())) return true;
+    const ArtAnimation& c = (clipAnim >= 0 && clipAnim < numAnimations()) ? m_anims[clipAnim] : a;
+    x += static_cast<int32_t>(c.header[1]);
+    y += static_cast<int32_t>(c.header[2]);
+    const int hx = static_cast<int32_t>(a.header[5]), hy = static_cast<int32_t>(a.header[6]);
+    for (const ArtPicture& p : a.frames[frame].pics) {            // ordem de slot
+        if (p.image >= m_images.size()) continue;
+        const ArtImage& m = m_images[p.image];
+        const int px = x - p.x, py = y - p.y;
+        const int k = (m.type & 0x3E0) >> 5;
+        if (k) {                                                   // recorte k (relativo ao hotspot)
+            const std::array<int32_t, 4> r = k - 1 < static_cast<int>(a.clips.size())
+                                                 ? a.clips[k - 1] : std::array<int32_t, 4>{0, 0, 0, 0};
+            if (r[0] - hx > px || px > r[2] - hx || py < r[1] - hy || py > r[3] - hy) continue;
+        }
+        // (largura/altura inclusivas e o stride cru — em bits nas sombras —
+        // como no original.)
+        if (px < 0 || py < 0 || static_cast<int>(m.width) < px || static_cast<int>(m.height) < py) continue;
+        const size_t off = static_cast<size_t>(m.offset) + static_cast<size_t>(m.stride) * py + px;
+        if (off < m_atlas.size() && m_atlas[off] != 0) return false;
+    }
+    return true;
 }
 
 uint32_t ArtFile::palColor(int p, int c) const {

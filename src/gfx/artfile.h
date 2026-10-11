@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -51,6 +52,9 @@ struct ArtAnimation {
     uint32_t header[9] = {0};
     std::vector<ArtFrame> frames;
     bool hasOffsets = false;        // base dos extras != 0xFFFF (algum frame com offsets)
+    // ExtraRecords {x1, y1, x2, y2} (loc_404BC0: registro +0x38..): recorte das
+    // imagens com type bits 5..9 = k (entrada k−1), usado no teste de pixel.
+    std::vector<std::array<int32_t, 4>> clips;
 };
 
 class ArtFile {
@@ -80,6 +84,11 @@ public:
     static constexpr int kPlayerRamp = 24;
     void decode(int i, std::vector<uint32_t>& out, bool transparent = true,
                 int palOverride = -1, int playerColor = -1) const;
+
+    // sub_404E30: o ponto (x, y) — relativo ao canto do bbox (header[1]/[2]) da
+    // animação `clipAnim` (−1 = a própria) — cai num pixel transparente de todas
+    // as pictures do frame? (true = nenhum pixel opaco.) Índices reais.
+    bool pixelMiss(int anim, int frame, int x, int y, int clipAnim = -1) const;
 
 private:
     bool m_ok = false;
