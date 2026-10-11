@@ -101,7 +101,9 @@ void processCommandPacket(int owner, const CommandPacket& pkt) {
     // unidade do packet cujo dono confere e que aceita comando.
     // Casos 2-4 e 38-40 (loc_40E2C0): ordem de movimento com a ação = tipo.
     // Portados: 2 (mover), 0x26 (ficar parado), 0x27 (rota de minério) e 0x28 (patrulhar).
-    if (pkt.type != CMD_MOVE && pkt.type != 0x26 && pkt.type != 0x27 && pkt.type != 0x28) return;
+    // 3/4: mover e, ao chegar, virar p/ 0x80/0xC0 e atracar (jpt_43B312 casos 2-4).
+    if (pkt.type != CMD_MOVE && pkt.type != 3 && pkt.type != 4 && pkt.type != 0x26 && pkt.type != 0x27 &&
+        pkt.type != 0x28) return;
 
     const int numUnits = static_cast<int>(pkt.unitIds.size());
     for (int idx = 0; idx < numUnits; ++idx) {

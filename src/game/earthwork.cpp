@@ -215,14 +215,20 @@ bool sendBuildWall(const std::vector<int>& sel, int x1, int y1, int x2, int y2, 
     if (!any) return false;
     soundPlay(0x56);
     for (int id : sel) {                                     // case 7 → sub_4234C0
-        if (!valid(id)) continue;
-        UnitRecord& u = g_units[id];
-        if (ownerOf(u) != me || !commandable(u)) continue;
-        u.action = 7; u.field20 = 1; u.field3C = 0;
-        u.buildL = static_cast<int16_t>(x1 & wmask()); u.buildT = static_cast<int16_t>(y1);
-        u.buildR = static_cast<int16_t>((x2 - 1) & wmask()); u.buildB = static_cast<int16_t>(y2 - 1);
-        u.cargo = static_cast<uint16_t>(wallType);
+        if (!valid(id) || ownerOf(g_units[id]) != me) continue;
+        earthworkWallOrder(id, x1, y1, x2, y2, wallType);
     }
+    return true;
+}
+
+bool earthworkWallOrder(int id, int x1, int y1, int x2, int y2, int wallType) {
+    if (!valid(id)) return false;
+    UnitRecord& u = g_units[id];
+    if (!commandable(u)) return false;
+    u.action = 7; u.field20 = 1; u.field3C = 0;
+    u.buildL = static_cast<int16_t>(x1 & wmask()); u.buildT = static_cast<int16_t>(y1);
+    u.buildR = static_cast<int16_t>((x2 - 1) & wmask()); u.buildB = static_cast<int16_t>(y2 - 1);
+    u.cargo = static_cast<uint16_t>(wallType);
     return true;
 }
 

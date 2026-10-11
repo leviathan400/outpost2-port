@@ -31,6 +31,8 @@ bool dozeCellOk(int x, int y);
 // Pacotes (jogador local). Retângulo em tiles, x2/y2 EXCLUSIVOS (como o filtro).
 // Retornam false se nenhuma célula serve (o clique é recusado: som 0x58).
 bool sendBuildWall(const std::vector<int>& sel, int x1, int y1, int x2, int y2, int wallType);
+// sub_40E210 case 7 → sub_4234C0 p/ uma unidade (qualquer dono); x2/y2 exclusivos.
+bool earthworkWallOrder(int id, int x1, int y1, int x2, int y2, int wallType);
 bool sendBulldoze(const std::vector<int>& sel, int x1, int y1, int x2, int y2);
 
 // sub_41C410: restringe o fim do arrasto (pixels) a uma reta de até 8 tiles.

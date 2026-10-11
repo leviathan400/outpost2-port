@@ -88,6 +88,8 @@ bool triggerHasFired(int stub, int player);
 // ScStub (Enable/Disable/IsEnabled/Destroy) pelo stubIndex.
 void stubEnable(int stub, bool on);
 bool stubEnabled(int stub);
+// ScStub::Destroy → vt[7] do objeto: sai das listas de instâncias e é apagado.
+void stubDestroy(int stub);
 
 // sub_403110: chamado a cada turno (age quando (tick & 3) == 3): dispara os
 // triggers, roda o AIProc da missão e testa vitória/derrota.

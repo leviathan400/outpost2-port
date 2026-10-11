@@ -4,12 +4,22 @@
 #include <array>
 #include <cstdlib>
 #include <cstdio>
+#include <cstring>
 #include <vector>
 
 #include "building_sheet.h"
+#include "colony.h"
 #include "command.h"
 #include "commands.h"
+#include "construction.h"
+#include "docking.h"
+#include "earthwork.h"
 #include "game_map.h"
+#include "mining.h"
+#include "pathfinder.h"
+#include "production.h"
+#include "structure.h"
+#include "walls.h"
 #include "player.h"
 #include "scenario.h"
 #include "tethys_game.h"
@@ -71,6 +81,15 @@ struct TargetList {
     int empVehicles = 0;      // +0x50
 };
 
+// TargCount: {tipo, arma (0x73 = qualquer), alvo, atual}.
+struct TCEntry { int type, weapon, target, current; };
+// BuildGroup: prédio/mina {x1,y1,x2,y2 (tiles internos), tipo, +0x14, +0x18}
+// (prédio: carga, grupo; mina: grupo, unidade designada), tubo {x, y, tipo,
+// unidade}, grupo a reforçar {stub, prioridade, fábrica}.
+struct BuildRec { int rc[4]; int type; int a14; int a18; };
+struct TubeRec { int x, y, type, worker; };
+struct ReinfRec { int stub, prio, factory; };
+
 struct Group : Stub {
     int kind = GK_SC;
     int player = 0;                 // +0x2F4
@@ -87,6 +106,18 @@ struct Group : Stub {
     int targetGroup = -1, attackType = 0, targetUnit = -1;   // +0x354/+0x358/+0x35C
     std::vector<std::array<int, 4>> guarded;                 // +0x360/+0x364 (até 8)
     int mode = 0;                                            // +0x3E4
+    // TargCount (+0x2E4, criado por sub_42B050; +0x10 = recontar).
+    bool hasTC = false, tcDirty = false;
+    std::vector<TCEntry> tc;
+    // MineGroup (sub_429970): mina/smelter +0x308/+0x30C, docas (px internos,
+    // centro do tile) +0x310/+0x318, tipos +0x320/+0x324.
+    int mine = 0, smelter = 0, mineDock[2] = {0, 0}, smelterDock[2] = {0, 0}, mineType = 0, smelterType = 0;
+    int area[4] = {0, 0, 0, 0};                              // Mine +0x328 / Build +0x338 (px internos)
+    // BuildGroup: listas e a máquina de reconstrução (+0x348..+0x358).
+    std::vector<BuildRec> blds, mines;
+    std::vector<TubeRec> tubes;
+    std::vector<ReinfRec> reinf;
+    int bState = 0, conVec = 0, factory = 0, bIndex = 0, bay = -1;
 
     bool hasClass(int c) const {
         for (const Node& n : nodes) if (n.cls == c) return true;
@@ -529,13 +560,14 @@ void classHandler(Group& g, Node& n, const TargetList& L) {
 }
 
 // sub_42B160: tira membros mortos ou que mudaram de dono.
-void dropInvalid(Group& g) {
+void dropInvalid(Group& g) {                                // sub_42B160
     for (size_t i = 0; i < g.nodes.size();) {
         const UnitRecord& r = g_units[g.nodes[i].unit];
         if (r.id != -1 && !(r.flags & UNIT_DEAD) && ownerOf(r) == g.player) { ++i; continue; }
         UnitRecord& w = g_units[g.nodes[i].unit];
         w.groupStub = 0xFF;
         g.nodes.erase(g.nodes.begin() + static_cast<long>(i));
+        g.tcDirty = true;
     }
 }
 
@@ -593,6 +625,781 @@ void fightThink(Group& g) {
 }
 
 // sub_42B360: DeleteWhenEmpty — true = apagar o grupo.
+// sub_46E5C0: o GORF devolve 50% (60% melhorado: bloco +0x1D do GORF, nibble
+// alto) do custo do tipo (bloco do nibble baixo: comum +0x0C, raro +0x10).
+void gorfRecycle(int gorf, int type) {
+    const UnitRecord& gr = g_units[gorf];
+    const int p = ownerOf(gr);
+    const uint8_t* b = unitStatBlock(type, p);
+    if (!b) return;
+    int common, rare;
+    std::memcpy(&common, b + 0x0C, 4);
+    std::memcpy(&rare, b + 0x10, 4);
+    const uint8_t* gb = unitStatBlock(0x39, (gr.owner >> 4) & 0x0F);
+    const int pct = (gb && gb[0x1D]) ? 60 : 50;
+    g_playerData[p].ore += common * pct / 100;
+    g_playerData[p].rareOre += rare * pct / 100;
+}
+
+// ================================================================================
+// TargCount (+0x2E4, sub_42C1F0): tabela ordenada {tipo, arma, alvo, atual};
+// arma 0x73 = qualquer (casa só pelo lado da entrada, sub_42CC40).
+int tcCmp(const TCEntry& e, int type, int weapon) {
+    const int d = e.type - type;
+    if (d) return d;
+    return e.weapon == 0x73 ? 0 : e.weapon - weapon;
+}
+// Busca binária de sub_42C3F0/sub_42C510/sub_42C8C0: índice ou −1.
+int tcFind(const std::vector<TCEntry>& v, int type, int weapon) {
+    if (v.empty()) return -1;
+    int lo = 0, hi = static_cast<int>(v.size()) - 1;
+    while (hi - lo > 1) {
+        const int mid = (lo + hi) / 2;
+        const int c = tcCmp(v[mid], type, weapon);
+        if (c > 0) hi = mid;
+        else if (c < 0) lo = mid;
+        else return mid;
+    }
+    if (tcCmp(v[lo], type, weapon) == 0) return lo;
+    if (tcCmp(v[lo], type, weapon) > 0) return -1;
+    if (tcCmp(v[hi], type, weapon) == 0) return hi;
+    return -1;
+}
+// sub_42CA00: índice da entrada (insere ordenado se não houver; marca a tabela).
+int tcEnsure(Group& g, int type, int weapon) {
+    std::vector<TCEntry>& v = g.tc;
+    int pos = 0;
+    if (!v.empty()) {
+        int lo = 0, hi = static_cast<int>(v.size()) - 1;
+        bool found = false;
+        while (hi - lo > 1) {
+            const int mid = (lo + hi) / 2;
+            const TCEntry key{type, weapon, 0, 0};
+            const int c = tcCmp(v[mid], key.type, key.weapon);   // sub_42CC40(mid, chave)
+            if (c > 0) hi = mid;
+            else if (c < 0) lo = mid;
+            else { pos = mid; found = true; break; }
+        }
+        if (found) return pos;
+        const int cl = tcCmp(v[lo], type, weapon);
+        if (cl == 0) return lo;
+        if (cl > 0) pos = 0;
+        else {
+            const int ch = tcCmp(v[hi], type, weapon);
+            if (ch == 0) return hi;
+            pos = ch < 0 ? static_cast<int>(v.size()) : hi;
+        }
+    }
+    v.insert(v.begin() + pos, TCEntry{type, weapon, 0, 0});
+    g.tcDirty = true;
+    return pos;
+}
+// sub_42C510: recontagem dos membros.
+void tcRecount(Group& g) {
+    for (TCEntry& e : g.tc) e.current = 0;
+    for (const Node& n : g.nodes) {
+        const UnitRecord& r = g_units[n.unit];
+        const int k = tcFind(g.tc, r.type, static_cast<int16_t>(r.cargo));
+        if (k >= 0) ++g.tc[k].current;
+    }
+    g.tcDirty = false;
+}
+
+// ---- Mapa em tiles INTERNOS ------------------------------------------------------
+int imask() { return g_gameMap.internalWidth() - 1; }                    // dword_54EBC4
+int toPortX(int ix) { return ((ix & imask()) - g_gameMap.internalXOffset()); }
+bool onPortMap(int ix, int y) {
+    const int px = toPortX(ix);
+    return px >= 0 && px < g_gameMap.width() && y >= 0 && y < g_gameMap.height();
+}
+int occupantAt(int ix, int y) { return onPortMap(ix, y) ? g_gameMap.cellOccupant(toPortX(ix), y) : 0; }
+int cellTypeAt(int ix, int y) { return onPortMap(ix, y) ? static_cast<int>(g_gameMap.rawCell(toPortX(ix), y) & 0x1F) : 0; }
+// Ocupante da célula = prédio do jogador do grupo → id; senão 0.
+int playerBuildingAt(const Group& g, int ix, int y) {
+    const int id = occupantAt(ix, y);
+    if (!id || !valid(id)) return 0;
+    const UnitRecord& r = g_units[id];
+    if (ownerOf(r) != g.player || !(r.flags & UNIT_BUILDING)) return 0;
+    return id;
+}
+bool liveOwned(const Group& g, int id) {
+    return valid(id) && !(g_units[id].flags & UNIT_DEAD) && ownerOf(g_units[id]) == g.player;
+}
+void dropRefOf(int id) {
+    if (valid(id) && g_units[id].refCount) --g_units[id].refCount;
+}
+
+// sub_437A90/sub_437AF0: alguma unidade (flags 0x46, dono em pm, flags & fm)
+// a menos de r px do ponto (px internos; x com volta).
+bool anyInCircle(int px, int py, int r, uint32_t pm, uint32_t fm) {
+    const int y0 = py - r, y1 = std::min(py + r, g_gameMap.height() * 32);
+    for (int id = unitListFirst(); id; id = unitListNext(id)) {
+        const UnitRecord& t = g_units[id];
+        int ux, uy;
+        origPos(t, ux, uy);
+        if (uy < y0) continue;
+        if (uy >= y1) break;
+        if (!(t.flags & 0x46u) || !(pm & (1u << ownerOf(t))) || !(t.flags & fm) || t.field22 == 0x0D ||
+            t.id == -1 || (t.flags & UNIT_DEAD))
+            continue;
+        const int dx = wrapDX(px - ux), dy = uy - py;
+        if (static_cast<unsigned>(dx * dx + dy * dy) < static_cast<unsigned>(r * r)) return true;
+    }
+    return false;
+}
+// sub_42C130: nenhum armado inimigo (0x10|0x20|0x80) a 0x140 px do tile.
+bool siteSafe(const Group& g, int ix, int iy) {
+    return !anyInCircle(ix << 5, iy << 5, 0x140, enemyMask(g.player), 0x10u | 0x20u | 0x80u);
+}
+
+// Membros da classe cls (0x11 = todos) — os nós estão ordenados por classe.
+template <class F> void forClass(Group& g, int cls, F f) {
+    for (Node& n : g.nodes) {
+        if (cls != 0x11 && n.cls < cls) continue;
+        if (cls != 0x11 && n.cls > cls) break;
+        if (!f(n)) break;
+    }
+}
+int dist2(const UnitRecord& r, int px, int py) {
+    int ux, uy;
+    origPos(r, ux, uy);
+    return (ux - px) * (ux - px) + (uy - py) * (uy - py);
+}
+Node* nearestOperating(Group& g, int px, int py, int cls) {            // sub_42C010
+    Node* best = nullptr;
+    int bd = 0x7FFFFFFF;
+    forClass(g, cls, [&](Node& n) {
+        const UnitRecord& r = g_units[n.unit];
+        if (structureOperational(r)) {
+            const int d = dist2(r, px, py);
+            if (d < bd) { bd = d; best = &n; }
+        }
+        return true;
+    });
+    return best;
+}
+Node* nearestFree(Group& g, int px, int py, int cls) {                 // sub_42BFA0
+    Node* best = nullptr;
+    int bd = 0x7FFFFFFF;
+    forClass(g, cls, [&](Node& n) {
+        const UnitRecord& r = g_units[n.unit];
+        if (!(r.flags & 0xC0000u) && r.field22 != 0x0A) {
+            const int d = dist2(r, px, py);
+            if (d < bd) { bd = d; best = &n; }
+        }
+        return true;
+    });
+    return best;
+}
+template <class P> Node* nearestWith(Group& g, P pred, int px, int py, int cls) {   // sub_42C0A0
+    Node* best = nullptr;
+    int bd = 0x7FFFFFFF;
+    forClass(g, cls, [&](Node& n) {
+        const UnitRecord& r = g_units[n.unit];
+        if (!(r.flags & 0xC0000u)) {
+            const int d = dist2(r, px, py);
+            if (d < bd && pred(n)) { bd = d; best = &n; }
+        }
+        return true;
+    });
+    return best;
+}
+int countTypeCargo(Group& g, int type, int cargo) {                    // sub_42BEA0
+    int c = 0;
+    forClass(g, aiUnitClass(type, cargo), [&](Node& n) {
+        const UnitRecord& r = g_units[n.unit];
+        if (r.type == type && static_cast<int16_t>(r.cargo) == cargo) ++c;
+        return true;
+    });
+    return c;
+}
+// Custo do tipo no bloco do jogador: comum +0x0C, raro +0x10.
+bool affordable(int player, int type) {
+    const uint8_t* b = unitStatBlock(type, player);
+    if (!b) return false;
+    int common, rare;
+    std::memcpy(&common, b + 0x0C, 4);
+    std::memcpy(&rare, b + 0x10, 4);
+    const PlayerData& d = g_playerData[player];
+    return d.rareOre >= rare && d.ore >= common;
+}
+
+// ---- Ordens (todas gravam o tick no nó) ------------------------------------------
+void orderMoveDock(Node& n, int px, int py) {                          // sub_42A440 (pacote 3)
+    n.tick = tick();
+    CommandPacket pkt;
+    pkt.type = 3;
+    pkt.unitIds.push_back(n.unit);
+    pkt.waypoints.push_back(packLocation(portTileX(px), py >> 5));
+    processCommandPacket(ownerOf(g_units[n.unit]), pkt);
+}
+// vt[0x10C] da fábrica (sub_4158E0): esvazia a baia; com GORF operando, recicla.
+void emptyBay(int factory, int bay) {                                  // pacote 0x0D
+    UnitRecord& f = g_units[factory];
+    const int p = ownerOf(f);
+    const int type = static_cast<int8_t>(f.bayType[bay]);
+    if (g_colony[p].stat(ST_GORF_GRP + 4)) {
+        for (int b : colonyStructures(p)) {
+            if (g_units[b].type != 0x39 || !structureOperational(g_units[b])) continue;
+            gorfRecycle(b, type);
+            if (type == 5 || type == 6 || type == 7 || type == 4 || type == 0x17)
+                gorfRecycle(b, static_cast<int8_t>(f.bayCargo[bay]));
+            break;
+        }
+    }
+    f.bayType[bay] = 0;
+    f.bayCargo[bay] = 0;
+}
+void orderProduce(Node& n, int type, int cargo, int groupStub) {      // sub_42A330
+    UnitRecord& f = g_units[n.unit];
+    int i = 0;
+    while (i < 6 && f.bayType[i]) ++i;
+    if (i == 6) { n.tick = tick(); emptyBay(n.unit, 0); }
+    n.tick = tick();
+    processProducePacket(ownerOf(f), n.unit, type, cargo, groupStub == 0xFF ? -1 : groupStub);
+}
+void orderBayTransfer(Node& n, int bay) {                              // sub_42A560 (pacote 0x0A)
+    n.tick = tick();
+    processBayTransfer(ownerOf(g_units[n.unit]), n.unit, bay);
+}
+// sub_42A6A0 (pacote 6): obra com o anel do registro; o prédio vai p/ o grupo.
+void orderBuild(Node& n, const BuildRec& rec, int group) {
+    n.tick = tick();
+    const int m = imask();
+    const uint32_t loc = packLocation(toPortX((rec.rc[2] + 1) & m), rec.rc[3] + 1);
+    processBuildPacket(ownerOf(g_units[n.unit]), n.unit, loc, toPortX((rec.rc[0] - 1) & m), rec.rc[1] - 1,
+                       toPortX((rec.rc[2] + 1) & m), rec.rc[3] + 1, group == 0xFF ? -1 : group);
+}
+// sub_42A800: longe (> 0x6400 px²) → anda; senão pacote 7 (uma célula).
+void orderWall(Node& n, int x, int y, int mapId) {
+    UnitRecord& r = g_units[n.unit];
+    int ux, uy;
+    origPos(r, ux, uy);
+    const int dy = std::abs(uy - (y << 5)), dx = std::abs(wrapDX((x << 5) - ux));
+    if (dx * dx + dy * dy > 0x6400) { orderMove(n, x << 5, y << 5); return; }
+    n.tick = tick();
+    earthworkWallOrder(n.unit, toPortX(x), y, toPortX(x + 1), y + 1, mapId);
+}
+// sub_42A200: despejar (pacote 0x0E) se ainda não despeja.
+void orderDump(Node& n) {
+    n.tick = tick();
+    UnitRecord& r = g_units[n.unit];
+    if (r.action == 0x0E) return;
+    dumpCargoOrder(n.unit);
+}
+
+// ---- Limpeza do lote (sub_4273C0) e muros em volta (sub_4276B0) ------------------
+bool clearSite(Group& g, const int rc[4], int except) {
+    // (diferença em TILES com a volta em pixels — como o original)
+    int dx = rc[2] - rc[0];
+    if (-(pxMask() / 2) >= dx) dx += pxW();
+    else if (pxMask() / 2 < dx) dx = -((-dx) & pxMask());
+    std::vector<int> found;
+    mapUnitsInRect(rc[0] << 5, rc[1] << 5, (dx + 1) << 5, (rc[3] - rc[1] + 1) << 5,
+                   g_playerData[g.player].allyMask, 2u, found);
+    bool any = false, init = false;
+    int sx = 0, sy = 0, dir = 1, run = 0, vlen = 0, hlen = 0;
+    const MAP_RECT& clip = g_gameMap.clipRect();      // dword_54EBD4..E0 (internos)
+    for (int id : found) {
+        UnitRecord& u = g_units[id];
+        if (id == except || u.field22 == 1 || u.action != 0) continue;
+        any = true;
+        if (!init) {
+            init = true;
+            int h = rc[3] - rc[1];
+            vlen = h + 4;
+            hlen = wrapDX(h) + 4;                            // (BUG do original: pela altura)
+            dir = 1;
+            sy = rc[1] - 3;
+            sx = (rc[0] - 2) & imask();
+            run = vlen + 1;
+        }
+        pfSetContext(id);
+        for (int guard = 0; guard < 4096; ++guard) {
+            if (run == 0) {
+                dir = (dir + 1) & 3;
+                if (dir & 1) { run = vlen; ++vlen; } else { run = hlen; ++hlen; }
+            } else {
+                --run;
+            }
+            bool test = false;
+            switch (dir) {
+                case 0: sx = (sx - 1) & imask(); test = clip.x1 <= sx; break;
+                case 1: ++sy; test = clip.y2 >= sy; break;
+                case 2: sx = (sx + 1) & imask(); test = clip.x2 >= sx; break;
+                case 3: --sy; test = clip.y1 <= sy; break;
+            }
+            if (!test || !onPortMap(sx, sy)) continue;
+            if (g_gameMap.rawCell(toPortX(sx), sy) & 0x87FF0000u) continue;
+            if (!pfCanEnter(toPortX(sx), sy)) continue;
+            if (u.groupStub == 0xFF) {
+                CommandPacket pkt;                              // Unit::DoMove
+                pkt.type = CMD_MOVE;
+                pkt.unitIds.push_back(id);
+                pkt.waypoints.push_back(packLocation(toPortX(sx), sy));
+                processCommandPacket(ownerOf(u), pkt);
+            } else if (Group* og = grp(u.groupStub)) {
+                if (Node* on = nodeOf(*og, id)) orderMove(*on, sx << 5, sy << 5);
+            }
+            break;
+        }
+    }
+    return any;
+}
+void clearWallsAround(const int rc[4]) {
+    const int xe = (rc[2] + 1) & imask();
+    const int y0 = std::max(rc[1] - 1, 0), y1 = std::min(rc[3] + 1, g_gameMap.height() - 1);
+    for (int x = (rc[0] - 1) & imask();; x = (x + 1) & imask()) {
+        for (int y = y0; y <= y1; ++y) {
+            const int ct = cellTypeAt(x, y);
+            if (ct >= 0x17 && ct <= 0x19) destroyWallOrTube(toPortX(x), y);
+        }
+        if (x == xe) break;
+    }
+}
+
+// ---- MineGroup ---------------------------------------------------------------------
+// sub_437EB0/sub_437EE0: prédio (flags 4, do jogador) cujo footprint cobre a célula,
+// entre os ocupantes da célula e das vizinhas esquerda/direita/acima.
+template <class P> int buildingCovering(int ix, int iy, P pred) {
+    const int cells[4][2] = {{0, 0}, {-1, 0}, {1, 0}, {0, -1}};
+    const int n = iy > 0 ? 4 : 3;
+    for (int k = 0; k < n; ++k) {
+        const int id = occupantAt((ix + cells[k][0]) & imask(), iy + cells[k][1]);
+        if (!id || !valid(id)) continue;
+        const UnitRecord& r = g_units[id];
+        if (r.flags & UNIT_DEAD) continue;
+        if (!(r.flags & 6u) || !(r.flags & UNIT_BUILDING)) continue;
+        int w, h;
+        buildingFootprint(r.type, w, h);
+        const int bx = ((unitOX(r) >> 5) + g_gameMap.internalXOffset()) & imask(), by = unitOY(r) >> 5;
+        const int x1 = (bx - (w >> 1)) & imask(), y1 = by - (h >> 1);
+        if (iy < y1 || iy > y1 + h - 1) continue;
+        if (((ix - x1) & imask()) >= w) continue;
+        if (pred(id)) return id;
+    }
+    return 0;
+}
+// sub_429C20 / sub_429DD0: acha a mina / o smelter pela doca e testa.
+bool mineReady(Group& g) {
+    if (!g.mine) {
+        g.mine = buildingCovering(g.mineDock[0] >> 5, g.mineDock[1] >> 5, [&](int id) {
+            const UnitRecord& r = g_units[id];
+            int x, y;
+            return ownerOf(r) == g.player && r.type == g.mineType && dockCell(id, x, y) &&
+                   ((x + g_gameMap.internalXOffset()) & imask()) == (g.mineDock[0] >> 5) && y == (g.mineDock[1] >> 5);
+        });
+    }
+    if (!g.mine || !structureOperational(g_units[g.mine])) return false;
+    // Nenhum inimigo de classe <= 4 num quadrado de 0x140 px centrado na doca.
+    std::vector<int> found;
+    mapUnitsInRect((g.mineDock[0] - 0xA0) & pxMask(), g.mineDock[1] - 0xA0, 0x140, 0x140,
+                   enemyMask(g.player), 0xFFFFFFFFu, found);
+    for (int id : found)
+        if (aiUnitClass(g_units[id].type, static_cast<int16_t>(g_units[id].cargo)) <= 4) return false;
+    return true;
+}
+bool smelterReady(Group& g) {
+    if (!g.smelter) {
+        g.smelter = buildingCovering(g.smelterDock[0] >> 5, g.smelterDock[1] >> 5, [&](int id) {
+            const UnitRecord& r = g_units[id];
+            int x, y;
+            return ownerOf(r) == g.player && r.type == g.smelterType && dockCell(id, x, y) &&
+                   ((x + g_gameMap.internalXOffset()) & imask()) == (g.smelterDock[0] >> 5) &&
+                   y == (g.smelterDock[1] >> 5);
+        });
+    }
+    if (!g.smelter || !structureOperational(g_units[g.smelter])) return false;
+    const PlayerData& d = g_playerData[g.player];
+    const ColonyState& c = g_colony[g.player];
+    if (g.mineType == 0x15) return c.oreCapacity > d.ore;          // +0x18 > +0x20
+    return d.rareOre < c.rareCapacity;                            // +0x24 < +0x1C
+}
+void mineThink(Group& g) {                                         // vt[13] sub_429B00
+    const int kind = g.mineType == 0x15 ? 2 : 3;
+    int mineOk = -1, smelterOk = -1;
+    for (size_t i = 0; i < g.nodes.size(); ++i) {
+        Node& n = g.nodes[i];
+        if (n.cls < 7) continue;
+        if (n.cls > 7) break;
+        UnitRecord& r = g_units[n.unit];
+        if (r.field22 == 0x0D) continue;
+        const int cargo = r.cargo & 0xF;
+        const int* dock = nullptr;
+        if (cargo == 0) {
+            if (mineOk < 0) mineOk = mineReady(g) ? 1 : 0;
+            if (mineOk) dock = g.mineDock;
+        } else if (cargo != kind) {
+            orderDump(n);
+            continue;
+        } else {
+            if (smelterOk < 0) smelterOk = smelterReady(g) ? 1 : 0;
+            if (smelterOk) dock = g.smelterDock;
+        }
+        if (!dock) { keepInRect(g, n, g.area, 0); continue; }
+        if (r.action == 3 && tick() - n.tick <= 0x320) continue;
+        orderMoveDock(n, dock[0], dock[1]);
+    }
+}
+
+// ---- BuildGroup --------------------------------------------------------------------
+int buildMinerType(int type) { return (type == 0x15 || type == 0x16 || type == 0x2A) ? 9 : type == 0x2C ? 0x0A : 0; }
+
+int buildState0(Group& g) {                                         // sub_425C50
+    if (TethysGame::rng().next() > 0x0FFFFFFFu) return 0;
+    for (size_t i = 0; i < g.blds.size(); ++i) {
+        const BuildRec& b = g.blds[i];
+        if (playerBuildingAt(g, b.rc[2], b.rc[1])) continue;
+        if (!siteSafe(g, b.rc[2], b.rc[3])) continue;
+        g.bIndex = static_cast<int>(i);
+        int found = 0;
+        forClass(g, 5, [&](Node& n) {
+            const UnitRecord& c = g_units[n.unit];
+            if (static_cast<int16_t>(c.cargo) == b.type &&
+                (b.type != 0x17 || static_cast<int8_t>(c.kitWeapon) == b.a14)) {
+                found = n.unit;
+                return false;
+            }
+            return true;
+        });
+        if (found) { g.bState = 3; g.conVec = found; }
+        else g.bState = 1;
+        return 1;
+    }
+    return 0;
+}
+void dockPx(int building, int& px, int& py) {
+    int x, y;
+    dockCell(building, x, y);
+    px = ((x + g_gameMap.internalXOffset()) & imask()) * 32 + 16;
+    py = y * 32 + 16;
+}
+int buildState1(Group& g) {                                         // sub_425DB0
+    const BuildRec& b = g.blds[g.bIndex];
+    if (!g.factory) {
+        g.conVec = 0;
+        Node* f = nearestOperating(g, b.rc[2] << 5, b.rc[3] << 5, 0x0C);
+        if (!f) return 0;
+        g.bay = -1;
+        g.factory = f->unit;
+    }
+    int dx, dy;
+    dockPx(g.factory, dx, dy);
+    int cv = g.conVec;
+    if (!cv) {
+        Node* c = nearestFree(g, dx, dy, 5);
+        if (c) { g.conVec = c->unit; cv = c->unit; }
+    }
+    bool atDock = false;
+    if (cv) {
+        UnitRecord& c = g_units[cv];
+        int cx, cy;
+        origPos(c, cx, cy);
+        atDock = cx == dx && cy == dy;
+        if (!atDock) {
+            int wx, wy;
+            const bool going = c.action == 3 && moveDest(c, wx, wy) && (wx >> 5) == (dx >> 5) && (wy >> 5) == (dy >> 5);
+            if (!going) if (Node* cn = nodeOf(g, cv)) orderMoveDock(*cn, dx, dy);
+        }
+    }
+    UnitRecord& f = g_units[g.factory];
+    if (g.bay == -1) {
+        for (int i = 0; i < 6; ++i)
+            if (static_cast<int8_t>(f.bayType[i]) == b.type && static_cast<int8_t>(f.bayCargo[i]) == b.a14) {
+                g.bay = i;
+                break;
+            }
+        if (g.bay == -1) {
+            if (!(f.action == 9 && f.produceType == b.type && static_cast<int8_t>(f.kitWeapon) == b.a14))
+                if (Node* fn = nodeOf(g, g.factory)) orderProduce(*fn, b.type, b.a14, 0xFF);
+            return 0;
+        }
+    }
+    if (atDock) { g.bState = 2; return 1; }
+    return 0;
+}
+int buildState2(Group& g) {                                         // sub_425FF0
+    if (!g.conVec || !g.factory) { g.bay = -1; g.bState = 1; return 1; }
+    UnitRecord& c = g_units[g.conVec];
+    const BuildRec& b = g.blds[g.bIndex];
+    if (static_cast<int16_t>(c.cargo) == b.type && static_cast<int8_t>(c.kitWeapon) == b.a14) {
+        g.bState = 3;
+        return 1;
+    }
+    int dx, dy;
+    dockPx(g.factory, dx, dy);
+    int cx, cy;
+    origPos(c, cx, cy);
+    if (cx != dx && cy != dy) { g.conVec = 0; g.bState = 1; return 1; }   // (o original exige os dois diferentes)
+    if (c.field22 != 0x0D)
+        if (Node* fn = nodeOf(g, g.factory)) orderBayTransfer(*fn, g.bay);
+    return 0;
+}
+int buildState3(Group& g) {                                         // sub_426120
+    BuildRec& b = g.blds[g.bIndex];
+    if (playerBuildingAt(g, b.rc[2], b.rc[1])) {
+        if (g.conVec) if (Node* cn = nodeOf(g, g.conVec)) keepInRect(g, *cn, g.area, 1);
+        g.factory = 0; g.conVec = 0; g.bState = 0;
+        return 1;
+    }
+    if (!g.conVec) { g.bay = -1; g.bState = 1; return 1; }
+    const int tx = ((b.rc[2] + 1) & imask()) * 32 + 16, ty = b.rc[3] * 32 + 0x30;
+    UnitRecord& c = g_units[g.conVec];
+    int cx, cy;
+    origPos(c, cx, cy);
+    if (cx == tx && cy == ty) {
+        if (c.action != 6) if (Node* cn = nodeOf(g, g.conVec)) orderBuild(*cn, b, b.a18);
+        clearSite(g, b.rc, g.conVec);
+        clearWallsAround(b.rc);
+        return 0;
+    }
+    int wx, wy;
+    const bool going = c.action == CMD_MOVE && moveDest(c, wx, wy) && (wx >> 5) == (tx >> 5) && (wy >> 5) == (ty >> 5);
+    if (!going) {
+        if (Node* cn = nodeOf(g, g.conVec)) orderMove(*cn, tx, ty);
+        const int ct = cellTypeAt(tx >> 5, ty >> 5);
+        if (ct >= 0x17 && ct <= 0x19) destroyWallOrTube(toPortX(tx >> 5), ty >> 5);
+    }
+    return 0;
+}
+
+void buildMines(Group& g) {                                         // sub_4269E0
+    if (TethysGame::rng().next() > 0x0FFFFFFFu) return;
+    for (BuildRec& m : g.mines) {
+        const int want = buildMinerType(m.type);
+        if (m.a18) {
+            const int w = m.a18;
+            if (liveOwned(g, w)) {
+                const UnitRecord& u = g_units[w];
+                if ((u.flags & UNIT_VEHICLE) && u.action == 6) {
+                    clearSite(g, m.rc, w);
+                    clearWallsAround(m.rc);
+                    continue;
+                }
+                if ((u.flags & UNIT_BUILDING) && u.action == 9 && u.produceType == want) continue;
+            }
+            m.a18 = 0;
+            dropRefOf(w);
+        }
+        if (playerBuildingAt(g, m.rc[2], m.rc[1])) continue;   // (a18 já é 0 aqui)
+        if (!siteSafe(g, m.rc[2], m.rc[3])) continue;
+        Node* n = nearestWith(g, [&](Node& c) {                  // loc_426DE0
+            const UnitRecord& r = g_units[c.unit];
+            return r.type == want && r.action != 6;
+        }, m.rc[2], m.rc[3], 9);
+        if (n) {
+            orderBuild(*n, m, m.a14);
+            m.a18 = n->unit;
+            ++g_units[n->unit].refCount;
+            continue;
+        }
+        if (countTypeCargo(g, want, 0)) continue;
+        if (!affordable(g.player, want)) continue;
+        bool done = false;
+        forClass(g, 0x0A, [&](Node& f) {
+            const UnitRecord& r = g_units[f.unit];
+            if (!structureOperational(r) || r.action == 9) return true;
+            orderProduce(f, want, 0, g.id);
+            m.a18 = f.unit;
+            ++g_units[f.unit].refCount;
+            done = true;
+            return false;
+        });
+        (void)done;
+    }
+}
+
+struct ReinfItem { int r, type, weapon, cum; };
+// sub_427080: distribui os itens pelas fábricas livres da classe.
+void assignFactories(Group& g, std::vector<ReinfItem>& items, int sum, int cls) {
+    const int n = static_cast<int>(items.size());
+    int k = 0;
+    forClass(g, cls, [&](Node& f) {
+        const UnitRecord& r = g_units[f.unit];
+        if (!structureOperational(r) || r.action == 9) return true;
+        ++k;
+        int idx = 0;
+        if (n > k) {
+            do {
+                const int x = TethysGame::getRand(sum);
+                idx = 0;
+                while (items[idx].cum <= x) ++idx;
+            } while (g.reinf[items[idx].r].factory != 0);
+        } else {
+            while (g.reinf[items[idx].r].factory != 0) ++idx;
+        }
+        const ReinfItem& it = items[idx];
+        orderProduce(f, it.type, it.weapon, g.reinf[it.r].stub);
+        g.reinf[it.r].factory = f.unit;
+        ++g_units[f.unit].refCount;
+        return n > k;
+    });
+}
+void buildReinforce(Group& g) {                                     // sub_426E10
+    if (TethysGame::rng().next() > 0x0FFFFFFFu) return;
+    std::vector<ReinfItem> a, b;
+    int sumA = 0, sumB = 0;
+    for (size_t ri = 0; ri < g.reinf.size(); ++ri) {
+        ReinfRec& e = g.reinf[ri];
+        if (e.factory) {
+            if (liveOwned(g, e.factory) && g_units[e.factory].action == 9) continue;
+            const int f = e.factory;
+            e.factory = 0;
+            dropRefOf(f);
+        }
+        Group* t = grp(e.stub);
+        if (!t || t->nodes.size() == 32 || !t->hasTC || t->tc.empty()) continue;
+        if (t->tcDirty) tcRecount(*t);
+        const int cnt = static_cast<int>(t->tc.size());
+        const int start = TethysGame::getRand(cnt);
+        int k = start;
+        do {
+            const TCEntry& c = t->tc[k];
+            if (c.target > c.current) {
+                if (c.type >= 3 && c.type <= 4) {
+                    sumB += e.prio;
+                    b.push_back({static_cast<int>(ri), c.type, c.weapon, sumB});
+                    break;
+                }
+                if (c.type >= 1 && c.type <= 0x0F && a.size() < 16) {
+                    sumA += e.prio;
+                    a.push_back({static_cast<int>(ri), c.type, c.weapon, sumA});
+                    break;
+                }
+            }
+            if (++k == cnt) k = 0;
+        } while (k != start);
+    }
+    if (!a.empty()) assignFactories(g, a, sumA, 0x0A);
+    if (!b.empty()) assignFactories(g, b, sumB, 0x0B);
+}
+
+void buildTubes(Group& g) {                                         // sub_426720
+    if (TethysGame::rng().next() > 0x0FFFFFFFu) return;
+    for (TubeRec& t : g.tubes) {
+        const int ct = cellTypeAt(t.x, t.y);
+        if (t.worker) {
+            if (ct >= 0x17 && ct <= 0x1A && t.type != ct) destroyWallOrTube(toPortX(t.x), t.y);
+            const int rc[4] = {t.x, t.y, t.x, t.y};
+            clearSite(g, rc, t.worker);
+            if (liveOwned(g, t.worker) && g_units[t.worker].action == 7) continue;
+            const int w = t.worker;
+            t.worker = 0;
+            dropRefOf(w);
+        }
+        if (ct == t.type) {
+            if (t.worker) {
+                if (Node* n = nodeOf(g, t.worker)) orderStop(*n);
+                const int w = t.worker;
+                t.worker = 0;
+                dropRefOf(w);
+            }
+            continue;
+        }
+        const int mapId = t.type == 0x17 ? 0x12 : t.type == 0x18 ? 0x14 : t.type == 0x19 ? 0x13 : t.type == 0x1A ? 0x11 : 0;
+        if (!affordable(g.player, mapId)) continue;
+        Node* n = nearestWith(g, [&](Node& c) {                  // loc_4269C0
+            return c.tick != tick() && g_units[c.unit].action != 7;
+        }, t.x, t.y, 8);
+        if (!n) continue;
+        orderWall(*n, t.x, t.y, mapId);
+        t.worker = n->unit;
+        ++g_units[n->unit].refCount;
+    }
+}
+
+void buildThink(Group& g) {                                         // vt[13] sub_425B30
+    if (g.nodes.empty()) return;
+    if (g.conVec && !liveOwned(g, g.conVec)) g.conVec = 0;
+    if (g.factory && !liveOwned(g, g.factory)) g.factory = 0;
+    for (int guard = 0; guard < 16; ++guard) {
+        int more = 0;
+        switch (g.bState) {
+            case 0: more = buildState0(g); break;
+            case 1: more = g.blds.empty() ? 0 : buildState1(g); break;
+            case 2: more = g.blds.empty() ? 0 : buildState2(g); break;
+            case 3: more = g.blds.empty() ? 0 : buildState3(g); break;
+        }
+        if (!more) break;
+    }
+    buildMines(g);
+    buildReinforce(g);
+    // sub_426360 (reparo pelos ConVecs/Spiders/Repair, pacote 0x1C): a ação de
+    // reparar ainda não foi portada.
+    buildTubes(g);
+    for (size_t i = 0; i < g.nodes.size(); ++i) {
+        Node& n = g.nodes[i];
+        if (n.cls > 9) break;
+        if (g_units[n.unit].action == 0 && n.unit != g.conVec) keepInRect(g, n, g.area, 0);
+    }
+}
+
+// sub_4362D0 (Heckbert, por colunas) com sub_430010 (dentro: não visitado e
+// prédio do jogador ou tubo) e sub_4300C0 (visita; grava a célula se não há
+// prédio por cima, até `budget`). Coordenadas internas.
+void tubeFill(int player, int x0, int y0, std::vector<std::pair<int, int>>& out, int budget) {
+    const int W = g_gameMap.internalWidth(), H = g_gameMap.height(), m = imask();
+    std::vector<uint8_t> seen(static_cast<size_t>(W) * H, 0);
+    auto inside = [&](int x, int y) {
+        x &= m;
+        if (y < 0 || y >= H || seen[static_cast<size_t>(y) * W + x]) return false;
+        const int id = occupantAt(x, y);
+        if (id && valid(id) && (g_units[id].flags & UNIT_BUILDING)) return ownerOf(g_units[id]) == player;
+        return cellTypeAt(x, y) == 0x1A;
+    };
+    auto set = [&](int x, int y) {
+        x &= m;
+        seen[static_cast<size_t>(y) * W + x] = 1;
+        if (budget <= 0) return;
+        if (buildingCovering(x, y, [](int) { return true; })) return;
+        out.emplace_back(x, y);
+        --budget;
+    };
+    struct Seg { int x, yl, yr, dx; };
+    std::vector<Seg> st;
+    inside(x0, y0);
+    st.push_back({x0, y0, y0, 1});
+    st.push_back({x0 - 1, y0, y0, -1});
+    const size_t kMax = 0x3FF;
+    while (!st.empty()) {
+        Seg s = st.back();
+        st.pop_back();
+        const int x = s.x & m;
+        int yl = s.yl, l = 0, y;
+        int nx = x + s.dx;
+        bool scan = false;
+        if (inside(x, yl)) {
+            int top = yl;
+            while (top > 0 && inside(x, top - 1)) { --top; set(x, top); }
+            if (yl > top) {
+                if (st.size() < kMax) st.push_back({x - s.dx, top, yl - 1, -s.dx});
+                l = top;
+                scan = true;
+            }
+        }
+        for (;;) {
+            if (!scan) {
+                while (yl <= s.yr && !inside(x, yl)) ++yl;
+                if (yl > s.yr) break;
+                l = yl;
+            }
+            scan = false;
+            y = yl;
+            do { set(x, y); ++y; } while (y <= s.yr && inside(x, y));
+            if (y > s.yr && y < H && inside(x, y)) {
+                while (y < H && inside(x, y)) { set(x, y); ++y; }
+                --y;
+                if (st.size() < kMax) st.push_back({nx, l, y, s.dx});
+                if (y > s.yr && st.size() < kMax) st.push_back({x - s.dx, s.yr + 1, y, -s.dx});
+                break;
+            }
+            yl = y + 1;
+            if (st.size() < kMax) st.push_back({nx, l, y - 1, s.dx});
+            if (yl > s.yr) break;
+        }
+    }
+}
+
 bool deleteCheck(Group& g) {
     if (g.deleteAt == 0x7FFFFFFF) return false;
     if (g.nodes.empty()) return true;
@@ -670,6 +1477,10 @@ void aiTakeUnit(int stub, int unitId) {                      // sub_42B960
         r.action = 5; r.field20 = 1; r.field3C = 0;
         if (r.flags & UNIT_ARMED) unitResetCombat(unitId);
     }
+    if (g->hasTC && !g->tcDirty) {                           // sub_42C3F0
+        const int k = tcFind(g->tc, r.type, static_cast<int16_t>(r.cargo));
+        if (k >= 0) ++g->tc[k].current;
+    }
 }
 
 void aiRemoveUnit(int stub, int unitId) {                    // sub_42BBF0
@@ -679,6 +1490,7 @@ void aiRemoveUnit(int stub, int unitId) {                    // sub_42BBF0
     for (size_t i = 0; i < v.size(); ++i)
         if (v[i].unit == unitId) { v.erase(v.begin() + static_cast<long>(i)); break; }
     g_units[unitId].groupStub = 0xFF;
+    g->tcDirty = true;
 }
 
 int aiAddUnitsFromBlock(int stub, const MissionUnitRecord* recs, int n, int (*portX)(int)) {   // sub_42BD50
@@ -785,6 +1597,25 @@ void aiGroupsDump() {
                     "patrulha %d | andando %d atacando %d patrulhando %d\n", id, g->kind, g->player,
                     static_cast<int>(g->nodes.size()), g->mode, g->rect[0] >> 5, g->rect[1] >> 5, g->rect[2] >> 5,
                     g->rect[3] >> 5, static_cast<int>(g->guarded.size()), g->patrolOn, moving, attacking, patrolling);
+        if (g->kind == GK_MINE) {
+            int loaded = 0, docked = 0;
+            for (const Node& n : g->nodes) {
+                if (g_units[n.unit].cargo & 0xF) ++loaded;
+                if (g_units[n.unit].field22 == 0x0D) ++docked;
+            }
+            std::printf("[AI]   mina %d (tipo 0x%X) smelter %d | carregados %d na doca %d | minerio j%d %d/%d raro %d/%d\n",
+                        g->mine, g->mineType, g->smelter, loaded, docked, g->player, g_playerData[g->player].ore,
+                        g_colony[g->player].oreCapacity, g_playerData[g->player].rareOre, g_colony[g->player].rareCapacity);
+        }
+        if (g->kind == GK_BUILD) {
+            int missing = 0, tubesMissing = 0;
+            for (const BuildRec& b : g->blds) if (!playerBuildingAt(*g, b.rc[2], b.rc[1])) ++missing;
+            for (const TubeRec& t : g->tubes) if (cellTypeAt(t.x, t.y) != t.type) ++tubesMissing;
+            std::printf("[AI]   predios %d (faltam %d) minas %d tubos %d (faltam %d) reforcos %d | estado %d convec %d fabrica %d baia %d\n",
+                        static_cast<int>(g->blds.size()), missing, static_cast<int>(g->mines.size()),
+                        static_cast<int>(g->tubes.size()), tubesMissing, static_cast<int>(g->reinf.size()), g->bState,
+                        g->conVec, g->factory, g->bay);
+        }
     }
 }
 
@@ -794,6 +1625,10 @@ void aiGroupsTick() {
         Group* g = grp(id);
         if (!g) continue;
         dropInvalid(*g);
+        if (g->kind == GK_MINE) {                            // vt[12] sub_429840
+            if (g->mine && !liveOwned(*g, g->mine)) g->mine = 0;
+            if (g->smelter && !liveOwned(*g, g->smelter)) g->smelter = 0;
+        }
         if (g->kind == GK_FIGHT && g->targetUnit > 0) {
             const int t = g->targetUnit;
             if (!valid(t) || (g_units[t].flags & UNIT_DEAD)) g->targetUnit = 0;
@@ -810,7 +1645,95 @@ void aiGroupsTick() {
         Group* g = grp(id);
         if (!g || !g->enabled) continue;
         if (g->kind == GK_FIGHT) fightThink(*g);
+        else if (g->kind == GK_MINE) mineThink(*g);
+        else if (g->kind == GK_BUILD) buildThink(*g);
     }
+}
+
+void aiSetTargCount(int stub, int type, int weapon, int count) {   // sub_42B050 + sub_42C8C0
+    Group* g = grp(stub);
+    if (!g) return;
+    g->hasTC = true;
+    if (type < 1 || type > 0x0F) return;
+    const int k = tcEnsure(*g, type, weapon ? weapon : 0x73);
+    g->tc[k].target = count;
+}
+void aiSetTargCountBlock(int stub, const MissionUnitRecord* recs, int n) {   // sub_42CBE0
+    Group* g = grp(stub);
+    if (!g) return;
+    g->hasTC = true;
+    for (int i = 0; i < n; ++i) {
+        if (recs[i].unitClass > 9) continue;
+        const int k = tcEnsure(*g, recs[i].type, recs[i].weapon ? recs[i].weapon : 0x73);
+        ++g->tc[k].target;
+    }
+}
+int aiGroupMemberAt(int stub, int idx) {
+    const Group* g = grp(stub);
+    if (!g || idx < 0 || idx >= static_cast<int>(g->nodes.size())) return 0;
+    return g->nodes[idx].unit;
+}
+void aiGroupDestroyed(int stub) {
+    Group* g = grp(stub);
+    if (!g) return;
+    for (const Node& n : g->nodes) if (valid(n.unit)) g_units[n.unit].groupStub = 0xFF;
+    g->nodes.clear();
+    auto it = std::find(s_groups.begin(), s_groups.end(), stub);
+    if (it != s_groups.end()) s_groups.erase(it);
+}
+
+void aiMineSetup(int stub, int mineId, int smelterId, int x1, int y1, int x2, int y2) {   // sub_429970
+    Group* g = grp(stub);
+    if (!g || !valid(mineId) || !valid(smelterId)) return;
+    g->mine = mineId; g->smelter = smelterId;
+    g->area[0] = x1 << 5; g->area[1] = y1 << 5; g->area[2] = x2 << 5; g->area[3] = y2 << 5;
+    g->mineType = g_units[mineId].type;
+    g->smelterType = g_units[smelterId].type;
+    dockPx(mineId, g->mineDock[0], g->mineDock[1]);
+    dockPx(smelterId, g->smelterDock[0], g->smelterDock[1]);
+}
+
+void aiBuildSetRect(int stub, int x1, int y1, int x2, int y2) {     // sub_425AB0
+    if (Group* g = grp(stub)) { g->area[0] = x1 << 5; g->area[1] = y1 << 5; g->area[2] = x2 << 5; g->area[3] = y2 << 5; }
+}
+// sub_408880: footprint (tiles internos) do tipo centrado em (x, y).
+static void footprintAt(int type, int x, int y, int rc[4]) {
+    int w, h;
+    buildingFootprint(static_cast<map_id>(type), w, h);
+    rc[0] = (x - w / 2) & imask();
+    rc[1] = std::max(y - h / 2, 0);
+    rc[2] = (w + rc[0] - 1) & imask();
+    rc[3] = std::min(h + rc[1] - 1, g_gameMap.height() - 1);
+}
+void aiBuildRecordBuilding(int stub, int x, int y, int type, int cargo, int group) {   // sub_4252A0
+    Group* g = grp(stub);
+    if (!g) return;
+    BuildRec r;
+    footprintAt(type, x, y, r.rc);
+    r.type = type;
+    if (type == 0x15 || type == 0x16 || type == 0x2C || type == 0x2A) {
+        r.a14 = group; r.a18 = 0;
+        g->mines.push_back(r);
+    } else {
+        r.a14 = cargo; r.a18 = group;
+        g->blds.push_back(r);
+    }
+}
+void aiBuildRecordBlock(int stub, const MissionUnitRecord* recs, int n, int first, int group) {   // sub_4254F0
+    for (int i = first; i < n; ++i) aiBuildRecordBuilding(stub, recs[i].x, recs[i].y, recs[i].type, recs[i].weapon, group);
+}
+void aiBuildRecordTube(int stub, int x, int y) {                    // sub_425090
+    if (Group* g = grp(stub)) g->tubes.push_back(TubeRec{x, y, 0x1A, 0});
+}
+void aiBuildRecordTubesTouching(int stub, int x, int y) {           // sub_4257D0
+    Group* g = grp(stub);
+    if (!g) return;
+    std::vector<std::pair<int, int>> cells;
+    tubeFill(g->player, x, y, cells, 0x800);
+    for (const auto& c : cells) g->tubes.push_back(TubeRec{c.first, c.second, 0x1A, 0});
+}
+void aiBuildRecordReinforce(int stub, int group, int prio) {        // sub_4258E0
+    if (Group* g = grp(stub)) g->reinf.push_back(ReinfRec{group, prio, 0});
 }
 
 } // namespace op2

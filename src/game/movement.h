@@ -9,5 +9,6 @@ namespace op2 {
 // byte-exato sub_44B650 (que depende do modelo completo do objeto Unit/descritor,
 // ainda a mapear) — mas NÃO substitui o pathfinder: a rota é a do original.
 void tickMovement();
+void moveDockArrive(int id);          // ações 3/4 no destino (giro + doca)
 
 } // namespace op2

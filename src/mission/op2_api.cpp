@@ -403,6 +403,98 @@ void __fastcall U_PutInGarage(int* u, void*, int bay, int x, int y) {
               << "): garagem nao portada" << std::endl;
 }
 
+// ---- Grupos de mineração e de construção ------------------------------------------------
+int* __fastcall G_CreateMiningGroup(int* ret, DllPlayer p) { *ret = aiCreateGroup(GK_MINE, p.playerNum); return ret; }
+int* __fastcall G_CreateBuildingGroup(int* ret, DllPlayer p) { *ret = aiCreateGroup(GK_BUILD, p.playerNum); return ret; }
+// Setup(Unit mina, Unit smelter, MAP_RECT&) / Setup(LOCATION&, LOCATION&, MAP_RECT&):
+// a 2ª forma pega os ocupantes das células (x interno).
+void __fastcall MG_SetupUnits(int* self, void*, int mine, int smelter, ApiRect* r) {
+    aiMineSetup(*self, mine, smelter, r->x1, r->y1, r->x2, r->y2);
+}
+void __fastcall MG_SetupLocs(int* self, void*, ApiLoc* mine, ApiLoc* smelter, ApiRect* r) {
+    const int m = g_gameMap.cellOccupant(portX(mine->x), mine->y);
+    const int s = g_gameMap.cellOccupant(portX(smelter->x), smelter->y);
+    aiMineSetup(*self, m, s, r->x1, r->y1, r->x2, r->y2);
+}
+void __fastcall BG_SetRect(int* self, void*, ApiRect* r) { aiBuildSetRect(*self, r->x1, r->y1, r->x2, r->y2); }
+void __fastcall BG_RecordBuilding(int* self, void*, ApiLoc* loc, int type, int cargo) {
+    aiBuildRecordBuilding(*self, loc->x, loc->y, type, cargo, 0xFF);
+}
+void __fastcall BG_RecordTube(int* self, void*, ApiLoc* loc) { aiBuildRecordTube(*self, loc->x, loc->y); }
+void __fastcall BG_RecordTubesTouching(int* self, void*, ApiLoc* loc) { aiBuildRecordTubesTouching(*self, loc->x, loc->y); }
+// RecordUnitBlock: os prédios do bloco (a partir de ranges[10][0], +0x54).
+void __fastcall BG_RecordUnitBlock(int* self, void*, DllUnitBlock* b) {
+    if (b) aiBuildRecordBlock(*self, b->table, b->numUnits, b->ranges[10][0], 0xFF);
+}
+void __fastcall BG_RecordUnitBlockGroup(int* self, void*, DllUnitBlock* b, int* grp) {
+    if (b) aiBuildRecordBlock(*self, b->table, b->numUnits, b->ranges[10][0], grp ? *grp : 0xFF);
+}
+void __fastcall BG_RecordVehReinforceGroup(int* self, void*, int* grp, int prio) {
+    aiBuildRecordReinforce(*self, grp ? *grp : 0xFF, prio);
+}
+void __fastcall SG_SetTargCount(int* self, void*, int type, int weapon, int count) { aiSetTargCount(*self, type, weapon, count); }
+void __fastcall SG_SetTargCountBlock(int* self, void*, DllUnitBlock* b) {
+    if (b) aiSetTargCountBlock(*self, b->table, b->numUnits);
+}
+// GetFirstOfType(Unit&, classe): 1º membro da classe.
+int  __fastcall SG_GetFirstOfType(int* self, void*, int* unit, int cls) {
+    const int id = aiFirstOfType(*self, cls);
+    if (!id) return 0;
+    *unit = id;
+    return 1;
+}
+// GroupEnumerator (4 bytes: o cursor) — aqui (stub << 8) | índice do membro.
+void* __fastcall E_GroupCtor(void* self, void*, int* grp) {
+    *static_cast<int*>(self) = ((grp ? *grp : 0xFF) & 0xFF) << 8;
+    return self;
+}
+int  __fastcall E_GroupGetNext(void* self, void*, int* unit) {
+    int& cur = *static_cast<int*>(self);
+    const int id = aiGroupMemberAt(cur >> 8, cur & 0xFF);
+    if (!id) return 0;
+    *unit = id;
+    ++cur;
+    return 1;
+}
+// ScStub::Destroy: vt[7] do objeto (apaga) e o stub vira 0xFF; IsEnabled: [+8].
+void __fastcall SS_Destroy(int* stub, void*) {
+    aiGroupDestroyed(*stub);
+    stubDestroy(*stub);
+    *stub = 0xFF;
+}
+int  __fastcall SS_IsEnabled(int* stub, void*) { return stubEnabled(*stub) ? 1 : 0; }
+// Unit: SetOppFiredUpon (bit 0x800000), DoDeath (Kill(1)), ClearSpecialTarget
+// (~0x2000000), isEMPed (0x80000 → −1), IsBusy ([+0x21] != 0).
+void __fastcall U_SetOppFiredUpon(int* u, void*, int on) {
+    UnitRecord& r = g_units[*u];
+    r.flags = (r.flags & ~0x800000u) | ((static_cast<uint32_t>(on) << 23) & 0x800000u);
+}
+void __fastcall U_DoDeath(int* u, void*) { killUnit(*u, 1); }
+void __fastcall U_ClearSpecialTarget(int* u, void*) { if (*u > 0) g_units[*u].flags &= ~0x2000000u; }
+int  __fastcall U_IsEMPed(int* u, void*) { return (*u > 0 && (g_units[*u].flags & UNIT_EMP)) ? -1 : 0; }
+int  __fastcall U_IsBusy(int* u, void*) { return g_units[*u].action != 0 ? 1 : 0; }
+// _Player(int) e LOCATION(int, int): só gravam os campos.
+DllPlayer* __fastcall P_Ctor(DllPlayer* p, void*, int n) { p->playerNum = n; return p; }
+ApiLoc* __fastcall L_Ctor(ApiLoc* l, void*, int x, int y) { l->x = x; l->y = y; return l; }
+// MAP_RECT::Inflate(dx, dy) (x com a máscara interna) / ClipToMap.
+void __fastcall R_Inflate(ApiRect* r, void*, int dx, int dy) {
+    const int m = g_gameMap.internalWidth() - 1;
+    r->x1 = (r->x1 - dx) & m; r->x2 = (r->x2 + dx) & m;
+    r->y1 -= dy; r->y2 += dy;
+}
+void __fastcall R_ClipToMap(ApiRect* r, void*) {
+    const int off = g_gameMap.internalXOffset(), m = g_gameMap.internalWidth() - 1;
+    auto clipX = [&](int x) {
+        if (!off) return x & m;
+        if (x < off) x = off;
+        const int hi = g_gameMap.internalWidth() / 2 + off;
+        return x < hi ? x : hi;
+    };
+    auto clipY = [&](int y) { if (y < 0) y = 0; return y < g_gameMap.height() - 1 ? y : g_gameMap.height() - 1; };
+    r->x1 = clipX(r->x1); r->y1 = clipY(r->y1);
+    r->x2 = clipX(r->x2); r->y2 = clipY(r->y2);
+}
+
 // ---- Grupos (ScGroup / FightGroup) -------------------------------------------------------
 // CreateFightGroup(_Player por valor): retorno oculto em ECX, _Player (12 bytes) na pilha.
 int* __fastcall G_CreateFightGroup(int* ret, DllPlayer p) { *ret = aiCreateGroup(GK_FIGHT, p.playerNum); return ret; }
@@ -715,6 +807,35 @@ const std::map<std::string, void*>& table() {
         {"??0LocationEnumerator@@QAE@ABULOCATION@@@Z", reinterpret_cast<void*>(&E_LocationCtor)},
         {"?GetNext@LocationEnumerator@@QAEHAAVUnit@@@Z", reinterpret_cast<void*>(&E_LocationGetNext)},
         {"??0FightGroup@@QAE@XZ", reinterpret_cast<void*>(&SS_Ctor)},
+        {"??0MiningGroup@@QAE@XZ", reinterpret_cast<void*>(&SS_Ctor)},
+        {"??0BuildingGroup@@QAE@XZ", reinterpret_cast<void*>(&SS_Ctor)},
+        {"?CreateMiningGroup@@YI?AVMiningGroup@@V_Player@@@Z", reinterpret_cast<void*>(&G_CreateMiningGroup)},
+        {"?CreateBuildingGroup@@YI?AVBuildingGroup@@V_Player@@@Z", reinterpret_cast<void*>(&G_CreateBuildingGroup)},
+        {"?Setup@MiningGroup@@QAEXVUnit@@0AAUMAP_RECT@@@Z", reinterpret_cast<void*>(&MG_SetupUnits)},
+        {"?Setup@MiningGroup@@QAEXAAULOCATION@@0AAUMAP_RECT@@@Z", reinterpret_cast<void*>(&MG_SetupLocs)},
+        {"?SetRect@BuildingGroup@@QAEXAAUMAP_RECT@@@Z", reinterpret_cast<void*>(&BG_SetRect)},
+        {"?RecordBuilding@BuildingGroup@@QAEXAAULOCATION@@W4map_id@@1@Z", reinterpret_cast<void*>(&BG_RecordBuilding)},
+        {"?RecordTube@BuildingGroup@@QAEXAAULOCATION@@@Z", reinterpret_cast<void*>(&BG_RecordTube)},
+        {"?RecordTubesTouching@BuildingGroup@@QAEXAAULOCATION@@@Z", reinterpret_cast<void*>(&BG_RecordTubesTouching)},
+        {"?RecordUnitBlock@BuildingGroup@@QAEXAAVUnitBlock@@@Z", reinterpret_cast<void*>(&BG_RecordUnitBlock)},
+        {"?RecordUnitBlock@BuildingGroup@@QAEXAAVUnitBlock@@AAVScGroup@@@Z", reinterpret_cast<void*>(&BG_RecordUnitBlockGroup)},
+        {"?RecordVehReinforceGroup@BuildingGroup@@QAEXAAVScGroup@@H@Z", reinterpret_cast<void*>(&BG_RecordVehReinforceGroup)},
+        {"?SetTargCount@ScGroup@@QAEXW4map_id@@0H@Z", reinterpret_cast<void*>(&SG_SetTargCount)},
+        {"?SetTargCount@ScGroup@@QAEXAAVUnitBlock@@@Z", reinterpret_cast<void*>(&SG_SetTargCountBlock)},
+        {"?GetFirstOfType@ScGroup@@QAEHAAVUnit@@W4UnitClassifactions@@@Z", reinterpret_cast<void*>(&SG_GetFirstOfType)},
+        {"??0GroupEnumerator@@QAE@AAVScGroup@@@Z", reinterpret_cast<void*>(&E_GroupCtor)},
+        {"?GetNext@GroupEnumerator@@QAEHAAVUnit@@@Z", reinterpret_cast<void*>(&E_GroupGetNext)},
+        {"?Destroy@ScStub@@QAEXXZ", reinterpret_cast<void*>(&SS_Destroy)},
+        {"?IsEnabled@ScStub@@QAEHXZ", reinterpret_cast<void*>(&SS_IsEnabled)},
+        {"?SetOppFiredUpon@Unit@@QAEXH@Z", reinterpret_cast<void*>(&U_SetOppFiredUpon)},
+        {"?DoDeath@Unit@@QAEXXZ", reinterpret_cast<void*>(&U_DoDeath)},
+        {"?ClearSpecialTarget@Unit@@QAEXXZ", reinterpret_cast<void*>(&U_ClearSpecialTarget)},
+        {"?isEMPed@Unit@@QBEHXZ", reinterpret_cast<void*>(&U_IsEMPed)},
+        {"?IsBusy@Unit@@QBEHXZ", reinterpret_cast<void*>(&U_IsBusy)},
+        {"??0_Player@@QAE@H@Z", reinterpret_cast<void*>(&P_Ctor)},
+        {"??0LOCATION@@QAE@HH@Z", reinterpret_cast<void*>(&L_Ctor)},
+        {"?Inflate@MAP_RECT@@QAEXHH@Z", reinterpret_cast<void*>(&R_Inflate)},
+        {"?ClipToMap@MAP_RECT@@QAEXXZ", reinterpret_cast<void*>(&R_ClipToMap)},
         {"?CreateDamagedTrigger@@YI?AVTrigger@@HHAAVScGroup@@HPBD@Z", reinterpret_cast<void*>(&TR_CreateDamagedTrigger)},
         {"?CreatePointTrigger@@YI?AVTrigger@@HHHHHPBD@Z", reinterpret_cast<void*>(&TR_CreatePointTrigger)},
         {"?CreateOnePlayerLeftTrigger@@YI?AVTrigger@@HHPBD@Z", reinterpret_cast<void*>(&TR_CreateOnePlayerLeftTrigger)},

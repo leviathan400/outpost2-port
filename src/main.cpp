@@ -1345,6 +1345,7 @@ static int runMissionTest(const std::string& dll, const std::string& outPath, in
         gs.onIdle(renderer, 0.2501f / 4.0f);
         const std::string m = op2::statusBarText();
         if (m != lastMsg) { std::printf("[MissionTest] t=%d msg: %s\n", op2::TethysGame::tick(), m.c_str()); lastMsg = m; }
+        if (k % 2500 == 2499) { std::printf("[MissionTest] --- t=%d\n", op2::TethysGame::tick()); op2::aiGroupsDump(); }
     }
     {   int hurt = 0, dead = 0;
         for (size_t i = 1; i < op2::g_units.size(); ++i) {

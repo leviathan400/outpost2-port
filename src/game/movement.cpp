@@ -11,6 +11,8 @@
 #include "terrain_cost.h"
 #include "building_sheet.h"
 #include "structure.h"
+#include "construction.h"
+#include "mining.h"
 
 namespace op2 {
 
@@ -159,7 +161,7 @@ static void stepUnit(int id) {
     // Ações de movimento: 2 (mover), 0x26 (ficar parado: anda até o ponto e
     // segura a posição), 0x28 (patrulhar) — sub_43ACA0 inicia todas em
     // loc_43ADAD — e a aproximação de atacar/guardar (0x24/0x25).
-    const bool moving = u.action == CMD_MOVE || u.action == 0x26 || u.action == 0x24 ||
+    const bool moving = u.action == CMD_MOVE || u.action == 3 || u.action == 4 || u.action == 0x26 || u.action == 0x24 ||
                         u.action == 0x25 || u.action == 0x27 || u.action == 0x28 ||
                         u.action == 6 || u.action == 7 || u.action == 1 || u.action == 8;   // 6: ConVec indo à obra;
                         // 0x27: rota de minério; 7: Earthworker; 1: Robo-Dozer
@@ -190,6 +192,8 @@ static void stepUnit(int id) {
                 u.routeDirs.clear(); u.routeIdx = 0;
                 // Patrulhar: a ordem fica; o tick da ação (case 40) recomeça.
                 if (u.action == 0x28 || u.action == 0x27) return;   // (0x27: case 39)
+                // 3/4: o giro e a doca vêm no tick da ação (moveDockArrive).
+                if (u.action == 3 || u.action == 4) { u.hasOrder = false; u.order = OrderBlock{}; return; }
                 // Mover (casos 2-4 de jpt_43B312) zera a ação; 0x26 não tem tratamento
                 // por tick (def_43B312): a ação fica 0x26 (posição mantida).
                 // Atacar/guardar (0x24/0x25) seguem no tick da ação (jpt_43B312 casos 36/37).
@@ -230,6 +234,7 @@ static void stepUnit(int id) {
                     u.field20 = 0; u.field22 = 0; u.field23 = 1;
                     u.routeDirs.clear(); u.routeIdx = 0;
                     if (u.action == 0x28 || u.action == 0x27) return;
+                    if (u.action == 3 || u.action == 4) { u.hasOrder = false; u.order = OrderBlock{}; return; }
                     if (u.action == CMD_MOVE) { u.action = 0; specialTargetCheck(id); }   // sub_44D5B0
                     u.hasOrder = false; u.order = OrderBlock{};
                     return;
@@ -252,6 +257,18 @@ static void stepUnit(int id) {
     // sub_44C0B0: montado o passo (sub_44B650 retornou 1), o MESMO tick já
     // aplica o deslocamento (jnz loc_44C27D) — sem tick parado entre células.
     applyStepTick(u);
+}
+
+// jpt_43B312 casos 3/4 (parado no destino): vira p/ 0x80 / 0xC0; então ação 0,
+// vt[0x88] (doca do caminhão, sub_406070) e sub_44D5B0.
+void moveDockArrive(int id) {
+    UnitRecord& u = g_units[id];
+    if (!unitTurnTo(u, u.action == 3 ? 0x80 : 0xC0)) return;
+    u.action = 0;
+    u.field23 = u.field22;
+    u.field22 = 0;
+    if (u.type == mapCargoTruck) truckDockStart(id);
+    if (!(g_units[id].flags & 0x40u)) specialTargetCheck(id);
 }
 
 void tickMovement() {

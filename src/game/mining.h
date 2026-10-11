@@ -76,6 +76,7 @@ void storageUnload(int buildingId);             // pacote 0x0C → sub_424120
 // só a 1ª unidade): ação 0x0E (jpt_43AD56 case 14: espera o último frame da
 // anim 0x7BC, som 0x45, [+0x5E] = tick, sub-estado 6; case 14: carga = 0).
 void sendDumpCargo(int unitId);
+void dumpCargoOrder(int unitId);      // case 14 sem o teste de dono (pacote da IA)
 void dumpCargoStart(int unitId);
 void dumpCargoTick(int unitId);
 

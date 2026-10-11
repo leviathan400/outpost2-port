@@ -1,6 +1,7 @@
 #include "trigger.h"
 #include "../audio/sound.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <iostream>
@@ -388,6 +389,15 @@ void stubEnable(int stub, bool on) {                       // vt[3]/vt[4]
 }
 bool stubEnabled(int stub) {
     return stub >= 0 && stub < kMaxStubs && s_stubs[stub] && s_stubs[stub]->enabled;
+}
+void stubDestroy(int stub) {
+    if (stub < 0 || stub >= kMaxStubs || !s_stubs[stub]) return;
+    for (std::vector<int>* L : {&s_triggers, &s_victory, &s_failure, &s_special}) {
+        auto it = std::find(L->begin(), L->end(), stub);
+        if (it != L->end()) L->erase(it);
+    }
+    delete s_stubs[stub];
+    s_stubs[stub] = nullptr;
 }
 
 // compare_mode: 0 igual, 1 <=, 2 >=, 3 <, 4 > (contagem comparada ao alvo).

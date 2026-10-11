@@ -1,5 +1,6 @@
 #include "structure.h"
 #include "missile.h"
+#include "movement.h"
 #include "mining.h"
 #include "earthwork.h"
 #include "trigger.h"
@@ -564,6 +565,8 @@ static bool vehicleTick(int id) {
     else if (!r.field20 && r.field22 == 0 && r.action == 0x0E) dumpCargoTick(id);     // case 14
     else if (!r.field20 && r.field22 == 0 && r.action == 7) wallBuildTick(id);        // case 7
     else if (!r.field20 && r.field22 == 0 && r.action == 1) bulldozeTick(id);         // case 1
+    else if (!r.field20 && r.field22 == 0 && (r.action == 3 || r.action == 4) && !r.hasOrder)
+        moveDockArrive(id);                                                            // casos 3/4
     {   // def_43B312: armado (0x10 xor 0x80), sem 0x20000/0x80000 → vt[5] da arma.
         UnitRecord& u = g_units[id];
         if ((((u.flags << 24) ^ (u.flags << 27)) & 0x80000000u) && !(u.flags & 0xA0000u))

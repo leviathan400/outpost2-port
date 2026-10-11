@@ -17,7 +17,9 @@ struct MissionUnitRecord;
 // 3 GuardUnit, 4 AttackUnit, 5 AttackEnemy, 6 ExitMap; tabela de tratadores
 // off_4E0A78 (5 por modo). Veja a memória op2-ai-groups-plan.
 
-enum GroupKind { GK_SC = 0, GK_FIGHT = 1 };
+// MiningGroup (MineGroup, off_4E0B28, vt off_4CFF58) e BuildingGroup
+// (BuildGroup, off_4E0A30, vt off_4CFE58): ver src/game/ai_group.cpp.
+enum GroupKind { GK_SC = 0, GK_FIGHT = 1, GK_MINE = 2, GK_BUILD = 3 };
 
 void aiGroupsReset();
 void aiGroupsTick();                         // sub_403110, passo dos grupos
@@ -52,6 +54,27 @@ void aiFightSetCombineFire(int stub, bool on);
 // SetPatrolMode: pontos em tiles do port; start = índice de recomeço.
 void aiFightSetPatrol(int stub, int n, int start, const int* xs, const int* ys);
 void aiFightClearPatrol(int stub);
+
+// TargCount (+0x2E4): SetTargCount(tipo, arma, n) (sub_42C8C0; arma 0 = qualquer)
+// e SetTargCount(UnitBlock) (sub_42CBE0: +1 por veículo do bloco).
+void aiSetTargCount(int stub, int type, int weapon, int count);
+void aiSetTargCountBlock(int stub, const MissionUnitRecord* recs, int n);
+// GroupEnumerator: id do membro no índice (0 = fim).
+int  aiGroupMemberAt(int stub, int idx);
+// ScStub::Destroy de um grupo: solta os membros e tira da lista.
+void aiGroupDestroyed(int stub);
+
+// MiningGroup::Setup (sub_429970): retângulo em tiles INTERNOS (MAP_RECT).
+void aiMineSetup(int stub, int mineId, int smelterId, int x1, int y1, int x2, int y2);
+// BuildingGroup (tiles INTERNOS): SetRect (sub_425AB0), RecordBuilding
+// (sub_4252A0), RecordUnitBlock (sub_4254F0, a partir de `first`), RecordTube
+// (sub_425090), RecordTubesTouching (sub_4257D0), RecordVehReinforceGroup (sub_4258E0).
+void aiBuildSetRect(int stub, int x1, int y1, int x2, int y2);
+void aiBuildRecordBuilding(int stub, int x, int y, int type, int cargo, int group);
+void aiBuildRecordBlock(int stub, const MissionUnitRecord* recs, int n, int first, int group);
+void aiBuildRecordTube(int stub, int x, int y);
+void aiBuildRecordTubesTouching(int stub, int x, int y);
+void aiBuildRecordReinforce(int stub, int group, int prio);
 
 // Grupo padrão do jogador (_Player::SetDefaultGroup / GetDefaultGroup).
 void aiSetDefaultGroup(int player, int stub);

@@ -500,9 +500,13 @@ void storageUnload(int b) {                                    // sub_424120 →
 
 // ---- Despejar carga -----------------------------------------------------------
 void sendDumpCargo(int id) {                                   // sub_40E210 case 14
+    if (!valid(id) || ownerOf(g_units[id]) != TethysGame::localPlayer()) return;
+    dumpCargoOrder(id);
+}
+void dumpCargoOrder(int id) {
     if (!valid(id)) return;
     UnitRecord& u = g_units[id];
-    if (ownerOf(u) != TethysGame::localPlayer() || !vehCommandable(u)) return;
+    if (!vehCommandable(u)) return;
     u.action = 0x0E; u.field20 = 1; u.field3C = 0;
 }
 

@@ -13,6 +13,7 @@
 #include "research.h"
 #include "tethys_game.h"
 #include "unit.h"
+#include "ai_group.h"
 
 namespace op2 {
 
@@ -255,29 +256,31 @@ void factoryProduceFinish(int factoryId) {                   // jpt_43B312 case 
         int n = 1;
         if (f.produceType == 0x71 || f.produceType == 0x70) { n = 3; f.produceType -= 0x6D; }
         for (int i = 0; i < n; ++i) {
-            const int type = f.produceType;
+            const int type = g_units[factoryId].produceType;
             if (!type) break;
             int x = fx, y = fy;
             findVehicleSpot(type, x, y);                     // sub_4366D0
             Unit u;
-            if (!createUnit(u, static_cast<map_id>(type), LOCATION{x, y}, ownerLo(f))) continue;   // sub_4466B0
+            if (!createUnit(u, static_cast<map_id>(type), LOCATION{x, y}, ownerLo(g_units[factoryId]))) continue;   // sub_4466B0
+            UnitRecord& fr = g_units[factoryId];                 // (createUnit pode realocar)
             UnitRecord& v = g_units[u.id()];
             const uint8_t dir = dirOfVec(x - fx, y - fy);    // sub_45C4F0
             v.turretDir = dir & 0xF0;                        // [+0x2D]
             v.rotation = dir & 0xE0;                         // [+0x1C]
             v.curDir = static_cast<uint8_t>((dir & 0xE0) >> 5);
             v.flags |= UNIT_LIGHTS;
-            if (v.flags & UNIT_ARMED) v.cargo = f.kitWeapon; // [+0x24] = arma
-            f.action = 0;
-            // (sub_4030E0: grupo de IA [+0x6C]; estatística [jogador+0x1C0]++ — pendentes.)
-            if (ownerLo(f) == me && i == 0) {
+            if (v.flags & UNIT_ARMED) v.cargo = fr.kitWeapon; // [+0x24] = arma
+            fr.action = 0;
+            // sub_4030E0: grupo de IA [+0x6C] (estatística [jogador+0x1C0]++ — pendente).
+            if (fr.produceGroup != -1) aiTakeUnit(fr.produceGroup, u.id());
+            if (ownerLo(fr) == me && i == 0) {
                 const int snd = type == 3 ? 0x65 : type == 4 ? 0x66 : 0x62;
                 const std::string name = n == 1 ? unitTitle(v) : (type == 3 ? "Spider Pack" : "Scorpion Pack");
                 std::snprintf(msg, sizeof(msg), "%s produced", name.c_str());
                 postMessage(unitOX(v), unitOY(v), msg, snd);
             }
         }
-        f.produceType = 0;
+        g_units[factoryId].produceType = 0;
         return;
     }
     const int type = f.produceType;

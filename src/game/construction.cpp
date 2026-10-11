@@ -13,6 +13,7 @@
 #include "terrain_cost.h"
 #include "tethys_game.h"
 #include "unit.h"
+#include "ai_group.h"
 
 namespace op2 {
 
@@ -82,7 +83,20 @@ static void sendBuildPacket(const std::vector<int>& sel, int w, int h, int tileX
         if (u.field23 == 2) continue;
         if (u.type != mapConVec && u.type != mapRoboMiner && u.type != mapGeoCon) continue;   // vt[0x84] nulo
         setBuildOrder(u, loc, l, t, r, b);
+        u.buildGroup = -1;
     }
+}
+
+bool processBuildPacket(int owner, int id, unsigned int loc, int l, int t, int r, int b, int group) {
+    if (!valid(id)) return false;
+    UnitRecord& u = g_units[id];
+    if (ownerOf(u) != (owner & 0x0F) || !commandable(u)) return false;
+    if (u.type == mapConVec && u.cargo == 0) return false;
+    if (u.field23 == 2) return false;
+    if (u.type != mapConVec && u.type != mapRoboMiner && u.type != mapGeoCon) return false;   // vt[0x84] nulo
+    setBuildOrder(u, loc, l, t, r, b);
+    u.buildGroup = static_cast<int16_t>(group);          // [+0x6A]
+    return true;
 }
 
 void sendBuildMine(const std::vector<int>& sel, int tileX, int tileY) {   // sub_452010
@@ -108,6 +122,7 @@ void sendBuildKit(const std::vector<int>& sel, int tileX, int tileY) {   // sub_
         if (u.field23 == 2) continue;
         if (u.type != mapConVec) continue;               // (Robo-Miner/GeoCon usam outra ordem)
         setBuildOrder(u, loc, l, t, r, b);
+        u.buildGroup = -1;
     }
 }
 
@@ -267,15 +282,18 @@ void conVecBuildStart(int id) {                           // sub_43DE50 case 2
     const int y = ((u.buildB - u.buildT - 1) * 16 + (u.buildT + 1) * 32) >> 5;
     const int bld = placeBuilding(type, x, y, ownerOf(u));   // sub_4369E0
     if (!bld) return;                                     // (fica no sub-estado 2 e tenta de novo)
-    UnitRecord& b = g_units[bld];
-    b.cargo = static_cast<uint16_t>(static_cast<int16_t>(static_cast<int8_t>(u.kitWeapon)));   // arma do kit
-    u.kitWeapon = 0;
-    // (sub_4030E0: grupo de IA [+0x6A]; revelação do mapa dword_574C88 — pendentes)
+    UnitRecord& cv = g_units[id];                         // (placeBuilding pode realocar)
+    g_units[bld].cargo = static_cast<uint16_t>(static_cast<int16_t>(static_cast<int8_t>(cv.kitWeapon)));   // arma do kit
+    cv.kitWeapon = 0;
+    // sub_4030E0: o prédio entra no grupo [+0x6A] (antes da ação 0x21).
+    // (revelação do mapa dword_574C88 — pendente)
+    if (cv.buildGroup != -1) aiTakeUnit(cv.buildGroup, bld);
     structureStartBuild(bld, id);                         // ação 0x21, duração com o [+0x3C] da ConVec
-    u.field3C = b.buildTime;                              // [esi+3Ch] = [edi+5Ch]
+    UnitRecord& c2 = g_units[id];
+    c2.field3C = g_units[bld].buildTime;                  // [esi+3Ch] = [edi+5Ch]
     if (!miner) soundPlayAt(unitOX(g_units[bld]), unitOY(g_units[bld]), 3);   // (sub_42F000 pendente)
-    u.field23 = u.field22;
-    u.field22 = 0;
+    c2.field23 = c2.field22;
+    c2.field22 = 0;
 }
 
 } // namespace op2

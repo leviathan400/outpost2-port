@@ -30,6 +30,9 @@ void sendBuildMine(const std::vector<int>& sel, int tileX, int tileY);
 // Área da mina (desc 0x15 +0x248/+0x24A) — o retângulo de posicionamento do
 // Robo-Miner e da GeoCon (sub_451FC0).
 void mineFootprint(int& w, int& h);
+// sub_40E210 case 6 p/ uma unidade de `owner` (vt[0x84]); [+0x6A] = grupo do
+// prédio (−1 = nenhum). loc = ponto (canto inferior direito do anel).
+bool processBuildPacket(int owner, int id, unsigned int loc, int l, int t, int r, int b, int group);
 // sub_44C410: gira [+0x1C] rumo ao alvo (no máximo Turn Rate por tick); true = virado.
 struct UnitRecord;
 bool unitTurnTo(UnitRecord& u, unsigned char target);
