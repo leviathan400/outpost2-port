@@ -1,4 +1,5 @@
 #include "structure.h"
+#include "missile.h"
 #include "mining.h"
 #include "earthwork.h"
 #include "trigger.h"
@@ -393,6 +394,9 @@ static void actionTick(int id) {
             case 9:                                             // produzir (pacote 9)
                 factoryProduceStart(id);
                 return;
+            case 0x1A:                                          // lançamento (case 26)
+                missileActionStart(id);
+                return;
             default: break;
         }
         r.field20 = 0;
@@ -457,6 +461,9 @@ static void actionTick(int id) {
         case 0x36:                                              // case 54: projétil
             weaponProjectileAction(id);
             break;
+        case 0x1A:                                              // case 26: lançamento
+            missileActionTick(id);
+            break;
         case 9:                                                 // produto pronto
             factoryProduceFinish(id);
             break;
@@ -480,6 +487,7 @@ static bool updateTick(int id) {
     UnitRecord& u = g_units[id];          // (structureUpdateState pode criar unidades)
     switch (u.field22) {
         case SUB_WAIT: case 9:            // loc_43E2B3
+        case 0x0A:                        // loc_43E35C
             if (--u.field3C == 0) { u.field23 = u.field22; u.field22 = 0; }
             return false;
         case 7:                           // loc_43E2D1: produção

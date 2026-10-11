@@ -19,6 +19,7 @@
 #include "terrain_cost.h"
 #include "vehicle_anim.h"
 #include "disaster.h"
+#include "missile.h"
 #include "../gfx/artfile.h"
 
 namespace op2 {
@@ -806,13 +807,25 @@ void weaponAutoEngage(int id) {                               // sub_485340
 void unitPeriodicTick(int id) {                               // prólogo de sub_43DE50
     UnitRecord& u = g_units[id];
     if (((u.id ^ TethysGame::tick()) & 7) != 0) return;
-    // (contadores 0x40000/0x100000/0x80000 — espuma/ESG/EMP — entram com essas armas.)
-    if (u.flags & UNIT_EMP) return;
+    // (contadores 0x40000/0x100000 — espuma/ESG — entram com essas armas.)
+    if (u.flags & UNIT_EMP) {                                   // loc_43DEA8: [+0x56]
+        if (--u.empTicks != 0) return;
+        u.flags &= ~UNIT_EMP;
+        if (u.field22 == 0x0A) u.field22 = 0;
+        if (u.flags & UNIT_BUILDING) { colonyMarkDirty(u.owner & 0x0F); return; }   // dword_56E37C
+        if ((u.flags & UNIT_VEHICLE) && u.id != -1 && !(u.flags & UNIT_DEAD)) {     // loc_43DF05
+            u.flags |= UNIT_LIGHTS;
+            u.action = 0; u.field20 = 1; u.field3C = 0;
+            if (u.flags & UNIT_ARMED) weaponAutoEngage(id);  // vt[0x50]
+        }
+        return;
+    }
     if (u.lastAttacker && TethysGame::tick() - u.lastAttackTick > 0x2BC) {
         dropRef(u.lastAttacker);
         u.lastAttacker = 0;
     }
     if (u.id != -1 && !(u.flags & UNIT_DEAD) && disasterPeriodicTick(id)) return;   // vt[20] do desastre
+    if (u.id != -1 && !(u.flags & UNIT_DEAD) && missilePeriodicTick(id)) return;    // vt[20] lançamento / EMP_BIG
     if (u.id != -1 && !(u.flags & UNIT_DEAD) && (u.flags & UNIT_VEHICLE) && (u.flags & UNIT_ARMED))
         weaponAutoEngage(id);                                     // vt[20] (sub_485340)
 }
@@ -1084,7 +1097,7 @@ bool weaponProjectileSubstate(int id) {
 
 void weaponUnitRemoved(int id) {                              // vt[19] (sub_4A4910...)
     UnitRecord& r = g_units[id];
-    if (isWeaponProjectile(r.type) && r.sourceId) dropRef(r.sourceId);
+    if ((isWeaponProjectile(r.type) || isEmpBlast(r.type)) && r.sourceId) dropRef(r.sourceId);
     if (r.lastAttacker) { dropRef(r.lastAttacker); r.lastAttacker = 0; }
     if (r.hasTarget() && r.targetIsUnit() && !isWeaponProjectile(r.type)) clearTarget(r);
 }

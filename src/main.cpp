@@ -29,6 +29,7 @@
 #include "game/research.h"
 #include "game/building_sheet.h"
 #include "game/colony.h"
+#include "game/missile.h"
 #include "game/structure_anim.h"
 #include "game/production.h"
 #include "game/docking.h"
@@ -582,6 +583,56 @@ static int runEarthTest(const std::string& mapName, const std::string& prefix) {
                 std::printf("[Loc] %s\n", row.c_str());
             }
         }
+        op2::resetUnits();
+    }
+    {   // Luz de status (Overlay, fim de sub_408DB0): CC, Observatory e Agridome.
+        op2::Unit a, b, c, d;
+        op2::TethysGame::CreateUnit(a, op2::mapCommandCenter, op2::LOCATION{20, 20}, 0);
+        op2::TethysGame::CreateUnit(b, static_cast<op2::map_id>(0x33), op2::LOCATION{24, 20}, 0);
+        op2::TethysGame::CreateUnit(c, static_cast<op2::map_id>(0x27), op2::LOCATION{20, 23}, 0);
+        op2::TethysGame::CreateUnit(d, static_cast<op2::map_id>(0x3A), op2::LOCATION{24, 23}, 0);
+        op2::g_playerData[0].workers = 30; op2::g_playerData[0].scientists = 10;
+        op2::colonyMarkDirty(0);
+        gs.setCamera(17 * 32, 17 * 32);
+        for (int t = 0; t < 20; ++t) gs.onIdle(renderer, 0.2501f / 4.0f);
+        gs.setCamera(17 * 32, 17 * 32);
+        gs.onIdle(renderer, 0.0f);
+        writeBmp32(prefix + "_overlay.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH,
+                   op2::Renderer::NATIVE_HEIGHT);
+        op2::resetUnits();
+    }
+    {   // Míssil EMP (ação 0x1A) do jogador 1 (Plymouth) sobre 3 veículos do 0.
+        op2::Player[1].GoPlymouth();
+        op2::Unit v[3];
+        for (int k = 0; k < 3; ++k)
+            op2::TethysGame::CreateUnit(v[k], op2::mapCargoTruck, op2::LOCATION{20 + k * 2, 20}, 0);
+        const int mid = op2::setEMPMissile(10, 30, 1, 21, 20);
+        int lastSub = -1, lastAct = -1, blast = 0;
+        bool shot = false;
+        for (int t = 0; t < 400; ++t) {
+            gs.onIdle(renderer, 0.2501f / 4.0f);
+            const op2::UnitRecord& m = op2::g_units[mid];
+            if (m.id != -1 && (m.field22 != lastSub || m.action != lastAct)) {
+                std::printf("[EMP] t=%d missil sub=0x%X acao=0x%X f3C=%d px(%d,%d) 0x4000=%d\n", t, m.field22, m.action,
+                            m.field3C, m.pixelX, m.pixelY, (m.flags & 0x4000u) != 0);
+                lastSub = m.field22; lastAct = m.action;
+            }
+            for (int i = 1; !blast && i < (int)op2::g_units.size(); ++i)
+                if (op2::g_units[i].id != -1 && op2::isEmpBlast(op2::g_units[i].type)) {
+                    blast = i;
+                    std::printf("[EMP] t=%d EMP_BIG id=%d em px(%d,%d)\n", t, i, op2::g_units[i].pixelX, op2::g_units[i].pixelY);
+                }
+            if (!shot && blast && op2::g_units[blast].id != -1 && op2::g_units[blast].field3C <= 15) {
+                shot = true;
+                gs.setCamera(15 * 32, 15 * 32);
+                gs.onIdle(renderer, 0.0f);
+                writeBmp32(prefix + "_emp.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH,
+                           op2::Renderer::NATIVE_HEIGHT);
+            }
+        }
+        for (int k = 0; k < 3; ++k)
+            std::printf("[EMP] caminhao %d: emp=%d ticks=%d\n", k, (op2::g_units[v[k].id()].flags & op2::UNIT_EMP) != 0,
+                        op2::g_units[v[k].id()].empTicks);
         op2::resetUnits();
     }
     const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();

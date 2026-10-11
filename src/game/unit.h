@@ -184,6 +184,7 @@ struct UnitRecord {
     // Grupo de IA (src/game/ai_group.cpp): +0x30 stub do grupo (0xFF = nenhum).
     uint8_t  groupStub = 0xFF;
     int16_t  empTicks = 0;
+    int      launchDefense = 0;     // +0x54 míssil (0x69..0x6B): Meteor Defense que atirou
     // Destroço (Wreckage 0x54, vt off_4CF400): +0x58 máscara de quem descobriu,
     // +0x5C tecnologia (vt[0xA0]).
     uint32_t wreckMask = 0;

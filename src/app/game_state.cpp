@@ -27,6 +27,7 @@
 #include "../game/movement.h"
 #include "../game/vehicle_anim.h"
 #include "../game/structure_anim.h"
+#include "../game/missile.h"
 #include "../game/structure.h"
 #include "../game/building_sheet.h"
 #include "../game/colony.h"
@@ -63,6 +64,7 @@ void GameState::loadSettings() {
     setAmbientAnimations(gs.ambient != 0);   // "Ambient" → dword_575628
     m_stationaryShadows = gs.stationaryShadows != 0;   // dword_575634
     m_mobileShadows = gs.mobileShadows != 0;           // dword_575638
+    m_overlay = gs.overlay != 0;                       // "Overlay" → dword_57562C
     m_frameSkip = gs.frameSkip;                        // Value (FrameSkip)
 }
 
@@ -488,6 +490,22 @@ void GameState::onIdle(Renderer& renderer, float dt) {
             if (anim >= 0 && g_art.ok() && anim < g_art.numAnimations()) {
                 int pc = (ow >= 0 && ow < kMaxPlayers) ? g_playerData[ow].colorNumber : 0;
                 drew = drawSprite(anim, structureFrame(r), ucx, ucy, pc);
+                // Luz de status (fim de sub_408DB0, opção "Overlay"): prédio de
+                // um aliado do jogador local, fora de desmonte/0x60000: 0x96 em
+                // idle (ação 0x12), 0x94 operando, 0x95 parado; no canto do bbox
+                // do sprite + 3; frame = tick % nF.
+                const int me = TethysGame::localPlayer();
+                if (m_overlay && ow < kMaxPlayers && (g_playerData[me].allyMask & (1u << ow)) &&
+                    r.action != ACT_DISMANTLE && !(r.flags & 0x60000u)) {
+                    const int light = r.action == 0x12 ? 0x96 : structureOperational(r) ? 0x94 : 0x95;
+                    const uint32_t* h = g_art.animation(anim).header;
+                    const int la = light - 0x65;
+                    if (la < g_art.numAnimations()) {
+                        const int nF = static_cast<int>(g_art.animation(la).frames.size());
+                        drawSprite(la, nF ? TethysGame::tick() % nF : 0,
+                                   ucx - static_cast<int>(h[5] - h[1]) + 3, ucy - static_cast<int>(h[6] - h[2]) + 3, -1);
+                    }
+                }
             }
         }
         if (isEffect && r.type == 0x51) {
@@ -535,6 +553,26 @@ void GameState::onIdle(Renderer& renderer, float dt) {
             drawSound(static_cast<int>(i), unitOX(d), unitOY(d), 0x47);
             if (r.flags & 0x10000u) drawSound(static_cast<int>(i), unitOX(r), unitOY(r), 0x4E);
         }
+        if (isEffect && (isLaunchUnit(r.type) || isEmpBlast(r.type))) {
+            // Lançamento do Spaceport (sub_4805F0) / anel da EMP_BIG (sub_413BC0).
+            std::vector<WeaponDrawOp> ops;
+            missileDrawOps((int)i, ops);
+            for (const WeaponDrawOp& op : ops) {
+                if (op.kind == WeaponDrawOp::SPRITE) {
+                    if (op.anim >= 0 && g_art.ok() && op.anim < g_art.numAnimations())
+                        drawSprite(op.anim, op.frame, screenXOf(op.x), op.y - m_camY, -1);
+                } else {
+                    drawBeam(renderer, op);
+                    // Ao desenhar o laser: 0x47 na defesa, 0x4E no míssil derrubado.
+                    if (onScreen(ucx, ucy)) {
+                        const UnitRecord& d = g_units[r.launchDefense];
+                        drawSound(static_cast<int>(i), unitOX(d), unitOY(d), 0x47);
+                        if (r.flags & 0x10000u) drawSound(static_cast<int>(i), r.pixelX, r.pixelY, 0x4E);
+                    }
+                }
+            }
+            continue;
+        }
         if (isEffect && isDisaster(r.type)) {
             // Meteoro / raio / tornado (vt[6]); terremoto e erupção não desenham.
             std::vector<WeaponDrawOp> ops;
@@ -580,9 +618,6 @@ void GameState::onIdle(Renderer& renderer, float dt) {
             renderer.fillRect(ucx - sz / 2, ucy - sz / 2, sz, sz, col);
             renderer.drawRect(ucx - sz / 2, ucy - sz / 2, sz, sz, 0xFF101010);
         }
-        // Acento de cor do dono (barrinha acima da unidade) — distingue jogador.
-        if (drew)
-            renderer.fillRect(ucx - 6, ucy - 18, 12, 2, kOwnerColor[(r.owner & 0x0F) % 7]);
     }
 
     // Caixas de seleção ao redor das unidades selecionadas.

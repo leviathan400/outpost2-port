@@ -30,6 +30,7 @@
 #include "../game/commands.h"
 #include "../game/structure.h"
 #include "../game/command.h"
+#include "../game/missile.h"
 #include "../audio/sound.h"
 
 namespace op2 {
@@ -252,6 +253,10 @@ void __fastcall T_SetLightning(int x, int y, int duration, int endX, int endY) {
 // ?SetTornado: 0x4D (cargo = duração); destino em +0x65/+0x67; imediato pula os avisos.
 void __fastcall T_SetTornado(int x, int y, int duration, int endX, int endY, int immediate) {
     setTornado(portX(x), y, duration, endX == -1 ? -1 : portX(endX), endY, immediate);
+}
+// ?SetEMPMissile(x, y, dono, alvoX, alvoY): unidade 0x6B (ação 0x1A).
+void __fastcall T_SetEMPMissile(int x, int y, int owner, int tx, int ty) {
+    setEMPMissile(portX(x), y, owner, portX(tx), ty);
 }
 // ?SetLavaSpeed (sub_432DE0 → sub_49E240).
 void __fastcall T_SetLavaSpeed(int speed) { setLavaSpeed(speed); }
@@ -705,6 +710,7 @@ const std::map<std::string, void*>& table() {
         {"?InitialUnits@TethysGame@@SIHXZ", reinterpret_cast<void*>(&T_InitialUnits)},
         {"?FindEMPMissleTarget@TethysGame@@SI?AULOCATION@@HHHHH@Z", reinterpret_cast<void*>(&T_FindEMPMissleTarget)},
         {"?GetWeapon@Unit@@QBE?AW4map_id@@XZ", reinterpret_cast<void*>(&U_GetWeapon)},
+        {"?SetEMPMissile@TethysGame@@SIXHHHHH@Z", reinterpret_cast<void*>(&T_SetEMPMissile)},
         {"?DoMove@Unit@@QAEXULOCATION@@@Z", reinterpret_cast<void*>(&U_DoMove)},
         {"??0LocationEnumerator@@QAE@ABULOCATION@@@Z", reinterpret_cast<void*>(&E_LocationCtor)},
         {"?GetNext@LocationEnumerator@@QAEHAAVUnit@@@Z", reinterpret_cast<void*>(&E_LocationGetNext)},

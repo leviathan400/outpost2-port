@@ -85,6 +85,7 @@ private:
     bool m_showPassability = false; // overlay de debug (tecla G)
     bool m_showDebugHud = false;    // overlay de depuração (Tick/RNG/economia; tecla F3)
     bool m_stationaryShadows = false; // INI StationaryShadows (dword_575634)
+    bool m_overlay = true;           // "Overlay" (dword_57562C): luz de status dos prédios
     bool m_mobileShadows = false;     // INI MobileShadows (dword_575638)
     int  m_frameSkip = 1;             // INI FrameSkip (Value)
     int  m_shakeX = 0, m_shakeY = 0;  // tremor acumulado (vista +0x138/+0x13C)
