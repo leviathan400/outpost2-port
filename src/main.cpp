@@ -601,6 +601,43 @@ static int runEarthTest(const std::string& mapName, const std::string& prefix) {
                    op2::Renderer::NATIVE_HEIGHT);
         op2::resetUnits();
     }
+    {   // RLV: Spaceport do jogador 1 lança (pacote 0x19), o 0 captura em órbita
+        // (CaptureRLV) e o RLV volta ao Spaceport do jogador 0.
+        op2::Player[1].GoPlymouth();
+        op2::Unit cc0, tk0, sp0, cc1, tk1, sp1;
+        op2::TethysGame::CreateUnit(cc0, op2::mapCommandCenter, op2::LOCATION{12, 12}, 0);
+        op2::TethysGame::CreateUnit(tk0, static_cast<op2::map_id>(0x3A), op2::LOCATION{15, 12}, 0);
+        sp0 = op2::Unit(op2::placeBuilding(0x37, 12, 15, 0));
+        op2::TethysGame::CreateUnit(cc1, op2::mapCommandCenter, op2::LOCATION{30, 12}, 1);
+        op2::TethysGame::CreateUnit(tk1, static_cast<op2::map_id>(0x3A), op2::LOCATION{33, 12}, 1);
+        sp1 = op2::Unit(op2::placeBuilding(0x37, 30, 15, 1));
+        for (int p = 0; p < 2; ++p) { op2::g_playerData[p].workers = 60; op2::g_playerData[p].scientists = 20; op2::colonyMarkDirty(p); }
+        for (int t = 0; t < 40; ++t) gs.onIdle(renderer, 0.2501f / 4.0f);
+        op2::g_units[sp1.id()].padCargo = 0x6A;
+        std::printf("[RLV] spaceports operando: j0=%d j1=%d\n", op2::structureOperational(op2::g_units[sp0.id()]),
+                    op2::structureOperational(op2::g_units[sp1.id()]));
+        const bool launched = op2::spaceportLaunch(sp1.id(), 0, 0);
+        int rlv = 0;
+        for (int i = 1; i < (int)op2::g_units.size(); ++i)
+            if (op2::g_units[i].id != -1 && op2::g_units[i].type == 0x6A) rlv = i;
+        std::printf("[RLV] lancado=%d rlv=%d pad j1=0x%X\n", launched, rlv, op2::g_units[sp1.id()].padCargo);
+        int lastSub = -1, lastOwner = -1;
+        bool captured = false;
+        for (int t = 0; t < 2400 && rlv; ++t) {
+            gs.onIdle(renderer, 0.2501f / 4.0f);
+            const op2::UnitRecord& r = op2::g_units[rlv];
+            if (r.id == -1) { std::printf("[RLV] t=%d rlv removido\n", t); break; }
+            if (r.field22 != lastSub || (r.owner & 15) != lastOwner) {
+                std::printf("[RLV] t=%d sub=0x%X acao=0x%X dono=%d px(%d,%d) contagem j0=%d j1=%d\n", t, r.field22, r.action,
+                            r.owner & 15, r.pixelX, r.pixelY, op2::g_playerData[0].rlvCount, op2::g_playerData[1].rlvCount);
+                lastSub = r.field22; lastOwner = r.owner & 15;
+            }
+            if (!captured && op2::g_playerData[1].rlvCount) { op2::playerCaptureRLV(0, 1); captured = true; }
+        }
+        std::printf("[RLV] fim: pad j0=0x%X reservado=%d pad j1=0x%X msg=%s\n", op2::g_units[sp0.id()].padCargo,
+                    op2::g_units[sp0.id()].padReserved, op2::g_units[sp1.id()].padCargo, op2::statusBarText().c_str());
+        op2::resetUnits();
+    }
     {   // Míssil EMP (ação 0x1A) do jogador 1 (Plymouth) sobre 3 veículos do 0.
         op2::Player[1].GoPlymouth();
         op2::Unit v[3];

@@ -121,8 +121,8 @@ bool produceAffordable(int factoryId, uint32_t item) {     // sub_468430
     if (weapon) { common += costOf(weapon, p, 0x0C); rare += costOf(weapon, p, 0x10); }
     if (rare > pd.rareOre || common > pd.ore) return false;   // dword_56E300 / dword_56E2FC
     if (validFactory(factoryId) && g_units[factoryId].type == 0x37 && type >= 0x69 && type <= 0x6B &&
-        g_units[factoryId].padCargo != 0)
-        return false;   // (o original também exige a palavra [+0x74] == 0 — campo não portado)
+        (g_units[factoryId].padCargo != 0 || g_units[factoryId].padReserved != 0))
+        return false;
     if (type == 0x66 && pd.foodStored < 10000) return false;   // Food Cargo: 10000 de comida
     return true;
 }
@@ -184,7 +184,7 @@ bool processProducePacket(int owner, int factoryId, int type, int weapon, int gr
         if (pd.foodStored < 10000) { if (local) soundPlay(0x58); return false; }
         pd.foodStored -= 10000;
     }
-    // (0x69..0x6B exigem também a palavra [+0x74] == 0 — campo não portado.)
+    if (type >= 0x69 && type <= 0x6B && f.padReserved != 0) return false;   // [+0x74]
     f.action = 9;                                            // [+0x21]
     f.field20 = 1;
     f.field3C = 0;

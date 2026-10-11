@@ -473,6 +473,27 @@ void __fastcall U_DoDeath(int* u, void*) { killUnit(*u, 1); }
 void __fastcall U_ClearSpecialTarget(int* u, void*) { if (*u > 0) g_units[*u].flags &= ~0x2000000u; }
 int  __fastcall U_IsEMPed(int* u, void*) { return (*u > 0 && (g_units[*u].flags & UNIT_EMP)) ? -1 : 0; }
 int  __fastcall U_IsBusy(int* u, void*) { return g_units[*u].action != 0 ? 1 : 0; }
+// ?DoLaunch(x, y, forçar): pacote 0x19; forçando, o Spaceport opera durante o
+// pacote (sem EMP, com energia/gente, dano 0) e depois volta como estava.
+void __fastcall U_DoLaunch(int* u, void*, int x, int y, int force) {
+    if (*u <= 0 || *u >= static_cast<int>(g_units.size())) return;
+    UnitRecord& r = g_units[*u];
+    if (r.id == -1 || (r.flags & UNIT_DEAD)) return;
+    const uint32_t keep = r.flags & (0x80000u | 0x2000u | 0x8000u | 0x4000u);
+    const int16_t dmg = r.damage;
+    if (force) {
+        r.flags = (r.flags & ~0x80000u) | 0x2000u | 0x8000u | 0x4000u;
+        r.damage = 0;
+    }
+    spaceportLaunch(*u, x - g_gameMap.internalXOffset() * 32, y);
+    if (force) {
+        UnitRecord& s = g_units[*u];
+        s.flags = (s.flags & ~(0x80000u | 0x2000u | 0x8000u | 0x4000u)) | keep;
+        s.damage = dmg;
+    }
+}
+void __fastcall P_CaptureRLV(DllPlayer* p, void*, int from) { playerCaptureRLV(p->playerNum, from); }
+int  __fastcall P_GetRLVCount(DllPlayer* p, void*) { return g_playerData[p->playerNum].rlvCount & 0xF; }
 // _Player(int) e LOCATION(int, int): só gravam os campos.
 DllPlayer* __fastcall P_Ctor(DllPlayer* p, void*, int n) { p->playerNum = n; return p; }
 ApiLoc* __fastcall L_Ctor(ApiLoc* l, void*, int x, int y) { l->x = x; l->y = y; return l; }
@@ -833,6 +854,9 @@ const std::map<std::string, void*>& table() {
         {"?isEMPed@Unit@@QBEHXZ", reinterpret_cast<void*>(&U_IsEMPed)},
         {"?IsBusy@Unit@@QBEHXZ", reinterpret_cast<void*>(&U_IsBusy)},
         {"??0_Player@@QAE@H@Z", reinterpret_cast<void*>(&P_Ctor)},
+        {"?DoLaunch@Unit@@QAEXHHH@Z", reinterpret_cast<void*>(&U_DoLaunch)},
+        {"?CaptureRLV@_Player@@QAEXH@Z", reinterpret_cast<void*>(&P_CaptureRLV)},
+        {"?GetRLVCount@_Player@@QAEHXZ", reinterpret_cast<void*>(&P_GetRLVCount)},
         {"??0LOCATION@@QAE@HH@Z", reinterpret_cast<void*>(&L_Ctor)},
         {"?Inflate@MAP_RECT@@QAEXHH@Z", reinterpret_cast<void*>(&R_Inflate)},
         {"?ClipToMap@MAP_RECT@@QAEXXZ", reinterpret_cast<void*>(&R_ClipToMap)},

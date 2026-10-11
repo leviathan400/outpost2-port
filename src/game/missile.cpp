@@ -196,16 +196,136 @@ void blastPeriodic(int id) {
 bool isLaunchUnit(int type) { return type >= kSULV && type <= kEMPMissile; }
 bool isEmpBlast(int type) { return type == kEmpBig; }
 
-int setEMPMissile(int x, int y, int owner, int tx, int ty) {   // ?SetEMPMissile
+// sub_4466B0(tipo, px, py, dono, carga): unidade de lançamento no pixel exato,
+// alvo +0x34/+0x38, ação 0x1A.
+static int createLaunchUnit(int type, int px, int py, int owner, int cargo, int tx, int ty) {
     Unit u;
-    if (!createUnit(u, static_cast<map_id>(kEMPMissile), LOCATION{x, y}, owner)) return 0;
+    if (!createUnit(u, static_cast<map_id>(type), LOCATION{px >> 5, py >> 5}, owner)) return 0;
     UnitRecord& m = g_units[u.id()];
-    m.rawPixel = true;                      // sub_4466B0(0x6B, x<<5, y<<5): canto do tile
-    m.pixelX = x << 5; m.pixelY = y << 5;
-    m.cargo = 0;
-    m.impactX = tx << 5; m.impactY = ty << 5;                 // +0x34 / +0x38
+    m.rawPixel = true;
+    m.pixelX = px; m.pixelY = py;
+    m.cargo = static_cast<uint16_t>(cargo);
+    m.impactX = tx; m.impactY = ty;                           // +0x34 / +0x38
     m.action = kActLaunch; m.field20 = 1; m.field3C = 0;
     return u.id();
+}
+
+int setEMPMissile(int x, int y, int owner, int tx, int ty) {   // ?SetEMPMissile
+    return createLaunchUnit(kEMPMissile, x << 5, y << 5, owner, 0, tx << 5, ty << 5);
+}
+
+// Ponto de lançamento do Spaceport: [+0x14]/[+0x18] + offset do frame atual (sub_404DF0).
+static void launchPoint(const UnitRecord& sp, int& x, int& y) {
+    x = unitOX(sp); y = unitOY(sp);
+    const int a = structureCurAnim(sp);
+    if (a < 0) return;
+    if (const int8_t* off = artFrameOffsets(a + 0x65, structureFrame(sp))) { x += off[0]; y += off[1]; }
+}
+
+bool spaceportLaunch(int sp, int tx, int ty) {               // case 25
+    if (!valid(sp)) return false;
+    UnitRecord& s = g_units[sp];
+    if (!s.padCargo) return false;
+    if (s.padPayload == 0 && s.padCargo == kSULV) return false;   // SULV sem carga
+    if (s.padPayload == 0x67) {                                  // Evacuation Module: 200 colonos
+        const PlayerData& d = g_playerData[ownerOf(s)];
+        if (d.workers + d.scientists + d.kids < 200) return false;
+    }
+    if (s.flags & UNIT_DEAD) return false;
+    if (!structureOperational(s)) return false;
+    int x, y;                                                    // sub_424140
+    launchPoint(s, x, y);
+    const int type = s.padCargo, payload = s.padPayload, owner = ownerOf(s);
+    if (!createLaunchUnit(type, x, y, owner, payload, tx, ty)) return true;
+    UnitRecord& s2 = g_units[sp];
+    s2.padCargo = 0;
+    s2.padPayload = 0;
+    return true;
+}
+
+// vt[0x7C] sub_47FC60: a carga chega em órbita; RLV soma 1 ao contador.
+static void launchInOrbit(int id) {
+    const UnitRecord& m = g_units[id];
+    const int p = ownerOf(m);
+    if (p >= kMaxPlayers) return;
+    PlayerData& d = g_playerData[p];
+    const bool local = p == TethysGame::localPlayer();
+    const int cargo = static_cast<int16_t>(m.cargo);
+    if (cargo == 0x58) {                                         // EDWARD: bits 9..12
+        int n = ((d.spaceBits >> 9) & 0xF) + 1;
+        if (n > 15) n = 15;
+        d.spaceBits = (d.spaceBits & ~0x1E00u) | (static_cast<uint32_t>(n) << 9);
+        if (local) soundVoice(0x7B, -1, -1);
+    } else if (cargo == 0x59) {                                  // Solar Satellite
+        d.solarSat = d.solarSat + 1 > 15 ? 15 : d.solarSat + 1;
+        if (local) soundVoice(0x7C, -1, -1);
+    } else if (cargo == 0x67) {
+        // Evacuation Module: bit e sub_471BD0(200, 1) — os colonos (pendente).
+        d.spaceBits |= 1u << (cargo - 0x4D);
+    } else if (cargo >= 0x5A && cargo <= 0x68) {
+        if (local) soundVoice(cargo == 0x68 ? 0xE3 : 0xD6 + (cargo - 0x5A), -1, -1);
+        d.spaceBits |= 1u << (cargo - 0x4D);
+    }
+    if (m.type == kRLV) d.rlvCount = d.rlvCount + 1 > 15 ? 15 : d.rlvCount + 1;
+}
+
+// sub_47FB90: o Spaceport aceita o RLV de volta (reserva +0x74; contador − 1).
+static bool spaceportReserve(UnitRecord& s) {
+    if (!structureOperational(s) || s.padCargo || s.padReserved) return false;
+    if (s.produceType == kSULV || s.produceType == kRLV || s.produceType == kEMPMissile) return false;
+    s.padReserved = 1;
+    PlayerData& d = g_playerData[ownerOf(s)];
+    d.rlvCount = (d.rlvCount - 1) & 0xF;
+    return true;
+}
+
+// vt[0x80]: míssil → alvo (sub_480280); RLV → Spaceport do dono (sub_480150); SULV → não volta.
+static bool launchReturn(int id) {
+    UnitRecord& m = g_units[id];
+    if (m.type == kEMPMissile) { m.pixelX = m.impactX; m.pixelY = m.impactY; return true; }
+    if (m.type != kRLV) return false;
+    const int p = ownerOf(m);
+    if (p >= kMaxPlayers) return false;
+    for (int b : colonyStructures(p)) {
+        UnitRecord& s = g_units[b];
+        if (s.type != 0x37 || !spaceportReserve(s)) continue;
+        int x, y;
+        launchPoint(s, x, y);
+        UnitRecord& r = g_units[id];
+        r.pixelX = x; r.pixelY = y;
+        return true;
+    }
+    return false;
+}
+
+// vt[0x84]: míssil → EMP_BIG; RLV pousa (sub_4801E0): plataforma = RLV, "RLV Ready".
+static void launchLand(int id) {
+    UnitRecord& m = g_units[id];
+    if (m.type == kEMPMissile) { launchImpact(id); return; }
+    if (m.type != kRLV) return;
+    const int x = (m.pixelX >> 5) & (g_gameMap.width() - 1), y = m.pixelY >> 5;
+    const int occ = g_gameMap.cellOccupant(x, y);
+    if (!valid(occ)) return;
+    UnitRecord& s = g_units[occ];
+    s.padCargo = kRLV;
+    s.padReserved = 0;
+    if (ownerOf(m) == TethysGame::localPlayer()) postMessage(unitOX(s), unitOY(s), "RLV Ready", 0x7F);
+}
+
+void playerCaptureRLV(int p, int from) {                     // ?CaptureRLV
+    if (p < 0 || p >= kMaxPlayers || from < 0 || from >= kMaxPlayers) return;
+    PlayerData& src = g_playerData[from];
+    if (!src.rlvCount) return;
+    src.rlvCount = (src.rlvCount - 1) & 0xF;
+    PlayerData& dst = g_playerData[p];
+    dst.rlvCount = dst.rlvCount + 1 > 15 ? 15 : dst.rlvCount + 1;
+    for (int u = unitListFirst(); u; u = unitListNext(u)) {
+        UnitRecord& r = g_units[u];
+        if (r.type == kRLV && ownerOf(r) == from) {
+            r.owner = static_cast<uint8_t>((r.owner & 0xF0) | p);
+            return;
+        }
+    }
 }
 
 void missileActionStart(int id) {
@@ -226,10 +346,10 @@ void missileActionStart(int id) {
 void missileActionTick(int id) {
     UnitRecord& m = g_units[id];
     switch (m.field23) {
-        case 6:                                                // vt[0x80] sub_480280
-            m.pixelX = m.impactX; m.pixelY = m.impactY;
-            m.field22 = 9;
-            m.field3C = 0x2D;
+        case 6:                                                // vt[0x80]
+            if (!launchReturn(id)) break;
+            g_units[id].field22 = 9;
+            g_units[id].field3C = 0x2D;
             break;
         case 9:
             if (m.flags & 0x4000u) {
@@ -237,7 +357,7 @@ void missileActionTick(int id) {
                 m.field22 = 9;
                 m.field3C = lastFrameOr1(launchAnimRaw(m));
             } else {
-                launchImpact(id);                              // vt[0x84]
+                launchLand(id);                                // vt[0x84]
                 g_units[id].action = ACT_DIE;
             }
             break;
@@ -248,8 +368,7 @@ void missileActionTick(int id) {
                 m.field3C = 0x2D;
                 m.flags |= 0x4000u;
             } else {
-                // vt[0x7C] (sub_47FC60): carga em órbita (satélites, módulos) e
-                // RLV +1 — só do SULV/RLV, que o Spaceport ainda não lança.
+                launchInOrbit(id);                             // vt[0x7C] sub_47FC60
                 if (m.type == kSULV) killUnit(id, 1);
                 else {
                     m.field22 = SUB_WAIT;
@@ -263,7 +382,8 @@ void missileActionTick(int id) {
 
 bool missilePeriodicTick(int id) {
     const int t = g_units[id].type;
-    if (isLaunchUnit(t)) { launchPeriodic(id); return true; }
+    if (t == kEMPMissile) { launchPeriodic(id); return true; }   // (SULV/RLV: vt[0x50] nulo)
+    if (isLaunchUnit(t)) return true;
     if (isEmpBlast(t)) { blastPeriodic(id); return true; }
     return false;
 }
@@ -290,7 +410,7 @@ void missileDrawOps(int id, std::vector<WeaponDrawOp>& ops) {
         return;
     }
     if (!isLaunchUnit(m.type)) return;
-    if (m.action != ACT_DIE) {                                  // sub_480900
+    if (m.action != ACT_DIE || m.type != kEMPMissile) {         // sub_480900
         const int raw = launchAnimRaw(m);
         if (raw) {
             const int last = artLastFrameRaw(raw);
@@ -302,7 +422,7 @@ void missileDrawOps(int id, std::vector<WeaponDrawOp>& ops) {
     } else {                                                    // derrubado
         sprite(kShotDownAnim, artLastFrameRaw(kShotDownAnim) - m.field3C, m.pixelX, m.pixelY - m.field3C * 20);
     }
-    if ((m.flags & 0x40000u) && valid(m.launchDefense)) {
+    if (m.type == kEMPMissile && (m.flags & 0x40000u) && valid(m.launchDefense)) {
         // Laser da defesa (sub_41E8F0, 0x7C0000): 32 px adiante se errou.
         const int lead = (m.flags & 0x10000u) ? 0 : 32;
         const UnitRecord& d = g_units[m.launchDefense];

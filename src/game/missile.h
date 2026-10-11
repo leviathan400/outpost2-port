@@ -24,6 +24,12 @@ bool isEmpBlast(int type);       // 0x4A
 
 // ?SetEMPMissile: míssil em (x, y) do dono, alvo (tx, ty) — tiles do port.
 int setEMPMissile(int x, int y, int owner, int tx, int ty);
+// sub_40E210 case 25 (pacote 0x19) → sub_424140: lança a carga da plataforma do
+// Spaceport ([+0x6E], com o módulo [+0x72]) do ponto de lançamento do sprite;
+// alvo em px do port. false se recusado.
+bool spaceportLaunch(int spaceportId, int tx, int ty);
+// _Player::CaptureRLV(de) / GetRLVCount (contador +0x08 bits 0..3).
+void playerCaptureRLV(int player, int from);
 
 void missileActionStart(int id);   // jpt_43AD56 case 26
 void missileActionTick(int id);    // jpt_43B312 case 26

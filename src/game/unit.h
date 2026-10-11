@@ -244,6 +244,8 @@ struct UnitRecord {
     int16_t  produceGroup = -1;
     uint8_t  bayCargo[6] = {};
     int      padCargo = 0;
+    int16_t  padPayload = 0;        // +0x72 Spaceport: carga do SULV (satélite/módulo)
+    int16_t  padReserved = 0;       // +0x74 Spaceport: reservado p/ um RLV voltando (sub_47FB90)
 
     // --- Lista por Y (dword_54EC0C; [+0x04]/[+0x08]) e slot livre -------------
     int      lnext = 0, lprev = 0;
