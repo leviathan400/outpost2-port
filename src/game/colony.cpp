@@ -797,6 +797,11 @@ void colonyForceMorale(int player, int level) {      // sub_4229F0 cases 21..25
     dirtyAll();
 }
 
+bool colonyMoraleForced(int player) {
+    for (uint32_t m : s_forceMask) if (m & (1u << player)) return true;
+    return false;
+}
+
 void colonyFreeMorale(int player) {                   // sub_4229F0 case 32
     if (player < 0) { for (auto& m : s_forceMask) m = 0; }
     else { for (auto& m : s_forceMask) m &= ~(1u << player); }

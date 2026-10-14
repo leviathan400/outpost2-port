@@ -21,6 +21,9 @@ struct PaneRect { int l, t, r, b; };
 int drawMarkupText(uint32_t* fb, int fbW, int fbH, const PaneRect& rc,
                    const std::string& text, uint32_t defaultColor, bool bold = false);
 int markupLineHeight();
+// Barra (sub_45C260): moldura 0x3DEF, parte feita em c1 e o resto em c2 (RGB555).
+void drawProgressBar(uint32_t* fb, int fbW, int fbH, int l, int t, int r, int b, int cur, int max,
+                     uint16_t c1, uint16_t c2);
 
 // Desenha o quadro no retângulo do painel (coordenadas de tela).
 void drawUnitInfoPane(uint32_t* fb, int fbW, int fbH, const PaneRect& pane,

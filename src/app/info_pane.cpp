@@ -45,7 +45,7 @@ int drawMarkupText(uint32_t* fb, int fbW, int fbH, const PaneRect& rc,
     size_t pos = 0;
     uint32_t color = defaultColor;
     bool literal = false;
-    while (pos <= text.size()) {
+    while (pos <= text.size() && (y == rc.t || y + lh <= rc.b)) {   // linhas que não cabem ficam de fora
         size_t nl = text.find('\n', pos);
         std::string line = text.substr(pos, nl == std::string::npos ? std::string::npos : nl - pos);
         // sub_416650: '\t' avança 4 larguras de espaço ([+0x3E4]).
@@ -364,8 +364,8 @@ static int drawLaunchPadSection(uint32_t* fb, int fbW, int fbH, const PaneRect& 
 }
 
 // Barra de progresso (sub_45C260): moldura 0x3DEF; feito em c1, o resto em c2.
-static void progressBar(uint32_t* fb, int fbW, int fbH, int l, int t, int r, int b, int cur, int max,
-                        uint16_t c1, uint16_t c2) {
+void drawProgressBar(uint32_t* fb, int fbW, int fbH, int l, int t, int r, int b, int cur, int max,
+                     uint16_t c1, uint16_t c2) {
     frameRect(fb, fbW, fbH, l, t, r - l, b - t, rgb555(0x3DEF));
     if (max <= 0) return;
     if (cur > max) cur = max;
@@ -465,7 +465,7 @@ static int drawProgressSection(uint32_t* fb, int fbW, int fbH, const PaneRect& r
         blitArtFrame(fb, fbW, fbH, icon - 0x65, 0, rc.l - 3, rc.t, pc, clip.l, clip.t, clip.r, clip.b);
     PaneRect trc{rc.l + 0x33, rc.t, rc.r, rc.b};
     const int h = drawMarkupText(fb, fbW, fbH, trc, wrapForPane(buf, trc), kTextGreen);
-    progressBar(fb, fbW, fbH, rc.l + 0x33, rc.t + h, rc.r, rc.t + h + 6, cur, max, 0x3E0, 0x1E0);
+    drawProgressBar(fb, fbW, fbH, rc.l + 0x33, rc.t + h, rc.r, rc.t + h + 6, cur, max, 0x3E0, 0x1E0);
     return 0x2D;
 }
 

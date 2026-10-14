@@ -145,6 +145,8 @@ bool structureDoActivate(int id);                   // case 19 (false se faltar 
 // 1º ForceMoraleGood deixa todas ligadas e vale o Great, checado primeiro).
 void colonyForceMorale(int player, int level);      // level 0=Great .. 4=Rotten
 void colonyFreeMorale(int player);
+// O bit do jogador está em alguma das cinco máscaras (moral "(Steady)").
+bool colonyMoraleForced(int player);
 
 // sub_42FF00: redução de dano do DIRT (0, 625..2500 de 10000) p/ o prédio.
 int colonyDirtProtection(const UnitRecord& r);

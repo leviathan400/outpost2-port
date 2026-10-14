@@ -960,7 +960,19 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
             if (k == SDLK_m) m_research.more();
         }
         // STORAGE: Alt+1..6 = botão da baia (sub_40A900(0x31 + i)).
-        if ((SDL_GetModState() & KMOD_ALT) && k == SDLK_v) { closePanes(); m_vehicles.open(); }   // Alt+V
+        // sub_498890: Alt+V (40224) só com Robot Command Center ([jogador+0x1A8]).
+        if ((SDL_GetModState() & KMOD_ALT) && k == SDLK_v &&
+            g_colony[TethysGame::localPlayer()].stat(ST_ROBOT_GRP)) {
+            closePanes(); closeTabPanes(); m_tab = -1; m_vehicles.open();
+        }
+        // 40200..40205: Alt+C/M/P/F/N/R → Resources no modo 1..6 (fora de missão
+        // só de unidades; Alt+R só com a mina de raro pesquisada); 40206: Alt+O.
+        if ((SDL_GetModState() & KMOD_ALT) && !reportsDisabled()) {
+            const int resMode = k == SDLK_c ? 1 : k == SDLK_m ? 2 : k == SDLK_p ? 3 : k == SDLK_f ? 4 :
+                                k == SDLK_n ? 5 : k == SDLK_r ? 6 : 0;
+            if (resMode && (resMode != 6 || ResourcesPane::rareAvailable())) openReport(2, resMode);
+        }
+        if ((SDL_GetModState() & KMOD_ALT) && k == SDLK_o && m_mission) openReport(5, 0);
         if ((SDL_GetModState() & KMOD_ALT) && k >= SDLK_1 && k <= SDLK_6 && m_storage.isOpen())
             m_storage.pressBay(static_cast<int>(k - SDLK_1));
         // Atalhos dos botões de comando (letra após o '&' da dica).
@@ -1019,6 +1031,11 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
         }
         if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_tab == 3 && m_comms.isOpen())
             paneHit = m_comms.click(infoPaneRect(), nx, ny);
+        if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_tab == 2 && m_resources.isOpen()) {
+            bool dbl = false;
+            paneHit = m_resources.click(infoPaneRect(), nx, ny, e.button.clicks >= 2, dbl);
+            if (dbl) clickCommand(kCmdDetails);
+        }
         if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_tab == 1 && m_labs.isOpen()) {
             bool dbl = false;
             paneHit = m_labs.click(infoPaneRect(), nx, ny, e.button.clicks >= 2, dbl);
@@ -1125,7 +1142,7 @@ void GameState::areaRect(int ex, int ey, int& x1, int& y1, int& x2, int& y2) con
 // veículo (painel off_4D5B28); prédios usam os botões de texto do quadro.
 std::vector<GameState::CmdButton> GameState::commandButtons() const {
     std::vector<CmdButton> out;
-    if (m_selected.empty() || m_confirm.isOpen() || m_vehicles.isOpen()) return out;   // outro painel no lugar da botoeira
+    if (m_selected.empty() || m_confirm.isOpen() || m_vehicles.isOpen() || m_tab != -1) return out;   // outro painel no lugar da botoeira
     const UnitRecord& u = g_units[m_selected[0]];
     if (u.id == -1 || !(u.flags & 0x42u) || (u.owner & 0x0F) != TethysGame::localPlayer()) return out;
     const std::vector<int>& list = m_selected.size() == 1 ? uiCommandsSingle() : uiCommandsMulti();
@@ -1181,7 +1198,28 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
         layoutButtons();
         return out;
     }
-    if (m_selected.empty() && m_tab == 0) {
+    if (m_tab == 2) {
+        // sub_469490: 0 → "&DETAILS" largo; 1..6 → "S&TRUCTURES" + "&SUMMARY";
+        // 7..12 → "&DETAILS" + "&SUMMARY".
+        const int md = m_resources.mode();
+        TextButton b{};
+        if (md == 0 || md >= 7) {
+            b.cmd = kCmdDetails; b.label = "&DETAILS"; b.tip = "&Details"; b.hotkey = 'D';
+            b.disabled = !m_resources.detailsEnabled();
+            out.push_back(b);
+        } else {
+            b.cmd = kCmdResStructures; b.label = "S&TRUCTURES"; b.tip = "S&tructures"; b.hotkey = 'T';
+            out.push_back(b);
+        }
+        if (md != 0) {
+            b = TextButton{};
+            b.cmd = kCmdResSummary; b.label = "&SUMMARY"; b.tip = "&Summary"; b.hotkey = 'S';
+            out.push_back(b);
+        }
+        layoutButtons();
+        return out;
+    }
+    if (m_tab == 0) {
         // sub_464BD0: "&DETAILS" largo, habilitado depois de escolher uma fábrica.
         TextButton b{};
         b.cmd = kCmdDetails; b.label = "&DETAILS"; b.tip = "&Details"; b.hotkey = 'D';
@@ -1190,7 +1228,7 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
         layoutButtons();
         return out;
     }
-    if (m_selected.empty() && m_tab == 1) {
+    if (m_tab == 1) {
         // sub_46BB90: modo 0 DETAILS + C&OMPLETED; 1 DETAILS + C&URRENT; 2 C&OMPLETED + C&URRENT.
         TextButton b{};
         if (m_labs.mode() != 2) {
@@ -1211,7 +1249,7 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
         layoutButtons();
         return out;
     }
-    if (m_selected.empty() && m_tab == 3) {
+    if (m_tab == 3) {
         // sub_4670A0 (modo 0, jogo solo): só "&JUMP", largo; habilitado quando a
         // mensagem escolhida tem posição (sub_466970).
         TextButton b{};
@@ -1221,7 +1259,7 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
         layoutButtons();
         return out;
     }
-    if (m_selected.empty() && m_tab == 5 && m_mission) {
+    if (m_tab == 5 && m_mission) {
         // Aba de objetivos (sub_465830, modo 1): "&GAME OPTIONS" largo.
         TextButton b{};
         b.cmd = kCmdGameOptions; b.label = "&GAME OPTIONS"; b.tip = "Show &Game Options"; b.hotkey = 'G';
@@ -1347,14 +1385,15 @@ void GameState::debugVehicleList(int row, bool jump) {
     if (jump) clickCommand(kCmdJump);
 }
 
-// sub_45CB60/sub_45CBA0: trocar a seleção (por outro que não o próprio quadro)
-// marca [+0x484]; no quadro seguinte sub_45CC30 põe o painel da unidade — ou
-// nenhum, sem seleção.
+// sub_45CB60/sub_45CBA0: trocar a seleção (por outro que não o próprio quadro —
+// inclusive JUMP/DETAILS dos relatórios) marca [+0x484]; no quadro seguinte
+// sub_45CC30 põe o painel da unidade — ou nenhum, sem seleção.
 void GameState::syncTabToSelection() {
     if (m_selected == m_lastSel) return;
     m_lastSel = m_selected;
     m_tab = -1;
     closeTabPanes();
+    closePanes();                                            // o painel da unidade substitui o atual
 }
 
 // sub_457760 (DETAILS): unidade viva → centraliza a vista nela (sub_408120) e a
@@ -1388,8 +1427,24 @@ bool GameState::tabRect(int k, PaneRect& r) const {
 // sub_45C620: clicar na aba limpa a seleção (sub_41A8E0, com o quadro como
 // origem: sem [+0x484]), volta o painel ao modo 0 (vt[5]) e o põe no quadro
 // (sub_45D020, aba acesa). PROVISÓRIO: só as abas já portadas respondem.
+bool GameState::reportsDisabled() const {
+    return m_mission && m_mission->desc && m_mission->desc->boolUnitMission;
+}
+
+void GameState::openReport(int k, int mode) {
+    closePanes();
+    closeTabPanes();
+    m_targetCmd = -1;
+    m_tab = k;
+    m_lastSel = m_selected;
+    if (k == 0) m_factories.open();
+    if (k == 1) m_labs.open(mode);
+    if (k == 2) m_resources.open(mode);
+    if (k == 3) m_comms.open();
+}
+
 void GameState::openTab(int k) {
-    if (k != 0 && k != 1 && k != 3 && !(k == 5 && m_mission)) return;
+    if (k == 5 ? !m_mission : (k < 0 || k > 3 || reportsDisabled())) return;   // 4 (Space Program): pendente
     m_targetCmd = -1;
     m_selected.clear();
     m_lastSel.clear();
@@ -1398,6 +1453,7 @@ void GameState::openTab(int k) {
     m_tab = k;
     if (k == 0) m_factories.open();
     if (k == 1) m_labs.open(0);
+    if (k == 2) m_resources.open(0);
     if (k == 3) m_comms.open();
     soundPlay(0x57);
 }
@@ -1408,6 +1464,7 @@ void GameState::debugTab(int k, int row) {
     if (k == 3 && row >= 0) m_comms.select(row);
     if (k == 0 && row >= 0) m_factories.select(row);
     if (k == 1 && row >= 0) m_labs.select(row);
+    if (k == 2 && row >= 0) m_resources.select(row);
 }
 
 PaneRect GameState::infoPaneRect() const {
@@ -1458,6 +1515,10 @@ void GameState::clickCommand(int cmd) {                  // vt[1] do comando
     if (cmd == kCmdVehicles) { closePanes(); m_vehicles.open(); return; }   // dword_567D80
     if (cmd == kCmdDetails) {
         if (m_tab == 0 && m_factories.detailsEnabled()) reportDetails(m_factories.unit());
+        if (m_tab == 2 && m_resources.detailsEnabled()) {
+            if (m_resources.mode() == 0) m_resources.open(m_resources.detailsMode());   // botão de modo
+            else reportDetails(m_resources.unit());                                     // off_4E2D20
+        }
         if (m_tab == 1 && m_labs.detailsEnabled()) {
             if (m_labs.mode() == 0) reportDetails(m_labs.lab());    // sub_4576D0
             else m_labs.open(2);                                    // botão de modo (sub_45C460)
@@ -1466,6 +1527,8 @@ void GameState::clickCommand(int cmd) {                  // vt[1] do comando
     }
     if (cmd == kCmdLabsCompleted) { if (m_tab == 1) m_labs.open(1); return; }
     if (cmd == kCmdLabsCurrent) { if (m_tab == 1) m_labs.open(0); return; }
+    if (cmd == kCmdResStructures) { if (m_tab == 2) m_resources.open(m_resources.mode() + 6); return; }
+    if (cmd == kCmdResSummary) { if (m_tab == 2) m_resources.open(0); return; }
     if (cmd == kCmdMsgJump) {                               // sub_466A00 → sub_438EC0 → sub_408120
         int px, py;
         if (m_comms.jump(px, py)) requestCenterView(px, py);
@@ -1713,7 +1776,8 @@ void GameState::renderPanel(Renderer& renderer) {
                 blitArtFrame(fb, VW, VH, emb, 0, winL + ex, winT + ey, -1, winL, winT, pane.r, pane.b);
             }
             static const int kTabArt[6] = {0x8E, 0x91, 0x90, 0x8F, 0x92, 0x8D};   // dword_4D5390
-            // Aba atual (sub_40A790 com 0x40): só a de objetivos é portada.
+            // Aba atual (sub_40A790 com 0x40) = frame 1; desabilitada = frame 2
+            // (sub_45C770: abas 0..3 em missão só de unidades).
             const int current = m_tab;
             int x = 1;
             for (int k = 0; k < 6; ++k) {
@@ -1721,7 +1785,8 @@ void GameState::renderPanel(Renderer& renderer) {
                 if (anim >= g_art.numAnimations()) continue;
                 const ArtAnimation& an = g_art.animation(anim);
                 // Botão (sub_40AEE0): sub_403E00 com o hotspot no canto do retângulo.
-                blitArtFrame(fb, VW, VH, anim, k == current ? 1 : 0, winL + x, winT, -1,
+                const int fr = (k <= 3 && reportsDisabled()) ? 2 : k == current ? 1 : 0;
+                blitArtFrame(fb, VW, VH, anim, fr, winL + x, winT, -1,
                              kColX, kPaneWinY, kColX + kColW, pane.t);
                 x += static_cast<int>(an.header[3]) - static_cast<int>(an.header[1]);
             }
@@ -1738,7 +1803,12 @@ void GameState::renderPanel(Renderer& renderer) {
     m_comms.update();
     m_factories.update();
     m_labs.update();
-    if (m_tab == 3 && m_comms.isOpen())
+    m_resources.update();
+    if (m_tab == 5 && m_mission)
+        m_objectives.draw(fb, VW, VH, pane, m_mouseNX, m_mouseNY);
+    else if (m_tab == 2 && m_resources.isOpen())
+        m_resources.draw(fb, VW, VH, pane, m_mouseNX, m_mouseNY);
+    else if (m_tab == 3 && m_comms.isOpen())
         m_comms.draw(fb, VW, VH, kColX, kPaneWinY, pane, m_mouseNX, m_mouseNY);
     else if (m_tab == 0 && m_factories.isOpen())
         m_factories.draw(fb, VW, VH, pane, m_mouseNX, m_mouseNY);
@@ -1762,8 +1832,6 @@ void GameState::renderPanel(Renderer& renderer) {
     }
     else if (!m_selected.empty())
         drawUnitInfoPane(fb, VW, VH, pane, m_selected[0], static_cast<int>(m_selected.size()), me);
-    else if (m_tab == 5 && m_mission)
-        m_objectives.draw(fb, VW, VH, pane, m_mouseNX, m_mouseNY);
     // Botoeira do veículo (sub_46D540): ícones verdes do op2_art (anim crua − 0x65).
     {
         const std::vector<CmdButton> btns = commandButtons();
