@@ -33,11 +33,12 @@ static const int kAnimBias = 0x65;   // sub_403E00: `lea eax,[ecx-65h]`
 // (antecipação). Valores lidos do OUTPOST2.EXE.
 enum Launch { LAUNCH_BALLISTIC /*sub_4A3A90*/, LAUNCH_INSTANT /*sub_4A3E00*/, LAUNCH_THOR /*sub_48AF60*/ };
 enum Finder { FIND_LOS /*sub_4A6DD0*/, FIND_NEAR /*sub_4A6AA0*/, FIND_BOX /*sub_4A7400*/,
-              FIND_EMP /*sub_4A7060*/, FIND_FOAM /*sub_4A7270*/ };
+              FIND_EMP /*sub_4A7060*/, FIND_FOAM /*sub_4A7270*/, FIND_NONE /*sub_4471E0*/ };
 enum DrawKind { DRAW_PROJECTILE /*sub_4A2D50*/, DRAW_LASER /*sub_4A3420*/,
                 DRAW_MICROWAVE /*sub_4A3000*/, DRAW_RAILGUN /*sub_4A2A00*/,
                 DRAW_SCORPION /*sub_4A31D0*/, DRAW_THOR /*sub_48AD70*/,
-                DRAW_ESG /*sub_480DB0*/, DRAW_ACID /*sub_401560*/ };
+                DRAW_ESG /*sub_480DB0*/, DRAW_ACID /*sub_401560*/,
+                DRAW_DESTRUCT /*sub_4A3370 / sub_4A64D0*/ };
 struct WeaponClass {
     int type;
     int rangeMode;          // desc+0x250: 1 = sem linha de visada no teste de alcance
@@ -56,6 +57,16 @@ static const WeaponClass kClasses[] = {
     // STICKYFOAM: sub_4A61C0 / sub_4A3A90 / sub_4A7270 / sub_4A2D50 / sub_4A6910 / sub_447240;
     // fire tick sub_4A7950, impacto sub_4A4F10.
     {0x47, 1, 0xF2, 0xF3, LAUNCH_BALLISTIC, FIND_FOAM, DRAW_PROJECTILE, 0x47D, 0, 1, 3},
+    // Autodestruições: vt[32] sub_4A4030 (explode no atirador), impacto sub_4A4090,
+    // antecipação sub_4470B0 (2). SELF_DESTRUCT (Starflare) sub_4A5EF0 / busca sub_4471E0;
+    // SELF_DESTRUCT_ADV (Supernova) sub_4A6080 / sub_447200; TURRET_DESTRUCT(_ADV)
+    // (Guard Post) sub_4A5E50 / sub_4A5EA0 (sem +0x250) / sub_4A7400; SCUTTLE_DESTRUCT
+    // sub_4A6170 / sub_4A7400. Explosões vt[35] sub_4A6890/68B0/6870/68D0/68F0.
+    {0x41, 0, 0xEE, 0xFB, LAUNCH_INSTANT, FIND_NONE, DRAW_DESTRUCT, 0x2FB, 2, 0, 0},
+    {0x42, 0, 0xEF, 0xFB, LAUNCH_INSTANT, FIND_NONE, DRAW_DESTRUCT, 0x5B5, 2, 0, 0},
+    {0x43, 0, 0xEE, 0xFB, LAUNCH_INSTANT, FIND_BOX, DRAW_DESTRUCT, 0x2FB, 2, 0, 0},
+    {0x44, 0, 0xEE, 0xFB, LAUNCH_INSTANT, FIND_BOX, DRAW_DESTRUCT, 0x5B5, 2, 0, 0},
+    {0x45, 0, 0xEF, 0xFB, LAUNCH_INSTANT, FIND_BOX, DRAW_DESTRUCT, 0x2FC, 2, 0, 0},
     // ACID: sub_4A5480 / sub_4A3A90 / sub_4A6AA0 / sub_401560 / sub_401910 / sub_4470D0;
     // impacto nullsub_5, nuvem no vt[20] sub_401050, duração vt[36] sub_4013D0.
     {0x3B, 1, 0xE4, 0xE5, LAUNCH_BALLISTIC, FIND_NEAR, DRAW_ACID, 0x414, 0, 5, 6},
@@ -618,6 +629,7 @@ static int findTarget(int id, uint32_t mask) {
         case FIND_NEAR: return findTargetNear(id, mask);
         case FIND_EMP:  return findTargetEMP(id, mask);
         case FIND_FOAM: return findTargetLOS(id, mask, false, true);
+        case FIND_NONE: return 0;
     }
     return 0;
 }
@@ -655,6 +667,19 @@ static int createProjectile(int type, int x, int y, int owner) {
     return u.id();
 }
 
+// vt[32] das autodestruições (sub_4A4030): impacto na posição do atirador
+// ([+0x48]), sem voo, espera 1 tick (alvo = o próprio atirador) ou 4 e explode
+// (o sub-estado 6 grava 6 em [+0x23] — não passa pelo 0x13 nem toca o disparo).
+static void destructArm(int pid, int source, int target) {
+    UnitRecord& p = g_units[pid];
+    const UnitRecord& s = g_units[source];
+    p.impactX = unitOX(s);
+    p.impactY = unitOY(s);
+    p.flags &= ~UNIT_IN_FLIGHT;
+    p.field22 = SUB_WAIT; p.field23 = 0x13; p.action = 0x36;
+    p.field3C = target == source ? 1 : 4;
+}
+
 static bool fireWeapon(int id) {
     UnitRecord& u = g_units[id];
     if (!inRange(u)) { clearTarget(u); return false; }
@@ -670,6 +695,15 @@ static bool fireWeapon(int id) {
     ++sh.refCount;
     if (p.type == 0x3C) p.shooterBit = static_cast<int8_t>(1 << statsOf(sh));   // sub_4A47F0
     if (p.type == 0x46) p.esgOwnerBit = static_cast<int8_t>(1 << ownerOf(sh));  // sub_480A80
+    if (sh.cargo == 0x41 || sh.cargo == 0x42) {
+        // sub_484F80: Starflare/Supernova — vt[32] (sub_4A4030) com o próprio
+        // atirador e larga o alvo dele.
+        destructArm(pid, id, id);
+        UnitRecord& s2 = g_units[id];
+        if (s2.targetIsUnit() && s2.hasTarget()) dropRef(s2.target4C);
+        s2.field4E = 0x7FFF;
+        return true;
+    }
     // vt[32] (sub_4A3DD0, alvo unidade) / vt[33] (sub_4A3DA0, alvo lugar).
     p.flags &= ~UNIT_IN_FLIGHT;
     p.field23 = 0; p.field22 = 0x12; p.action = 0x36;
@@ -1510,6 +1544,94 @@ void unitApplyFoam(int id, int ticks) {                       // vt[0x60] sub_44
     u.foamStart = static_cast<int16_t>(TethysGame::tick());
 }
 
+// vt[34] das autodestruições (sub_4A4090): o dano em área de sub_4A35C0 sem
+// crédito ao atirador, sem o x1.5 de prédio-torre e sem som — fere todos,
+// inclusive o próprio atirador. (Paredes/tubos 0x17..0x19: sub_4A23F0 com
+// (raio − d) * (Concussion + Penetration) / raio — pendente com o dano em paredes.)
+static void explodeDestruct(int pid) {
+    const UnitRecord& p = g_units[pid];
+    const WeaponSheetDesc* d = weaponSheet(p.type);
+    const WeapPlayerStats* w = weapStats(p.type, statsOf(p));
+    if (!d || !w) return;
+    const int R = d->radius;
+    const int rt = (R + 31) >> 5;
+    const int ix = p.impactX, iy = p.impactY;
+    const int x0 = (ix >> 5) - rt, x1 = (ix >> 5) + rt;
+    int y0 = (iy >> 5) - rt; if (y0 <= 0) y0 = 0;
+    int y1 = (iy >> 5) + rt; if (y1 > g_gameMap.height() - 1) y1 = g_gameMap.height() - 1;
+    const int attacker = statsOf(p);
+    for (int x = x0; x <= x1; ++x) {
+        const int cxp = x * 32 + 16;
+        for (int y = y0; y <= y1; ++y) {
+            const uint32_t cell = g_gameMap.rawCell(x & tileMask(), y);
+            const int occ = static_cast<int>((cell & GameMap::CELL_OCCUPANCY) >> GameMap::CELL_OCC_SHIFT);
+            if (!occ || !alive(occ)) continue;
+            UnitRecord& t = g_units[occ];
+            if (!(t.flags & UNIT_DAMAGEABLE)) continue;
+            int dx, dy;
+            if (t.flags & UNIT_BUILDING) {
+                dy = std::abs(iy - y * 32 - 16);
+                dx = (ix > cxp ? ix : cxp) - (ix < cxp ? ix : cxp);
+            } else {
+                dy = std::abs(iy - unitOY(t));
+                const int tx = unitOX(t);
+                dx = (tx > ix ? tx : ix) - (tx < ix ? tx : ix);
+            }
+            if (half(pxW()) < dx) dx = pxW() - dx;
+            const int dist = octo(dx, dy);
+            if (R <= dist) continue;
+            int dmg = ((armorOf(t) * w->concussion) >> 8) + w->penetration;
+            if (!(t.flags & UNIT_BUILDING)) dmg = (R - dist) * dmg / R;
+            else dmg = (10000 - colonyDirtProtection(t)) * dmg / 20000;
+            if (dmg <= 0) continue;
+            t.damage = static_cast<int16_t>(t.damage + dmg);
+            damageMessage(t, attacker);
+            const int hp = maxHPOf(t);
+            if (hp <= t.damage) {
+                t.damage = static_cast<int16_t>(hp);
+                t.flags |= UNIT_DEAD;
+                killUnit(occ, 5);
+            }
+        }
+    }
+}
+
+// sub_43A6A0 (comando 0x14): Starflare/Supernova armado mira o próprio tile e
+// dispara (vt[4]); os demais criam a SCUTTLE_DESTRUCT (0x45) no lugar, com o
+// vt[32] apontando p/ si, e morrem (0x20000, ação 0x2F, [+0x3C] = 5) — prédio
+// em obra (0x21/0x22, estado 0) leva junto o ConVec que o constrói ([+0x48]).
+void unitSelfDestruct(int id) {
+    UnitRecord& u = g_units[id];
+    if ((u.flags & 0x90u) && (u.cargo == 0x41 || u.cargo == 0x42)) {
+        if (u.targetIsUnit() && u.hasTarget()) dropRef(u.target4C);
+        u.target4C = static_cast<int16_t>(unitOX(u) >> 5);
+        u.field4E = static_cast<uint16_t>(unitOY(u) >> 5);
+        fireWeapon(id);                                           // vt[4] sub_484F80
+        return;
+    }
+    const int pid = createProjectile(0x45, unitOX(u), unitOY(u), ownerOf(u));
+    if (!pid) return;
+    UnitRecord& p = g_units[pid];
+    UnitRecord& s = g_units[id];
+    p.owner = static_cast<uint8_t>((p.owner & 0xF6) | 6);
+    ++s.refCount;
+    p.sourceId = id;
+    destructArm(pid, id, id);                                     // vt[32] sub_4A4030
+    UnitRecord& v = g_units[id];
+    v.flags |= UNIT_DEAD;
+    if ((v.flags & UNIT_BUILDING) && (v.action == 0x21 || v.action == 0x22) && (v.state34 >> 16) == 0) {
+        const int b = v.builderId;
+        if (b > 0 && b < static_cast<int>(g_units.size()) && g_units[b].id != -1) {
+            UnitRecord& c = g_units[b];
+            c.damage = static_cast<int16_t>(maxHPOf(c));
+            c.flags |= UNIT_DEAD;
+            killUnit(b, 5);
+        }
+    }
+    UnitRecord& v2 = g_units[id];
+    v2.action = 0x2F; v2.field3C = 5; v2.field20 = 1;
+}
+
 // ---- Máquina do projétil ----------------------------------------------------------
 // vt[29] do atirador: veículo (sub_44B620) vivo, sem EMP e fora do estado 0xA.
 static bool sourceReady(int src) {
@@ -1549,6 +1671,7 @@ void weaponProjectileAction(int id) {                         // case 54
         if (p.type == 0x46 || p.type == 0x3B) {}                  // vt[34] nullsub_122 / nullsub_5 (efeito no vt[20])
         else if (p.type == 0x3C) explodeEMP(id);                 // vt[34] sub_4A4490
         else if (p.type == 0x47) explodeFoam(id);                 // vt[34] sub_4A4F10
+        else if (p.type >= 0x41 && p.type <= 0x45) explodeDestruct(id);   // vt[34] sub_4A4090
         else explode(id);                                         // vt[34] sub_4A35C0
         UnitRecord& q = g_units[id];
         q.field22 = SUB_WAIT;
@@ -1757,6 +1880,10 @@ void weaponDrawOps(int id, std::vector<WeaponDrawOp>& ops) {
                 pushSprite(ops, c->explodeAnim, lastFrameRaw(c->explodeAnim) - p.field3C, p.impactX, p.impactY);
             return;
         }
+        case DRAW_DESTRUCT:                                       // sub_4A3370 / sub_4A64D0
+            if (p.exploded)
+                pushSprite(ops, c->explodeAnim, lastFrameRaw(c->explodeAnim) - p.field3C, p.impactX, p.impactY);
+            return;
         case DRAW_ACID: {                                         // sub_401560
             if (!p.exploded) break;                               // → sub_4A2D50
             const int dur = explosionDuration(p);

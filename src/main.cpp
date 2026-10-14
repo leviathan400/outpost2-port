@@ -1337,7 +1337,10 @@ static int runCombatTest(const std::string& mapName, const std::string& prefix, 
         }
     if (bx < 0) { std::printf("[Combat] sem area livre\n"); return 3; }
     op2::Unit a, b, c, d;
-    const int w[4] = {wpn ? wpn[0] : 0x3D, wpn ? wpn[1] : 0x3F, wpn ? wpn[2] : 0x3E, wpn ? wpn[3] : 0x40};
+    int w[4] = {wpn ? wpn[0] : 0x3D, wpn ? wpn[1] : 0x3F, wpn ? wpn[2] : 0x3E, wpn ? wpn[3] : 0x40};
+    // 0x41/0x42 na unidade 0: detona em t=30; 0x45: um Laser Lynx que se afunda (scuttle).
+    const int selfDestruct = (w[0] == 0x41 || w[0] == 0x42 || w[0] == 0x45) ? w[0] : 0;
+    if (w[0] == 0x45) w[0] = 0x3D;
     auto chassis = [&](int k) { return w[k] == 0x49 ? op2::mapScorpion : (k & 1) ? op2::mapTiger : op2::mapLynx; };
     op2::TethysGame::CreateUnit(a, chassis(0), op2::LOCATION{bx, by}, 0, w[0]);
     op2::TethysGame::CreateUnit(b, chassis(1), op2::LOCATION{bx, by + 2}, 0, w[1]);
@@ -1359,6 +1362,10 @@ static int runCombatTest(const std::string& mapName, const std::string& prefix, 
         op2::TethysGame::advanceTick();
         op2::TethysGame::advanceDaylight(op2::g_gameMap.internalWidth());
         op2::TethysGame::getRand(100);
+        if (selfDestruct && t == 30 && op2::g_units[ids[0]].id != -1) {
+            std::printf("[Combat] t=%d  %d autodestruicao\n", t, ids[0]);
+            op2::unitSelfDestruct(ids[0]);
+        }
         op2::tickColony();
         op2::tickMovement();
         const size_t before = op2::g_units.size();

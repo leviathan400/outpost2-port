@@ -49,6 +49,9 @@ bool weaponProjectileSubstate(int id);
 // vt[19] (destrutor) do projétil: solta a referência ao atirador ([+0x32]).
 void weaponUnitRemoved(int id);
 
+// sub_43A6A0 (comando 0x14, Unit::DoSelfDestruct): Starflare/Supernova detonam a
+// carga; os demais criam a SCUTTLE_DESTRUCT (0x45) e morrem.
+void unitSelfDestruct(int id);
 // vt[0x60] do veículo (sub_44B5C0): espuma por `ticks` passadas de 8 ticks.
 void unitApplyFoam(int id, int ticks);
 

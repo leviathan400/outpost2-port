@@ -13,6 +13,7 @@
 #include "terrain_cost.h"
 #include "unit.h"
 #include "walls.h"
+#include "weapon.h"
 #include "mining.h"
 #include "vehicle_anim.h"
 #include "../gfx/artfile.h"
@@ -522,14 +523,7 @@ void unitDoSelfDestruct(int id) {                            // ?DoSelfDestruct
     // sub-estado != 0x0A) e veículo/0x40.
     if (((r.flags | (r.flags << 2)) & 0x80000u) || r.field22 == 0x0A) return;
     if (!(r.flags & 0x42u)) return;
-    // sub_43A6A0: cria a arma SCUTTLE_DESTRUCT (0x45) no lugar (ou detona a
-    // 0x41/0x42 de quem a carrega) — essas armas ainda não estão portadas;
-    // aqui só a morte da unidade (0x20000, ação 0x2F, [+0x3C] = 5).
-    std::fprintf(stderr, "[Mission] DoSelfDestruct(%d): explosao SCUTTLE (0x45) nao portada\n", id);
-    r.flags |= UNIT_DEAD;
-    r.action = 0x2F;
-    r.field3C = 5;
-    r.field20 = 1;
+    unitSelfDestruct(id);                                    // sub_43A6A0
 }
 
 int unitHasOccupiedBay(int id) {                             // ?HasOccupiedBay
