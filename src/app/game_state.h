@@ -14,6 +14,7 @@
 #include "factories_pane.h"
 #include "labs_pane.h"
 #include "resources_pane.h"
+#include "space_pane.h"
 #include "objectives_pane.h"
 #include "storage_pane.h"
 #include "research_pane.h"
@@ -52,6 +53,7 @@ public:
     void debugTab(int k, int row = -1);
     void debugLabs(int mode, int row) { m_labs.open(mode == 2 ? 2 : mode); if (row >= 0) m_labs.select(row); }
     void debugResources(int mode, int row) { openReport(2, mode); if (row >= 0) m_resources.select(row); }
+    void debugSpace(int mode) { openReport(4, mode); }
     void pressCommand(int cmd) { clickCommand(cmd); }      // testes: botão do painel
     ResearchPane& researchPaneForTest() { return m_research; }
     void setMouse(int nx, int ny) { m_mouseNX = nx; m_mouseNY = ny; }
@@ -132,7 +134,10 @@ private:
     FactoriesPane m_factories;     // aba 0 (dword_5657C8: Factories Report)
     LabsPane m_labs;               // aba 1 (dword_568248: Labs)
     ResourcesPane m_resources;     // aba 2 (dword_567920: Resources)
-    void closeTabPanes() { m_comms.close(); m_factories.close(); m_labs.close(); m_resources.close(); }
+    SpacePane m_space;             // aba 4 (dword_56A0A8: Space Program)
+    void closeTabPanes() {
+        m_comms.close(); m_factories.close(); m_labs.close(); m_resources.close(); m_space.close();
+    }
     // DescBlock+0xC (missão só de unidades): abas 0..3 desabilitadas (sub_45C770)
     // e os atalhos dos relatórios ignorados (sub_498890).
     bool reportsDisabled() const;
@@ -164,6 +169,7 @@ private:
     static constexpr int kCmdDetails = -18;                    // &DETAILS dos relatórios (sub_458CC0)
     static constexpr int kCmdLabsCompleted = -19, kCmdLabsCurrent = -20;   // modos 1 / 0 (sub_45C460)
     static constexpr int kCmdResStructures = -21, kCmdResSummary = -22;    // Resources: modo+6 / 0
+    static constexpr int kCmdSpaceMode = -23;                              // &STARSHIP / &SATELLITES
     void reportDetails(int unit);                              // sub_457760
     static constexpr int kCmdBuildIt = -2, kCmdStatus = -3;
     PaneRect infoPaneRect() const;

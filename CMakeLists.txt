@@ -65,6 +65,7 @@ add_executable(outpost2_modern
     src/app/factories_pane.cpp
     src/app/labs_pane.cpp
     src/app/resources_pane.cpp
+    src/app/space_pane.cpp
     src/app/game_frame.cpp
     src/app/objectives_pane.cpp
     src/app/storage_pane.cpp

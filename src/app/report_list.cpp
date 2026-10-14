@@ -33,9 +33,22 @@ std::vector<ReportLine> reportLines(const std::vector<std::string>& items, int w
     for (int i = 0; i < static_cast<int>(items.size()); ++i) {
         const std::string& it = items[i];
         size_t pos = 0;
+        // sub_416650: a cor (<Cn>) e o <N> valem até o fim do item, atravessando
+        // o '\n'; o alinhamento volta ao padrão a cada linha.
+        std::string color;
+        bool literal = false;
         while (true) {
             const size_t nl = it.find('\n', pos);
-            const std::string seg = it.substr(pos, nl == std::string::npos ? std::string::npos : nl - pos);
+            const std::string raw = it.substr(pos, nl == std::string::npos ? std::string::npos : nl - pos);
+            const std::string seg = color + (literal ? "<N>" : "") + raw;
+            for (size_t k = 0; k < raw.size() && !literal; ++k) {
+                if (raw[k] != '<') continue;
+                const size_t e = raw.find('>', k);
+                if (e == std::string::npos) break;
+                if (e == k + 3 && raw[k + 1] == 'C') color = raw.substr(k, 4);
+                if (e == k + 2 && raw[k + 1] == 'N') literal = true;
+                k = e;
+            }
             // Tags do começo (repetidas nas linhas quebradas).
             size_t p = 0;
             while (p < seg.size() && seg[p] == '<') {

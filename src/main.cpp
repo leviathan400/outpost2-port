@@ -1771,6 +1771,12 @@ static int runPaneTest(const std::string& dll, const std::string& prefix) {
             std::snprintf(f2, sizeof(f2), "%s_res%02d.bmp", prefix.c_str(), md);
             writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
         }
+        for (int md = 0; md <= 1; ++md) {
+            gs.debugSpace(md);
+            gs.onIdle(renderer, 0.0f);
+            std::snprintf(f2, sizeof(f2), "%s_space%d.bmp", prefix.c_str(), md);
+            writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        }
         gs.debugTab(5);
         gs.onIdle(renderer, 0.0f);
         std::snprintf(f2, sizeof(f2), "%s_options.bmp", prefix.c_str());

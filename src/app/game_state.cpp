@@ -1031,6 +1031,8 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
         }
         if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_tab == 3 && m_comms.isOpen())
             paneHit = m_comms.click(infoPaneRect(), nx, ny);
+        if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_tab == 4 && m_space.isOpen())
+            paneHit = m_space.click(infoPaneRect(), nx, ny);
         if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_tab == 2 && m_resources.isOpen()) {
             bool dbl = false;
             paneHit = m_resources.click(infoPaneRect(), nx, ny, e.button.clicks >= 2, dbl);
@@ -1194,6 +1196,20 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
         out.push_back(b);
         b = TextButton{};
         b.cmd = kCmdStatus; b.label = "&STATUS"; b.tip = "Back to Structure &Status"; b.hotkey = 'S';
+        out.push_back(b);
+        layoutButtons();
+        return out;
+    }
+    if (m_tab == 4) {
+        // sub_46CFA0: modo 0 "&STARSHIP" (só com a pesquisa do tipo 0x37); 1 "&SATELLITES".
+        TextButton b{};
+        b.cmd = kCmdSpaceMode;
+        if (m_space.mode() == 0) {
+            if (!SpacePane::starshipAvailable()) return out;
+            b.label = "&STARSHIP"; b.tip = "Show &Starship Information"; b.hotkey = 'S';
+        } else {
+            b.label = "&SATELLITES"; b.tip = "Show &Satellite Information"; b.hotkey = 'S';
+        }
         out.push_back(b);
         layoutButtons();
         return out;
@@ -1441,10 +1457,11 @@ void GameState::openReport(int k, int mode) {
     if (k == 1) m_labs.open(mode);
     if (k == 2) m_resources.open(mode);
     if (k == 3) m_comms.open();
+    if (k == 4) m_space.open(mode);
 }
 
 void GameState::openTab(int k) {
-    if (k == 5 ? !m_mission : (k < 0 || k > 3 || reportsDisabled())) return;   // 4 (Space Program): pendente
+    if (k == 5 ? !m_mission : k == 4 ? false : (k < 0 || k > 3 || reportsDisabled())) return;
     m_targetCmd = -1;
     m_selected.clear();
     m_lastSel.clear();
@@ -1455,6 +1472,7 @@ void GameState::openTab(int k) {
     if (k == 1) m_labs.open(0);
     if (k == 2) m_resources.open(0);
     if (k == 3) m_comms.open();
+    if (k == 4) m_space.open(0);
     soundPlay(0x57);
 }
 
@@ -1529,6 +1547,7 @@ void GameState::clickCommand(int cmd) {                  // vt[1] do comando
     if (cmd == kCmdLabsCurrent) { if (m_tab == 1) m_labs.open(0); return; }
     if (cmd == kCmdResStructures) { if (m_tab == 2) m_resources.open(m_resources.mode() + 6); return; }
     if (cmd == kCmdResSummary) { if (m_tab == 2) m_resources.open(0); return; }
+    if (cmd == kCmdSpaceMode) { if (m_tab == 4) m_space.open(m_space.mode() == 0 ? 1 : 0); return; }
     if (cmd == kCmdMsgJump) {                               // sub_466A00 → sub_438EC0 → sub_408120
         int px, py;
         if (m_comms.jump(px, py)) requestCenterView(px, py);
@@ -1804,10 +1823,13 @@ void GameState::renderPanel(Renderer& renderer) {
     m_factories.update();
     m_labs.update();
     m_resources.update();
+    m_space.update();
     if (m_tab == 5 && m_mission)
         m_objectives.draw(fb, VW, VH, pane, m_mouseNX, m_mouseNY);
     else if (m_tab == 2 && m_resources.isOpen())
         m_resources.draw(fb, VW, VH, pane, m_mouseNX, m_mouseNY);
+    else if (m_tab == 4 && m_space.isOpen())
+        m_space.draw(fb, VW, VH, pane, m_mouseNX, m_mouseNY);
     else if (m_tab == 3 && m_comms.isOpen())
         m_comms.draw(fb, VW, VH, kColX, kPaneWinY, pane, m_mouseNX, m_mouseNY);
     else if (m_tab == 0 && m_factories.isOpen())
