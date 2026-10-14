@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 #include "unit.h"
@@ -23,7 +24,8 @@ namespace op2 {
 //   morte do veículo — case 47 (loc_43D8A3): explosão AMBIENT_ANIM, marca no
 //   terreno, crédito de moral ao atacante ([+0x26]) e mensagem.
 //
-// Armas portadas: LASER 0x3D, MICROWAVE 0x3E, RAIL_GUN 0x3F, CANNON (RPG) 0x40.
+// Armas portadas: LASER 0x3D, MICROWAVE 0x3E, RAIL_GUN 0x3F, CANNON (RPG) 0x40,
+// THORS_HAMMER 0x48, SCORPION_WEAPON 0x49, BFG 0x4B.
 
 // Projétil de uma das armas portadas?
 bool isWeaponProjectile(int type);
@@ -53,12 +55,21 @@ void vehicleDeath(int id);
 // ---- Desenho ----------------------------------------------------------------
 // Operações de desenho em coordenadas de MUNDO (pixel do original, centro).
 struct WeaponDrawOp {
-    enum Kind { SPRITE, LASER_LINE, MICROWAVE_LINE } kind = SPRITE;
+    enum Kind { SPRITE, LASER_LINE, MICROWAVE_LINE, BOLT } kind = SPRITE;
     int anim = -1, frame = 0;       // SPRITE: animação real (sem viés) e frame
     int x = 0, y = 0;               // SPRITE: ponto; linhas: início
     int x2 = 0, y2 = 0;             // linhas: fim
-    int phase = 0;                  // MICROWAVE_LINE: rotação do padrão
+    int phase = 0;                  // MICROWAVE_LINE: rotação do padrão; BOLT: ângulo inicial
+    uint16_t orColor = 0x7C00;      // LASER_LINE: cor 555 somada por OR (sub_41E8F0)
+    uint32_t seed = 0;              // BOLT: semente da RNG do desenho (unk_5737E8)
+    int segs = 0;                   // BOLT: segmentos ([+0x58])
 };
+// Raio do Thor's Hammer (sub_48AD70 → sub_48A850): subdivide de (x,y) a
+// (x2,y2) com a RNG própria do desenho e risca com sub_41E620 (2x2, 1º nível) /
+// sub_41E7B0 (1 px, ramos) na superfície de vw x vh com a câmera em (camX, camY).
+// put(x, y, cor555) recebe pixels já dentro da superfície.
+void weaponDrawBolt(const WeaponDrawOp& op, int camX, int camY, int vw, int vh,
+                    const std::function<void(int, int, uint16_t)>& put);
 // vt[6] do projétil (sub_4A3420 laser, sub_4A3000 microwave, sub_4A2A00 rail
 // gun, sub_4A2D50 genérico).
 void weaponDrawOps(int id, std::vector<WeaponDrawOp>& ops);

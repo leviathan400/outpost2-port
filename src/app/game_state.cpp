@@ -735,10 +735,20 @@ void GameState::drawBeam(Renderer& renderer, const WeaponDrawOp& op) {
         const uint32_t r = (w >> 10) & 31, g = (w >> 5) & 31, b = w & 31;
         return 0xFF000000u | (((r << 3) | (r >> 2)) << 16) | (((g << 3) | (g >> 2)) << 8) | ((b << 3) | (b >> 2));
     };
-    auto put = [&](int x, int y, uint32_t argb, bool orRed) {
+    auto to555 = [](uint32_t p) {
+        return static_cast<uint16_t>((((p >> 19) & 31) << 10) | (((p >> 11) & 31) << 5) | ((p >> 3) & 31));
+    };
+    if (op.kind == WeaponDrawOp::BOLT) {                           // sub_48AD70
+        weaponDrawBolt(op, m_camX, m_camY, clipW, clipH, [&](int x, int y, uint16_t c) {
+            if (x < 0 || x >= clipW || y < 0 || y >= clipH) return;
+            fb[y * VW + x] = c555(c);
+        });
+        return;
+    }
+    auto put = [&](int x, int y, uint32_t argb, bool orCol) {
         if (x < 0 || x >= clipW || y < 0 || y >= clipH) return;
         uint32_t& px = fb[y * VW + x];
-        px = orRed ? (px | 0x00FF0000u) : argb;
+        px = orCol ? c555(to555(px) | op.orColor) : argb;
     };
     int x0 = screenXOf(op.x), y0 = op.y - m_camY;
     int x1 = x0 + (screenXOf(op.x2) - screenXOf(op.x)), y1 = op.y2 - m_camY;

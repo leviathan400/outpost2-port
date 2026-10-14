@@ -29,13 +29,13 @@ static const int kAnimBias = 0x65;   // sub_403E00: `lea eax,[ecx-65h]`
 // ---- Classes de arma --------------------------------------------------------
 // Por map_id: vt[4] do descritor (+0x250 modo de alcance, +0x254/+0x258 sons),
 // vt[31] da unidade (lançamento), vt[6] do descritor (busca de alvo), vt[6] da
-// unidade (desenho), vt[35] (animação da explosão) e as tabelas de torre de
-// vt[7]/vt[9..10]/vt[8] (Guard Post / Lynx e Panther / Tiger), 16 direções no
-// padrão {b, b+15, b+14, ..., b+1}. Valores lidos do OUTPOST2.EXE.
-enum Launch { LAUNCH_BALLISTIC /*sub_4A3A90*/, LAUNCH_INSTANT /*sub_4A3E00*/ };
-enum Finder { FIND_LOS /*sub_4A6DD0*/, FIND_NEAR /*sub_4A6AA0*/ };
+// unidade (desenho), vt[35] (animação da explosão) e vt[11] do descritor
+// (antecipação). Valores lidos do OUTPOST2.EXE.
+enum Launch { LAUNCH_BALLISTIC /*sub_4A3A90*/, LAUNCH_INSTANT /*sub_4A3E00*/, LAUNCH_THOR /*sub_48AF60*/ };
+enum Finder { FIND_LOS /*sub_4A6DD0*/, FIND_NEAR /*sub_4A6AA0*/, FIND_BOX /*sub_4A7400*/ };
 enum DrawKind { DRAW_PROJECTILE /*sub_4A2D50*/, DRAW_LASER /*sub_4A3420*/,
-                DRAW_MICROWAVE /*sub_4A3000*/, DRAW_RAILGUN /*sub_4A2A00*/ };
+                DRAW_MICROWAVE /*sub_4A3000*/, DRAW_RAILGUN /*sub_4A2A00*/,
+                DRAW_SCORPION /*sub_4A31D0*/, DRAW_THOR /*sub_48AD70*/ };
 struct WeaponClass {
     int type;
     int rangeMode;          // desc+0x250: 1 = sem linha de visada no teste de alcance
@@ -44,19 +44,151 @@ struct WeaponClass {
     Finder finder;
     DrawKind draw;
     int explodeAnim;        // vt[35] (cru, com viés)
-    int leadConst;          // vt[11] do descritor: 4 fixo, ou 0 = max(dist/16+1, 3)
-    int turretGP, turretLP, turretTiger;   // bases das tabelas de torre (cru)
+    int leadFixed;          // vt[11]: valor fixo, ou 0 = max(dist/16 + leadAdd, leadMin)
+    int leadAdd, leadMin;
 };
 static const WeaponClass kClasses[] = {
-    // LASER: sub_4A58D0 / sub_4A3E00 / sub_4A7020→sub_4A6DD0 / sub_4A3420 / sub_4A2880
-    {0x3D, 2, 0xE8, 0xE9, LAUNCH_INSTANT, FIND_LOS, DRAW_LASER, 0x2F6, 4, 0x42B, 0x65A, 0x66A},
-    // MICROWAVE: sub_4A5A30 / sub_4A3E00 / sub_4A7040 / sub_4A3000 / sub_4A2880
-    {0x3E, 2, 0xEA, 0xEB, LAUNCH_INSTANT, FIND_LOS, DRAW_MICROWAVE, 0x2F6, 4, 0x458, 0x63A, 0x64A},
-    // RAIL_GUN: sub_4A5B90 / sub_4A3A90 / sub_4A7000 / sub_4A2A00 / sub_4A2870
-    {0x3F, 2, 0xEC, 0xED, LAUNCH_BALLISTIC, FIND_LOS, DRAW_RAILGUN, 0x14B, 0, 0x43B, 0x5B8, 0x5C8},
+    // LASER: sub_4A58D0 / sub_4A3E00 / sub_4A7020→sub_4A6DD0 / sub_4A3420 / sub_4A2880 / sub_447130
+    {0x3D, 2, 0xE8, 0xE9, LAUNCH_INSTANT, FIND_LOS, DRAW_LASER, 0x2F6, 4, 0, 0},
+    // MICROWAVE: sub_4A5A30 / sub_4A3E00 / sub_4A7040 / sub_4A3000 / sub_4A2880 / sub_447150
+    {0x3E, 2, 0xEA, 0xEB, LAUNCH_INSTANT, FIND_LOS, DRAW_MICROWAVE, 0x2F6, 4, 0, 0},
+    // RAIL_GUN: sub_4A5B90 / sub_4A3A90 / sub_4A7000 / sub_4A2A00 / sub_4A2870 / sub_447170
+    {0x3F, 2, 0xEC, 0xED, LAUNCH_BALLISTIC, FIND_LOS, DRAW_RAILGUN, 0x14B, 0, 1, 3},
     // CANNON (RPG): sub_4A5CF0 / sub_4A3A90 / sub_4A6AA0 / sub_4A2D50 / sub_4A2870
-    {0x40, 1, 0xF6, 0xF7, LAUNCH_BALLISTIC, FIND_NEAR, DRAW_PROJECTILE, 0x14B, 0, 0x2D5, 0x5D8, 0x5E8},
+    {0x40, 1, 0xF6, 0xF7, LAUNCH_BALLISTIC, FIND_NEAR, DRAW_PROJECTILE, 0x14B, 0, 1, 3},
+    // THORS_HAMMER: sub_48A6F0 / sub_48AF60 / sub_4A7400 / sub_48AD70 / sub_4A2880 / sub_447440
+    {0x48, 1, 0xF4, 0xF5, LAUNCH_THOR, FIND_BOX, DRAW_THOR, 0x2F6, 13, 0, 0},
+    // SCORPION_WEAPON: sub_4A6480 / sub_4A3E00 / sub_4A6FE0→sub_4A6DD0 / sub_4A31D0 / sub_4A2880 / sub_4472A0
+    {0x49, 2, 0xF8, 0xF9, LAUNCH_INSTANT, FIND_LOS, DRAW_SCORPION, 0x2F6, 4, 0, 0},
+    // BFG: sub_4A6320 / sub_4A3A90 / sub_4A7400 / sub_4A2D50 / sub_4A2870 / sub_447270
+    {0x4B, 1, 0xFA, 0xFB, LAUNCH_BALLISTIC, FIND_BOX, DRAW_PROJECTILE, 0x14B, 0, 1, 3},
 };
+
+// Torres — vt[7] Guard Post, vt[8] Tiger, vt[9] Panther, vt[10] Lynx do
+// descritor (as vt[5] dos chassis sub_485990 / sub_4857E0 / sub_485600 chamam
+// +0x20 / +0x24 / +0x28). kind 1: tabela de 16 direções indexada por
+// (dir + 8) >> 4, com a 1ª tabela se o dono das estatísticas ([+0x1D] >> 4) é
+// Eden (dword_56E308) e `sar` = o 2º cano do Tiger nos offsets x2/y2 do frame
+// (com 0x4000); kind 2: animação fixa por facção, boca no centro (offsets 0).
+// Gerado do OUTPOST2.EXE (scratchpad genweap2.py).
+struct TurretDesc { uint8_t kind, sar; int16_t eden[16], ply[16]; };
+struct TurretSet { int type; TurretDesc t[4]; };
+static const TurretSet kTurrets[] = {
+    {0x3B, {{1, 0, {0x491,0x4A0,0x49F,0x49E,0x49D,0x49C,0x49B,0x49A,0x499,0x498,0x497,0x496,0x495,0x494,0x493,0x492},
+                  {0x491,0x4A0,0x49F,0x49E,0x49D,0x49C,0x49B,0x49A,0x499,0x498,0x497,0x496,0x495,0x494,0x493,0x492}},
+           {1, 1, {0x6AA,0x6B9,0x6B8,0x6B7,0x6B6,0x6B5,0x6B4,0x6B3,0x6B2,0x6B1,0x6B0,0x6AF,0x6AE,0x6AD,0x6AC,0x6AB},
+                  {0x6AA,0x6B9,0x6B8,0x6B7,0x6B6,0x6B5,0x6B4,0x6B3,0x6B2,0x6B1,0x6B0,0x6AF,0x6AE,0x6AD,0x6AC,0x6AB}},
+           {1, 0, {0x69A,0x6A9,0x6A8,0x6A7,0x6A6,0x6A5,0x6A4,0x6A3,0x6A2,0x6A1,0x6A0,0x69F,0x69E,0x69D,0x69C,0x69B},
+                  {0x69A,0x6A9,0x6A8,0x6A7,0x6A6,0x6A5,0x6A4,0x6A3,0x6A2,0x6A1,0x6A0,0x69F,0x69E,0x69D,0x69C,0x69B}},
+           {1, 0, {0x69A,0x6A9,0x6A8,0x6A7,0x6A6,0x6A5,0x6A4,0x6A3,0x6A2,0x6A1,0x6A0,0x69F,0x69E,0x69D,0x69C,0x69B},
+                  {0x69A,0x6A9,0x6A8,0x6A7,0x6A6,0x6A5,0x6A4,0x6A3,0x6A2,0x6A1,0x6A0,0x69F,0x69E,0x69D,0x69C,0x69B}}}},
+    {0x3C, {{1, 0, {0x4A1,0x4B0,0x4AF,0x4AE,0x4AD,0x4AC,0x4AB,0x4AA,0x4A9,0x4A8,0x4A7,0x4A6,0x4A5,0x4A4,0x4A3,0x4A2},
+                  {0x860,0x86F,0x86E,0x86D,0x86C,0x86B,0x86A,0x869,0x868,0x867,0x866,0x865,0x864,0x863,0x862,0x861}},
+           {1, 1, {0x56B,0x57A,0x579,0x578,0x577,0x576,0x575,0x574,0x573,0x572,0x571,0x570,0x56F,0x56E,0x56D,0x56C},
+                  {0x58B,0x59A,0x599,0x598,0x597,0x596,0x595,0x594,0x593,0x592,0x591,0x590,0x58F,0x58E,0x58D,0x58C}},
+           {1, 0, {0x55B,0x56A,0x569,0x568,0x567,0x566,0x565,0x564,0x563,0x562,0x561,0x560,0x55F,0x55E,0x55D,0x55C},
+                  {0x57B,0x58A,0x589,0x588,0x587,0x586,0x585,0x584,0x583,0x582,0x581,0x580,0x57F,0x57E,0x57D,0x57C}},
+           {1, 0, {0x55B,0x56A,0x569,0x568,0x567,0x566,0x565,0x564,0x563,0x562,0x561,0x560,0x55F,0x55E,0x55D,0x55C},
+                  {0x57B,0x58A,0x589,0x588,0x587,0x586,0x585,0x584,0x583,0x582,0x581,0x580,0x57F,0x57E,0x57D,0x57C}}}},
+    {0x3D, {{1, 0, {0x42B,0x43A,0x439,0x438,0x437,0x436,0x435,0x434,0x433,0x432,0x431,0x430,0x42F,0x42E,0x42D,0x42C},
+                  {0x42B,0x43A,0x439,0x438,0x437,0x436,0x435,0x434,0x433,0x432,0x431,0x430,0x42F,0x42E,0x42D,0x42C}},
+           {1, 1, {0x66A,0x679,0x678,0x677,0x676,0x675,0x674,0x673,0x672,0x671,0x670,0x66F,0x66E,0x66D,0x66C,0x66B},
+                  {0x66A,0x679,0x678,0x677,0x676,0x675,0x674,0x673,0x672,0x671,0x670,0x66F,0x66E,0x66D,0x66C,0x66B}},
+           {1, 0, {0x65A,0x669,0x668,0x667,0x666,0x665,0x664,0x663,0x662,0x661,0x660,0x65F,0x65E,0x65D,0x65C,0x65B},
+                  {0x65A,0x669,0x668,0x667,0x666,0x665,0x664,0x663,0x662,0x661,0x660,0x65F,0x65E,0x65D,0x65C,0x65B}},
+           {1, 0, {0x65A,0x669,0x668,0x667,0x666,0x665,0x664,0x663,0x662,0x661,0x660,0x65F,0x65E,0x65D,0x65C,0x65B},
+                  {0x65A,0x669,0x668,0x667,0x666,0x665,0x664,0x663,0x662,0x661,0x660,0x65F,0x65E,0x65D,0x65C,0x65B}}}},
+    {0x3E, {{1, 0, {0x458,0x467,0x466,0x465,0x464,0x463,0x462,0x461,0x460,0x45F,0x45E,0x45D,0x45C,0x45B,0x45A,0x459},
+                  {0x458,0x467,0x466,0x465,0x464,0x463,0x462,0x461,0x460,0x45F,0x45E,0x45D,0x45C,0x45B,0x45A,0x459}},
+           {1, 1, {0x64A,0x659,0x658,0x657,0x656,0x655,0x654,0x653,0x652,0x651,0x650,0x64F,0x64E,0x64D,0x64C,0x64B},
+                  {0x64A,0x659,0x658,0x657,0x656,0x655,0x654,0x653,0x652,0x651,0x650,0x64F,0x64E,0x64D,0x64C,0x64B}},
+           {1, 0, {0x63A,0x649,0x648,0x647,0x646,0x645,0x644,0x643,0x642,0x641,0x640,0x63F,0x63E,0x63D,0x63C,0x63B},
+                  {0x63A,0x649,0x648,0x647,0x646,0x645,0x644,0x643,0x642,0x641,0x640,0x63F,0x63E,0x63D,0x63C,0x63B}},
+           {1, 0, {0x63A,0x649,0x648,0x647,0x646,0x645,0x644,0x643,0x642,0x641,0x640,0x63F,0x63E,0x63D,0x63C,0x63B},
+                  {0x63A,0x649,0x648,0x647,0x646,0x645,0x644,0x643,0x642,0x641,0x640,0x63F,0x63E,0x63D,0x63C,0x63B}}}},
+    {0x3F, {{1, 0, {0x43B,0x44A,0x449,0x448,0x447,0x446,0x445,0x444,0x443,0x442,0x441,0x440,0x43F,0x43E,0x43D,0x43C},
+                  {0x43B,0x44A,0x449,0x448,0x447,0x446,0x445,0x444,0x443,0x442,0x441,0x440,0x43F,0x43E,0x43D,0x43C}},
+           {1, 1, {0x5C8,0x5D7,0x5D6,0x5D5,0x5D4,0x5D3,0x5D2,0x5D1,0x5D0,0x5CF,0x5CE,0x5CD,0x5CC,0x5CB,0x5CA,0x5C9},
+                  {0x5C8,0x5D7,0x5D6,0x5D5,0x5D4,0x5D3,0x5D2,0x5D1,0x5D0,0x5CF,0x5CE,0x5CD,0x5CC,0x5CB,0x5CA,0x5C9}},
+           {1, 0, {0x5B8,0x5C7,0x5C6,0x5C5,0x5C4,0x5C3,0x5C2,0x5C1,0x5C0,0x5BF,0x5BE,0x5BD,0x5BC,0x5BB,0x5BA,0x5B9},
+                  {0x5B8,0x5C7,0x5C6,0x5C5,0x5C4,0x5C3,0x5C2,0x5C1,0x5C0,0x5BF,0x5BE,0x5BD,0x5BC,0x5BB,0x5BA,0x5B9}},
+           {1, 0, {0x5B8,0x5C7,0x5C6,0x5C5,0x5C4,0x5C3,0x5C2,0x5C1,0x5C0,0x5BF,0x5BE,0x5BD,0x5BC,0x5BB,0x5BA,0x5B9},
+                  {0x5B8,0x5C7,0x5C6,0x5C5,0x5C4,0x5C3,0x5C2,0x5C1,0x5C0,0x5BF,0x5BE,0x5BD,0x5BC,0x5BB,0x5BA,0x5B9}}}},
+    {0x40, {{1, 0, {0x2D5,0x2E4,0x2E3,0x2E2,0x2E1,0x2E0,0x2DF,0x2DE,0x2DD,0x2DC,0x2DB,0x2DA,0x2D9,0x2D8,0x2D7,0x2D6},
+                  {0x2D5,0x2E4,0x2E3,0x2E2,0x2E1,0x2E0,0x2DF,0x2DE,0x2DD,0x2DC,0x2DB,0x2DA,0x2D9,0x2D8,0x2D7,0x2D6}},
+           {1, 1, {0x5E8,0x5F7,0x5F6,0x5F5,0x5F4,0x5F3,0x5F2,0x5F1,0x5F0,0x5EF,0x5EE,0x5ED,0x5EC,0x5EB,0x5EA,0x5E9},
+                  {0x5E8,0x5F7,0x5F6,0x5F5,0x5F4,0x5F3,0x5F2,0x5F1,0x5F0,0x5EF,0x5EE,0x5ED,0x5EC,0x5EB,0x5EA,0x5E9}},
+           {1, 0, {0x5D8,0x5E7,0x5E6,0x5E5,0x5E4,0x5E3,0x5E2,0x5E1,0x5E0,0x5DF,0x5DE,0x5DD,0x5DC,0x5DB,0x5DA,0x5D9},
+                  {0x5D8,0x5E7,0x5E6,0x5E5,0x5E4,0x5E3,0x5E2,0x5E1,0x5E0,0x5DF,0x5DE,0x5DD,0x5DC,0x5DB,0x5DA,0x5D9}},
+           {1, 0, {0x5D8,0x5E7,0x5E6,0x5E5,0x5E4,0x5E3,0x5E2,0x5E1,0x5E0,0x5DF,0x5DE,0x5DD,0x5DC,0x5DB,0x5DA,0x5D9},
+                  {0x5D8,0x5E7,0x5E6,0x5E5,0x5E4,0x5E3,0x5E2,0x5E1,0x5E0,0x5DF,0x5DE,0x5DD,0x5DC,0x5DB,0x5DA,0x5D9}}}},
+    {0x41, {{0, 0, {0}, {0}},
+           {2, 0, {0x6BD}, {0x6BA}},
+           {2, 0, {0x6BC}, {0x5A2}},
+           {2, 0, {0x6BC}, {0x5A2}}}},
+    {0x42, {{0, 0, {0}, {0}},
+           {2, 0, {0x6BB}, {0x6BB}},
+           {2, 0, {0x5A3}, {0x5A3}},
+           {1, 0, {0x5A3,0x5B2,0x5B1,0x5B0,0x5AF,0x5AE,0x5AD,0x5AC,0x5AB,0x5AA,0x5A9,0x5A8,0x5A7,0x5A6,0x5A5,0x5A4},
+                  {0x5A3,0x5B2,0x5B1,0x5B0,0x5AF,0x5AE,0x5AD,0x5AC,0x5AB,0x5AA,0x5A9,0x5A8,0x5A7,0x5A6,0x5A5,0x5A4}}}},
+    {0x43, {{2, 0, {0x703}, {0x40F}},
+           {0, 0, {0}, {0}},
+           {0, 0, {0}, {0}},
+           {0, 0, {0}, {0}}}},
+    {0x44, {{2, 0, {0x410}, {0x410}},
+           {0, 0, {0}, {0}},
+           {0, 0, {0}, {0}},
+           {0, 0, {0}, {0}}}},
+    {0x45, {{0, 0, {0}, {0}},
+           {0, 0, {0}, {0}},
+           {0, 0, {0}, {0}},
+           {0, 0, {0}, {0}}}},
+    {0x46, {{1, 0, {0x54B,0x55A,0x559,0x558,0x557,0x556,0x555,0x554,0x553,0x552,0x551,0x550,0x54F,0x54E,0x54D,0x54C},
+                  {0x54B,0x55A,0x559,0x558,0x557,0x556,0x555,0x554,0x553,0x552,0x551,0x550,0x54F,0x54E,0x54D,0x54C}},
+           {1, 1, {0x62A,0x639,0x638,0x637,0x636,0x635,0x634,0x633,0x632,0x631,0x630,0x62F,0x62E,0x62D,0x62C,0x62B},
+                  {0x62A,0x639,0x638,0x637,0x636,0x635,0x634,0x633,0x632,0x631,0x630,0x62F,0x62E,0x62D,0x62C,0x62B}},
+           {1, 0, {0x61A,0x629,0x628,0x627,0x626,0x625,0x624,0x623,0x622,0x621,0x620,0x61F,0x61E,0x61D,0x61C,0x61B},
+                  {0x61A,0x629,0x628,0x627,0x626,0x625,0x624,0x623,0x622,0x621,0x620,0x61F,0x61E,0x61D,0x61C,0x61B}},
+           {1, 0, {0x61A,0x629,0x628,0x627,0x626,0x625,0x624,0x623,0x622,0x621,0x620,0x61F,0x61E,0x61D,0x61C,0x61B},
+                  {0x61A,0x629,0x628,0x627,0x626,0x625,0x624,0x623,0x622,0x621,0x620,0x61F,0x61E,0x61D,0x61C,0x61B}}}},
+    {0x47, {{1, 0, {0x46C,0x47B,0x47A,0x479,0x478,0x477,0x476,0x475,0x474,0x473,0x472,0x471,0x470,0x46F,0x46E,0x46D},
+                  {0x46C,0x47B,0x47A,0x479,0x478,0x477,0x476,0x475,0x474,0x473,0x472,0x471,0x470,0x46F,0x46E,0x46D}},
+           {1, 1, {0x608,0x617,0x616,0x615,0x614,0x613,0x612,0x611,0x610,0x60F,0x60E,0x60D,0x60C,0x60B,0x60A,0x609},
+                  {0x608,0x617,0x616,0x615,0x614,0x613,0x612,0x611,0x610,0x60F,0x60E,0x60D,0x60C,0x60B,0x60A,0x609}},
+           {1, 0, {0x5F8,0x607,0x606,0x605,0x604,0x603,0x602,0x601,0x600,0x5FF,0x5FE,0x5FD,0x5FC,0x5FB,0x5FA,0x5F9},
+                  {0x5F8,0x607,0x606,0x605,0x604,0x603,0x602,0x601,0x600,0x5FF,0x5FE,0x5FD,0x5FC,0x5FB,0x5FA,0x5F9}},
+           {1, 0, {0x5F8,0x607,0x606,0x605,0x604,0x603,0x602,0x601,0x600,0x5FF,0x5FE,0x5FD,0x5FC,0x5FB,0x5FA,0x5F9},
+                  {0x5F8,0x607,0x606,0x605,0x604,0x603,0x602,0x601,0x600,0x5FF,0x5FE,0x5FD,0x5FC,0x5FB,0x5FA,0x5F9}}}},
+    {0x48, {{1, 0, {0x41C,0x41B,0x41A,0x419,0x418,0x427,0x426,0x425,0x424,0x423,0x422,0x421,0x420,0x41F,0x41E,0x41D},
+                  {0x41C,0x41B,0x41A,0x419,0x418,0x427,0x426,0x425,0x424,0x423,0x422,0x421,0x420,0x41F,0x41E,0x41D}},
+           {1, 1, {0x68A,0x699,0x698,0x697,0x696,0x695,0x694,0x693,0x692,0x691,0x690,0x68F,0x68E,0x68D,0x68C,0x68B},
+                  {0x68A,0x699,0x698,0x697,0x696,0x695,0x694,0x693,0x692,0x691,0x690,0x68F,0x68E,0x68D,0x68C,0x68B}},
+           {1, 0, {0x67A,0x689,0x688,0x687,0x686,0x685,0x684,0x683,0x682,0x681,0x680,0x67F,0x67E,0x67D,0x67C,0x67B},
+                  {0x67A,0x689,0x688,0x687,0x686,0x685,0x684,0x683,0x682,0x681,0x680,0x67F,0x67E,0x67D,0x67C,0x67B}},
+           {1, 0, {0x67A,0x689,0x688,0x687,0x686,0x685,0x684,0x683,0x682,0x681,0x680,0x67F,0x67E,0x67D,0x67C,0x67B},
+                  {0x67A,0x689,0x688,0x687,0x686,0x685,0x684,0x683,0x682,0x681,0x680,0x67F,0x67E,0x67D,0x67C,0x67B}}}},
+    {0x49, {{0, 0, {0}, {0}},
+           {0, 0, {0}, {0}},
+           {0, 0, {0}, {0}},
+           {0, 0, {0}, {0}}}},
+    {0x4B, {{1, 0, {0x43B,0x44A,0x449,0x448,0x447,0x446,0x445,0x444,0x443,0x442,0x441,0x440,0x43F,0x43E,0x43D,0x43C},
+                  {0x43B,0x44A,0x449,0x448,0x447,0x446,0x445,0x444,0x443,0x442,0x441,0x440,0x43F,0x43E,0x43D,0x43C}},
+           {1, 1, {0x43B,0x44A,0x449,0x448,0x447,0x446,0x445,0x444,0x443,0x442,0x441,0x440,0x43F,0x43E,0x43D,0x43C},
+                  {0x43B,0x44A,0x449,0x448,0x447,0x446,0x445,0x444,0x443,0x442,0x441,0x440,0x43F,0x43E,0x43D,0x43C}},
+           {1, 0, {0x43B,0x44A,0x449,0x448,0x447,0x446,0x445,0x444,0x443,0x442,0x441,0x440,0x43F,0x43E,0x43D,0x43C},
+                  {0x43B,0x44A,0x449,0x448,0x447,0x446,0x445,0x444,0x443,0x442,0x441,0x440,0x43F,0x43E,0x43D,0x43C}},
+           {1, 0, {0x43B,0x44A,0x449,0x448,0x447,0x446,0x445,0x444,0x443,0x442,0x441,0x440,0x43F,0x43E,0x43D,0x43C},
+                  {0x43B,0x44A,0x449,0x448,0x447,0x446,0x445,0x444,0x443,0x442,0x441,0x440,0x43F,0x43E,0x43D,0x43C}}}},
+};
+enum { TUR_GP, TUR_TIGER, TUR_PANTHER, TUR_LYNX };
+
+static const TurretDesc* turretOf(int weapon, int chassis) {
+    const int slot = chassis == mapTiger ? TUR_TIGER : chassis == mapPanther ? TUR_PANTHER
+                   : chassis == mapLynx ? TUR_LYNX : TUR_GP;
+    for (const auto& s : kTurrets)
+        if (s.type == weapon) return s.t[slot].kind ? &s.t[slot] : nullptr;
+    return nullptr;
+}
 
 static const WeaponClass* classOf(int type) {
     for (const auto& c : kClasses) if (c.type == type) return &c;
@@ -191,12 +323,17 @@ static bool isEdenUnit(const UnitRecord& r) {
     return ow < kMaxPlayers && g_playerData[ow].isEden != 0;
 }
 
+static bool statsEden(const UnitRecord& r) {                     // dword_56E308[[+0x1D] >> 4]
+    const int p = statsOf(r);
+    return p < kMaxPlayers && g_playerData[p].isEden != 0;
+}
+
 // vt[7..10] do descritor da arma: animação crua da torre p/ a direção.
-static int turretAnimRaw(const WeaponClass& c, int chassis, uint8_t dir) {
-    const int base = chassis == mapTiger ? c.turretTiger
-                   : (chassis == mapLynx || chassis == mapPanther) ? c.turretLP : c.turretGP;
+static int turretAnimRaw(const TurretDesc& t, const UnitRecord& u, uint8_t dir) {
+    const bool eden = statsEden(u);
+    if (t.kind == 2) return eden ? t.eden[0] : t.ply[0];
     const int idx = static_cast<uint8_t>(dir + 8) >> 4;           // add al,8; shr al,2; and ~3
-    return idx == 0 ? base : base + 16 - idx;
+    return eden ? t.eden[idx] : t.ply[idx];
 }
 
 // vt[5] do veículo armado (sub_485600 Lynx / sub_4857E0 Panther / sub_485990
@@ -204,13 +341,14 @@ static int turretAnimRaw(const WeaponClass& c, int chassis, uint8_t dir) {
 // unidade `alt` tem 0x4000, só no Tiger) + encaixe do frame 0 do chassi.
 static void muzzleOffset(const UnitRecord& shooter, bool alt, uint8_t dir, int& mx, int& my) {
     mx = my = 0;
-    const WeaponClass* c = classOf(static_cast<int16_t>(shooter.cargo));
-    if (!c || !isTankChassis(shooter.type)) return;
-    const int turret = turretAnimRaw(*c, shooter.type, dir) - kAnimBias;
-    const int8_t* t = frameOffsets(turret, 0);
-    const bool second = alt && shooter.type == mapTiger;           // sub_4A5960: sar 10h
-    mx = second ? t[2] : t[0];
-    my = second ? t[3] : t[1];
+    if (!isTankChassis(shooter.type)) return;                       // Scorpion: sub_481850 (0)
+    const TurretDesc* td = turretOf(static_cast<int16_t>(shooter.cargo), shooter.type);
+    if (td && td->kind == 1) {
+        const int8_t* t = frameOffsets(turretAnimRaw(*td, shooter, dir) - kAnimBias, 0);
+        const bool second = alt && td->sar;                         // sub_4A5960: sar 10h
+        mx = second ? t[2] : t[0];
+        my = second ? t[3] : t[1];
+    }
     const int body = vehicleAnimIndex(shooter.type, shooter.rotation, isEdenUnit(shooter));
     const int8_t* b = frameOffsets(body, 0);
     mx += b[0];
@@ -352,8 +490,9 @@ static bool candidateOk(const UnitRecord& c, uint32_t mask, uint32_t ownerBit) {
 }
 
 // sub_4A6DD0: varre a lista por Y p/ cima e depois p/ baixo a partir do
-// atirador; 1º candidato dentro da caixa e com linha de visada.
-static int findTargetLOS(int id, uint32_t mask) {
+// atirador; 1º candidato dentro da caixa e com linha de visada. sub_4A7400
+// (BFG, Thor, SPAM, destruições de torre) é a mesma varredura sem a visada.
+static int findTargetLOS(int id, uint32_t mask, bool los = true) {
     const UnitRecord& u = g_units[id];
     const WeapPlayerStats* w = weapStats(static_cast<int16_t>(u.cargo), statsOf(u));
     int R = w ? w->range : 0;                     // min(desc deste, desc da arma) = o mesmo
@@ -368,7 +507,7 @@ static int findTargetLOS(int id, uint32_t mask) {
         const int x = unitOX(t);
         if (x <= xL || x >= xR) continue;
         if (!candidateOk(t, mask, bit)) continue;
-        if (!lineOfSight(x >> 5, unitOY(t) >> 5, stx, sty)) continue;
+        if (los && !lineOfSight(x >> 5, unitOY(t) >> 5, stx, sty)) continue;
         return c;
     }
     for (int c = u.lnext; c != 0 && unitOY(g_units[c]) <= sy + Rpx; c = g_units[c].lnext) {
@@ -376,7 +515,7 @@ static int findTargetLOS(int id, uint32_t mask) {
         const int x = unitOX(t);
         if (x <= xL || x >= xR) continue;
         if (!candidateOk(t, mask, bit)) continue;
-        if (!lineOfSight(x >> 5, unitOY(t) >> 5, stx, sty)) continue;
+        if (los && !lineOfSight(x >> 5, unitOY(t) >> 5, stx, sty)) continue;
         return c;
     }
     return 0;
@@ -416,7 +555,12 @@ static int findTargetNear(int id, uint32_t mask) {
 static int findTarget(int id, uint32_t mask) {
     const WeaponClass* c = classOf(static_cast<int16_t>(g_units[id].cargo));
     if (!c) return 0;
-    return c->finder == FIND_LOS ? findTargetLOS(id, mask) : findTargetNear(id, mask);
+    switch (c->finder) {
+        case FIND_LOS:  return findTargetLOS(id, mask);
+        case FIND_BOX:  return findTargetLOS(id, mask, false);
+        case FIND_NEAR: return findTargetNear(id, mask);
+    }
+    return 0;
 }
 
 static void dropRef(int id) {
@@ -872,9 +1016,53 @@ static void scatterAndClamp(UnitRecord& p, int tx, int ty) {
     }
 }
 
+// sub_48AF60 (Thor's Hammer): dispersão por dist/8, o mesmo empurrão p/ dentro
+// do alcance, sem voo — espera 0x10 ticks; [+0x58] = segmentos do raio
+// (dword_4E9A70[dist/32]) e [+0x5C]/[+0x60] = sementes do desenho.
+static const int kThorSegs[15] = {3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17};
+static void launchThor(UnitRecord& p, int tx, int ty) {
+    const int a = wrapAbsW(tx - p.pixelX), b = std::abs(ty - p.pixelY);
+    const int dist = octo(a, b);
+    const int si = dist >> 5;
+    p.flightTicks = static_cast<int16_t>(si >= 0 && si < 15 ? kThorSegs[si] : kThorSegs[14]);
+    const int s = dist >> 3;
+    p.impactX = TethysGame::getRand(s) + tx;
+    p.impactY = TethysGame::getRand(s) + ty;
+    p.impactY -= TethysGame::getRand(s);
+    p.impactX -= TethysGame::getRand(s);
+    p.impactX &= pxMask();
+    const WeaponSheetDesc* d = weaponSheet(p.type);
+    int minD = d ? d->skipped : 0;
+    const WeapPlayerStats* w = weapStats(p.type, statsOf(p));
+    int maxD = (w ? w->range : 0) << 5;
+    if (p.flags & UNIT_TURRET_BLD) maxD += 32;
+    const int maxY = g_gameMap.height() * 32 - 16;
+    for (;;) {
+        const int vx = wrapVecMask(p.impactX - p.pixelX);
+        const int vy = p.impactY - p.pixelY;
+        p.rotation = dirOf(vx, vy);
+        const int dist2 = octo(std::abs(vx), std::abs(vy));
+        int L;
+        if (dist2 < minD) L = minD;
+        else if (dist2 > maxD) L = maxD;
+        else break;
+        p.impactX = p.pixelX + (kCos[p.rotation] * L >> 6);
+        int iy = p.pixelY + (kSin[p.rotation] * L >> 6);
+        if (iy > maxY) iy = maxY;
+        if (iy <= 16) iy = 16;
+        p.impactY = iy;
+        if (dist2 < minD) minD = 0; else maxD *= 2;
+    }
+    p.field3C = 0x10;
+    p.field23 = 0; p.field22 = 0x13; p.action = 0x36;
+    p.vecX = static_cast<int>(TethysGame::rng().next());
+    p.vecY = static_cast<int>(TethysGame::rng().next());
+}
+
 static void launch(int pid, int tx, int ty) {
     UnitRecord& p = g_units[pid];
     const WeaponClass* c = classOf(p.type);
+    if (c && c->launch == LAUNCH_THOR) { launchThor(p, tx, ty); return; }
     scatterAndClamp(p, tx, ty);
     if (c && c->launch == LAUNCH_INSTANT) { p.field3C = 4; return; }      // sub_4A3E00
     // sub_4A3A90: sai da boca da arma, duração = dist/16 + 1 (mín. 3).
@@ -903,8 +1091,13 @@ static void aimPoint(const UnitRecord& shooter, const UnitRecord& t, int& ax, in
     const int dy = std::abs(unitOY(shooter) - unitOY(t));
     const int dist = octo(dx, dy);
     const WeaponClass* c = classOf(static_cast<int16_t>(shooter.cargo));
-    int lead = c && c->leadConst ? c->leadConst : 0;
-    if (!c || !c->leadConst) { lead = (dist >> 4) + 1; if (lead <= 3) lead = 3; }
+    int lead;
+    if (c && c->leadFixed) lead = c->leadFixed;
+    else {
+        lead = (dist >> 4) + (c ? c->leadAdd : 1);
+        const int mn = c ? c->leadMin : 3;
+        if (lead <= mn) lead = mn;
+    }
     const int32_t px = t.velX * lead, py = t.velY * lead;
     const int cx = ((static_cast<uint32_t>(px) & 0xFFFF) + t.fracX) > 0xFFFF ? 1 : 0;
     const int cy = ((static_cast<uint32_t>(py) & 0xFFFF) + t.fracY) > 0xFFFF ? 1 : 0;
@@ -1198,15 +1391,36 @@ void weaponDrawOps(int id, std::vector<WeaponDrawOp>& ops) {
     if (!c) return;
     if (p.field22 == 0 || p.field22 >= 0x12) return;
     switch (c->draw) {
+        case DRAW_THOR: {                                         // sub_48AD70
+            // Explodido ([+0x54]): só chama vt[35] — não desenha nada.
+            if (p.exploded) return;
+            const int fc = p.field3C;
+            static const int kPick[18] = {0, 2, 2, 2, 0, 1, 0, 2, 0, 0, 1, 1, 1, 0, 2, 2, 0, 0};   // dword_4E9A28
+            const int k = fc >= 0 && fc < 18 ? kPick[fc] : 0;
+            if (!k) return;
+            WeaponDrawOp op; op.kind = WeaponDrawOp::BOLT;
+            muzzleWorld(p, op.x, op.y);
+            op.x2 = p.impactX; op.y2 = p.impactY;
+            op.seed = static_cast<uint32_t>(k == 1 ? p.vecX : p.vecY);       // [+0x58 + k*4]
+            uint8_t ang = static_cast<uint8_t>((p.vecX & 0x0F) + 0x0C);
+            if (k == 1) ang = static_cast<uint8_t>(-ang);
+            op.phase = ang;
+            op.segs = p.flightTicks;
+            ops.push_back(op);
+            return;
+        }
+        case DRAW_SCORPION:                                       // sub_4A31D0
         case DRAW_LASER:                                          // sub_4A3420
         case DRAW_MICROWAVE: {                                    // sub_4A3000
-            bool beam = !p.exploded || p.field3C > 5;
+            bool beam = !p.exploded || p.field3C > (c->draw == DRAW_SCORPION ? 4 : 5);
             if (c->draw == DRAW_MICROWAVE && p.field3C == 2) beam = false;
             if (beam) {
                 int mx, my; muzzleWorld(p, mx, my);
                 WeaponDrawOp op;
-                if (c->draw == DRAW_LASER) {
+                if (c->draw != DRAW_MICROWAVE) {
+                    // sub_41E8F0: OR de 0x7C00 (laser) / 0x0018 (Scorpion) em 2x2.
                     op.kind = WeaponDrawOp::LASER_LINE;
+                    op.orColor = c->draw == DRAW_LASER ? 0x7C00 : 0x0018;
                     op.x = mx; op.y = my; op.x2 = p.impactX; op.y2 = p.impactY;
                 } else {
                     op.kind = WeaponDrawOp::MICROWAVE_LINE;
@@ -1284,11 +1498,139 @@ void weaponDrawOps(int id, std::vector<WeaponDrawOp>& ops) {
     }
 }
 
+// ---- Raio do Thor's Hammer (sub_48A850) ---------------------------------------
+namespace {
+struct BoltCtx {
+    GameRNG rng;                       // unk_5737E8
+    int depth = 0;                     // dword_5737F0
+    int endX = 0, endY = 0;            // dword_5737F8 / dword_5737FC
+    int camX = 0, camY = 0;            // vista +0x830 / +0x834
+    int r = 0, b = 0;                  // superfície +0x100 / +0x104 (l = t = 0)
+    const std::function<void(int, int, uint16_t)>* put = nullptr;
+};
+
+// sub_41E440: Cohen-Sutherland — só diz se a linha toca o retângulo.
+bool clipTest(int x0, int y0, int x1, int y1, int l, int t, int r, int b) {
+    for (int guard = 0; guard < 16; ++guard) {
+        int c0 = 0, c1 = 0;
+        if (l > x0) c0 = 1; else if (r < x0) c0 = 4;
+        if (l > x1) c1 = 1; else if (r < x1) c1 = 4;
+        if (t > y0) c0 |= 2; else if (b < y0) c0 |= 8;
+        if (t > y1) c1 |= 2; else if (b < y1) c1 |= 8;
+        if (c0 & c1) return false;
+        if (!(c0 | c1)) return true;
+        if (!c0) { std::swap(x0, x1); std::swap(y0, y1); c0 = c1; }
+        if (c0 & 1) {
+            if (x1 == x0) return false;
+            y0 = (x1 - l) * (y0 - y1) / (x1 - x0) + y1; x0 = l;
+        } else if (c0 & 4) {
+            if (x0 == x1) return false;
+            y0 = (r - x1) * (y0 - y1) / (x0 - x1) + y1; x0 = r;
+        } else if (c0 & 2) {
+            if (y1 == y0) return false;
+            x0 = (y1 - t) * (x0 - x1) / (y1 - y0) + x1; y0 = t;
+        } else {
+            if (y0 == y1) return false;
+            x0 = (b - y1) * (x0 - x1) / (y0 - y1) + x1; y0 = b;
+        }
+    }
+    return false;
+}
+
+// sub_41E620 (big: 2x2, dentro de (0, r-1) x (0, b-1)) / sub_41E7B0 (1 px):
+// passo aleatório — anda em x se |rnd*dy| < |rnd*dx|, senão em y.
+void boltLine(BoltCtx& c, int x0, int y0, int x1, int y1, uint16_t color, bool big) {
+    if (!clipTest(x0, y0, x1, y1, 0, 0, c.r, c.b)) return;
+    const int R = big ? c.r - 1 : c.r, B = big ? c.b - 1 : c.b;
+    int x = x0, y = y0;
+    for (;;) {
+        if (x > 0 && x < R && y > 0 && y < B) {
+            (*c.put)(x, y, color);
+            if (big) { (*c.put)(x + 1, y, color); (*c.put)(x, y + 1, color); (*c.put)(x + 1, y + 1, color); }
+        }
+        const int dx = x1 - x, dy = y1 - y;
+        if (!(dx | dy)) return;
+        const int32_t rx = static_cast<int32_t>(static_cast<uint32_t>(c.rng.next() & 0x7FFFF) * static_cast<uint32_t>(dx));
+        const int32_t ry = static_cast<int32_t>(static_cast<uint32_t>(c.rng.next() & 0x7FFFF) * static_cast<uint32_t>(dy));
+        if (std::abs(ry) < std::abs(rx)) x += rx < 0 ? -1 : 1;
+        else y += ry < 0 ? -1 : 1;
+    }
+}
+
+int boltScreenX(const BoltCtx& c, int x) {
+    int v = (x & pxMask()) - (c.camX & pxMask());
+    const int h = half(pxMask());
+    if (-h > v) v &= pxMask();
+    if (h < v) v -= pxMask();
+    return v;
+}
+
+// dword_4E99F8 (1º nível) e dword_4E99F4[nível]: cinzas-azulados em 555.
+const uint16_t kBoltColor[12] = {0, 0x7BDE, 0x6B5E, 0x631E, 0x5ADE, 0x4E7C, 0x463B,
+                                 0x39DA, 0x39DA, 0x39DA, 0x39DA, 0x39DA};
+
+void boltRecurse(BoltCtx& c, int sx, int sy, int ex, int ey, int n, uint8_t angle) {
+    ++c.depth;
+    int cx = sx, cy = sy;
+    int k = (n - 1) * 128;                                        // var_24
+    for (int i = 0; i < n; ++i, k -= 128) {
+        bool branch = false;
+        int r = 0;                                                // var_28
+        int e = k / n;
+        int dx = ex - cx, dy = ey - cy;
+        if (half(pxW()) < std::abs(dx)) dx = dx > 0 ? dx - pxW() : dx + pxW();
+        uint8_t dir = dirOf(dx, dy);
+        const int rem = n - i;
+        if (i == 0) {
+            dir = static_cast<uint8_t>(dir + angle);
+        } else if (rem != 1) {
+            if (e > 16 && i % 3 == 2) {
+                e >>= 2;
+                r = c.rng.getRand(e);
+                branch = true;
+            } else {
+                const int h = e / 2, q = e / 4;
+                do { r = c.rng.getRand(e) - h; } while (std::abs(r) < q);
+            }
+            dir = static_cast<uint8_t>(dir - static_cast<uint8_t>(r));
+        }
+        int len = static_cast<int>(std::sqrt(static_cast<double>(dx * dx + dy * dy)));
+        if (rem != 1) len = ((c.rng.getRand(0x38) + 100) * len) / 128;
+        const int step = len / rem;
+        const int nx = cx + (kCos[dir] * step >> 6), ny = cy + (kSin[dir] * step >> 6);
+        const int ax = boltScreenX(c, cx), ay = cy - c.camY;
+        const int bx = boltScreenX(c, nx), by = ny - c.camY;
+        boltLine(c, ax, ay, bx, by, kBoltColor[c.depth < 12 ? c.depth : 11], c.depth == 1);
+        if (branch) {
+            const uint8_t a1 = static_cast<uint8_t>(c.rng.getRand(0x100));
+            const int r2 = c.rng.getRand(0x100);
+            const int tx = c.endX + (kCos[a1] * r2 >> 9), ty = c.endY + (kSin[a1] * r2 >> 9);
+            boltRecurse(c, cx, cy, tx, ty, rem, static_cast<uint8_t>(r));
+        }
+        cx = nx; cy = ny;
+    }
+    --c.depth;
+}
+} // namespace
+
+void weaponDrawBolt(const WeaponDrawOp& op, int camX, int camY, int vw, int vh,
+                    const std::function<void(int, int, uint16_t)>& put) {
+    if (!g_gameMap.ok() || op.segs <= 0) return;
+    BoltCtx c;
+    c.rng.setSeed(op.seed);
+    c.endX = op.x2; c.endY = op.y2;
+    c.camX = camX; c.camY = camY;
+    c.r = vw; c.b = vh;
+    c.put = &put;
+    boltRecurse(c, op.x, op.y, op.x2, op.y2, op.segs, static_cast<uint8_t>(op.phase));
+}
+
 bool tankTurret(const UnitRecord& r, int bodyAnimReal, int bodyFrame,
                 int& turretAnimReal, int& offX, int& offY) {
-    const WeaponClass* c = classOf(static_cast<int16_t>(r.cargo));
-    if (!c || !isTankChassis(r.type)) return false;
-    turretAnimReal = turretAnimRaw(*c, r.type, r.turretDir) - kAnimBias;
+    if (!isTankChassis(r.type)) return false;
+    const TurretDesc* td = turretOf(static_cast<int16_t>(r.cargo), r.type);
+    if (!td) return false;
+    turretAnimReal = turretAnimRaw(*td, r, r.turretDir) - kAnimBias;
     const int8_t* o = frameOffsets(bodyAnimReal, bodyFrame);
     offX = o[0];
     offY = o[1];

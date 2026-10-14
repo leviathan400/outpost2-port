@@ -1308,10 +1308,12 @@ static int runColonyTest(const std::string& mapName) {
     return 0;
 }
 
-// --combattest <map> <prefix>: Laser Lynx + Rail Gun Tiger (jogador 0) contra
-// Microwave Lynx + RPG Tiger (jogador 1, IA) a 3 tiles; roda o laço real e
-// registra alvos, disparos, dano e mortes; grava quadros <prefix>_tNNN.bmp.
-static int runCombatTest(const std::string& mapName, const std::string& prefix) {
+// --combattest <map> <prefix> [w0 w1 w2 w3]: Laser Lynx + Rail Gun Tiger
+// (jogador 0) contra Microwave Lynx + RPG Tiger (jogador 1, IA) a 3 tiles — ou
+// as armas dadas em hex (0x49 vai num Scorpion); roda o laço real e registra
+// alvos, disparos, dano e mortes; grava quadros <prefix>_tNNN.bmp (e _beam /
+// _boom no 1º feixe/raio e na 1ª explosão).
+static int runCombatTest(const std::string& mapName, const std::string& prefix, const int* wpn = nullptr) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
     op2::g_ResManager.init(".");
     op2::g_art.load();
@@ -1335,14 +1337,18 @@ static int runCombatTest(const std::string& mapName, const std::string& prefix) 
         }
     if (bx < 0) { std::printf("[Combat] sem area livre\n"); return 3; }
     op2::Unit a, b, c, d;
-    op2::TethysGame::CreateUnit(a, op2::mapLynx, op2::LOCATION{bx, by}, 0, 0x3D);
-    op2::TethysGame::CreateUnit(b, op2::mapTiger, op2::LOCATION{bx, by + 2}, 0, 0x3F);
-    op2::TethysGame::CreateUnit(c, op2::mapLynx, op2::LOCATION{bx + 3, by}, 1, 0x3E);
-    op2::TethysGame::CreateUnit(d, op2::mapTiger, op2::LOCATION{bx + 3, by + 2}, 1, 0x40);
+    const int w[4] = {wpn ? wpn[0] : 0x3D, wpn ? wpn[1] : 0x3F, wpn ? wpn[2] : 0x3E, wpn ? wpn[3] : 0x40};
+    auto chassis = [&](int k) { return w[k] == 0x49 ? op2::mapScorpion : (k & 1) ? op2::mapTiger : op2::mapLynx; };
+    op2::TethysGame::CreateUnit(a, chassis(0), op2::LOCATION{bx, by}, 0, w[0]);
+    op2::TethysGame::CreateUnit(b, chassis(1), op2::LOCATION{bx, by + 2}, 0, w[1]);
+    op2::TethysGame::CreateUnit(c, chassis(2), op2::LOCATION{bx + 3, by}, 1, w[2]);
+    op2::TethysGame::CreateUnit(d, chassis(3), op2::LOCATION{bx + 3, by + 2}, 1, w[3]);
     const int ids[4] = {a.id(), b.id(), c.id(), d.id()};
     for (int id : ids)
-        std::printf("[Combat] %d: %s  HP=%d\n", id, op2::unitTitle(op2::g_units[id]).c_str(),
-                    op2::vehicleSheet(op2::g_units[id].type, 0)->hitPoints);
+        std::printf("[Combat] %d: %s  HP=%d alcance=%d\n", id, op2::unitTitle(op2::g_units[id]).c_str(),
+                    op2::vehicleSheet(op2::g_units[id].type, 0)->hitPoints,
+                    op2::weaponSheet(static_cast<int16_t>(op2::g_units[id].cargo)) ?
+                    op2::weaponSheet(static_cast<int16_t>(op2::g_units[id].cargo))->player[0].range : -1);
     gs.setMouse(200, 150);
     gs.setCamera(bx * 32 - 200 + 48, by * 32 - 240 + 48);
     gs.setSelection({ids[0], ids[1]});
@@ -1381,9 +1387,21 @@ static int runCombatTest(const std::string& mapName, const std::string& prefix) 
         static int lastProj = 0;
         if (projNow > lastProj) shots += projNow - lastProj;
         lastProj = projNow;
-        if (t == 8 || t == 12 || t == 18 || t == 40 || t == 60 || t == 120 || t == 136 || t == 200 || t == 400) {
+        static bool beamShot = false, boomShot = false;
+        const char* tag = nullptr;
+        for (size_t i = 1; i < op2::g_units.size() && !tag; ++i) {
+            const op2::UnitRecord& p = op2::g_units[i];
+            if (p.id == -1 || !op2::isWeaponProjectile(p.type)) continue;
+            if (!beamShot && p.type == w[0] && p.field22 == op2::SUB_WAIT && !p.exploded && p.field3C < 15) { beamShot = true; tag = "beam"; }
+            else if (!boomShot && p.exploded && p.field22 == op2::SUB_WAIT) { boomShot = true; tag = "boom"; }
+            if (tag) std::printf("[Combat] t=%d  projetil %d tipo 0x%X sub=0x%X f3C=%d impacto(%d,%d)\n", t, (int)i, p.type,
+                                 p.field22, p.field3C, p.impactX, p.impactY);
+        }
+        if (tag || t == 8 || t == 12 || t == 18 || t == 40 || t == 60 || t == 120 || t == 136 || t == 200 || t == 400) {
             gs.onIdle(renderer, 0.0f);
-            char fn[256]; std::snprintf(fn, sizeof(fn), "%s_t%03d.bmp", prefix.c_str(), t);
+            char fn[256];
+            if (tag) std::snprintf(fn, sizeof(fn), "%s_%s.bmp", prefix.c_str(), tag);
+            else std::snprintf(fn, sizeof(fn), "%s_t%03d.bmp", prefix.c_str(), t);
             writeBmp32(fn, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
         }
     }
@@ -1999,6 +2017,11 @@ int main(int argc, char* argv[]) {
             return runAiTest(argv[i + 1], atoi(argv[i + 2]), atoi(argv[i + 3]), atoi(argv[i + 4]));
         if (std::strcmp(argv[i], "--missiontest") == 0 && i + 2 < argc)
             return runMissionTest(argv[i + 1], argv[i + 2], i + 3 < argc ? atoi(argv[i + 3]) : 200);
+        if (std::strcmp(argv[i], "--combattest") == 0 && i + 6 < argc) {
+            const int wp[4] = {(int)std::strtol(argv[i + 3], nullptr, 16), (int)std::strtol(argv[i + 4], nullptr, 16),
+                               (int)std::strtol(argv[i + 5], nullptr, 16), (int)std::strtol(argv[i + 6], nullptr, 16)};
+            return runCombatTest(argv[i + 1], argv[i + 2], wp);
+        }
         if (std::strcmp(argv[i], "--combattest") == 0 && i + 2 < argc)
             return runCombatTest(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--earthtest") == 0 && i + 2 < argc)
