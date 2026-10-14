@@ -1558,6 +1558,11 @@ static int runGuardPostTest(const std::string& mapName, const std::string& prefi
     gs.setCamera(bx * 32 - 200, by * 32 - 150);
     int lastTgt = -2, lastD1 = 0, lastD2 = 0, lastGd = 0, lastOp = -1;
     for (int t = 1; t <= 500; ++t) {
+        if ((weapon == 0x43 || weapon == 0x44) && t == 30) {          // DETONATE (sub_457E40)
+            std::printf("[GP] t=%d DETONATE disponivel=%d\n", t,
+                        op2::uiCommandAvailable(op2::UC_DETONATE, {g}) ? 1 : 0);
+            op2::uiCommandClick(op2::UC_DETONATE, {g});
+        }
         op2::TethysGame::advanceTick();
         op2::TethysGame::advanceDaylight(op2::g_gameMap.internalWidth());
         op2::tickColony();

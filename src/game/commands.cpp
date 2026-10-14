@@ -372,6 +372,20 @@ static void sendSelfDestruct(const std::vector<int>& sel) { // case 20
         if ((g_units[id].owner & 0x0F) == me) unitDoSelfDestruct(id);
 }
 
+// DETONATE (sub_457E40): pacote 0x24 (atacar) com as unidades da seleção que
+// têm 0x80 (prédio-torre), sem pontos, alvo = o tile do 1º selecionado; som 0x56.
+static void sendDetonate(const std::vector<int>& sel) {
+    if (sel.empty()) return;
+    const int me = TethysGame::localPlayer();
+    std::vector<int> ids;
+    for (int id : sel)
+        if ((g_units[id].owner & 0x0F) == me && (g_units[id].flags & UNIT_TURRET_BLD)) ids.push_back(id);
+    const UnitRecord& b = g_units[sel[0]];
+    const uint32_t tgt = static_cast<uint32_t>((unitOX(b) >> 5) & 0xFFFF) | (static_cast<uint32_t>(unitOY(b) >> 5) << 16);
+    if (!ids.empty()) processAttackPacket(me, 0x24, ids, {}, tgt);
+    soundPlay(0x56);
+}
+
 // sub_4241D0 (pacote 0x15): centro das unidades vivas (x com a volta, a partir
 // da 1ª) e cada uma vai p/ o ponto espelhado: pos + (pos − centro), y preso a
 // [0, (H−1)*32]. Ordem de mover (ação 2) com 1 ponto, [ordem+0x34] &= ~1.
@@ -467,6 +481,7 @@ UiClick uiCommandClick(int cmd, const std::vector<int>& sel) {
             s_hint = "Set path to initial patrol point";
             return UiClick::TARGET;
         case UC_SCATTER: sendScatter(sel); return UiClick::DONE;        // sub_4556B0 (0x15)
+        case UC_DETONATE: sendDetonate(sel); return UiClick::DONE;      // sub_457E40 (0x24 no próprio tile)
         case UC_REPAIR: case UC_TAKE_OVER: case UC_DISMANTLE:          // sub_4548B0 etc. (modo 7)
             return UiClick::TARGET;
         // IDLE (pacote 0x12) / ACTIVATE (0x13). O IDLE do original confirma antes
