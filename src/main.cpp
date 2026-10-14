@@ -1517,6 +1517,70 @@ static int runMissionTest(const std::string& dll, const std::string& outPath, in
     return ok ? 0 : 1;
 }
 
+// --gptest <map> <prefix> <arma>: CC + Tokamak + Guard Post (jogador 0, arma em
+// hex) encostados contra dois Laser Lynx do jogador 1 a 3 tiles; registra alvo,
+// torre, disparos e dano; grava quadros <prefix>_tNNN.bmp.
+static int runGuardPostTest(const std::string& mapName, const std::string& prefix, int weapon) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 gptest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    op2::resetUnits();
+    const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
+    for (int y = 0; y < H; ++y)
+        for (int x = 0; x < W; ++x) op2::g_gameMap.clearUnitOccupancy(x, y);
+    int bx = -1, by = -1;
+    for (int y = H / 2; y < H - 8 && bx < 0; ++y)
+        for (int x = W / 2; x < W - 8 && bx < 0; ++x) {
+            bool ok = true;
+            for (int dy = -1; dy <= 6 && ok; ++dy)
+                for (int dx = -2; dx <= 6 && ok; ++dx)
+                    if (!op2::g_gameMap.isPassable(op2::LOCATION{x + dx, y + dy})) ok = false;
+            if (ok) { bx = x; by = y; }
+        }
+    if (bx < 0) { std::printf("[GP] sem area livre\n"); return 3; }
+    op2::g_playerData[0].workers = 40; op2::g_playerData[0].scientists = 10;
+    op2::Unit cc, tok, gp, e1, e2;
+    op2::TethysGame::CreateUnit(cc, op2::mapCommandCenter, op2::LOCATION{bx, by}, 0);
+    op2::TethysGame::CreateUnit(tok, op2::mapTokamak, op2::LOCATION{bx + 3, by}, 0);
+    op2::TethysGame::CreateUnit(gp, 0x17, op2::LOCATION{bx, by + 2}, 0, weapon);
+    op2::TethysGame::CreateUnit(e1, op2::mapLynx, op2::LOCATION{bx - 1, by + 5}, 1, 0x3D);
+    op2::TethysGame::CreateUnit(e2, op2::mapLynx, op2::LOCATION{bx + 2, by + 5}, 1, 0x3D);
+    const int g = gp.id();
+    std::printf("[GP] %s alcance=%d\n", op2::unitTitle(op2::g_units[g]).c_str(),
+                op2::weaponSheet(weapon) ? op2::weaponSheet(weapon)->player[0].range : -1);
+    gs.setCamera(bx * 32 - 200, by * 32 - 150);
+    int lastTgt = -2, lastD1 = 0, lastD2 = 0, lastGd = 0, lastOp = -1;
+    for (int t = 1; t <= 500; ++t) {
+        op2::TethysGame::advanceTick();
+        op2::TethysGame::advanceDaylight(op2::g_gameMap.internalWidth());
+        op2::tickColony();
+        op2::tickMovement();
+        op2::tickUnits();
+        const op2::UnitRecord& r = op2::g_units[g];
+        const int op = op2::structureOperational(r) ? 1 : 0;
+        if (op != lastOp) { std::printf("[GP] t=%d operando=%d rede=%d\n", t, op, r.netConnected); lastOp = op; }
+        const int tg = r.hasTarget() ? r.target4C : -1;
+        if (tg != lastTgt) { std::printf("[GP] t=%d alvo -> %d (torre %d)\n", t, tg, r.turretDir); lastTgt = tg; }
+        if (r.damage != lastGd) { std::printf("[GP] t=%d GP dano %d -> %d\n", t, lastGd, r.damage); lastGd = r.damage; }
+        const op2::UnitRecord& a = op2::g_units[e1.id()];
+        const op2::UnitRecord& b = op2::g_units[e2.id()];
+        if (a.id != -1 && a.damage != lastD1) { std::printf("[GP] t=%d Lynx1 dano %d -> %d\n", t, lastD1, a.damage); lastD1 = a.damage; }
+        if (b.id != -1 && b.damage != lastD2) { std::printf("[GP] t=%d Lynx2 dano %d -> %d\n", t, lastD2, b.damage); lastD2 = b.damage; }
+        if (t == 20 || t == 60 || t == 200) {
+            gs.onIdle(renderer, 0.0f);
+            char fn[256]; std::snprintf(fn, sizeof(fn), "%s_t%03d.bmp", prefix.c_str(), t);
+            writeBmp32(fn, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        }
+    }
+    renderer.shutdown(); SDL_Quit();
+    return 0;
+}
+
 // --walltest <map>: parede comum, de lava, de micróbio e um tubo lado a lado;
 // sub_4A23F0 (damageWall) com dano 1000 e depois 20, 6x cada, imprimindo o tile
 // e o tipo da célula — a parede comum passa pelos estágios +0x54/+0x74/+0x94.
@@ -2067,6 +2131,8 @@ int main(int argc, char* argv[]) {
                               i + 4 < argc ? atoi(argv[i + 4]) : 1, i + 5 < argc ? (int)std::strtol(argv[i + 5], nullptr, 0) : 0);
         if (std::strcmp(argv[i], "--cmdtest") == 0 && i + 1 < argc)
             return runCmdTest(argv[i + 1]);
+        if (std::strcmp(argv[i], "--gptest") == 0 && i + 3 < argc)
+            return runGuardPostTest(argv[i + 1], argv[i + 2], (int)std::strtol(argv[i + 3], nullptr, 16));
         if (std::strcmp(argv[i], "--walltest") == 0 && i + 1 < argc)
             return runWallTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--quaketest") == 0 && i + 1 < argc)

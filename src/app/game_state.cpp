@@ -508,13 +508,16 @@ void GameState::onIdle(Renderer& renderer, float dt) {
             // da maquina de estados (src/game/structure.cpp).
             int ow = r.owner & 0x0F;
             int anim = structureCurAnim(r);
+            int gpAnim;
+            const bool guardPost = guardPostSprite(r, gpAnim);     // vt[8] sub_42D250
+            if (guardPost) anim = gpAnim;
             if (anim >= 0 && g_art.ok() && anim < g_art.numAnimations()) {
                 int pc = (ow >= 0 && ow < kMaxPlayers) ? g_playerData[ow].colorNumber : 0;
-                drew = drawSprite(anim, structureFrame(r), ucx, ucy, pc);
+                drew = drawSprite(anim, guardPost ? 0 : structureFrame(r), ucx, ucy, pc);
                 // EMP / ESG (0x180000) no prédio (sub_408DB0): grade de 16 px no
                 // footprint; cada ponto aparece se rnd(100) > 80 (40 com lado 1),
                 // com a RNG semeada por (tick>>5) + id + [+0x18] + 0x11790718.
-                if (r.flags & 0x180000u) {
+                if ((r.flags & 0x180000u) && (!guardPost || (r.flags & UNIT_EMP))) {   // GP: só EMP (sub_42D300)
                     const StructSheetDesc* sd = structSheet(r.type);
                     const int sx = sd ? sd->sizeX : 1, sy = sd ? sd->sizeY : 1;
                     const int oraw = (r.flags & UNIT_EMP) ? 0x2FF : 0x619;
@@ -538,7 +541,16 @@ void GameState::onIdle(Renderer& renderer, float dt) {
                 // idle (ação 0x12), 0x94 operando, 0x95 parado; no canto do bbox
                 // do sprite + 3; frame = tick % nF.
                 const int me = TethysGame::localPlayer();
-                if (m_overlay && ow < kMaxPlayers && (g_playerData[me].allyMask & (1u << ow)) &&
+                if (guardPost) {
+                    // sub_42D300: a luz só quando NÃO opera — 0x96 parado (0x12) / 0x95 —
+                    // em (x − 3, y − 3).
+                    if (m_overlay && ow < kMaxPlayers && (g_playerData[me].allyMask & (1u << ow)) &&
+                        !structureOperational(r)) {
+                        const int la = (r.action == 0x12 ? 0x96 : 0x95) - 0x65;
+                        const int nF = (int)g_art.animation(la).frames.size();
+                        drawSprite(la, nF ? TethysGame::tick() % nF : 0, ucx - 3, ucy - 3, -1);
+                    }
+                } else if (m_overlay && ow < kMaxPlayers && (g_playerData[me].allyMask & (1u << ow)) &&
                     r.action != ACT_DISMANTLE && !(r.flags & 0x60000u)) {
                     const int light = r.action == 0x12 ? 0x96 : structureOperational(r) ? 0x94 : 0x95;
                     const uint32_t* h = g_art.animation(anim).header;

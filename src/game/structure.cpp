@@ -400,7 +400,15 @@ static void dismantleTick(int id) {
 }
 
 // sub_43ACA0 (vt[1]) — só os casos que prédios e efeitos usam.
+static void actionTickBody(int id);
 static void actionTick(int id) {
+    actionTickBody(id);
+    // def_43B312: armado (0x10 xor 0x80 — o Guard Post), sem 0x20000/0x80000 → vt[5] da arma.
+    UnitRecord& u = g_units[id];
+    if ((u.flags & UNIT_BUILDING) && (((u.flags << 24) ^ (u.flags << 27)) & 0x80000000u) && !(u.flags & 0xA0000u))
+        weaponTick(id);
+}
+static void actionTickBody(int id) {
     UnitRecord& r = g_units[id];
     if (r.field20) {
         if (r.action == ACT_DIE) {
@@ -432,6 +440,9 @@ static void actionTick(int id) {
                 return;
             case 0x1A:                                          // lançamento (case 26)
                 missileActionStart(id);
+                return;
+            case 0x24: case 0x25:                               // atacar/guardar (Guard Post)
+                weaponAttackStart(id);
                 return;
             default: break;
         }
@@ -496,6 +507,12 @@ static void actionTick(int id) {
             break;
         case 0x36:                                              // case 54: projétil
             weaponProjectileAction(id);
+            break;
+        case 0x24:                                              // case 36 (Guard Post)
+            if (r.flags & UNIT_BUILDING) weaponAttackTick(id);
+            break;
+        case 0x25:                                              // case 37
+            if (r.flags & UNIT_BUILDING) weaponGuardTick(id);
             break;
         case 0x1A:                                              // case 26: lançamento
             missileActionTick(id);

@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 
 #include "building_sheet.h"
 #include "colony.h"
@@ -369,6 +370,14 @@ static int turretAnimRaw(const TurretDesc& t, const UnitRecord& u, uint8_t dir) 
 // unidade `alt` tem 0x4000, só no Tiger) + encaixe do frame 0 do chassi.
 static void muzzleOffset(const UnitRecord& shooter, bool alt, uint8_t dir, int& mx, int& my) {
     mx = my = 0;
+    if ((shooter.flags & UNIT_BUILDING) && shooter.type == 0x17) {   // Guard Post: sub_42CFB0
+        const TurretDesc* td = turretOf(static_cast<int16_t>(shooter.cargo), shooter.type);
+        if (td && td->kind == 1) {
+            const int8_t* t = frameOffsets(turretAnimRaw(*td, shooter, dir) - kAnimBias, 0);
+            mx = t[0]; my = t[1];
+        }
+        return;
+    }
     if (!isTankChassis(shooter.type)) return;                       // Scorpion: sub_481850 (0)
     const TurretDesc* td = turretOf(static_cast<int16_t>(shooter.cargo), shooter.type);
     if (td && td->kind == 1) {
@@ -730,18 +739,48 @@ static void idleTurret(UnitRecord& u) {
         case 6: case 13: target = TethysGame::getRand(0x100); break;
         default: return;
     }
-    // Giro pelo bloco do PRÓPRIO veículo, +0x24 (= Move_Speed nos veículos).
-    const VehPlayerStats* v = vehicleSheet(u.type, statsOf(u));
-    const int rate = v ? v->moveSpeed : 0;
+    // Giro pelo bloco do PRÓPRIO tipo, +0x24 (Move_Speed nos veículos; no Guard
+    // Post é o Power_Required).
+    const uint8_t* blk = unitStatBlock(u.type, statsOf(u));
+    int rate = 0;
+    if (blk) std::memcpy(&rate, blk + 0x24, 4);
     const int8_t diff = static_cast<int8_t>(static_cast<uint8_t>(target) - u.turretDir);
     if (std::abs(static_cast<int>(diff)) < rate) u.turretDir = static_cast<uint8_t>(target);
     else if (diff < 0) u.turretDir = static_cast<uint8_t>(u.turretDir - rate);
     else u.turretDir = static_cast<uint8_t>(u.turretDir + rate);
 }
 
+// vt[4] do Guard Post (sub_42CFD0): operando e com o alvo ao alcance, cria o
+// projétil ([+0x18]+1), dono 6; ligado à rede o projétil ganha 0x10|0x80 (+1 de
+// alcance, dano x1.5); vt[37] e vt[32]/[33] como no veículo (sem trocar o cano).
+static bool guardPostFire(int id) {
+    UnitRecord& u = g_units[id];
+    if (!structureOperational(u) || !inRange(u)) {
+        if (u.field4E != 0x7FFF) clearTarget(u);
+        return false;
+    }
+    const bool linked = turretBonus(u);
+    const int pid = createProjectile(static_cast<int16_t>(u.cargo), unitOX(u), unitOY(u) + 1, ownerOf(u));
+    if (!pid) return false;
+    UnitRecord& sh = g_units[id];
+    UnitRecord& p = g_units[pid];
+    p.owner = static_cast<uint8_t>((p.owner & 0xF6) | 6);
+    if (linked) p.flags |= 0x10u | UNIT_TURRET_BLD;
+    p.sourceId = id;                                              // vt[37]
+    ++sh.refCount;
+    if (p.type == 0x3C) p.shooterBit = static_cast<int8_t>(1 << statsOf(sh));
+    if (p.type == 0x46) p.esgOwnerBit = static_cast<int8_t>(1 << ownerOf(sh));
+    p.flags &= ~UNIT_IN_FLIGHT;
+    p.field23 = 0; p.field22 = 0x12; p.action = 0x36;
+    p.target4C = sh.target4C;
+    p.field4E = sh.targetIsUnit() ? 0xFFFF : sh.field4E;
+    return true;
+}
+
 void weaponTick(int id) {                                     // sub_4A7AF0 / sub_4A7740
     UnitRecord& u = g_units[id];
-    if (!(u.flags & UNIT_VEHICLE)) return;      // Guard Post (vt[4] sub_42CFD0): pendente
+    const bool gp = (u.flags & UNIT_BUILDING) && u.type == 0x17;  // Guard Post (vt[4] sub_42CFD0)
+    if (!(u.flags & UNIT_VEHICLE) && !gp) return;
     const WeaponClass* c = classOf(static_cast<int16_t>(u.cargo));
     if (!c) return;
     if (u.reload) { --u.reload; return; }
@@ -781,7 +820,73 @@ void weaponTick(int id) {                                     // sub_4A7AF0 / su
     } else if (c->rangeMode == 1 && !inRange(u)) {
         return;
     }
-    if (fireWeapon(id)) reload();
+    if (gp ? guardPostFire(id) : fireWeapon(id)) reload();
+}
+
+// vt[63] do Guard Post (sub_423E50): ordem de ataque [+0x48] sem rota.
+static void guardPostOrder(int id, int type, uint32_t tgt) {
+    UnitRecord& u = g_units[id];
+    if (tgt & 0x80000000u) {
+        const int t = static_cast<int16_t>(tgt & 0xFFFF);
+        if (!alive(t)) {
+            u.action = 0; u.field3C = 0; u.field20 = 1;
+            if (u.orderTarget() & 0x80000000u) { dropRef(u.orderLo); u.field4A = 0x7FFF; }
+            return;
+        }
+        u.action = static_cast<uint8_t>(type);
+        if (u.orderTarget() == tgt) return;
+        if (u.orderTarget() & 0x80000000u) dropRef(u.orderLo);
+        u.setOrderTarget(tgt);
+        if (u.orderLo > 0 && u.orderLo < static_cast<int>(g_units.size())) ++g_units[u.orderLo].refCount;
+        return;
+    }
+    u.action = static_cast<uint8_t>(type);
+    if (u.orderTarget() & 0x80000000u) dropRef(u.orderLo);
+    u.setOrderTarget(tgt);
+}
+
+// vt[20] do Guard Post (sub_42CDD0), 1x a cada 8 ticks: sem alvo e operando,
+// parado e atacado há < 75 ticks por quem não é aliado (EMP não revida
+// Scorpion) → ordem de ataque 0x24; senão busca (vt[6], máscara 0x400); sem
+// achar, a torre gira pelo Turret Turn Rate na fase (id ^ tick/512) & 3 = 1/3.
+// Com alvo fora do alcance, larga.
+static void guardPostPeriodic(int id) {
+    UnitRecord& u = g_units[id];
+    if (u.field4E == 0x7FFF) {
+        if (!structureOperational(u)) return;
+        if (u.action == 0 && u.field22 == 0 && u.lastAttacker &&
+            static_cast<int>(TethysGame::tick()) - u.lastAttackTick < 0x4B) {
+            const UnitRecord& a = g_units[u.lastAttacker];
+            const bool empVsScorpion = static_cast<int16_t>(u.cargo) == 0x3C && a.type == mapScorpion;
+            const int ow = ownerOf(u);
+            const bool ally = ow < kMaxPlayers && (g_playerData[ow].allyMask & (1u << ownerOf(a)));
+            if (!empVsScorpion && !ally) {
+                u.action = 0;
+                guardPostOrder(id, 0x24, static_cast<uint32_t>(a.id) | 0xFFFF0000u);
+                return;
+            }
+        }
+        const int t = findTarget(id, UNIT_DAMAGEABLE);
+        if (!t) {
+            const WeapPlayerStats* w = weapStats(static_cast<int16_t>(u.cargo), statsOf(u));
+            const int tr = w ? w->turnRate : 0;
+            const int ph = static_cast<int>((static_cast<uint32_t>(u.id) ^ (TethysGame::tick() >> 9)) & 3);
+            if (ph == 1) u.turretDir = static_cast<uint8_t>(u.turretDir + tr);
+            else if (ph == 3) u.turretDir = static_cast<uint8_t>(u.turretDir - tr);
+            return;
+        }
+        setUnitTarget(g_units[id], t);
+    }
+    UnitRecord& g = g_units[id];
+    if (g.field4E != 0x7FFF && !inRange(g)) clearTarget(g);
+}
+
+bool guardPostSprite(const UnitRecord& r, int& animReal) {   // vt[8] sub_42D250
+    if (r.type != 0x17 || !(r.flags & UNIT_BUILDING) || r.action == 0x21 || r.action == 0x22) return false;
+    const TurretDesc* td = turretOf(static_cast<int16_t>(r.cargo), r.type);
+    if (!td) return false;
+    animReal = turretAnimRaw(*td, r, r.turretDir) - kAnimBias;
+    return true;
 }
 
 static void addRef(int id) {
@@ -895,7 +1000,11 @@ void processAttackPacket(int owner, int type, const std::vector<int>& ids,
             }
             unitOrderAttack(id, type, wps, tgt, i, 0);
         }
-        // Prédio-torre (0x80) operando: vt[63] — Guard Post ainda não portado.
+        // Prédio-torre (0x80) operando: vt[63] (sub_423E50); 0x24 limpa 0x400000.
+        if ((u.flags & UNIT_TURRET_BLD) && (u.flags & UNIT_BUILDING) && structureOperational(u)) {
+            if (type == 0x24) u.flags &= ~0x400000u;
+            guardPostOrder(id, type, tgt);
+        }
     }
 }
 
@@ -1087,6 +1196,8 @@ void unitPeriodicTick(int id) {                               // prólogo de sub
     if (u.id != -1 && !(u.flags & UNIT_DEAD) && esgPeriodic(id)) return;            // vt[20] do ESG
     if (u.id != -1 && !(u.flags & UNIT_DEAD) && (u.flags & UNIT_VEHICLE) && (u.flags & UNIT_ARMED))
         weaponAutoEngage(id);                                     // vt[20] (sub_485340)
+    else if (u.id != -1 && !(u.flags & UNIT_DEAD) && (u.flags & UNIT_BUILDING) && u.type == 0x17)
+        guardPostPeriodic(id);                                    // vt[20] (sub_42CDD0)
 }
 
 // ---- Lançamento ----------------------------------------------------------------

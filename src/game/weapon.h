@@ -84,6 +84,9 @@ void weaponDrawOps(int id, std::vector<WeaponDrawOp>& ops);
 // o veículo não tem torre (sem arma ou chassi sem tabela).
 bool tankTurret(const UnitRecord& r, int bodyAnimReal, int bodyFrame,
                 int& turretAnimReal, int& offX, int& offY);
+// vt[8] do Guard Post (sub_42D250): pronto, o sprite é a torre da arma (vt[7]
+// do descritor) na direção [+0x2D], frame 0. false em obra / outro tipo.
+bool guardPostSprite(const UnitRecord& r, int& animReal);
 // sub_484A90: frame do chassi do tanque (em movimento: (id + tick/2) % nF).
 bool isTankChassis(int type);
 
