@@ -313,12 +313,15 @@ static void meteorImpact(int id) {
     const int tx0 = m.dsTX, ty0 = m.dsTY;
     int y0 = ty0 - R; if (y0 <= 0) y0 = 0;
     int y1 = ty0 + R; if (mapH() - 1 < y1) y1 = mapH() - 1;
+    int ebx = base;                                          // a parede recebe o ebx corrente
     for (int x = tx0 - R; x <= tx0 + R; ++x) {
         for (int y = y0; y <= y1; ++y) {
             const uint32_t cell = cellAt(x, y);
             if (!(cell & 0x7FF0000u)) {
-                // Parede (cellType 0x17..0x19): sub_4A23F0(x, y, ebx) — dano em
-                // parede ainda não portado.
+                // Parede (cellType 0x17..0x19): sub_4A23F0(x, y, ebx) — ebx é o
+                // base, ou o dano da última unidade atingida (como no original).
+                const int ct = static_cast<int>(cell & 0x1F);
+                if (ct >= 0x17 && ct <= 0x19) damageWall(x & iMask(), y, ebx);
                 continue;
             }
             const int occ = damageableIn(cell);
@@ -331,6 +334,7 @@ static void meteorImpact(int id) {
             if (iW() / 2 < dx) dx = iW() - dx;
             const int sh = ((dx < dy ? dx : dy) / 2 + (dx > dy ? dx : dy)) & 0xFF;   // add cl, al
             dmg >>= (sh & 31);
+            ebx = dmg;
             addDamage(occ, dmg);
         }
     }
@@ -419,7 +423,18 @@ static void lightningStrike(int id) {
         for (int y = y0; y < y1; ++y) {
             const uint32_t cell = cellAt(x, y);
             if (!(cell & 0x7FF0000u)) {
-                // Parede 0x17..0x19: sub_4A23F0(x, y, (raio − d) * pen / raio) — pendente.
+                // Parede 0x17..0x19: sub_4A23F0(x, y, (raio − d) * pen / raio), com
+                // a distância medida de [+0x64]/[+0x66] — TILES usados como pixel
+                // (bug do original: quase nunca alcança).
+                const int ct = static_cast<int>(cell & 0x1F);
+                if (ct < 0x17 || ct > 0x19) continue;
+                const int wdy = std::abs(L.dsEndY - y * 32 - 16);
+                const int ex = L.dsEndX;
+                int wdx = (ex > cxp ? ex : cxp) - (ex < cxp ? ex : cxp);
+                if (iPxW() / 2 < wdx) wdx = iPxW() - wdx;
+                const int wd = (wdx < wdy ? wdx : wdy) / 2 + (wdx > wdy ? wdx : wdy);
+                if (radius <= wd) continue;
+                damageWall(x & iMask(), y, (radius - wd) * w.penetration / radius);
                 continue;
             }
             const int occ = damageableIn(cell);
@@ -535,7 +550,9 @@ static void tornadoDamage(int id) {
             const uint32_t cell = cellAt(x, y);
             if (!(cell & 0x7FF0000u)) {
                 // Parede 0x17..0x19: sub_4A23F0(x, y, conc, ou conc/2 fora da
-                // coluna central) — pendente.
+                // coluna central).
+                const int ct = static_cast<int>(cell & 0x1F);
+                if (ct >= 0x17 && ct <= 0x19) damageWall(x & iMask(), y, x == cx ? conc : conc >> 1);
                 continue;
             }
             const int occ = damageableIn(cell);
@@ -705,7 +722,7 @@ static void lavaSetCell(int x, int y) {                      // sub_432890 (vt[2
     if (y < 0 || mapH() - 1 < y) return;
     const uint32_t c = cellAt(x, y);
     if (!(c & 0x10000000u)) return;
-    if ((c & 0x1F) == 0x19) return;   // parede de lava: sub_4A23F0(x, y, 15) — dano em parede pendente
+    if ((c & 0x1F) == 0x19) { damageWall(x, y, 15); return; }   // parede de lava: sub_4A23F0(x, y, 15)
     const int occ = static_cast<int>((c & 0x7FF0000u) >> 16);
     if (occ && occ < static_cast<int>(g_units.size())) {
         UnitRecord& t = g_units[occ];

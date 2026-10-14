@@ -2,9 +2,12 @@
 
 #include <cstdint>
 
+#include "../audio/sound.h"
+#include "building_sheet.h"
 #include "colony.h"
 #include "game_map.h"
 #include "player.h"
+#include "tethys_game.h"
 
 namespace op2 {
 
@@ -160,6 +163,24 @@ int destroyWallOrTube(int x, int y) {                          // sub_4A25F0
     }
     g_gameMap.setRawCell(x, y, (g_gameMap.rawCell(x, y) & 0x7FFFFFE0u) | 0x15u);
     return ret;
+}
+
+void damageWall(int x, int y, int dmg) {                      // sub_4A23F0
+    const int tile = static_cast<int>((g_gameMap.rawCell(x, y) & 0xFFE0) >> 5);
+    const GameMap::TerrainType* rec; int base, index;
+    if (!tileGroup(tile, rec, base, index)) return;
+    if (base == 0xBC) return;                                     // tubo
+    const int me = TethysGame::localPlayer();
+    const int type = base == 0x14 ? 0x13 : base == 0x34 ? 0x14 : 0x12;   // off_4E138C / 4E1390 / 4E1388
+    const StructSheetDesc* d = wallSheet(type);
+    int hp = d ? d->player[me].hitPoints : 0;
+    if (type == 0x12) hp /= 3;
+    if (dmg < TethysGame::getRand(hp)) return;
+    if (base == 0x54) setTileIndex(x, y, rec->word(0x74 + 2 * index));
+    else if (base == 0x74) setTileIndex(x, y, rec->word(0x94 + 2 * index));
+    else destroyWallOrTube(x, y);                                 // sub_4A25F0
+    // (vista de detalhe: sub_46F550 marca o retângulo — o port redesenha tudo.)
+    soundPlayAt(x, y, 1);
 }
 
 } // namespace op2

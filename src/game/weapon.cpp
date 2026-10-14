@@ -20,6 +20,7 @@
 #include "vehicle_anim.h"
 #include "disaster.h"
 #include "missile.h"
+#include "walls.h"
 #include "../gfx/artfile.h"
 
 namespace op2 {
@@ -1258,8 +1259,18 @@ static void explode(int pid) {
             const uint32_t cell = g_gameMap.rawCell(x & tileMask(), y);
             const int occ = static_cast<int>((cell & GameMap::CELL_OCCUPANCY) >> GameMap::CELL_OCC_SHIFT);
             if (!occ) {
-                // Paredes/tubos (cellType 0x17..0x19) levam dano por sub_4A23F0 —
-                // o sistema de paredes ainda não foi portado.
+                // Parede (cellType 0x17..0x19): (raio − d) * Penetration / raio,
+                // x2.5 de laser/micro-ondas → sub_4A23F0.
+                const int ct = static_cast<int>(cell & 0x1F);
+                if (ct < 0x17 || ct > 0x19) continue;
+                const int wdy = std::abs(iy - y * 32 - 16);
+                int wdx = (ix > cxp ? ix : cxp) - (ix < cxp ? ix : cxp);
+                if (half(pxW()) < wdx) wdx = pxW() - wdx;
+                const int wd = octo(wdx, wdy);
+                if (wd >= R) continue;
+                int wdmg = (R - wd) * w->penetration / R;
+                if (p.type == 0x3D || p.type == 0x3E) wdmg = wdmg * 5 / 2;
+                damageWall(x & tileMask(), y, wdmg);
                 continue;
             }
             if (!alive(occ)) continue;
@@ -1565,7 +1576,19 @@ static void explodeDestruct(int pid) {
         for (int y = y0; y <= y1; ++y) {
             const uint32_t cell = g_gameMap.rawCell(x & tileMask(), y);
             const int occ = static_cast<int>((cell & GameMap::CELL_OCCUPANCY) >> GameMap::CELL_OCC_SHIFT);
-            if (!occ || !alive(occ)) continue;
+            if (!occ) {
+                // Parede: (raio − d) * (Concussion + Penetration) / raio → sub_4A23F0.
+                const int ct = static_cast<int>(cell & 0x1F);
+                if (ct < 0x17 || ct > 0x19) continue;
+                const int wdy = std::abs(iy - y * 32 - 16);
+                int wdx = (ix > cxp ? ix : cxp) - (ix < cxp ? ix : cxp);
+                if (half(pxW()) < wdx) wdx = pxW() - wdx;
+                const int wd = octo(wdx, wdy);
+                if (R <= wd) continue;
+                damageWall(x & tileMask(), y, (R - wd) * (w->concussion + w->penetration) / R);
+                continue;
+            }
+            if (!alive(occ)) continue;
             UnitRecord& t = g_units[occ];
             if (!(t.flags & UNIT_DAMAGEABLE)) continue;
             int dx, dy;

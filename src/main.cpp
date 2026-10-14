@@ -12,6 +12,7 @@
 #include "core/config.h"
 #include "res/res_manager.h"
 #include "game/game_map.h"
+#include "game/walls.h"
 #include "game/terrain_renderer.h"
 #include "game/game_rng.h"
 #include "game/player.h"
@@ -1516,6 +1517,49 @@ static int runMissionTest(const std::string& dll, const std::string& outPath, in
     return ok ? 0 : 1;
 }
 
+// --walltest <map>: parede comum, de lava, de micróbio e um tubo lado a lado;
+// sub_4A23F0 (damageWall) com dano 1000 e depois 20, 6x cada, imprimindo o tile
+// e o tipo da célula — a parede comum passa pelos estágios +0x54/+0x74/+0x94.
+static int runWallTest(const std::string& mapName) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 walltest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
+    int bx = -1, by = -1;
+    for (int y = H / 2; y < H - 2 && bx < 0; ++y)
+        for (int x = W / 2; x < W - 10 && bx < 0; ++x) {
+            bool ok = true;
+            for (int dx = 0; dx < 8 && ok; ++dx)
+                if (!op2::g_gameMap.isPassable(op2::LOCATION{x + dx, y}) ||
+                    (op2::g_gameMap.rawCell(x + dx, y) & 0x7FF0000u)) ok = false;
+            if (ok) { bx = x; by = y; }
+        }
+    if (bx < 0) return 3;
+    const int types[4] = {0x12, 0x13, 0x14, 0x11};
+    for (int k = 0; k < 4; ++k) op2::createWallOrTube(bx + 2 * k, by, types[k]);
+    for (int dmg : {1000, 20}) {
+        if (dmg == 20) for (int k = 0; k < 4; ++k) op2::createWallOrTube(bx + 2 * k, by, types[k]);
+        for (int pass = 0; pass < 6; ++pass) {
+            std::printf("[WallTest] dano=%4d passada %d:", dmg, pass);
+            for (int k = 0; k < 4; ++k) {
+                const int x = bx + 2 * k;
+                op2::damageWall(x, by, dmg);
+                const uint32_t c = op2::g_gameMap.rawCell(x, by);
+                std::printf("  0x%02X tile=%4u tipo=0x%02X%s", types[k], (c & 0xFFE0u) >> 5, c & 0x1Fu,
+                            (c & 0x80000000u) ? " bloq" : "");
+            }
+            std::printf("\n");
+        }
+    }
+    renderer.shutdown(); SDL_Quit();
+    return 0;
+}
+
 // --quaketest <map>: terremoto de magnitude 3 no CC da cena demo; imprime o
 // dano por unidade e o tremor de tela.
 static int runQuakeTest(const std::string& mapName) {
@@ -2023,6 +2067,8 @@ int main(int argc, char* argv[]) {
                               i + 4 < argc ? atoi(argv[i + 4]) : 1, i + 5 < argc ? (int)std::strtol(argv[i + 5], nullptr, 0) : 0);
         if (std::strcmp(argv[i], "--cmdtest") == 0 && i + 1 < argc)
             return runCmdTest(argv[i + 1]);
+        if (std::strcmp(argv[i], "--walltest") == 0 && i + 1 < argc)
+            return runWallTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--quaketest") == 0 && i + 1 < argc)
             return runQuakeTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--disastertest") == 0 && i + 3 < argc)

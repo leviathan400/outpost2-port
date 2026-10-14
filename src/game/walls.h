@@ -23,4 +23,12 @@ int tubeTileFor(int tile);
 // (tubo), 2 (parede) ou 0.
 int destroyWallOrTube(int x, int y);
 
+// sub_4A23F0: dano `dmg` na parede de (x interno mascarado, y). Pelo grupo do
+// tile (sub_4A18D0): lava (+0x14) e micróbio (+0x34) sorteiam contra o HP da
+// sua parede, a comum (+0x54/+0x74/+0x94) contra HP/3 — do jogador LOCAL;
+// rand(HP) <= dmg: lava/micróbio/3º estágio somem (sub_4A25F0), os outros
+// estágios avançam (+0x54 → +0x74 → +0x94). Tubo (+0xBC) não sofre. Som 1
+// com o tile passado como pixel (como no original).
+void damageWall(int x, int y, int dmg);
+
 } // namespace op2
