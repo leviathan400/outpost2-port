@@ -58,7 +58,7 @@ void vehicleDeath(int id);
 // ---- Desenho ----------------------------------------------------------------
 // Operações de desenho em coordenadas de MUNDO (pixel do original, centro).
 struct WeaponDrawOp {
-    enum Kind { SPRITE, LASER_LINE, MICROWAVE_LINE, BOLT } kind = SPRITE;
+    enum Kind { SPRITE, LASER_LINE, MICROWAVE_LINE, BOLT, SOUND } kind = SPRITE;   // SOUND: som `anim` em (x, y)
     int anim = -1, frame = 0;       // SPRITE: animação real (sem viés) e frame
     int x = 0, y = 0;               // SPRITE: ponto; linhas: início
     int x2 = 0, y2 = 0;             // linhas: fim

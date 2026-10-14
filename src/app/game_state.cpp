@@ -636,7 +636,9 @@ void GameState::onIdle(Renderer& renderer, float dt) {
             std::vector<WeaponDrawOp> ops;
             weaponDrawOps((int)i, ops);
             for (const WeaponDrawOp& op : ops) {
-                if (op.kind == WeaponDrawOp::SPRITE) {
+                if (op.kind == WeaponDrawOp::SOUND) {                // som tocado pelo desenho (ácido)
+                    if (onScreen(ucx, ucy)) drawSound(static_cast<int>(i), op.x, op.y, op.anim);
+                } else if (op.kind == WeaponDrawOp::SPRITE) {
                     if (op.anim >= 0 && g_art.ok() && op.anim < g_art.numAnimations())
                         drawSprite(op.anim, op.frame, screenXOf(op.x), op.y - m_camY, -1);
                 } else {

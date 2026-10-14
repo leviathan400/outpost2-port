@@ -37,7 +37,7 @@ enum Finder { FIND_LOS /*sub_4A6DD0*/, FIND_NEAR /*sub_4A6AA0*/, FIND_BOX /*sub_
 enum DrawKind { DRAW_PROJECTILE /*sub_4A2D50*/, DRAW_LASER /*sub_4A3420*/,
                 DRAW_MICROWAVE /*sub_4A3000*/, DRAW_RAILGUN /*sub_4A2A00*/,
                 DRAW_SCORPION /*sub_4A31D0*/, DRAW_THOR /*sub_48AD70*/,
-                DRAW_ESG /*sub_480DB0*/ };
+                DRAW_ESG /*sub_480DB0*/, DRAW_ACID /*sub_401560*/ };
 struct WeaponClass {
     int type;
     int rangeMode;          // desc+0x250: 1 = sem linha de visada no teste de alcance
@@ -56,6 +56,9 @@ static const WeaponClass kClasses[] = {
     // STICKYFOAM: sub_4A61C0 / sub_4A3A90 / sub_4A7270 / sub_4A2D50 / sub_4A6910 / sub_447240;
     // fire tick sub_4A7950, impacto sub_4A4F10.
     {0x47, 1, 0xF2, 0xF3, LAUNCH_BALLISTIC, FIND_FOAM, DRAW_PROJECTILE, 0x47D, 0, 1, 3},
+    // ACID: sub_4A5480 / sub_4A3A90 / sub_4A6AA0 / sub_401560 / sub_401910 / sub_4470D0;
+    // impacto nullsub_5, nuvem no vt[20] sub_401050, duração vt[36] sub_4013D0.
+    {0x3B, 1, 0xE4, 0xE5, LAUNCH_BALLISTIC, FIND_NEAR, DRAW_ACID, 0x414, 0, 5, 6},
     // SPAM (ESG): sub_480AC0 / sub_4A3A90 / sub_4A7400 / sub_480DB0 / sub_4A2870 / sub_447460;
     // impacto nullsub_122, minas no vt[20] sub_481170, duração vt[36] sub_480C10 (0xD8).
     {0x46, 1, 0xF0, 0xF1, LAUNCH_BALLISTIC, FIND_BOX, DRAW_ESG, 0x14B, 0, 4, 8},
@@ -1185,6 +1188,8 @@ static int explosionDuration(const UnitRecord& p) {
     if (c && c->draw == DRAW_RAILGUN)                              // sub_4A29C0
         return lastFrameRaw(0x2F8) + lastFrameRaw(0x2F9) + lastFrameRaw(0x2FA) + 3;
     if (c && c->draw == DRAW_ESG) return 0xD8;                     // sub_480C10
+    if (c && c->draw == DRAW_ACID)                                 // sub_4013D0
+        return lastFrameRaw(0x415) * 3 + lastFrameRaw(0x416) + lastFrameRaw(0x414) + 4;
     return lastFrameRaw(c ? c->explodeAnim : 0);                   // sub_4A27C0
 }
 
@@ -1390,8 +1395,58 @@ static void explodeFoam(int pid) {
 // dano (blind * Concussion >> 8) + Penetration da arma (x1.5 de prédio-torre,
 // /2 em ação 0x12), 0x100000 por 4 passadas ([+0x58]) e o crédito do atirador
 // só se o dono do alvo é IA. Sem minas, o projétil sai (sub-estado 0x0B).
+// vt[20] do ácido (sub_401050): explodido, liga 0x8000 e a cada passada fere
+// TODA unidade danificável (sem teste de aliança) nos 3x3 tiles do impacto:
+// (blind * Concussion >> 8) + Penetration; prédio /4 e pela terra (sub_42FF00);
+// x1.5 de prédio-torre; /2 em ação 0x12; crédito só contra dono IA.
+static void acidPeriodic(int pid) {
+    UnitRecord& p = g_units[pid];
+    if (p.exploded) p.flags |= 0x8000u;
+    if (!(p.flags & 0x8000u)) return;
+    const WeapPlayerStats* w = weapStats(p.type, statsOf(p));
+    const int iy = p.impactY >> 5, ix = p.impactX >> 5;
+    int y1 = iy + 2; if (y1 >= g_gameMap.height()) y1 = g_gameMap.height();
+    int y = iy - 1; if (y <= 0) y = 0;
+    for (; y < y1; ++y) {
+        for (int x = ix - 1; x < ix + 2; ++x) {
+            const uint32_t cell = g_gameMap.rawCell(x & tileMask(), y);
+            const int occ = static_cast<int>((cell & GameMap::CELL_OCCUPANCY) >> GameMap::CELL_OCC_SHIFT);
+            if (!occ || !alive(occ)) continue;
+            UnitRecord& t = g_units[occ];
+            if (!(t.flags & UNIT_DAMAGEABLE)) continue;
+            int dmg = ((armorOf(t) * (w ? w->concussion : 0)) >> 8) + (w ? w->penetration : 0);
+            if (t.flags & UNIT_BUILDING) {
+                dmg >>= 2;
+                dmg = (10000 - colonyDirtProtection(t)) * dmg / 10000;
+            }
+            if (g_units[pid].flags & UNIT_TURRET_BLD) dmg += dmg >> 1;
+            if (t.action == 0x12) dmg >>= 1;
+            t.damage = static_cast<int16_t>(t.damage + dmg);
+            const int ow = ownerOf(t);
+            if (ow < kMaxPlayers && !g_playerData[ow].isHuman) {
+                const int source = g_units[pid].sourceId;
+                if (t.lastAttacker != source) {
+                    if (t.lastAttacker) dropRef(t.lastAttacker);
+                    if (source > 0 && source < static_cast<int>(g_units.size())) ++g_units[source].refCount;
+                    t.lastAttacker = static_cast<int16_t>(source);
+                }
+                t.lastAttackTick = TethysGame::tick();
+            }
+            damageMessage(t, statsOf(g_units[pid]));
+            const int hp = maxHPOf(t);
+            if (hp <= t.damage) {
+                t.damage = static_cast<int16_t>(hp);
+                t.flags |= UNIT_DEAD;
+                killUnit(occ, 5);
+                // (estatísticas 0x1C4/0x1CC dos jogadores — pendente.)
+            }
+        }
+    }
+}
+
 static bool esgPeriodic(int pid) {
     UnitRecord& p = g_units[pid];
+    if (p.type == 0x3B) { acidPeriodic(pid); return true; }
     if (p.type != 0x46) return false;
     if (p.exploded && !(p.flags & 0x8000u)) { p.esgMask = 0x1FFF; p.flags |= 0x8000u; }
     if (!(p.flags & 0x8000u)) return true;
@@ -1491,7 +1546,7 @@ void weaponProjectileAction(int id) {                         // case 54
     }
     if (!p.exploded) {
         p.exploded = 1;
-        if (p.type == 0x46) {}                                    // vt[34] nullsub_122 (minas: vt[20])
+        if (p.type == 0x46 || p.type == 0x3B) {}                  // vt[34] nullsub_122 / nullsub_5 (efeito no vt[20])
         else if (p.type == 0x3C) explodeEMP(id);                 // vt[34] sub_4A4490
         else if (p.type == 0x47) explodeFoam(id);                 // vt[34] sub_4A4F10
         else explode(id);                                         // vt[34] sub_4A35C0
@@ -1657,7 +1712,9 @@ void weaponDrawOps(int id, std::vector<WeaponDrawOp>& ops) {
     const WeaponClass* c = classOf(p.type);
     if (!c) return;
     if (p.field22 == 0 || p.field22 >= 0x12) return;
-    switch (c->draw) {
+    DrawKind kind = c->draw;
+    if (kind == DRAW_ACID && !p.exploded) kind = DRAW_PROJECTILE;    // sub_401560 → sub_4A2D50
+    switch (kind) {
         case DRAW_THOR: {                                         // sub_48AD70
             // Explodido ([+0x54]): só chama vt[35] — não desenha nada.
             if (p.exploded) return;
@@ -1698,6 +1755,35 @@ void weaponDrawOps(int id, std::vector<WeaponDrawOp>& ops) {
             }
             if (p.exploded)
                 pushSprite(ops, c->explodeAnim, lastFrameRaw(c->explodeAnim) - p.field3C, p.impactX, p.impactY);
+            return;
+        }
+        case DRAW_ACID: {                                         // sub_401560
+            if (!p.exploded) break;                               // → sub_4A2D50
+            const int dur = explosionDuration(p);
+            int e = dur - p.field3C;                              // var_1C
+            if (p.flightTicks > 0) {
+                const int e0 = e > 0 ? e : 0;
+                int X8 = p.impactX * 8, Y8 = p.impactY * 8;
+                for (int i = e0;; ++i) {
+                    int lim = e0 + p.flightTicks * 2;
+                    const int cap = lastFrameRaw(0x2C0) * 2;
+                    if (lim >= cap) lim = cap;
+                    if (lim <= i) break;
+                    X8 -= p.velQX; Y8 -= p.velQY;
+                    pushSprite(ops, 0x2C0 + i % 3, i / 3, X8 >> 3, Y8 >> 3);
+                }
+            }
+            if (p.field3C % 20 == 0) {                            // som 0xE5 a cada 20 ticks
+                WeaponDrawOp s; s.kind = WeaponDrawOp::SOUND;
+                s.anim = 0xE5; s.x = p.pixelX; s.y = p.pixelY;
+                ops.push_back(s);
+            }
+            const int n414 = lastFrameRaw(0x414) + 1;
+            if (n414 > e) { pushSprite(ops, 0x414, e, p.impactX, p.impactY); return; }
+            e -= n414;
+            const int n415 = lastFrameRaw(0x415) + 1;
+            if (e < n415 * 3) pushSprite(ops, 0x415, e % n415, p.impactX, p.impactY);
+            else pushSprite(ops, 0x416, e - n415 * 3, p.impactX, p.impactY);
             return;
         }
         case DRAW_ESG: {                                          // sub_480DB0
