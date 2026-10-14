@@ -87,16 +87,21 @@ static int mineCurve(int yield, int variant, int loads) {      // sub_44B0B0
     return span ? (m.min - m.peak) * (loads - m.peakTruck) / span + m.peak : m.peak;
 }
 
-int mineTakeLoad(int mineId) {                                  // vt[0x100]
-    UnitRecord& m = g_units[mineId];
-    if (m.type == 0x2A) {                                       // sub_44B120
+int mineLoadAmount(int mineId) {                                // vt[0x104]
+    const UnitRecord& m = g_units[mineId];
+    if (m.type == 0x2A) {                                       // sub_44B140
         const StructSheetDesc* d = structSheet(0x2A);
         return d ? d->player[statsOf(m)].productionCapacity : 0;
     }
     int amount = mineCurve(m.mineYield, m.mineVariant, m.mineLink);   // sub_44AE00
     if ((m.type == 0x15 || m.type == 0x16) && improved(m)) amount = amount * 120 / 100;
     if (m.type == 0x16) amount >>= 1;
-    ++m.mineLink;                                               // [+0x68]++
+    return amount;
+}
+
+int mineTakeLoad(int mineId) {                                  // vt[0x100]
+    const int amount = mineLoadAmount(mineId);
+    if (g_units[mineId].type != 0x2A) ++g_units[mineId].mineLink;   // [+0x68]++
     return amount;
 }
 

@@ -1,6 +1,7 @@
 #include "info_pane.h"
 
 #include <cstdio>
+#include <cstring>
 #include <vector>
 
 #include "../gfx/font.h"
@@ -12,6 +13,10 @@
 #include "../game/building_sheet.h"
 #include "../game/structure.h"
 #include "../game/structure_anim.h"
+#include "../game/mining.h"
+#include "../game/research.h"
+#include "../game/vehicle_anim.h"
+#include "../game/weapon.h"
 
 namespace op2 {
 
@@ -88,6 +93,26 @@ int drawMarkupText(uint32_t* fb, int fbW, int fbH, const PaneRect& rc,
     return y - rc.t;
 }
 
+// Quebra por palavras na largura do retângulo (sub_415EC0 / sub_416650).
+static std::string wrapForPane(const std::string& text, const PaneRect& rc) {
+    const int width = rc.r - rc.l;
+    std::string out, line, word;
+    auto flushWord = [&]() {
+        if (word.empty()) return;
+        const std::string cand = line.empty() ? word : line + " " + word;
+        if (!line.empty() && UiFont::width(cand) > width) { out += line + "\n"; line = word; }
+        else line = cand;
+        word.clear();
+    };
+    for (char ch : text) {
+        if (ch == ' ') flushWord();
+        else if (ch == '\n') { flushWord(); out += line + "\n"; line.clear(); }
+        else word += ch;
+    }
+    flushWord();
+    return out + line;
+}
+
 static void fillRect(uint32_t* fb, int fbW, int fbH, int x, int y, int w, int h, uint32_t c) {
     for (int yy = y; yy < y + h; ++yy) {
         if (yy < 0 || yy >= fbH) continue;
@@ -119,6 +144,127 @@ static const char* armorName(int v, bool isBuilding) {
     if (v >= 0x5A) return "Heavy Armor";
     if (v >= 0x3C) return "Very Heavy Armor";
     return "Adamantium Armor";
+}
+
+// Texto de melhoria (+0x34) da tecnologia de índice `idx` (0 = nenhuma).
+static std::string improveText(int idx) {
+    if (idx <= 0) return "";
+    const Tech* t = techAt(idx);
+    return t ? t->improveDesc : "";
+}
+static int32_t blockDword(int type, int player, int off) {
+    const uint8_t* b = unitStatBlock(type, player);
+    int32_t v = 0;
+    if (b) std::memcpy(&v, b + off, 4);
+    return v;
+}
+
+// ---- Melhorias (sub_45A690): +0x3C/+0x40 do bloco (dono das estatísticas) ----
+static int drawUpgradesSection(uint32_t* fb, int fbW, int fbH, const PaneRect& rc, const UnitRecord& r) {
+    const int lh = markupLineHeight();
+    const int p = (r.owner >> 4) & 0x0F;
+    const std::string a = improveText(blockDword(r.type, p, 0x3C));
+    const std::string b = improveText(blockDword(r.type, p, 0x40));
+    if (!a.empty()) drawMarkupText(fb, fbW, fbH, rc, a, kTextGreen);
+    if (!b.empty() && b != a) {
+        PaneRect r2 = rc; r2.t += lh - 2;
+        drawMarkupText(fb, fbW, fbH, r2, b, kTextGreen);
+    }
+    return 2 * lh;
+}
+
+// ---- Recurso do armazém (sub_45BD50) -----------------------------------------
+static int drawResourceSection(uint32_t* fb, int fbW, int fbH, const PaneRect& rc, const UnitRecord& r) {
+    if (r.type != 0x19 && r.type != 0x1A) return 0;
+    char buf[128];
+    std::snprintf(buf, sizeof(buf), "%s:<R>%s", "Resource", r.type == 0x19 ? "Common Metals" : "Rare Metals");
+    return drawMarkupText(fb, fbW, fbH, rc, buf, kTextGreen);
+}
+
+// ---- Demanda da colônia (sub_45B540) — registro do jogador LOCAL --------------
+static int drawDemandSection(uint32_t* fb, int fbW, int fbH, const PaneRect& rc, const UnitRecord& r, int me) {
+    const ColonyState& c = g_colony[me];
+    char buf[160];
+    auto demand = [&](int v) {
+        if (v != 10000) std::snprintf(buf, sizeof(buf), "%s:<R>%i%%", "Colony Demand", v);
+        else std::snprintf(buf, sizeof(buf), "%s:<R>%s", "Colony Demand", "---");
+    };
+    switch (r.type) {
+        case 0x1B: case 0x25: demand(c.recreationLoad); break;             // +0x54
+        case 0x1E: case 0x34: case 0x35: demand(c.crowding); break;        // +0x48
+        case 0x22: demand(c.medicalLoad); break;                           // +0x5C
+        case 0x26: std::snprintf(buf, sizeof(buf), "%s:<R>%i", "Trainable Workers", c.workersLeft); break;   // +0xA4
+        case 0x28: {                                                       // DIRT
+            int local = 0;
+            if (r.netComp >= 0 && r.netComp < static_cast<int>(g_colony[r.owner & 0x0F].components.size())) {
+                const auto& k = g_colony[r.owner & 0x0F].components[r.netComp];
+                const StructSheetDesc* d = structSheet(0x28);
+                const int cap = d ? d->player[me].productionCapacity : 0;
+                const int per = k.dirts ? (k.structures - k.dirts) / k.dirts : 0;   // sub_42FEE0
+                local = cap ? per * 100 / cap : 0;
+            }
+            const int prot = colonyDirtProtection(r);                         // sub_42FF00
+            std::snprintf(buf, sizeof(buf), "%s:<R>%i%%\n<L>%s:<R>%i.%02i%%", "Local Demand", local,
+                          "Damage Prevention", prot / 100, prot % 100);
+            break;
+        }
+        default: return 0;
+    }
+    return drawMarkupText(fb, fbW, fbH, rc, buf, kTextGreen);
+}
+
+// ---- Rendimento da mina (sub_45B350): vt[0x104] -------------------------------
+static int drawYieldSection(uint32_t* fb, int fbW, int fbH, const PaneRect& rc, int id) {
+    const UnitRecord& r = g_units[id];
+    if (r.type != 0x15 && r.type != 0x16 && r.type != 0x2A) return 0;
+    char buf[64];
+    std::snprintf(buf, sizeof(buf), "%s:<R>%i", "Yield", mineLoadAmount(id));   // ("%i%" no original)
+    return drawMarkupText(fb, fbW, fbH, rc, buf, kTextGreen);
+}
+
+// ---- Arma do Guard Post (sub_45BBD0): melhorias do bloco do jogador LOCAL -----
+static int drawWeaponSection(uint32_t* fb, int fbW, int fbH, const PaneRect& rc, const UnitRecord& r, int me) {
+    if (r.type != 0x17) return 0;
+    const int w = static_cast<int16_t>(r.cargo);
+    char buf[256];
+    std::snprintf(buf, sizeof(buf), "%s:<R>%s\n<L>%s\n%s", "Weapon", unitDisplayName(w),
+                  improveText(blockDword(w, me, 0x3C)).c_str(), improveText(blockDword(w, me, 0x40)).c_str());
+    return drawMarkupText(fb, fbW, fbH, rc, buf, kTextGreen);
+}
+
+// ---- Observatório (sub_45B440): estatística +0x10C do jogador local -----------
+static int drawObservatorySection(uint32_t* fb, int fbW, int fbH, const PaneRect& rc, const UnitRecord& r, int me) {
+    if (r.type != 0x2B) return 0;
+    const char* t = g_colony[me].stat(ST_OBSERVATORY)
+        ? "Observatory Active: Targeting data available."
+        : "Observatory not Active: No targeting data available.";
+    return drawMarkupText(fb, fbW, fbH, rc, wrapForPane(t, rc), kTextGreen);
+}
+
+// ---- Estoque (sub_45B070) ------------------------------------------------------
+static int drawStorageSection(uint32_t* fb, int fbW, int fbH, const PaneRect& rc, const UnitRecord& r, int me) {
+    const PlayerData& pd = g_playerData[me];
+    const ColonyState& c = g_colony[me];
+    const char* unit = "Units";
+    int cap = 0, n = 0;
+    switch (r.type) {
+        case 0x19: case 0x36: cap = c.oreCapacity; n = pd.ore; break;
+        case 0x1A: case 0x38: cap = c.rareCapacity; n = pd.rareOre; break;
+        case 0x27: n = pd.foodStored; break;
+        case 0x29: unit = "Vehicles"; n = 0; break;              // vt[63] da garagem (não portada)
+        case 0x2F: {                                             // kits nas baias
+            unit = "Kits";
+            const StructSheetDesc* d = structSheet(r.type);
+            const int bays = d ? d->player[(r.owner >> 4) & 0x0F].storageBays : 0;
+            for (int i = 0; i < bays && i < 6; ++i) if (r.bayType[i]) ++n;
+            break;
+        }
+        default: return 0;
+    }
+    char buf[128];
+    if (!cap) std::snprintf(buf, sizeof(buf), "%s:<R>%i %s", "In Storage", n, unit);
+    else std::snprintf(buf, sizeof(buf), "%s:<R>%i/%i %s", "In Storage", n, cap, unit);
+    return drawMarkupText(fb, fbW, fbH, rc, buf, kTextGreen);
 }
 
 // ---- Seção de Status (sub_45A8F0) -------------------------------------------
@@ -210,6 +356,112 @@ static int drawLaunchPadSection(uint32_t* fb, int fbW, int fbH, const PaneRect& 
     return drawMarkupText(fb, fbW, fbH, rc, buf, kTextGreen);
 }
 
+// Barra de progresso (sub_45C260): moldura 0x3DEF; feito em c1, o resto em c2.
+static void progressBar(uint32_t* fb, int fbW, int fbH, int l, int t, int r, int b, int cur, int max,
+                        uint16_t c1, uint16_t c2) {
+    frameRect(fb, fbW, fbH, l, t, r - l, b - t, rgb555(0x3DEF));
+    if (max <= 0) return;
+    if (cur > max) cur = max;
+    const int il = l + 1, ir = r - 2, w = ir - il + 1;
+    const int fill = cur * w / max;
+    if (fill > 0) fillRect(fb, fbW, fbH, il, t + 1, fill, b - t - 2, rgb555(c1));
+    fillRect(fb, fbW, fbH, il + (fill > 0 ? fill : 0), t + 1, w - (fill > 0 ? fill : 0), b - t - 2, rgb555(c2));
+}
+
+void drawVehicleIcon(uint32_t* fb, int fbW, int fbH, bool eden, int type, int weapon,
+                     int l, int t, int r, int b, const PaneRect& clip, int colorPlayer) {   // sub_458EF0
+    fillRect(fb, fbW, fbH, l, t, r - l, b - t, rgb555(eden ? 0x6DC3 : 0x35AD));
+    int dx = 0x14, dy = 0x14;
+    bool tank = false;
+    switch (type) {
+        case 1: dx = 0x16; dy = 0x15; break;
+        case 2: dx = 0x15; dy = 0x17; break;
+        case 5: case 6: dx = (type == 6 && !eden) ? 0x12 : 0x16; dy = 0x16; tank = true; break;
+        case 7: dx = 0x17; dy = 0x1A; tank = true; break;
+        case 9: dx = 0x15; dy = eden ? 0x15 : 0x12; break;
+        case 10: dx = 0x15; dy = 0x15; break;
+        case 11: dx = 0x16; dy = 0x14; break;
+        case 12: dx = 0x15; dy = 0x14; break;
+        case 13: dx = 0x16; dy = 0x15; break;
+        default: break;
+    }
+    const int body = vehicleAnimIndex(type, 0, eden);           // desc+0x24C / +0x34C
+    if (body < 0) return;
+    const int pc = g_playerData[colorPlayer < kMaxPlayers ? colorPlayer : 0].colorNumber;
+    setArtShadows(false);                                       // dword_575630 = 0
+    blitArtFrame(fb, fbW, fbH, body, 0, l + dx, t + dy, pc, clip.l, clip.t, clip.r, clip.b);
+    if (tank) {
+        const int tr = weaponTurretIconRaw(weapon, type, eden);
+        if (tr) {
+            const int8_t* o = artFrameOffsets(body + 0x65, 0);
+            blitArtFrame(fb, fbW, fbH, tr - 0x65, 0, l + dx + o[0], t + dy + o[1], pc, clip.l, clip.t, clip.r, clip.b);
+        }
+    }
+    setArtShadows(true);
+}
+
+// ---- Progresso: pesquisa / treino / produção (sub_45B850) -----------------------
+static int drawProgressSection(uint32_t* fb, int fbW, int fbH, const PaneRect& rc, const UnitRecord& r,
+                               int me, const PaneRect& clip) {
+    char buf[160];
+    int icon = 0, cur = 0, max = 0;
+    bool vehicleIcon = false;
+    const bool eden = g_playerData[r.owner & 0x0F].isEden != 0;      // [+0x44] & 0x1000
+    switch (r.type) {
+        case 0x21: case 0x31: case 0x32: {                           // labs
+            if (r.action != 0x16 || !r.labTopic) return 0;
+            const Tech* t = techAt(r.labTopic);
+            if (!t) return 0;
+            static const int kCat[12] = {0x4BB, 0x4B9, 0x4B1, 0x4B7, 0x4B6, 0x4BA, 0x4B5, 0x4B4, 0x4B8,
+                                         0x4B3, 0x4B2, 0x707};         // sub_4320D0
+            icon = (t->category >= 1 && t->category <= 12) ? kCat[t->category - 1] : 0;
+            max = eden ? t->edenCost : t->plymouthCost;
+            cur = max - (r.field3C >> 8);
+            std::snprintf(buf, sizeof(buf), "%s\n%i/%i", t->name.c_str(), cur, max);
+            break;
+        }
+        case 0x26: {                                                 // University
+            if (r.action != 0x17) return 0;
+            max = r.trainTime;
+            cur = max - r.field3C;
+            std::snprintf(buf, sizeof(buf), "%s %i %s:\n%i/%i", "Training", r.extraWorkers,
+                          r.extraWorkers > 1 ? "Scientists" : "Scientist", cur, max);
+            icon = 0x4BB;
+            break;
+        }
+        case 0x2D: case 0x2E: case 0x2F: case 0x30: case 0x37: {     // fábricas
+            if (r.action != 9) return 0;
+            const int T = r.produceTotal;
+            if (T <= 0) return 0;
+            const int total = ((T + 20) / 40) * 25;
+            std::snprintf(buf, sizeof(buf), "%s\n%i/%i", unitDisplayName(r.produceType),
+                          total - r.field3C * total / T, total);
+            cur = T - r.field3C; max = T;
+            const int pt = r.produceType;
+            switch (r.type) {                                        // vt[0x114]
+                case 0x2D: icon = pt ? 0x795 : 0; break;
+                case 0x2E: icon = pt ? 0x4B8 : 0; break;
+                case 0x2F: icon = (pt >= 0x15 && pt <= 0x3A) ? structureAnimIndex(pt, 4, eden) + 0x65 : 0; break;
+                case 0x37: icon = pt ? ((pt >= 0x5A && pt <= 0x63) ? 0x707 : 0x4B4) : 0; break;
+                default: icon = pt ? 0x4B7 : 0; vehicleIcon = true; break;
+            }
+            break;
+        }
+        default: return 0;
+    }
+    blitArtFrame(fb, fbW, fbH, 0x9B - 0x65, 0, rc.l - 10, rc.t - 7, -1, clip.l, clip.t, clip.r, clip.b);
+    const int pc = g_playerData[me].colorNumber;
+    if (vehicleIcon && icon)
+        drawVehicleIcon(fb, fbW, fbH, g_playerData[me].isEden != 0, r.produceType, r.kitWeapon,
+                        rc.l - 3, rc.t, rc.l - 3 + 0x2D, rc.t + 0x2D, clip, me);
+    else if (icon)
+        blitArtFrame(fb, fbW, fbH, icon - 0x65, 0, rc.l - 3, rc.t, pc, clip.l, clip.t, clip.r, clip.b);
+    PaneRect trc{rc.l + 0x33, rc.t, rc.r, rc.b};
+    const int h = drawMarkupText(fb, fbW, fbH, trc, wrapForPane(buf, trc), kTextGreen);
+    progressBar(fb, fbW, fbH, rc.l + 0x33, rc.t + h, rc.r, rc.t + h + 6, cur, max, 0x3E0, 0x1E0);
+    return 0x2D;
+}
+
 void drawUnitInfoPane(uint32_t* fb, int fbW, int fbH, const PaneRect& pane,
                       int unitId, int numSelected, int localPlayer) {
     if (numSelected <= 0 || unitId <= 0 || unitId >= static_cast<int>(g_units.size())) return;
@@ -244,7 +496,11 @@ void drawUnitInfoPane(uint32_t* fb, int fbW, int fbH, const PaneRect& pane,
         if (icon >= 0) blitArtFrame(fb, fbW, fbH, icon, 0, iconL, iconTop, pc,
                                     pane.l, pane.t, pane.r, pane.b);
     }
-    // (Ícone de veículo — sub_458EF0, com a carga/arma — ainda não portado.)
+    else {
+        const bool eden = g_playerData[r.owner & 0x0F].isEden != 0;   // [+0x44] & 0x1000
+        drawVehicleIcon(fb, fbW, fbH, eden, r.type, static_cast<int16_t>(r.cargo), iconL, iconTop,
+                        iconL + 0x2C, iconTop + 0x2C, pane, localPlayer);   // sub_458EF0
+    }
     // Blindagem + HP à direita do ícone.
     int hp = 0, armorClass = 256;
     if (isBld) {
@@ -278,11 +534,19 @@ void drawUnitInfoPane(uint32_t* fb, int fbW, int fbH, const PaneRect& pane,
     if (!isBld) return;
     // Seções (sub_45A510): retângulo 13..W-14, a partir de topo + título + 0x3C.
     PaneRect sec{pane.l + 13, pane.t + lh + 0x3C, pane.l + W - 14, pane.b - 1};
-    sec.t += 2 * lh;                                   // sub_45A690: melhorias (2 linhas)
+    // Ordem de sub_45A510 (vt 9, 10, 11, 17, 14, 13, 16, 19, 12, 18, +0xA, 15).
+    sec.t += drawUpgradesSection(fb, fbW, fbH, sec, r);          // sub_45A690
     sec.t += drawStatusSection(fb, fbW, fbH, sec, r, localPlayer);
     sec.t += drawProductionSection(fb, fbW, fbH, sec, r);
-    // (seções sub_45B070..sub_45BD50 — pendentes)
-    sec.t += drawLaunchPadSection(fb, fbW, fbH, sec, r);
+    sec.t += drawResourceSection(fb, fbW, fbH, sec, r);          // sub_45BD50
+    sec.t += drawDemandSection(fb, fbW, fbH, sec, r, localPlayer);   // sub_45B540
+    sec.t += drawYieldSection(fb, fbW, fbH, sec, unitId);        // sub_45B350
+    sec.t += drawWeaponSection(fb, fbW, fbH, sec, r, localPlayer);   // sub_45BBD0
+    sec.t += drawObservatorySection(fb, fbW, fbH, sec, r, localPlayer);   // sub_45B440
+    sec.t += drawStorageSection(fb, fbW, fbH, sec, r, localPlayer);  // sub_45B070
+    sec.t += drawLaunchPadSection(fb, fbW, fbH, sec, r);         // sub_45BE70
+    sec.t += 0x0A;
+    drawProgressSection(fb, fbW, fbH, sec, r, localPlayer, pane);   // sub_45B850
 }
 
 bool infoPaneButton(const PaneRect& pane, int unitId, int localPlayer, PaneButton& out) {

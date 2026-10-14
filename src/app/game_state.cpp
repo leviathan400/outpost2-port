@@ -118,6 +118,7 @@ bool GameState::loadMission(const std::string& dllName) {
     // sub_4893A0: planilhas relidas (sub_445070) e árvore da missão (sub_4733B0).
     reloadSheets();
     loadMoraleSheet();
+    loadMinesSheet();                       // MINES.TXT (sub_44AF00, no TApp::Init)
     loadTechTree(m_mission->techtreeName, d->maxTechLevel);
     resetMessages();
     resetUnits();

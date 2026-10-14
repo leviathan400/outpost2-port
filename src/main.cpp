@@ -1684,6 +1684,46 @@ static int runSalvageTest(const std::string& mapName) {
     return 0;
 }
 
+// --panetest <DLL> <prefix>: carrega a missão, roda 300 ticks e grava o quadro
+// com o painel de informações de uma unidade de cada tipo do jogador 0
+// (<prefix>_<tipo>.bmp).
+static int runPaneTest(const std::string& dll, const std::string& prefix) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 panetest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    for (int k = 0; k < 300; ++k) gs.onIdle(renderer, 0.2501f / 4.0f);
+    std::vector<int> done;
+    for (size_t i = 1; i < op2::g_units.size(); ++i) {
+        const op2::UnitRecord& r = op2::g_units[i];
+        if (r.id == -1 || (r.owner & 0x0F) != 0 || !(r.flags & (op2::UNIT_BUILDING | op2::UNIT_VEHICLE))) continue;
+        if (std::find(done.begin(), done.end(), (int)r.type) != done.end()) continue;
+        done.push_back(r.type);
+        {   // Progresso só p/ a captura (sub_45B850): lab pesquisando, universidade treinando, VF produzindo.
+            op2::UnitRecord& w = op2::g_units[i];
+            if (w.type == 0x31 && op2::techAt(5)) { w.action = 0x16; w.labTopic = 5; w.field3C = (op2::techAt(5)->edenCost / 3) << 8; }
+            if (w.type == 0x26) { w.action = 0x17; w.extraWorkers = 3; w.trainTime = 400; w.field3C = 150; }
+            if (w.type == 0x30) { w.action = 9; w.produceType = op2::mapTiger; w.kitWeapon = 0x3F; w.produceTotal = 600; w.field3C = 200; }
+            if (w.type == 0x2F) { w.action = 9; w.produceType = 0x31; w.produceTotal = 600; w.field3C = 450; }
+        }
+        gs.setSelection({(int)i});
+        gs.setCamera(op2::unitOX(r) - 200, op2::unitOY(r) - 200);
+        gs.onIdle(renderer, 0.0f);
+        char fn[256]; std::snprintf(fn, sizeof(fn), "%s_%02X.bmp", prefix.c_str(), r.type);
+        writeBmp32(fn, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        std::printf("[Pane] %s -> %s\n", op2::unitTitle(r).c_str(), fn);
+        if (r.type == 0x15 || r.type == 0x16)
+            std::printf("[Pane]   mina rend=%d var=%d cargas=%d carga=%d\n", r.mineYield, r.mineVariant, r.mineLink,
+                        op2::mineLoadAmount((int)i));
+    }
+    renderer.shutdown(); SDL_Quit();
+    return 0;
+}
+
 // --walltest <map>: parede comum, de lava, de micróbio e um tubo lado a lado;
 // sub_4A23F0 (damageWall) com dano 1000 e depois 20, 6x cada, imprimindo o tile
 // e o tipo da célula — a parede comum passa pelos estágios +0x54/+0x74/+0x94.
@@ -2238,6 +2278,8 @@ int main(int argc, char* argv[]) {
             return runGuardPostTest(argv[i + 1], argv[i + 2], (int)std::strtol(argv[i + 3], nullptr, 16));
         if (std::strcmp(argv[i], "--salvagetest") == 0 && i + 1 < argc)
             return runSalvageTest(argv[i + 1]);
+        if (std::strcmp(argv[i], "--panetest") == 0 && i + 2 < argc)
+            return runPaneTest(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--walltest") == 0 && i + 1 < argc)
             return runWallTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--quaketest") == 0 && i + 1 < argc)

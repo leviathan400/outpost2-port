@@ -38,6 +38,8 @@ int buildingAtTile(int x, int y, int owner);
 
 // Carga da mina (vt[0x100]); incrementa as cargas tiradas.
 int mineTakeLoad(int mineId);
+// vt[0x104]: tamanho da próxima carga (sub_44AE00 / Magma Well sub_44B140), sem tirar.
+int mineLoadAmount(int mineId);
 
 // Smelter: cabe `amount` (sub_47DBC0/sub_47DCB0)? / recebe (sub_47DB40/sub_47DC30).
 bool smelterCanAccept(int smelterId, int amount);

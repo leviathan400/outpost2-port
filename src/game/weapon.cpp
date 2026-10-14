@@ -881,6 +881,12 @@ static void guardPostPeriodic(int id) {
     if (g.field4E != 0x7FFF && !inRange(g)) clearTarget(g);
 }
 
+int weaponTurretIconRaw(int weapon, int chassis, bool eden) {
+    const TurretDesc* td = turretOf(weapon, chassis);
+    if (!td) return 0;
+    return eden ? td->eden[0] : td->ply[0];
+}
+
 bool guardPostSprite(const UnitRecord& r, int& animReal) {   // vt[8] sub_42D250
     if (r.type != 0x17 || !(r.flags & UNIT_BUILDING) || r.action == 0x21 || r.action == 0x22) return false;
     const TurretDesc* td = turretOf(static_cast<int16_t>(r.cargo), r.type);

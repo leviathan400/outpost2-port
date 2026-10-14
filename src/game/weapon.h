@@ -87,6 +87,9 @@ bool tankTurret(const UnitRecord& r, int bodyAnimReal, int bodyFrame,
 // vt[8] do Guard Post (sub_42D250): pronto, o sprite é a torre da arma (vt[7]
 // do descritor) na direção [+0x2D], frame 0. false em obra / outro tipo.
 bool guardPostSprite(const UnitRecord& r, int& animReal);
+// Torre do ícone de veículo (sub_458EF0): direção 0 da tabela da arma p/ o
+// chassi, na facção pedida (anim crua; 0 se não há).
+int weaponTurretIconRaw(int weapon, int chassis, bool eden);
 // sub_484A90: frame do chassi do tanque (em movimento: (id + tick/2) % nF).
 bool isTankChassis(int type);
 
