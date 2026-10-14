@@ -251,6 +251,7 @@ struct UnitRecord {
     int      produceTotal = 0;
     int16_t  produceGroup = -1;
     uint8_t  bayCargo[6] = {};
+    int      garageSlot[6] = {};    // +0x60.. GARAGEM: veículos guardados (ids; 0 = baia vazia)
     int      padCargo = 0;
     int16_t  padPayload = 0;        // +0x72 Spaceport: carga do SULV (satélite/módulo)
     int16_t  padReserved = 0;       // +0x74 Spaceport: reservado p/ um RLV voltando (sub_47FB90)

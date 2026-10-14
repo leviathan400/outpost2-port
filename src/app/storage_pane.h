@@ -26,7 +26,7 @@ public:
     bool isOpen() const { return m_open; }
     int  building() const { return m_bld; }
     static bool supports(int type) {
-        return type == 0x2F || type == 0x37 || type == 0x19 || type == 0x1A || type == 0x27 ||
+        return type == 0x2F || type == 0x37 || type == 0x29 || type == 0x19 || type == 0x1A || type == 0x27 ||
                type == 0x36 || type == 0x38;
     }
     // [+0x6C0] = 0: recursos (armazéns, smelters, Agridome) com LOAD/UNLOAD.

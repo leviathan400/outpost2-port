@@ -17,6 +17,7 @@
 #include "../game/research.h"
 #include "../game/vehicle_anim.h"
 #include "../game/weapon.h"
+#include "../game/garage.h"
 
 namespace op2 {
 
@@ -146,6 +147,8 @@ static const char* armorName(int v, bool isBuilding) {
     return "Adamantium Armor";
 }
 
+static int unitIdOf(const UnitRecord& r) { return static_cast<int>(&r - g_units.data()); }
+
 // Texto de melhoria (+0x34) da tecnologia de índice `idx` (0 = nenhuma).
 static std::string improveText(int idx) {
     if (idx <= 0) return "";
@@ -251,7 +254,7 @@ static int drawStorageSection(uint32_t* fb, int fbW, int fbH, const PaneRect& rc
         case 0x19: case 0x36: cap = c.oreCapacity; n = pd.ore; break;
         case 0x1A: case 0x38: cap = c.rareCapacity; n = pd.rareOre; break;
         case 0x27: n = pd.foodStored; break;
-        case 0x29: unit = "Vehicles"; n = 0; break;              // vt[63] da garagem (não portada)
+        case 0x29: unit = "Vehicles"; n = garageCount(unitIdOf(r)); break;   // vt[0xFC]
         case 0x2F: {                                             // kits nas baias
             unit = "Kits";
             const StructSheetDesc* d = structSheet(r.type);

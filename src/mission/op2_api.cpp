@@ -17,6 +17,7 @@
 
 #include "mission.h"
 #include "../game/salvage.h"
+#include "../game/garage.h"
 #include "../audio/music.h"
 #include "../game/colony.h"
 #include "../game/game_map.h"
@@ -387,10 +388,13 @@ int __fastcall E_InRectGetNext(void* self, void*, int* unit) {
     return 1;
 }
 
-// ?PutInGarage(baia, x, y): vt[65] da garagem em (x,y) — garagem ainda não portada.
+// ?PutInGarage(baia, x, y): vt[0x104](baia) do ocupante da célula (x, y) — a
+// garagem guarda o veículo que estiver na doca; a unidade fica no sub-estado 0.
 void __fastcall U_PutInGarage(int* u, void*, int bay, int x, int y) {
-    std::cerr << "[Mission] PutInGarage(unidade " << *u << ", baia " << bay << ", " << x << "," << y
-              << "): garagem nao portada" << std::endl;
+    const int gx = portX(x) & (g_gameMap.width() - 1);
+    const int g = g_gameMap.ok() ? g_gameMap.cellOccupant(gx, y) : 0;
+    if (g > 0 && g < static_cast<int>(g_units.size()) && g_units[g].type == 0x29) garageBay(g, bay);
+    if (*u > 0 && *u < static_cast<int>(g_units.size())) g_units[*u].field22 = 0;
 }
 
 // ---- Grupos de mineração e de construção ------------------------------------------------

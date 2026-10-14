@@ -1,5 +1,6 @@
 #include "docking.h"
 #include "salvage.h"
+#include "garage.h"
 #include "../audio/sound.h"
 
 #include "building_sheet.h"
@@ -57,6 +58,7 @@ int dockedVehicle(int buildingId) {                       // sub_483010
 bool bayTransferAvailable(int buildingId, int bay) {      // sub_456BC0 (fábricas)
     if (!valid(buildingId)) return false;
     const UnitRecord& b = g_units[buildingId];
+    if (b.type == 0x29) return garageBayAvailable(buildingId, bay);   // ramo da garagem
     const int v = dockedVehicle(buildingId);
     if (!v) return false;
     const UnitRecord& u = g_units[v];
@@ -81,7 +83,7 @@ bool processBayTransfer(int owner, int buildingId, int bay) {   // sub_40E210 ca
     if (ownerOf(b) != (owner & 0x0F)) return false;
     // (Humano: anel anti-duplicata [jogador+0xBD8] — rede, não portado.)
     if (b.flags & UNIT_DEAD) return false;
-    // (Garage: vt[0x104](baia) solta o veículo — não portado.)
+    if (b.type == 0x29) { garageBay(buildingId, bay); return true; }   // vt[0x104] sub_41C5F0
     const int v = dockedVehicle(buildingId);
     if (!v || !commandable(g_units[v]) || (g_units[v].flags & 0x40000u)) {
         if (b.type != 0x37) return false;

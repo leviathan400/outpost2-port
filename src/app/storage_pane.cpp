@@ -68,8 +68,16 @@ PaneRect StoragePane::bayRect(int winL, int winT, int i) const {   // sub_463170
     return PaneRect{x, y, x + 0x2C, y + 0x2C};
 }
 
-// Nome do item da baia (sub_4637B0): +0x1F8 do tipo; Guard Post → a arma.
+// Nome do item da baia (sub_4637B0): +0x1F8 do tipo; Guard Post → a arma;
+// garagem: título do veículo sem os 7 últimos caracteres (" # 1-01").
 static std::string bayName(const UnitRecord& b, int i) {
+    if (b.type == 0x29) {
+        const int v = b.garageSlot[i];
+        if (!v) return "Empty Bay";
+        std::string t = unitTitle(g_units[v]);
+        if (t.size() > 7) t.resize(t.size() - 7);
+        return t;
+    }
     const int t = static_cast<int8_t>(b.bayType[i]);
     if (!t) return "Empty Bay";
     if (t == 0x17) return unitDisplayName(static_cast<int8_t>(b.bayCargo[i]));
@@ -79,6 +87,7 @@ static std::string bayName(const UnitRecord& b, int i) {
 // Ícone da baia (sub_463170): kit de prédio = estado 4 da tabela (desc+0x260
 // Eden / +0x288 Plymouth); módulo espacial 0x707; outros 0x4B4; vazia 0x706.
 static int bayIcon(const UnitRecord& b, int i) {
+    if (b.type == 0x29) return (b.garageSlot[i] ? 0x4B7 : 0x706) - 0x65;   // garagem
     const int t = static_cast<int8_t>(b.bayType[i]);
     if (!t) return 0x706 - 0x65;
     if (t >= 0x15 && t <= 0x3A) return structureAnimIndex(t, 4, edenBuilt(b));
@@ -126,6 +135,21 @@ void StoragePane::draw(uint32_t* fb, int fbW, int fbH, int winL, int winT, const
         std::string name = bayName(b, i);
         while (!name.empty() && UiFont::width(name) > 0x55) name.pop_back();
         UiFont::drawCentered(fb, fbW, fbH, name, lx + 0x57 / 2, ly, 0xFF00FF00u, false);
+        if (b.type == 0x29 && b.garageSlot[i]) {
+            // Barra de HP vertical (sub_45C3C0) ao lado da baia: x 0x36/0x90, base y 0x66+0x3A*k.
+            const UnitRecord& v = g_units[b.garageSlot[i]];
+            const VehPlayerStats* vs = vehicleSheet(v.type, (v.owner >> 4) & 0x0F);
+            const int hp = vs ? vs->hitPoints : 0;
+            uint16_t col = 0x3E0;
+            if ((hp * 3 >> 2) <= v.damage) col = 0x7C00;
+            else if (hp * 6 / 10 <= v.damage) col = 0x7FE0;
+            const int bx2 = winL + (i < 3 ? 0x36 : 0x90), byb = winT + 0x66 + 0x3A * (i % 3), byt = byb - 0x2D;
+            const int fill = hp > 0 ? (hp - v.damage) * (byb - byt) / hp : 0;
+            for (int y = byt; y < byb; ++y)
+                for (int x = bx2; x < bx2 + 5; ++x)
+                    if (x >= 0 && x < fbW && y >= 0 && y < fbH)
+                        fb[y * fbW + x] = rgb555(y >= byb - fill ? col : 0x3DEF);
+        }
         const std::string alt = "Alt+" + std::to_string(i + 1);
         UiFont::drawCentered(fb, fbW, fbH, alt, lx + (0x39 + 0x57) / 2, ly - 0x1E + 8, 0xFF00FF00u, false);
     }

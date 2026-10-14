@@ -13,6 +13,7 @@
 #include "res/res_manager.h"
 #include "game/game_map.h"
 #include "game/walls.h"
+#include "game/garage.h"
 #include "audio/music.h"
 #include "game/salvage.h"
 #include "game/terrain_renderer.h"
@@ -1751,6 +1752,91 @@ static int runMusicTest(const std::string& clm) {
     return 0;
 }
 
+// --garagetest <map>: CC + Tokamak + Garage; um Laser Lynx danificado na doca é
+// guardado (baia 0), consertado (ação 0x1B, custo em minério) e solto de novo.
+static int runGarageTest(const std::string& mapName) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 garagetest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    op2::resetUnits();
+    const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
+    for (int y = 0; y < H; ++y)
+        for (int x = 0; x < W; ++x) op2::g_gameMap.clearUnitOccupancy(x, y);
+    int bx = -1, by = -1;
+    for (int y = 4; y < H - 10 && bx < 0; ++y)
+        for (int x = 4; x < W - 12 && bx < 0; ++x) {
+            bool ok = true;
+            for (int dy = -1; dy <= 8 && ok; ++dy)
+                for (int dx = -2; dx <= 10 && ok; ++dx)
+                    if (!op2::g_gameMap.isPassable(op2::LOCATION{x + dx, y + dy})) ok = false;
+            if (ok) { bx = x; by = y; }
+        }
+    if (bx < 0) return 3;
+    op2::g_playerData[0].workers = 40; op2::g_playerData[0].scientists = 10;
+    op2::g_playerData[0].ore = 3000; op2::g_playerData[0].rareOre = 1000;
+    (void)bx; (void)by;
+    op2::Unit cc, tok, lynx;
+    op2::TethysGame::CreateUnit(cc, op2::mapCommandCenter, op2::LOCATION{12, 12}, 0);   // (arranjo do [Rep])
+    op2::TethysGame::CreateUnit(tok, op2::mapTokamak, op2::LOCATION{15, 12}, 0);
+    op2::Unit gar(op2::placeBuilding(0x29, 12, 14, 0));                // garagem encostada
+    op2::Unit st1(op2::placeBuilding(0x36, 17, 14, 0));                // smelter comum (capacidade)
+    op2::Unit st2(op2::placeBuilding(0x38, 21, 14, 0));                // smelter raro
+    op2::colonyMarkDirty(0);
+    auto tick = [&](int n) {
+        for (int k = 0; k < n; ++k) {
+            op2::TethysGame::advanceTick();
+            op2::tickColony();
+            op2::tickMovement();
+            op2::tickUnits();
+        }
+    };
+    tick(20);
+    op2::g_playerData[0].ore = 3000; op2::g_playerData[0].rareOre = 1000;
+    std::printf("[Garage] armazens operando=%d/%d capacidade %d/%d\n", op2::structureOperational(op2::g_units[st1.id()]),
+                op2::structureOperational(op2::g_units[st2.id()]), op2::g_colony[0].oreCapacity, op2::g_colony[0].rareCapacity);
+    const int g = gar.id();
+    for (int id : {cc.id(), tok.id(), g, st1.id()}) {
+        const op2::UnitRecord& b = op2::g_units[id];
+        int fw, fh; op2::buildingFootprint(b.type, fw, fh);
+        std::printf("[Garage]   pos px (%d,%d) tile (%d,%d) tamanho %dx%d\n", op2::unitOX(b), op2::unitOY(b), b.pixelX >> 5, b.pixelY >> 5, fw, fh);
+        std::printf("[Garage]   %s energia=%d trab=%d rede=%d acao=0x%X dano=%d operando=%d\n", op2::unitTitle(b).c_str(),
+                    (b.flags & op2::UNIT_POWERED) != 0, (b.flags & op2::UNIT_WORKERS) != 0, b.netConnected, b.action, b.damage,
+                    op2::structureOperational(b));
+    }
+    int dx, dy;
+    if (!op2::dockCell(g, dx, dy)) { std::printf("[Garage] sem doca\n"); return 4; }
+    op2::TethysGame::CreateUnit(lynx, op2::mapLynx, op2::LOCATION{dx, dy}, 0, 0x3D);
+    op2::g_units[lynx.id()].damage = 200;
+    const int v = lynx.id();
+    std::printf("[Garage] garagem %d operando=%d baias=%d doca (%d,%d) veiculo na doca=%d\n", g,
+                op2::structureOperational(op2::g_units[g]), op2::garageBays(op2::g_units[g]), dx, dy, op2::dockedVehicle(g));
+    std::printf("[Garage] baia 0 disponivel=%d\n", op2::garageBayAvailable(g, 0));
+    const int ore0 = op2::g_playerData[0].ore, rare0 = op2::g_playerData[0].rareOre;
+    op2::processBayTransfer(0, g, 0);
+    std::printf("[Garage] guardou: baia0=%d sub=0x%X morto=%d acao garagem=0x%X\n", op2::garageVehicle(g, 0),
+                op2::g_units[v].field22, (op2::g_units[v].flags & op2::UNIT_DEAD) != 0, op2::g_units[g].action);
+    for (int k = 0; k < 8; ++k) {
+        tick(50);
+        std::printf("[Garage] t+%d: dano=%d sub=0x%X minerio %d->%d raro %d->%d acao=0x%X msg=%s\n", (k + 1) * 50,
+                    op2::g_units[v].damage, op2::g_units[v].field22, ore0, op2::g_playerData[0].ore, rare0,
+                    op2::g_playerData[0].rareOre, op2::g_units[g].action, op2::statusBarText().c_str());
+    }
+    std::printf("[Garage] soltar: disponivel=%d\n", op2::garageBayAvailable(g, 0));
+    op2::processBayTransfer(0, g, 0);
+    tick(70);
+    const op2::UnitRecord& r = op2::g_units[v];
+    std::printf("[Garage] solto: baia0=%d sub=0x%X morto=%d em (%d,%d) ocupante=%d contagem=%d\n", op2::garageVehicle(g, 0),
+                r.field22, (r.flags & op2::UNIT_DEAD) != 0, r.pixelX >> 5, r.pixelY >> 5,
+                op2::g_gameMap.cellOccupant(r.pixelX >> 5, r.pixelY >> 5), op2::garageCount(g));
+    renderer.shutdown(); SDL_Quit();
+    return 0;
+}
+
 // --walltest <map>: parede comum, de lava, de micróbio e um tubo lado a lado;
 // sub_4A23F0 (damageWall) com dano 1000 e depois 20, 6x cada, imprimindo o tile
 // e o tipo da célula — a parede comum passa pelos estágios +0x54/+0x74/+0x94.
@@ -2309,6 +2395,8 @@ int main(int argc, char* argv[]) {
             return runPaneTest(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--musictest") == 0 && i + 1 < argc)
             return runMusicTest(argv[i + 1]);
+        if (std::strcmp(argv[i], "--garagetest") == 0 && i + 1 < argc)
+            return runGarageTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--walltest") == 0 && i + 1 < argc)
             return runWallTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--quaketest") == 0 && i + 1 < argc)
