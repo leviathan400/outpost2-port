@@ -109,6 +109,9 @@ bool GameState::loadMission(const std::string& dllName) {
     if (!loadMap(mission->mapName)) return false;
     m_mission = std::move(mission);
     setCurrentMission(m_mission.get());
+    m_comms.close();
+    m_tab = 5;                                               // sub_4893A0: unk_565AC8 no início
+    m_lastSel.clear();
 
     TethysGame::reset(/*seed*/ 0x12345678u, d->numPlayers, /*localPlayer*/ 0);
     m_tickAccum = 0.0f;
@@ -1007,7 +1010,16 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
             paneHit = m_vehicles.click(infoPaneRect(), nx, ny);
         if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_storage.isOpen())
             paneHit = m_storage.click(kColX, kPaneWinY, nx, ny);
-        if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_selected.empty() && m_mission)
+        if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit) {
+            syncTabToSelection();
+            for (int k = 0; k < 6 && !paneHit; ++k) {
+                PaneRect r;
+                if (tabRect(k, r) && nx >= r.l && nx < r.r && ny >= r.t && ny < r.b) { openTab(k); paneHit = true; }
+            }
+        }
+        if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_tab == 3 && m_comms.isOpen())
+            paneHit = m_comms.click(infoPaneRect(), nx, ny);
+        if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_tab == 5 && m_mission)
             paneHit = m_objectives.click(infoPaneRect(), nx, ny);
         // Botão de comando do quadro (IDLE / ACTIVATE → CommandPacket 0x12 / 0x13).
         if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit) {
@@ -1159,7 +1171,17 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
         layoutButtons();
         return out;
     }
-    if (m_selected.empty() && m_mission) {
+    if (m_selected.empty() && m_tab == 3) {
+        // sub_4670A0 (modo 0, jogo solo): só "&JUMP", largo; habilitado quando a
+        // mensagem escolhida tem posição (sub_466970).
+        TextButton b{};
+        b.cmd = kCmdMsgJump; b.label = "&JUMP"; b.tip = "&Jump to the message's location"; b.hotkey = 'J';
+        b.disabled = !m_comms.jumpEnabled();
+        out.push_back(b);
+        layoutButtons();
+        return out;
+    }
+    if (m_selected.empty() && m_tab == 5 && m_mission) {
         // Aba de objetivos (sub_465830, modo 1): "&GAME OPTIONS" largo.
         TextButton b{};
         b.cmd = kCmdGameOptions; b.label = "&GAME OPTIONS"; b.tip = "Show &Game Options"; b.hotkey = 'G';
@@ -1280,9 +1302,58 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
 void GameState::debugVehicleList(int row, bool jump) {
     if (!m_vehicles.isOpen()) clickCommand(kCmdVehicles);
     const PaneRect pane = infoPaneRect();
-    const ListBoxLayout L = listBoxLayout(pane, 0x0A, 0, 0, 0x12);
+    const ListBoxLayout L = listBoxLayout(pane, 0, 0x0A, 0, 0x12);
     if (row >= 0) m_vehicles.click(pane, L.list.l + 5, L.list.t + 2 + row * L.lineH + 2);
     if (jump) clickCommand(kCmdJump);
+}
+
+// sub_45CB60/sub_45CBA0: trocar a seleção (por outro que não o próprio quadro)
+// marca [+0x484]; no quadro seguinte sub_45CC30 põe o painel da unidade — ou
+// nenhum, sem seleção.
+void GameState::syncTabToSelection() {
+    if (m_selected == m_lastSel) return;
+    m_lastSel = m_selected;
+    m_tab = -1;
+    m_comms.close();
+}
+
+// Retângulo da aba k (sub_45C940): encostadas a partir de x = 1 no topo da
+// janela do quadro, cada uma da largura da sua arte (sub_404D30).
+bool GameState::tabRect(int k, PaneRect& r) const {
+    static const int kTabArt[6] = {0x8E, 0x91, 0x90, 0x8F, 0x92, 0x8D};   // dword_4D5390
+    if (!g_art.ok() || k < 0 || k > 5) return false;
+    int x = 1;
+    for (int i = 0; i <= k; ++i) {
+        const int anim = kTabArt[i] - 0x65;
+        if (anim >= g_art.numAnimations()) return false;
+        const ArtAnimation& an = g_art.animation(anim);
+        const int w = static_cast<int>(an.header[3]) - static_cast<int>(an.header[1]);
+        const int h = static_cast<int>(an.header[4]) - static_cast<int>(an.header[2]);
+        if (i == k) { r = PaneRect{kColX + x, kPaneWinY, kColX + x + w, kPaneWinY + h}; return true; }
+        x += w;
+    }
+    return false;
+}
+
+// sub_45C620: clicar na aba limpa a seleção (sub_41A8E0, com o quadro como
+// origem: sem [+0x484]), volta o painel ao modo 0 (vt[5]) e o põe no quadro
+// (sub_45D020, aba acesa). PROVISÓRIO: só as abas já portadas respondem.
+void GameState::openTab(int k) {
+    if (k != 3 && !(k == 5 && m_mission)) return;
+    m_targetCmd = -1;
+    m_selected.clear();
+    m_lastSel.clear();
+    closePanes();
+    m_comms.close();
+    m_tab = k;
+    if (k == 3) m_comms.open();
+    soundPlay(0x57);
+}
+
+void GameState::debugTab(int k, int row) {
+    PaneRect r;
+    if (tabRect(k, r)) openTab(k);
+    if (k == 3 && row >= 0) m_comms.select(row);
 }
 
 PaneRect GameState::infoPaneRect() const {
@@ -1331,6 +1402,11 @@ void GameState::clickCommand(int cmd) {                  // vt[1] do comando
     if (cmd == kCmdUnload) { m_storage.unload(); return; }   // pacote 0x0C
     if (cmd == kCmdStatus || cmd == kCmdCancel) { closePanes(); return; }
     if (cmd == kCmdVehicles) { closePanes(); m_vehicles.open(); return; }   // dword_567D80
+    if (cmd == kCmdMsgJump) {                               // sub_466A00 → sub_438EC0 → sub_408120
+        int px, py;
+        if (m_comms.jump(px, py)) requestCenterView(px, py);
+        return;
+    }
     if (cmd == kCmdJump) {                                  // sub_46B3D0
         int px, py;
         const int v = m_vehicles.jump(px, py);
@@ -1555,6 +1631,7 @@ void GameState::renderPanel(Renderer& renderer) {
     // O conteúdo começa abaixo delas (sub_45CB00). Fundo (sub_45CCF0): preto +
     // emblema da facção centrado (anim crua 0x99 Eden / 0x540 Plymouth).
     const PaneRect pane = infoPaneRect();
+    syncTabToSelection();
     {
         const int winT = kPaneWinY;                         // topo da janela = topo das abas
         const int winL = pane.l, winW = pane.r - pane.l, winH = pane.b - winT;
@@ -1573,7 +1650,7 @@ void GameState::renderPanel(Renderer& renderer) {
             }
             static const int kTabArt[6] = {0x8E, 0x91, 0x90, 0x8F, 0x92, 0x8D};   // dword_4D5390
             // Aba atual (sub_40A790 com 0x40): só a de objetivos é portada.
-            const int current = (m_selected.empty() && m_mission) ? 5 : -1;
+            const int current = m_tab;
             int x = 1;
             for (int k = 0; k < 6; ++k) {
                 const int anim = kTabArt[k] - 0x65;
@@ -1594,7 +1671,10 @@ void GameState::renderPanel(Renderer& renderer) {
     m_students.update(m_selected);
     m_confirm.update(m_selected);
     m_vehicles.update();
-    if (m_vehicles.isOpen())
+    m_comms.update();
+    if (m_tab == 3 && m_comms.isOpen())
+        m_comms.draw(fb, VW, VH, kColX, kPaneWinY, pane, m_mouseNX, m_mouseNY);
+    else if (m_vehicles.isOpen())
         m_vehicles.draw(fb, VW, VH, pane, m_mouseNX, m_mouseNY);
     else if (m_confirm.isOpen())
         m_confirm.draw(fb, VW, VH, pane);
@@ -1612,7 +1692,7 @@ void GameState::renderPanel(Renderer& renderer) {
     }
     else if (!m_selected.empty())
         drawUnitInfoPane(fb, VW, VH, pane, m_selected[0], static_cast<int>(m_selected.size()), me);
-    else if (m_mission)
+    else if (m_tab == 5 && m_mission)
         m_objectives.draw(fb, VW, VH, pane, m_mouseNX, m_mouseNY);
     // Botoeira do veículo (sub_46D540): ícones verdes do op2_art (anim crua − 0x65).
     {

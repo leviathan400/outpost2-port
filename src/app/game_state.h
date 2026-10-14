@@ -10,6 +10,7 @@
 #include "location.h"
 #include "produce_pane.h"
 #include "vehicle_list_pane.h"
+#include "comms_pane.h"
 #include "objectives_pane.h"
 #include "storage_pane.h"
 #include "research_pane.h"
@@ -44,6 +45,8 @@ public:
     void setSelection(const std::vector<int>& ids) { m_selected = ids; }
     // Testes: abre a lista de veículos, clica na linha `row` e (opcional) JUMP.
     void debugVehicleList(int row, bool jump);
+    // Testes: clica na aba k (0..5) do quadro; na de mensagens escolhe `row`.
+    void debugTab(int k, int row = -1);
     void pressCommand(int cmd) { clickCommand(cmd); }      // testes: botão do painel
     ResearchPane& researchPaneForTest() { return m_research; }
     void setMouse(int nx, int ny) { m_mouseNX = nx; m_mouseNY = ny; }
@@ -119,7 +122,15 @@ private:
     // Painel de produção (BUILD da fábrica) e seus botões (sub_4682C0).
     ProducePane m_produce;
     VehicleListPane m_vehicles;    // lista de veículos (Alt+V / &VEHICLES do Robot Command Center)
-    ObjectivesPane m_objectives;   // aba de objetivos (sem seleção)
+    ObjectivesPane m_objectives;   // aba 5 (unk_565AC8: Game Options / objetivos)
+    CommsPane m_comms;             // aba 3 (dword_566510: Communications)
+    // Painel de aba aberto no quadro (índice em dword_4D5390) ou −1 = o status da
+    // seleção (sub_45CC30: unidade escolhida, ou nada).
+    int m_tab = -1;
+    std::vector<int> m_lastSel;    // p/ notar troca de seleção (sub_45CB60 → [+0x484])
+    void syncTabToSelection();
+    bool tabRect(int k, PaneRect& r) const;
+    void openTab(int k);           // sub_45C620
     StoragePane m_storage;         // STORAGE (baias)
     ResearchPane m_research;       // ASSIGN (pesquisa do laboratório)
     StudentsPane m_students;       // ASSIGN (alunos da University)
@@ -136,6 +147,7 @@ private:
     }
     static constexpr int kCmdGameOptions = -4;
     static constexpr int kCmdVehicles = -15, kCmdJump = -16;   // &VEHICLES (RCC) / &JUMP da lista
+    static constexpr int kCmdMsgJump = -17;                    // &JUMP das mensagens (sub_466A00)
     static constexpr int kCmdBuildIt = -2, kCmdStatus = -3;
     PaneRect infoPaneRect() const;
     void produceBuildIt();

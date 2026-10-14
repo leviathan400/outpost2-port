@@ -13,6 +13,7 @@ namespace op2 {
 
 static GameMessage s_ring[64];
 static int s_start = 0, s_count = 0;            // [obj+0] início, [obj+4] quantidade
+static int s_serial = 0;
 static std::string s_status;
 
 // Estado do filtro sub_439490 (campos +0x130C..+0x13FC do objeto de log).
@@ -24,6 +25,7 @@ static uint32_t s_lastCommonT = 0, s_lastRareT = 0, s_lastDisabledT = 0;
 
 void resetMessages() {
     s_start = s_count = 0;
+    s_serial = 0;
     s_status.clear();
     for (auto& r : s_recent) r = Recent{};
     s_lastPowerId = s_lastMoraleId = s_lastFoodId = 0;
@@ -93,14 +95,16 @@ void postMessage(int x, int y, const char* text, int soundId) {
     GameMessage& m = s_ring[slot];
     m.x = x; m.y = y; m.soundId = soundId ? soundId : 0x5B;
     char buf[0x40];
-    std::snprintf(buf, sizeof(buf), "%d: %s", TethysGame::tick() / 100, text);
+    std::snprintf(buf, sizeof(buf), "<N>%d: %s", TethysGame::tick() / 100, text);
     m.text = buf;
+    ++s_serial;
     // Barra de status: até 80 caracteres em maiúsculas.
     s_status.assign(text ? text : "", 0, 0x50);
     for (char& c : s_status) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
 }
 
 int messageCount() { return s_count; }
+int messageSerial() { return s_serial; }
 const GameMessage& messageAt(int i) { return s_ring[(s_start + i) & 0x3F]; }
 const std::string& statusBarText() { return s_status; }
 

@@ -44,6 +44,7 @@ int drawMarkupText(uint32_t* fb, int fbW, int fbH, const PaneRect& rc,
     int y = rc.t;
     size_t pos = 0;
     uint32_t color = defaultColor;
+    bool literal = false;
     while (pos <= text.size()) {
         size_t nl = text.find('\n', pos);
         std::string line = text.substr(pos, nl == std::string::npos ? std::string::npos : nl - pos);
@@ -52,13 +53,14 @@ int drawMarkupText(uint32_t* fb, int fbW, int fbH, const PaneRect& rc,
         std::string cur;
         auto flush = [&]() { if (!cur.empty()) { segs.push_back({cur, color, align}); cur.clear(); } };
         for (size_t i = 0; i < line.size(); ++i) {
-            if (line[i] == '<') {
+            if (line[i] == '<' && !literal) {
                 size_t e = line.find('>', i);
                 if (e != std::string::npos && e > i + 1) {
                     const char t = line[i + 1];
                     if (t == 'C' && e == i + 3 && line[i + 2] >= '0' && line[i + 2] <= '5') {
                         flush(); color = kMarkupColor[line[i + 2] - '0']; i = e; continue;
                     }
+                    if (e == i + 2 && t == 'N') { literal = true; i = e; continue; }   // <N>: resto sem tags
                     if (e == i + 2 && (t == 'L' || t == 'R' || t == 'X')) {
                         flush(); align = (t == 'L') ? 0 : (t == 'X') ? 1 : 2; i = e; continue;
                     }

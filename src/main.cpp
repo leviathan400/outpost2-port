@@ -1739,6 +1739,21 @@ static int runPaneTest(const std::string& dll, const std::string& prefix) {
             std::printf("[Pane]   mina rend=%d var=%d cargas=%d carga=%d\n", r.mineYield, r.mineVariant, r.mineLink,
                         op2::mineLoadAmount((int)i));
     }
+    {   // Aba Communications (dword_566510): mensagens com e sem posição, a mais nova escolhida.
+        gs.setSelection({});
+        op2::postMessage(-1, -1, "Mensagem sem posicao no log de teste", 0);
+        op2::postMessage(-2, -1, "Mensagem de chat (x = -2)", 0);
+        op2::postMessage(64 * 32, 40 * 32, "Mensagem com posicao: uma linha bem comprida para testar a quebra", 0);
+        gs.debugTab(3, 0);
+        gs.onIdle(renderer, 0.0f);
+        char f2[256]; std::snprintf(f2, sizeof(f2), "%s_comms.bmp", prefix.c_str());
+        writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        std::printf("[Pane] Communications -> %s\n", f2);
+        gs.debugTab(5);
+        gs.onIdle(renderer, 0.0f);
+        std::snprintf(f2, sizeof(f2), "%s_options.bmp", prefix.c_str());
+        writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+    }
     renderer.shutdown(); SDL_Quit();
     return 0;
 }

@@ -48,7 +48,7 @@ void VehicleListPane::update() {                            // sub_46B120
 }
 
 ListBoxLayout VehicleListPane::layout(const PaneRect& pane) const {
-    return listBoxLayout(pane, 0x0A, 0, 0, 0x12);           // sub_459940(1, 0, 0xA, 0, 0, 0x12)
+    return listBoxLayout(pane, 0, 0x0A, 0, 0x12);           // sub_459940(.., 1, 0, 0xA, 0, 0x12)
 }
 
 void VehicleListPane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, int mx, int my) const {
