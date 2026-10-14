@@ -13,6 +13,7 @@
 #include "res/res_manager.h"
 #include "game/game_map.h"
 #include "game/walls.h"
+#include "audio/music.h"
 #include "game/salvage.h"
 #include "game/terrain_renderer.h"
 #include "game/game_rng.h"
@@ -1724,6 +1725,27 @@ static int runPaneTest(const std::string& dll, const std::string& prefix) {
     return 0;
 }
 
+// --musictest <clm>: abre o CLM dado, inicia a partida (lista padrão), troca a
+// lista como uma missão (SetMusicPlayList) e imprime a sequência de blocos de
+// 0x8000 bytes (valor da 1ª amostra de cada bloco).
+static int runMusicTest(const std::string& clm) {
+    op2::musicSetClmPath(clm.c_str());
+    op2::musicStartGame(-1, false);
+    std::printf("[Music] tocando=%d (lista padrao)\n", op2::musicPlaying());
+    const int ids[4] = {0, 3, 4, 2};                          // EDEN11, EDEN31, EDEN32, EDEN22
+    op2::musicSetPlayList(4, 2, ids);
+    std::vector<int16_t> buf(0x4000);
+    std::printf("[Music] blocos:");
+    for (int b = 0; b < 24; ++b) {
+        const int n = op2::musicDebugPull(buf.data(), 0x4000);
+        std::printf(" %d", n ? buf[0] / 100 : -1);
+    }
+    std::printf("\n");
+    op2::musicEndGame();
+    std::printf("[Music] depois do fim: tocando=%d\n", op2::musicPlaying());
+    return 0;
+}
+
 // --walltest <map>: parede comum, de lava, de micróbio e um tubo lado a lado;
 // sub_4A23F0 (damageWall) com dano 1000 e depois 20, 6x cada, imprimindo o tile
 // e o tipo da célula — a parede comum passa pelos estágios +0x54/+0x74/+0x94.
@@ -2280,6 +2302,8 @@ int main(int argc, char* argv[]) {
             return runSalvageTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--panetest") == 0 && i + 2 < argc)
             return runPaneTest(argv[i + 1], argv[i + 2]);
+        if (std::strcmp(argv[i], "--musictest") == 0 && i + 1 < argc)
+            return runMusicTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--walltest") == 0 && i + 1 < argc)
             return runWallTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--quaketest") == 0 && i + 1 < argc)

@@ -17,6 +17,7 @@
 
 #include "mission.h"
 #include "../game/salvage.h"
+#include "../audio/music.h"
 #include "../game/colony.h"
 #include "../game/game_map.h"
 #include "../game/messages.h"
@@ -261,7 +262,7 @@ void __fastcall T_AddMessageUnit(char* msg, int toPlayer, int unit, int sound) {
     postMessage(unitOX(g_units[unit]), unitOY(g_units[unit]), msg, sound);
 }
 // ?SetMusicPlayList (sub_451090): a música vem de op2.clm (ausente) — não portada.
-void __fastcall T_SetMusicPlayList(int, int, int*) {}
+void __fastcall T_SetMusicPlayList(int n, int repeat, int* ids) { if (ids) musicSetPlayList(n, repeat, ids); }   // sub_451090
 
 // ---- GameMap ------------------------------------------------------------------------
 // ?InitialSetTile (sub_4353A0): só o tileIndex (bits 5..15).

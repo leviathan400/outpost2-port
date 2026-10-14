@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "../core/config.h"
+#include "music.h"
 #include "../game/game_map.h"
 #include "../res/res_manager.h"
 
@@ -89,6 +90,7 @@ void mix(void*, Uint8* stream, int len) {
         }
         if (c.pos >= n) c.s = nullptr;
     }
+    musicMix(acc.data(), frames, s_spec.freq);              // dword_564750 (buffer próprio no original)
     for (int i = 0; i < frames * 2; ++i) {
         float v = acc[i];
         if (v > 32767.f) v = 32767.f;
@@ -188,6 +190,11 @@ bool soundInit() {                                        // sub_47E020
     s_enabled = ok > 0;
     SDL_PauseAudioDevice(s_dev, 0);
     return s_enabled;
+}
+
+void soundLockAudio(bool lock) {
+    if (!s_dev) return;
+    if (lock) SDL_LockAudioDevice(s_dev); else SDL_UnlockAudioDevice(s_dev);
 }
 
 void soundShutdown() {

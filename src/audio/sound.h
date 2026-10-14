@@ -22,6 +22,9 @@ void soundPlayAt(int pixelX, int pixelY, int id);   // sub_47EE00
 void soundVoice(int id, int pixelX, int pixelY);    // sub_47F060
 void soundUpdate();                        // fila de vozes (sub_47F250)
 
+// Trava/destrava o callback do mixer (a música altera o estado dele).
+void soundLockAudio(bool lock);
+
 // Som de seleção do tipo (campo +0x1F0 do descritor off_4E1340[map_id]).
 int unitSelectSound(int mapId);
 

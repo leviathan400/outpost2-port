@@ -29,6 +29,7 @@
 #include "../game/structure_anim.h"
 #include "../game/missile.h"
 #include "../game/salvage.h"
+#include "../audio/music.h"
 #include "../game/structure.h"
 #include "../game/building_sheet.h"
 #include "../game/colony.h"
@@ -120,6 +121,8 @@ bool GameState::loadMission(const std::string& dllName) {
     loadMoraleSheet();
     loadMinesSheet();                       // MINES.TXT (sub_44AF00, no TApp::Init)
     loadTechTree(m_mission->techtreeName, d->maxTechLevel);
+    musicEndGame();                         // sub_489FB0 → sub_4506C0 (partida anterior)
+    musicStartGame(d->missionType, false);  // sub_4507B0 (antes do InitProc)
     resetMessages();
     resetUnits();
     lavaReset();                                 // sub_4322A0 (início da partida)
