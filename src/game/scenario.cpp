@@ -9,6 +9,7 @@
 #include "game_map.h"
 #include "player.h"
 #include "structure.h"
+#include "salvage.h"
 #include "tethys_game.h"
 #include "terrain_cost.h"
 #include "unit.h"
@@ -94,11 +95,6 @@ void findBuildingSpot(int& x, int& y, int w2, int h2) {    // sub_436820
     }
 }
 
-// vt[39] (sub_405420): o jogador pesquisa o beacon. (A mensagem e o teste de
-// tecnologia p/ minério raro entram com a pesquisa portada.)
-static void beaconSurvey(UnitRecord& b, int player) {
-    b.surveyedMask |= 1u << player;
-}
 
 bool beaconSurveyed(int id, int player) {                    // sub_4054E0
     const UnitRecord& b = g_units[id];
@@ -171,7 +167,7 @@ int placeBuilding(int type, int x, int y, int owner) {      // sub_4369E0
     }
     if ((type == 0x15 || type == 0x16) && beacon) {         // vt[43] do beacon (sub_405620)
         UnitRecord& b = g_units[beacon];
-        beaconSurvey(b, owner);
+        beaconSurveyBy(beacon, owner);                       // vt[0x9C] sub_405420
         b.beaconHasMine = 1;
         UnitRecord& m = g_units[id];                         // sub_44ADC0
         m.mineVariant = b.beaconVariant;

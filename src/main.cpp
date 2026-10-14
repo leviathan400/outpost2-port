@@ -13,6 +13,7 @@
 #include "res/res_manager.h"
 #include "game/game_map.h"
 #include "game/walls.h"
+#include "game/salvage.h"
 #include "game/terrain_renderer.h"
 #include "game/game_rng.h"
 #include "game/player.h"
@@ -1581,6 +1582,108 @@ static int runGuardPostTest(const std::string& mapName, const std::string& prefi
     return 0;
 }
 
+// --salvagetest <map>: destroço (descoberto, carregado pelo caminhão no tile —
+// ação 0x0F — e entregue na baia do Spaceport → tecnologia pesquisada), entulho
+// carregado no tile, e o Robo-Surveyor pesquisando um beacon (ação 0x11).
+static int runSalvageTest(const std::string& mapName) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 salvagetest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    op2::loadTechTree("MULTITEK.TXT", 12);
+    op2::resetUnits();
+    const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
+    for (int y = 0; y < H; ++y)
+        for (int x = 0; x < W; ++x) op2::g_gameMap.clearUnitOccupancy(x, y);
+    int bx = -1, by = -1;
+    for (int y = 4; y < H - 10 && bx < 0; ++y)
+        for (int x = 4; x < W - 12 && bx < 0; ++x) {
+            bool ok = true;
+            for (int dy = -1; dy <= 8 && ok; ++dy)
+                for (int dx = -2; dx <= 10 && ok; ++dx)
+                    if (!op2::g_gameMap.isPassable(op2::LOCATION{x + dx, y + dy})) ok = false;
+            if (ok) { bx = x; by = y; }
+        }
+    if (bx < 0) return 3;
+    auto tick = [&](int n) {
+        for (int k = 0; k < n; ++k) {
+            op2::TethysGame::advanceTick();
+            op2::tickColony();
+            op2::tickMovement();
+            op2::tickUnits();
+        }
+    };
+    // Destroço com a tecnologia 10303 (ver MULTITEK) em (bx+6, by+6), visível.
+    int tech = 0;
+    for (int k = 0; op2::techAt(k) && !tech; ++k) if (op2::techAt(k)->id > 8000) tech = op2::techAt(k)->id;
+    op2::Unit w;
+    op2::createUnit(w, static_cast<op2::map_id>(0x54), op2::LOCATION{bx + 6, by + 6}, 6);
+    op2::g_units[w.id()].wreckTech = tech;
+    std::printf("[Salvage] destroço %d tecnologia %d; conhecido por 0: %d\n", w.id(), tech, op2::wreckKnownBy(op2::g_units[w.id()], 0));
+    op2::Unit scout;
+    op2::TethysGame::CreateUnit(scout, op2::mapScout, op2::LOCATION{bx + 8, by + 6}, 0);
+    tick(2);
+    std::printf("[Salvage] após o Scout: conhecido por 0: %d (mascara 0x%X)\n", op2::wreckKnownBy(op2::g_units[w.id()], 0),
+                op2::g_units[w.id()].wreckMask);
+    // Caminhão sobre o destroço: chegada → ação 0x0F → carga 9.
+    op2::Unit truck;
+    op2::TethysGame::CreateUnit(truck, op2::mapCargoTruck, op2::LOCATION{bx + 6, by + 6}, 0);
+    op2::unitArrived(truck.id());
+    std::printf("[Salvage] caminhão acao=0x%X\n", op2::g_units[truck.id()].action);
+    tick(40);
+    const op2::UnitRecord& t = op2::g_units[truck.id()];
+    std::printf("[Salvage] caminhão carga tipo %d qtd %d; destroço vivo=%d\n", t.cargo & 0xF, (t.cargo >> 4) & 0xFFF,
+                op2::g_units[w.id()].id != -1 && op2::g_units[w.id()].type == 0x54);
+    // Spaceport: põe o caminhão na doca e troca com a baia 0.
+    op2::Unit cc, tok, sp;
+    op2::TethysGame::CreateUnit(cc, op2::mapCommandCenter, op2::LOCATION{bx, by}, 0);
+    op2::TethysGame::CreateUnit(tok, op2::mapTokamak, op2::LOCATION{bx + 3, by}, 0);
+    op2::TethysGame::CreateUnit(sp, static_cast<op2::map_id>(0x37), op2::LOCATION{bx - 1, by + 3}, 0);
+    int dx, dy;
+    if (op2::dockCell(sp.id(), dx, dy)) {
+        op2::UnitRecord& tr = op2::g_units[truck.id()];
+        op2::g_gameMap.clearUnitOccupancy(tr.pixelX >> 5, tr.pixelY >> 5);
+        tr.pixelX = dx << 5; tr.pixelY = dy << 5;
+        op2::g_gameMap.setUnitOccupancy(dx, dy, truck.id());
+        tr.field22 = 0; tr.action = 0;
+    }
+    const int idx = op2::techIndex(tech);
+    std::printf("[Salvage] doca (%d,%d) veiculo na doca=%d; pesquisada antes=%d\n", dx, dy, op2::dockedVehicle(sp.id()),
+                op2::researchHas(0, idx));
+    const bool ok = op2::processBayTransfer(0, sp.id(), 0);
+    tick(400);
+    std::printf("[Salvage] troca=%d pesquisada depois=%d; caminhão carga %d sub=0x%X\n", ok, op2::researchHas(0, idx),
+                op2::g_units[truck.id()].cargo, op2::g_units[truck.id()].field22);
+    // Entulho: tile da 1ª faixa do 1º tipo de terreno, célula 0x16.
+    const auto& types = op2::g_gameMap.terrainTypes();
+    const int rx = bx + 9, ry = by + 7;
+    if (!types.empty()) op2::g_gameMap.setTileAndCellType(rx, ry, types[0].word(6), 0x16);
+    op2::Unit t2;
+    op2::TethysGame::CreateUnit(t2, op2::mapCargoTruck, op2::LOCATION{rx, ry}, 0);
+    op2::unitArrived(t2.id());
+    tick(40);
+    const uint32_t c = op2::g_gameMap.rawCell(rx, ry);
+    std::printf("[Salvage] entulho: carga tipo %d qtd %d; tile agora tipo 0x%X\n", op2::g_units[t2.id()].cargo & 0xF,
+                (op2::g_units[t2.id()].cargo >> 4) & 0xFFF, c & 0x1F);
+    // Beacon + Robo-Surveyor.
+    const int beacon = op2::createBeacon(0x51, bx + 2, by + 8, 0, 1, 1);
+    op2::Unit sv;
+    op2::TethysGame::CreateUnit(sv, op2::mapRoboSurveyor, op2::LOCATION{bx + 2, by + 8}, 0);
+    op2::unitArrived(sv.id());
+    std::printf("[Salvage] surveyor acao=0x%X\n", op2::g_units[sv.id()].action);
+    tick(40);
+    const op2::UnitRecord& s = op2::g_units[sv.id()];
+    std::printf("[Salvage] beacon pesquisado por 0: %d; surveyor em (%d,%d) msg=%s\n",
+                [&] { for (size_t k = 1; k < op2::g_units.size(); ++k) if (op2::g_units[k].id != -1 && op2::g_units[k].type == 0x51) return (int)(op2::g_units[k].surveyedMask & 1); return -1; }(), s.pixelX >> 5, s.pixelY >> 5,
+                op2::statusBarText().c_str());
+    renderer.shutdown(); SDL_Quit();
+    return 0;
+}
+
 // --walltest <map>: parede comum, de lava, de micróbio e um tubo lado a lado;
 // sub_4A23F0 (damageWall) com dano 1000 e depois 20, 6x cada, imprimindo o tile
 // e o tipo da célula — a parede comum passa pelos estágios +0x54/+0x74/+0x94.
@@ -2133,6 +2236,8 @@ int main(int argc, char* argv[]) {
             return runCmdTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--gptest") == 0 && i + 3 < argc)
             return runGuardPostTest(argv[i + 1], argv[i + 2], (int)std::strtol(argv[i + 3], nullptr, 16));
+        if (std::strcmp(argv[i], "--salvagetest") == 0 && i + 1 < argc)
+            return runSalvageTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--walltest") == 0 && i + 1 < argc)
             return runWallTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--quaketest") == 0 && i + 1 < argc)

@@ -44,6 +44,7 @@ add_executable(outpost2_modern
     src/game/structure.cpp
     src/game/weapon.cpp
     src/game/missile.cpp
+    src/game/salvage.cpp
     src/game/repair.cpp
     src/game/trigger.cpp
     src/game/walls.cpp

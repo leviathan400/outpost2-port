@@ -10,5 +10,7 @@ namespace op2 {
 // ainda a mapear) — mas NÃO substitui o pathfinder: a rota é a do original.
 void tickMovement();
 void moveDockArrive(int id);          // ações 3/4 no destino (giro + doca)
+// vt[0x7C] (sub_44B650) p/ um tile vizinho: monta o passo; false se não dá.
+bool unitStepToward(int id, int tx, int ty);
 
 } // namespace op2

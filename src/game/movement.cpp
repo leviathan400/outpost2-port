@@ -1,4 +1,5 @@
 #include "movement.h"
+#include "salvage.h"
 #include "trigger.h"
 
 #include <algorithm>
@@ -110,6 +111,15 @@ static bool setupStep(int id, int dir) {
     return true;
 }
 
+bool unitStepToward(int id, int tx, int ty) {
+    const UnitRecord& u = g_units[id];
+    const int mask = g_gameMap.width() - 1;
+    const int cx = u.pixelX >> 5, cy = u.pixelY >> 5;
+    for (int d = 0; d < 8; ++d)
+        if (((cx + kDir8[d].dx) & mask) == (tx & mask) && cy + kDir8[d].dy == ty) return setupStep(id, d);
+    return false;
+}
+
 // sub_44C2F0: objetivo da busca p/ o waypoint atual [ordem+8]. O último usa o
 // modo/distância do bloco ([ordem+0x3C]/[+0x40]); os intermediários usam os
 // bits 29-31 do ponto (0 = célula exata; n>0 = modo 1, chegar a até n tiles).
@@ -201,8 +211,8 @@ static void stepUnit(int id) {
                 // Mover (casos 2-4 de jpt_43B312) zera a ação; 0x26 não tem tratamento
                 // por tick (def_43B312): a ação fica 0x26 (posição mantida).
                 // Atacar/guardar (0x24/0x25) seguem no tick da ação (jpt_43B312 casos 36/37).
-                if (u.action == CMD_MOVE) { u.action = 0; specialTargetCheck(id); }   // sub_44D5B0
-                u.hasOrder = false; u.order = OrderBlock{};
+                if (u.action == CMD_MOVE) { u.action = 0; unitArrived(id); }   // sub_44D5B0 / sub_406C20 / sub_484460
+                g_units[id].hasOrder = false; g_units[id].order = OrderBlock{};
                 return;
             }
             waypointAdvance(u);                          // sub_44BEC0
@@ -239,8 +249,8 @@ static void stepUnit(int id) {
                     u.routeDirs.clear(); u.routeIdx = 0;
                     if (u.action == 0x28 || u.action == 0x27) return;
                     if (u.action == 3 || u.action == 4) { u.hasOrder = false; u.order = OrderBlock{}; return; }
-                    if (u.action == CMD_MOVE) { u.action = 0; specialTargetCheck(id); }   // sub_44D5B0
-                    u.hasOrder = false; u.order = OrderBlock{};
+                    if (u.action == CMD_MOVE) { u.action = 0; unitArrived(id); }   // sub_44D5B0...
+                    g_units[id].hasOrder = false; g_units[id].order = OrderBlock{};
                     return;
                 }
                 u.field22 = 0; return;                    // sem rota: parado, não anima
@@ -272,7 +282,7 @@ void moveDockArrive(int id) {
     u.field23 = u.field22;
     u.field22 = 0;
     if (u.type == mapCargoTruck) truckDockStart(id);
-    if (!(g_units[id].flags & 0x40u)) specialTargetCheck(id);
+    unitArrived(id);                                          // sub_44D5B0 / sub_406C20 / sub_484460
 }
 
 void tickMovement() {

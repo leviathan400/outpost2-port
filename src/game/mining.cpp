@@ -1,4 +1,5 @@
 #include "mining.h"
+#include "salvage.h"
 #include "../audio/sound.h"
 
 #include <cstdlib>
@@ -258,6 +259,17 @@ static void truckDockBegin(UnitRecord& u, int kind, int amount, int loadFlag) {
     u.field3C = (kind == 2 || kind == 3) ? 1 : truckDockPhaseTicks(u);
 }
 
+void truckSetCargo(int truckId, int kind, int amount, int loadFlag) {   // sub_406530
+    UnitRecord& u = g_units[truckId];
+    if (kind == 6 || kind == 7 || kind == 9) {
+        u.cargoRequest = static_cast<uint16_t>((amount << 4) | (kind & 0x0F));
+        if (kind == 9 && amount > 0x1F40) amount -= 0x1F40;
+        u.cargo = static_cast<uint16_t>((amount << 4) | (kind & 0x0F));
+        return;
+    }
+    truckDockBegin(u, kind, amount, loadFlag);
+}
+
 void truckDockStart(int truckId) {                           // sub_406070
     UnitRecord& u = g_units[truckId];
     const int b = buildingUnder(u);
@@ -277,7 +289,10 @@ void truckDockStart(int truckId) {                           // sub_406070
         case 0x38:                                            // smelter raro
             if (kind == 3 && structureOperational(bl)) truckDockBegin(u, 0, 0, 0);
             break;
-        default:                                              // (0x39: sub_44DA80 — não portado)
+        case 0x39:                                            // GORF: sub_44DA80 decide
+            if (vehicleCanDock(truckId, b, true)) truckDockBegin(u, 0, 0, 0);
+            break;
+        default:
             break;
     }
 }
@@ -356,7 +371,11 @@ void truckDockExchange(int truckId) {                        // sub_406610
             } else if (kind == 0) loadMetal(true);
             else if (kind == 5) unloadMetal(true);
             break;
-        default:                                              // (0x39 GORF: não portado)
+        case 0x39:                                            // GORF: entulho (sub_46E4E0 / sub_46E550)
+            if (kind == 6 || kind == 7) gorfReceiveRubble(b, kind, cargoAmount(u));
+            u.cargo = 0;
+            break;
+        default:
             break;
     }
     colonyMarkDirty(p);                                       // dword_56E37C = 1

@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "mission.h"
+#include "../game/salvage.h"
 #include "../game/colony.h"
 #include "../game/game_map.h"
 #include "../game/messages.h"
@@ -209,20 +210,8 @@ int  __fastcall T_PlaceMarker(int* unit, int x, int y, int type) {
     *unit = id;
     return 1;
 }
-// Destroço (vt off_4CF400): vt[0x98] sub_405B10 descobre p/ o jogador p.
-static void wreckDiscover(int id, int p) {
-    UnitRecord& w = g_units[id];
-    const uint32_t old = w.wreckMask;
-    w.wreckMask |= 1u << p;
-    if (old == w.wreckMask || p != TethysGame::localPlayer()) return;
-    postMessage(unitOX(w), unitOY(w), "Wreckage Discovered", TethysGame::tick() > 0 ? 0x97 : 0);
-}
-// vt[0x9C] sub_405B80: algum descobridor i aliado de p.
-static bool wreckDiscovered(const UnitRecord& w, int p) {
-    for (int i = 0; i < TethysGame::noPlayers(); ++i)
-        if ((w.wreckMask >> i & 1u) && (g_playerData[i].allyMask >> p & 1u)) return true;
-    return false;
-}
+// Destroço (vt off_4CF400): vt[0x98]/vt[0x9C] em src/game/salvage.cpp.
+static bool wreckDiscovered(const UnitRecord& w, int p) { return wreckKnownBy(w, p); }
 // CreateWreck(x, y, tecnologia, visível): sub_4466B0(0x54, dono 6); visível →
 // descoberto por todos; senão pelos jogadores de computador (+0x28 == 0).
 int  __fastcall T_CreateWreck(int x, int y, int tech, int visible) {

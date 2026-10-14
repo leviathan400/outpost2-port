@@ -1,4 +1,5 @@
 #include "structure.h"
+#include "salvage.h"
 #include "missile.h"
 #include "repair.h"
 #include "movement.h"
@@ -537,6 +538,7 @@ static void actionTickBody(int id) {
 // se a unidade deve ser removida.
 static bool updateTick(int id) {
     UnitRecord& r = g_units[id];
+    if (r.type == 0x54 && !(r.flags & (UNIT_BUILDING | UNIT_VEHICLE))) return wreckTick(id);   // vt[2] sub_405BF0
     if ((r.flags & UNIT_BUILDING) && r.action != ACT_BUILD) structureUpdateState(id);
     unitPeriodicTick(id);                 // prólogo de sub_43DE50 (1x a cada 8 ticks)
     if (weaponProjectileSubstate(id)) return false;   // cases 15/18/19 (projétil)
@@ -624,6 +626,9 @@ static bool vehicleTick(int id) {
         moveDockArrive(id);                                                            // casos 3/4
     else if (!r.field20 && r.field22 == 0 && r.action >= 0x1C && r.action <= 0x1E)
         repairTick(id);                                                                // casos 28-30
+    else if (r.field20 && (r.action == 0x0F || r.action == 0x11)) salvageActionStart(id);   // jpt_43AD56 15/17
+    else if (!r.field20 && r.field22 == 0 && (r.action == 0x0F || r.action == 0x11))
+        salvageActionTick(id);                                                         // casos 15/17
     {   // def_43B312: armado (0x10 xor 0x80), sem 0x20000/0x80000 → vt[5] da arma.
         UnitRecord& u = g_units[id];
         if ((((u.flags << 24) ^ (u.flags << 27)) & 0x80000000u) && !(u.flags & 0xA0000u))

@@ -1,4 +1,5 @@
 #include "docking.h"
+#include "salvage.h"
 #include "../audio/sound.h"
 
 #include "building_sheet.h"
@@ -85,8 +86,9 @@ bool processBayTransfer(int owner, int buildingId, int bay) {   // sub_40E210 ca
     if (!v || !commandable(g_units[v]) || (g_units[v].flags & 0x40000u)) {
         if (b.type != 0x37) return false;
     }
-    // vt[0x108] das fábricas (sub_415880). (Spaceport: sub_47F470 — pendente.)
-    if (b.type == 0x37 || !v) return false;
+    // vt[0x108]: Spaceport sub_47F470 (flag 0, imediato) / fábricas sub_415880.
+    if (b.type == 0x37) return spaceportBayTransfer(owner, buildingId, bay);
+    if (!v) return false;
     UnitRecord& u = g_units[v];
     u.dockTick = static_cast<int16_t>(TethysGame::tick());   // [+0x5E]
     u.flags &= ~0x1000000u;                               // 1ª fase

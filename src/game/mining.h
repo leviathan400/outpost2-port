@@ -45,6 +45,9 @@ bool smelterReceive(int smelterId, int amount);
 
 // Caminhão.
 void truckDockStart(int truckId);                 // vt[0x88]
+// vt[0x94] (sub_406530): carga 6/7/9 grava direto [+0x24] (9: −8000 se > 8000);
+// as demais viram pedido [+0x5C] com o sub-estado de doca 0x0D.
+void truckSetCargo(int truckId, int kind, int amount, int loadFlag);
 void truckDockExchange(int truckId);              // vt[0x98]
 int  truckAnimRaw(const UnitRecord& u, int dir);  // vt[0x80] (anim crua)
 int  truckFrame(const UnitRecord& u, int id);     // vt[8]

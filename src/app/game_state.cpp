@@ -28,6 +28,7 @@
 #include "../game/vehicle_anim.h"
 #include "../game/structure_anim.h"
 #include "../game/missile.h"
+#include "../game/salvage.h"
 #include "../game/structure.h"
 #include "../game/building_sheet.h"
 #include "../game/colony.h"
@@ -657,6 +658,14 @@ void GameState::onIdle(Renderer& renderer, float dt) {
                     drawBeam(renderer, op);
                 }
             }
+            continue;
+        }
+        if (isEffect && r.type == 0x54) {
+            // Destroço (sub_405A50): 0x7A5 com a cor do jogador 1, se descoberto
+            // por um aliado do jogador local.
+            int raw, frame;
+            if (wreckSprite(static_cast<int>(i), raw, frame) && g_art.ok() && raw - 0x65 < g_art.numAnimations())
+                drawSprite(raw - 0x65, frame, ucx, ucy, g_playerData[1].colorNumber);
             continue;
         }
         if (isEffect) {
