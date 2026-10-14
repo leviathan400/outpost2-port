@@ -575,6 +575,7 @@ static bool updateTick(int id) {
 }
 
 void removeUnit(int id) {
+    if ((g_units[id].flags & UNIT_BUILDING) && g_units[id].type == 0x29) garageDestroyed(id);   // vt[19] sub_41C570
     UnitRecord& r = g_units[id];
     if (r.flags & UNIT_BUILDING) colonyStructureRemoved(id);    // sub_439C00
     else if (r.flags & UNIT_VEHICLE) colonyVehicleRemoved(id);

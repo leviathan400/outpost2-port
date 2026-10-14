@@ -11,6 +11,7 @@
 #include "construction.h"
 #include "mining.h"
 #include "earthwork.h"
+#include "docking.h"
 #include "command.h"
 #include "game_map.h"
 #include "player.h"
@@ -643,10 +644,23 @@ UiClick uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int til
         return UiClick::DONE;
     }
     if (cmd != UC_MOVE) return UiClick::NOT_PORTED;
-    // sub_451280: no chão → pacote 2 (mover). Garagem/doca (pacotes 3/4) pendentes.
+    // sub_451280: na célula da doca de um prédio → pacote 3 (ou 4 na garagem de
+    // Eden) se o 1º selecionado pode atracar (sub_44DA80); se não pode, nada.
+    // Fora da doca → pacote 2 (mover).
     const int me = TethysGame::localPlayer();
     CommandPacket pkt;
     pkt.type = CMD_MOVE;
+    {
+        const int occ = buildingAtTile(tileX & (g_gameMap.width() - 1), tileY, -1);   // sub_437EB0 (classe 4)
+        int dx, dy;
+        if (occ > 0 && occ < static_cast<int>(g_units.size()) && (g_units[occ].flags & UNIT_BUILDING) &&
+            dockCell(occ, dx, dy) && (dx & (g_gameMap.width() - 1)) == (tileX & (g_gameMap.width() - 1)) && dy == tileY) {
+            if (sel.empty() || !vehicleCanDock(sel[0], occ, true)) return UiClick::DONE;
+            const UnitRecord& b = g_units[occ];
+            const bool edenBld = (b.owner & 0x0F) < kMaxPlayers && g_playerData[b.owner & 0x0F].isEden;
+            pkt.type = (b.type == 0x29 && edenBld) ? 4 : 3;
+        }
+    }
     pkt.waypoints.push_back(packLocation(tileX, tileY));
     for (int id : sel)
         if ((g_units[id].owner & 0x0F) == me && (g_units[id].flags & UNIT_VEHICLE)) pkt.unitIds.push_back(id);

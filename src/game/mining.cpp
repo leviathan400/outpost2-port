@@ -135,7 +135,7 @@ int buildingAtTile(int x, int y, int owner) {
     for (int i = 1; i < static_cast<int>(g_units.size()); ++i) {
         const UnitRecord& b = g_units[i];
         if (b.id == -1 || !(b.flags & UNIT_BUILDING) || (b.flags & UNIT_DEAD)) continue;
-        if (ownerOf(b) != (owner & 0x0F)) continue;
+        if (owner >= 0 && ownerOf(b) != (owner & 0x0F)) continue;   // (−1 = qualquer dono)
         int w, h; buildingFootprint(b.type, w, h);
         const int l = ((b.pixelX >> 5) - (w >> 1)) & mask, t = (b.pixelY >> 5) - (h >> 1);
         if (y < t || y >= t + h) continue;

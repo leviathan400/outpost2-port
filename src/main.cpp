@@ -1833,6 +1833,28 @@ static int runGarageTest(const std::string& mapName) {
     std::printf("[Garage] solto: baia0=%d sub=0x%X morto=%d em (%d,%d) ocupante=%d contagem=%d\n", op2::garageVehicle(g, 0),
                 r.field22, (r.flags & op2::UNIT_DEAD) != 0, r.pixelX >> 5, r.pixelY >> 5,
                 op2::g_gameMap.cellOccupant(r.pixelX >> 5, r.pixelY >> 5), op2::garageCount(g));
+    // Mover p/ a doca (sub_451280 → pacote 3/4): o Lynx sai da doca, um Panther vai até ela.
+    op2::uiCommandTarget(op2::UC_MOVE, {v}, dx + 4, dy + 4);
+    tick(120);
+    op2::Unit pan;
+    op2::TethysGame::CreateUnit(pan, op2::mapPanther, op2::LOCATION{dx + 6, dy + 2}, 0, 0x40);
+    op2::g_units[pan.id()].damage = 300;
+    op2::uiCommandTarget(op2::UC_MOVE, {pan.id()}, dx, dy);
+    std::printf("[Garage] panther acao=0x%X (3/4 = doca)\n", op2::g_units[pan.id()].action);
+    tick(700);
+    const op2::UnitRecord& pr = op2::g_units[pan.id()];
+    std::printf("[Garage] panther f20=%d f22=%d ordem=%d passo=%d\n", pr.field20, pr.field22, (int)pr.hasOrder, pr.stepTicks);
+    std::printf("[Garage] panther em (%d,%d) rot=0x%X acao=0x%X; na doca=%d\n", pr.pixelX >> 5, pr.pixelY >> 5, pr.rotation,
+                pr.action, op2::dockedVehicle(g));
+    op2::processBayTransfer(0, g, 2);
+    tick(300);
+    std::printf("[Garage] panther guardado na baia 2=%d dano=%d\n", op2::garageVehicle(g, 2), op2::g_units[pan.id()].damage);
+    // Garagem destruída com o veículo dentro (sub_41C570).
+    op2::g_units[g].damage = 3000;
+    op2::killUnit(g, 1);
+    tick(200);
+    std::printf("[Garage] garagem destruida: panther vivo=%d\n",
+                op2::g_units[pan.id()].id != -1 && !(op2::g_units[pan.id()].flags & op2::UNIT_DEAD));
     renderer.shutdown(); SDL_Quit();
     return 0;
 }

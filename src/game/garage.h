@@ -24,6 +24,9 @@ void garageRepairStart(int garageId);              // jpt_43AD56 case 27
 void garageRepairTick(int garageId);               // jpt_43B312 case 27
 // Botão da baia no painel STORAGE (ramo 0x29 de sub_456BC0).
 bool garageBayAvailable(int garageId, int bay);
+// Destrutor da garagem (sub_41C570): cada veículo guardado volta às listas
+// (sub_44CE60(1), ainda com 0x20000) e morre (sub_43A890(1)).
+void garageDestroyed(int garageId);
 // Veículo guardado na baia (0 = vazia).
 int  garageVehicle(int garageId, int bay);
 

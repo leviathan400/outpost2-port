@@ -82,6 +82,19 @@ static void leaveGarage(int vid) {
     v.flags &= ~UNIT_DEAD;
 }
 
+void garageDestroyed(int gid) {                               // sub_41C570
+    for (int i = 0; i < 6; ++i) {
+        const int vid = g_units[gid].garageSlot[i];
+        g_units[gid].garageSlot[i] = 0;
+        if (!vid || !valid(vid)) continue;
+        unitListInsert(vid);                                  // sub_44CE60(v, 1): sem ocupar célula
+        colonyVehicleAdded(vid);
+        UnitRecord& v = g_units[vid];
+        if (v.flags & UNIT_ARMED) { v.field4E = 0x7FFF; v.field4A = 0x7FFF; v.guardHi = 0x7FFF; }
+        killUnit(vid, 1);                                     // sub_43A890(1)
+    }
+}
+
 void garageBay(int gid, int bay) {                            // sub_41C5F0
     if (!valid(gid) || bay < 0 || bay >= 6) return;
     UnitRecord& g = g_units[gid];
