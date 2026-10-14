@@ -36,7 +36,8 @@ enum Finder { FIND_LOS /*sub_4A6DD0*/, FIND_NEAR /*sub_4A6AA0*/, FIND_BOX /*sub_
               FIND_EMP /*sub_4A7060*/, FIND_FOAM /*sub_4A7270*/ };
 enum DrawKind { DRAW_PROJECTILE /*sub_4A2D50*/, DRAW_LASER /*sub_4A3420*/,
                 DRAW_MICROWAVE /*sub_4A3000*/, DRAW_RAILGUN /*sub_4A2A00*/,
-                DRAW_SCORPION /*sub_4A31D0*/, DRAW_THOR /*sub_48AD70*/ };
+                DRAW_SCORPION /*sub_4A31D0*/, DRAW_THOR /*sub_48AD70*/,
+                DRAW_ESG /*sub_480DB0*/ };
 struct WeaponClass {
     int type;
     int rangeMode;          // desc+0x250: 1 = sem linha de visada no teste de alcance
@@ -55,6 +56,9 @@ static const WeaponClass kClasses[] = {
     // STICKYFOAM: sub_4A61C0 / sub_4A3A90 / sub_4A7270 / sub_4A2D50 / sub_4A6910 / sub_447240;
     // fire tick sub_4A7950, impacto sub_4A4F10.
     {0x47, 1, 0xF2, 0xF3, LAUNCH_BALLISTIC, FIND_FOAM, DRAW_PROJECTILE, 0x47D, 0, 1, 3},
+    // SPAM (ESG): sub_480AC0 / sub_4A3A90 / sub_4A7400 / sub_480DB0 / sub_4A2870 / sub_447460;
+    // impacto nullsub_122, minas no vt[20] sub_481170, duração vt[36] sub_480C10 (0xD8).
+    {0x46, 1, 0xF0, 0xF1, LAUNCH_BALLISTIC, FIND_BOX, DRAW_ESG, 0x14B, 0, 4, 8},
     // LASER: sub_4A58D0 / sub_4A3E00 / sub_4A7020→sub_4A6DD0 / sub_4A3420 / sub_4A2880 / sub_447130
     {0x3D, 2, 0xE8, 0xE9, LAUNCH_INSTANT, FIND_LOS, DRAW_LASER, 0x2F6, 4, 0, 0},
     // MICROWAVE: sub_4A5A30 / sub_4A3E00 / sub_4A7040 / sub_4A3000 / sub_4A2880 / sub_447150
@@ -203,6 +207,8 @@ static const WeaponClass* classOf(int type) {
 }
 
 bool isWeaponProjectile(int type) { return classOf(type) != nullptr; }
+
+static bool esgPeriodic(int pid);
 
 const char* weaponDisplayName(int type) {
     const WeaponSheetDesc* d = weaponSheet(type);
@@ -660,6 +666,7 @@ static bool fireWeapon(int id) {
     p.sourceId = id;                                            // vt[37] = sub_4A27E0
     ++sh.refCount;
     if (p.type == 0x3C) p.shooterBit = static_cast<int8_t>(1 << statsOf(sh));   // sub_4A47F0
+    if (p.type == 0x46) p.esgOwnerBit = static_cast<int8_t>(1 << ownerOf(sh));  // sub_480A80
     // vt[32] (sub_4A3DD0, alvo unidade) / vt[33] (sub_4A3DA0, alvo lugar).
     p.flags &= ~UNIT_IN_FLIGHT;
     p.field23 = 0; p.field22 = 0x12; p.action = 0x36;
@@ -1039,6 +1046,7 @@ void unitPeriodicTick(int id) {                               // prólogo de sub
     }
     if (u.id != -1 && !(u.flags & UNIT_DEAD) && disasterPeriodicTick(id)) return;   // vt[20] do desastre
     if (u.id != -1 && !(u.flags & UNIT_DEAD) && missilePeriodicTick(id)) return;    // vt[20] lançamento / EMP_BIG
+    if (u.id != -1 && !(u.flags & UNIT_DEAD) && esgPeriodic(id)) return;            // vt[20] do ESG
     if (u.id != -1 && !(u.flags & UNIT_DEAD) && (u.flags & UNIT_VEHICLE) && (u.flags & UNIT_ARMED))
         weaponAutoEngage(id);                                     // vt[20] (sub_485340)
 }
@@ -1176,6 +1184,7 @@ static int explosionDuration(const UnitRecord& p) {
     const WeaponClass* c = classOf(p.type);
     if (c && c->draw == DRAW_RAILGUN)                              // sub_4A29C0
         return lastFrameRaw(0x2F8) + lastFrameRaw(0x2F9) + lastFrameRaw(0x2FA) + 3;
+    if (c && c->draw == DRAW_ESG) return 0xD8;                     // sub_480C10
     return lastFrameRaw(c ? c->explodeAnim : 0);                   // sub_4A27C0
 }
 
@@ -1374,6 +1383,71 @@ static void explodeFoam(int pid) {
     }
 }
 
+// vt[20] do ESG (sub_481170, 1x a cada 8 ticks): ao explodir arma 13 minas no
+// losango 5x5 de byte_4E40F0 em volta do tile do impacto ([+0x6E] = 0x1FFF,
+// flag 0x8000). Cada mina dispara uma vez no 1º veículo inimigo (dono fora de
+// [+0x6C]) sobre ela que não esteja passando rápido (passo restante >= 9):
+// dano (blind * Concussion >> 8) + Penetration da arma (x1.5 de prédio-torre,
+// /2 em ação 0x12), 0x100000 por 4 passadas ([+0x58]) e o crédito do atirador
+// só se o dono do alvo é IA. Sem minas, o projétil sai (sub-estado 0x0B).
+static bool esgPeriodic(int pid) {
+    UnitRecord& p = g_units[pid];
+    if (p.type != 0x46) return false;
+    if (p.exploded && !(p.flags & 0x8000u)) { p.esgMask = 0x1FFF; p.flags |= 0x8000u; }
+    if (!(p.flags & 0x8000u)) return true;
+    static const uint8_t kMines[25] = {0, 0, 1, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1,
+                                       0, 1, 1, 1, 0, 0, 0, 1, 0, 0};   // byte_4E40F0
+    const WeapPlayerStats* w = weapStats(p.type, statsOf(p));
+    const int y0 = (p.impactY >> 5) - 2, x0 = (p.impactX >> 5) - 2;
+    int k = 0;
+    uint16_t bit = 1;
+    for (int y = y0; y < y0 + 5; ++y) {
+        for (int x = x0; x < x0 + 5; ++x) {
+            if (!kMines[k++] || y < 0 || y >= g_gameMap.height()) continue;
+            const uint16_t me = bit;
+            bit = static_cast<uint16_t>(bit << 1);
+            if (!(g_units[pid].esgMask & me)) continue;
+            const uint32_t cell = g_gameMap.rawCell(x & tileMask(), y);
+            const int occ = static_cast<int>((cell & GameMap::CELL_OCCUPANCY) >> GameMap::CELL_OCC_SHIFT);
+            if (!occ || !alive(occ)) continue;
+            UnitRecord& t = g_units[occ];
+            if (!(t.flags & UNIT_DAMAGEABLE)) continue;
+            const int ow = ownerOf(t);
+            if (ow < kMaxPlayers && (g_playerData[ow].allyMask & static_cast<uint32_t>(g_units[pid].esgOwnerBit))) continue;
+            if (!(t.flags & UNIT_VEHICLE)) continue;
+            if (t.field22 == 1 && t.stepTicks >= 9) continue;
+            int dmg = ((armorOf(t) * (w ? w->concussion : 0)) >> 8) + (w ? w->penetration : 0);
+            if (g_units[pid].flags & UNIT_TURRET_BLD) dmg += dmg >> 1;
+            // (dword_56DE64 x4 fica em 0; prédios — dirt — não chegam aqui.)
+            if (t.action == 0x12) dmg >>= 1;
+            t.damage = static_cast<int16_t>(t.damage + dmg);
+            t.flags |= 0x100000u;
+            t.esgTicks = 4;
+            if (ow < kMaxPlayers && !g_playerData[ow].isHuman) {
+                const int source = g_units[pid].sourceId;
+                if (t.lastAttacker != source) {
+                    if (t.lastAttacker) dropRef(t.lastAttacker);
+                    if (source > 0 && source < static_cast<int>(g_units.size())) ++g_units[source].refCount;
+                    t.lastAttacker = static_cast<int16_t>(source);
+                }
+                t.lastAttackTick = TethysGame::tick();
+            }
+            damageMessage(t, statsOf(g_units[pid]));
+            const int hp = maxHPOf(t);
+            if (hp <= t.damage) {
+                t.damage = static_cast<int16_t>(hp);
+                t.flags |= UNIT_DEAD;
+                killUnit(occ, 5);
+                // (estatísticas 0x1C4/0x1CC dos jogadores — pendente.)
+            }
+            UnitRecord& q = g_units[pid];
+            q.esgMask = static_cast<uint16_t>(q.esgMask & ~me);
+            if (!q.esgMask) q.field22 = SUB_REMOVE;
+        }
+    }
+    return true;
+}
+
 void unitApplyFoam(int id, int ticks) {                       // vt[0x60] sub_44B5C0
     UnitRecord& u = g_units[id];
     u.flags |= 0x40000u;
@@ -1417,7 +1491,8 @@ void weaponProjectileAction(int id) {                         // case 54
     }
     if (!p.exploded) {
         p.exploded = 1;
-        if (p.type == 0x3C) explodeEMP(id);                      // vt[34] sub_4A4490
+        if (p.type == 0x46) {}                                    // vt[34] nullsub_122 (minas: vt[20])
+        else if (p.type == 0x3C) explodeEMP(id);                 // vt[34] sub_4A4490
         else if (p.type == 0x47) explodeFoam(id);                 // vt[34] sub_4A4F10
         else explode(id);                                         // vt[34] sub_4A35C0
         UnitRecord& q = g_units[id];
@@ -1623,6 +1698,38 @@ void weaponDrawOps(int id, std::vector<WeaponDrawOp>& ops) {
             }
             if (p.exploded)
                 pushSprite(ops, c->explodeAnim, lastFrameRaw(c->explodeAnim) - p.field3C, p.impactX, p.impactY);
+            return;
+        }
+        case DRAW_ESG: {                                          // sub_480DB0
+            const int tick = static_cast<int>(TethysGame::tick());
+            if (p.exploded) {
+                const int dur = explosionDuration(p);                 // 0xD8
+                const int e = dur - p.field3C > 0 ? dur - p.field3C : 0;
+                const int nT = lastFrameRaw(0x2C0), T = p.flightTicks;
+                if (nT + T * 2 > e && T > 0) {
+                    int X8 = p.impactX * 8, Y8 = p.impactY * 8;
+                    for (int i = e;; ++i) {
+                        int lim = e + T * 2;
+                        if (lim >= nT * 2) lim = nT * 2;
+                        if (lim <= i) break;
+                        X8 -= p.velQX; Y8 -= p.velQY;
+                        pushSprite(ops, 0x2C0 + (tick + i) % 3, i / 3, X8 >> 3, Y8 >> 3);
+                    }
+                }
+                if (lastFrameRaw(c->explodeAnim) >= dur - p.field3C) pushSprite(ops, c->explodeAnim, e, p.impactX, p.impactY);
+            } else {
+                if (p.field3C) pushSprite(ops, 0x2BC, 0x1F - (static_cast<uint8_t>(p.rotation + 4) >> 3),
+                                          p.pixelX & pxMask(), p.pixelY);
+                int X8 = (p.pixelX & pxMask()) * 8, Y8 = p.pixelY * 8;
+                int n = p.field3C * 2;
+                const int cap = lastFrameRaw(0x2C0) * 3;
+                if (n >= cap) n = cap;
+                if (p.flightTicks * 2 < n) n = p.flightTicks * 2;
+                for (int b = 0; b < n; ++b) {
+                    X8 -= p.velQX; Y8 -= p.velQY;
+                    pushSprite(ops, 0x2C0 + (tick + b) % 3, b / 3, X8 >> 3, Y8 >> 3);
+                }
+            }
             return;
         }
         case DRAW_PROJECTILE: {                                   // sub_4A2D50

@@ -203,6 +203,8 @@ struct UnitRecord {
     int      exploded = 0;         // +0x54
     int16_t  flightTicks = 0;      // +0x58 duração do voo
     int8_t   shooterBit = 0;       // +0x5A EMP: 1 << dono das estatísticas do atirador (vt[37] sub_4A47F0)
+    int8_t   esgOwnerBit = 0;      // +0x6C ESG: 1 << dono do atirador (vt[37] sub_480A80)
+    uint16_t esgMask = 0;          // +0x6E ESG: minas ainda armadas (0x1FFF ao explodir; flag 0x8000)
     int      vecX = 0, vecY = 0;   // +0x5C/+0x60 impacto - origem
     int      velQX = 0, velQY = 0; // +0x64/+0x68 vec*4/duração (rastro)
     bool     rawPixel = false;     // pixelX/Y já no sentido do original (centro, sem +16)
