@@ -868,9 +868,16 @@ static void microbeSpreadAt(int x, int y) {                  // sub_49DC90 (vt[0
     const int ct = static_cast<int>(cellAt(nx, ny) & 0x1F);
     const int resist = terrainMoveCost(ct, 6) - g_gameMap.lightDarkness(nx - TethysGame::daylightPos());
     if (resist <= TethysGame::tick() % 40) return;
-    // Parede de micróbio (0x18) em volta barra (e leva dano: sub_4A23F0(…, 15) — pendente).
-    bool wall = (cellAt(nx, ny) & 0x1F) == 0x18 || (cellAt(nx + 1, ny) & 0x1F) == 0x18;
-    if (ny > 0) wall = wall || (cellAt(nx, ny - 1) & 0x1F) == 0x18 || (cellAt(nx + 1, ny - 1) & 0x1F) == 0x18;
+    // Parede de micróbio (0x18) em (nx,ny), (nx+1,ny) e, com ny > 0, nas duas de
+    // cima: cada uma leva sub_4A23F0(…, 15) (em sequência) e barra o avanço.
+    bool wall = false;
+    auto hit = [&](int x2, int y2) {
+        x2 &= iMask();
+        if ((cellAt(x2, y2) & 0x1F) == 0x18) { damageWall(x2, y2, 15); wall = true; }
+    };
+    hit(nx, ny);
+    hit(nx + 1, ny);
+    if (ny > 0) { hit(nx, ny - 1); hit(nx + 1, ny - 1); }
     if (wall) return;
     if (cellAt(nx, ny) & 0x8000000u) return;                 // lava
     microbeSetVirus(nx, ny);
