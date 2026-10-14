@@ -28,6 +28,15 @@ int setEMPMissile(int x, int y, int owner, int tx, int ty);
 // Spaceport ([+0x6E], com o módulo [+0x72]) do ponto de lançamento do sprite;
 // alvo em px do port. false se recusado.
 bool spaceportLaunch(int spaceportId, int tx, int ty);
+// LAUNCH (sub_4572F0): um Spaceport operando com carga na plataforma; SULV
+// exige o módulo; o de evacuação (0x67), 200 colonos.
+bool spaceportLaunchAvailable(int spaceportId);
+// Baia → plataforma (dword_564A3C, loc_456DD0): plataforma com veículo que não
+// é o míssil, e baia ≠ carga atual (alguma das duas não vazia).
+bool spaceportPadSwapAvailable(int spaceportId, int bay);
+// Pacote 0x0A com a palavra +0x12 = 1 → vt[0x108](baia, 1) (sub_47F470): troca a
+// baia com a carga do SULV ([+0x72]).
+bool spaceportPadSwap(int owner, int spaceportId, int bay);
 // _Player::CaptureRLV(de) / GetRLVCount (contador +0x08 bits 0..3).
 void playerCaptureRLV(int player, int from);
 

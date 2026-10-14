@@ -939,6 +939,15 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
             // Área (sub_41B550 modos 1/4): o arrasto começa aqui e termina ao soltar.
             m_areaDrag = true;
             m_areaSX = m_camX + vx; m_areaSY = m_camY + vy;
+        } else if (e.button.button == SDL_BUTTON_LEFT && inView && m_launchFrom) {
+            // sub_457480: o clique escolhe o alvo do míssil (pacote 0x19 no ponto).
+            const int px = g_gameMap.ok() ? (m_camX + vx) & (g_gameMap.width() * 32 - 1) : m_camX + vx;
+            spaceportLaunch(m_launchFrom, px, m_camY + vy);
+            m_launchFrom = 0;
+            closePanes();
+            soundPlay(0x56);
+        } else if (e.button.button == SDL_BUTTON_RIGHT && m_launchFrom) {
+            m_launchFrom = 0;
         } else if (e.button.button == SDL_BUTTON_LEFT && inView && m_targetCmd >= 0) {
             // Modo de mira: o clique escolhe o alvo (vt[3] do comando).
             int tileX = (m_camX + vx) / 32, tileY = (m_camY + vy) / 32;
@@ -1105,10 +1114,16 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
         b.cmd = kCmdStatus; b.label = "&STATUS"; b.tip = "Back to Structure &Status"; b.hotkey = 'S';
         out.push_back(b);
     } else if (m_storage.isOpen()) {
-        // sub_463170: só "&STATUS" (o LAUNCH do modo plataforma ainda não).
+        // sub_463170: "&STATUS"; no modo plataforma ([+0x6C4]) também "L&AUNCH".
         TextButton b{};
         b.cmd = kCmdStatus; b.label = "&STATUS"; b.tip = "Back to Structure &Status"; b.hotkey = 'S';
         out.push_back(b);
+        if (m_storage.launchMode()) {
+            b = TextButton{};
+            b.cmd = kCmdLaunch; b.label = "L&AUNCH"; b.tip = "L&aunch Vehicle into Orbit"; b.hotkey = 'A';
+            b.disabled = !spaceportLaunchAvailable(m_storage.building());
+            out.push_back(b);
+        }
     }
     if (m_produce.isOpen()) {
         // sub_4682C0: "&BUILD IT" (desabilitado até escolher um item pagável) e
@@ -1175,6 +1190,19 @@ bool GameState::onScreen(int sx, int sy) const {
 void GameState::clickCommand(int cmd) {                  // vt[1] do comando
     soundPlay(0x57);                                      // sub_40A960: botão solto dentro
     if (cmd == kCmdBuildIt) { produceBuildIt(); return; }
+    if (cmd == kCmdLaunch) {                                  // sub_4573C0
+        const int sp = m_storage.building();
+        if (!spaceportLaunchAvailable(sp)) return;
+        if (g_units[sp].padCargo == 0x6B) {                   // míssil: mira (sub_41B550 modo 3)
+            m_launchFrom = sp;
+            m_targetCmd = -1;
+            return;
+        }
+        spaceportLaunch(sp, 0, 0);                            // pacote 0x19
+        closePanes();
+        soundPlay(0x56);
+        return;
+    }
     if (cmd == kCmdLoad) { m_storage.load(); return; }       // pacote 0x0B
     if (cmd == kCmdUnload) { m_storage.unload(); return; }   // pacote 0x0C
     if (cmd == kCmdStatus || cmd == kCmdCancel) { closePanes(); return; }
@@ -1213,6 +1241,11 @@ void GameState::clickCommand(int cmd) {                  // vt[1] do comando
     if (cmd == UC_ASSIGN_SCIENTISTS && m_selected.size() == 1) {   // sub_456340 → unk_569110
         closePanes();
         m_research.open(m_selected[0], g_units[m_selected[0]].action == 0x16 ? 1 : 0);
+        return;
+    }
+    if (cmd == UC_LAUNCH_PAD && m_selected.size() == 1) {   // sub_456730 → painel [+0x6C4] = 1
+        closePanes();
+        m_storage.open(m_selected[0], true);
         return;
     }
     if (cmd == UC_STORAGE && m_selected.size() == 1) {      // loc_456640 → painel dword_5650F0

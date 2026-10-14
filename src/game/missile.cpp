@@ -222,6 +222,38 @@ static void launchPoint(const UnitRecord& sp, int& x, int& y) {
     if (const int8_t* off = artFrameOffsets(a + 0x65, structureFrame(sp))) { x += off[0]; y += off[1]; }
 }
 
+bool spaceportLaunchAvailable(int sp) {                     // sub_4572F0
+    if (!valid(sp)) return false;
+    const UnitRecord& s = g_units[sp];
+    if (!structureOperational(s) || !s.padCargo) return false;
+    if (s.padPayload == 0 && s.padCargo == kSULV) return false;
+    if (s.padPayload == 0x67) {
+        const PlayerData& d = g_playerData[TethysGame::localPlayer()];
+        if (d.workers + d.scientists + d.kids < 200) return false;
+    }
+    return true;
+}
+
+bool spaceportPadSwapAvailable(int sp, int bay) {           // loc_456DD0
+    if (!valid(sp) || bay < 0 || bay > 5) return false;
+    const UnitRecord& s = g_units[sp];
+    if (!s.padCargo || s.padCargo == kEMPMissile) return false;
+    const int8_t t = static_cast<int8_t>(s.bayType[bay]);
+    if (!t && s.padPayload == 0) return false;
+    return s.padPayload != t;
+}
+
+bool spaceportPadSwap(int owner, int sp, int bay) {         // case 10 (+0x12 = 1) → sub_47F470
+    if (!valid(sp) || bay < 0 || bay > 5) return false;
+    UnitRecord& s = g_units[sp];
+    if (ownerOf(s) != (owner & 0x0F) || (s.flags & UNIT_DEAD)) return false;
+    if (!s.padCargo) return false;
+    const int8_t old = static_cast<int8_t>(s.padPayload);
+    s.padPayload = static_cast<int8_t>(s.bayType[bay]);
+    s.bayType[bay] = static_cast<uint8_t>(old);
+    return true;
+}
+
 bool spaceportLaunch(int sp, int tx, int ty) {               // case 25
     if (!valid(sp)) return false;
     UnitRecord& s = g_units[sp];

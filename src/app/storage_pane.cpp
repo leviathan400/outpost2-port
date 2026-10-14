@@ -11,6 +11,7 @@
 #include "../game/colony.h"
 #include "../game/docking.h"
 #include "../game/mining.h"
+#include "../game/missile.h"
 #include "../game/tethys_game.h"
 #include "../game/player.h"
 #include "../game/structure.h"
@@ -118,7 +119,7 @@ void StoragePane::draw(uint32_t* fb, int fbW, int fbH, int winL, int winT, const
         if (g_art.ok() && icon >= 0 && icon < g_art.numAnimations())
             blitArtFrame(fb, fbW, fbH, icon, 0, r.l, r.t, -1, pane.l, pane.t, pane.r, pane.b);
         const bool over = mx >= r.l && mx < r.r && my >= r.t && my < r.b;
-        if (over && bayTransferAvailable(m_bld, i))
+        if (over && bayAvailable(i))
             for (int x = r.l; x < r.r; ++x) { fb[r.t * fbW + x] = 0xFF00FF00u; fb[(r.b - 1) * fbW + x] = 0xFF00FF00u; }
         // Nome sob o ícone (x .. x+0x57, y = 0x64 + 0x3A*k) e "Alt+N" à direita.
         const int lx = winL + (i < 3 ? 7 : 0x61), ly = winT + 0x64 + 0x3A * (i % 3);
@@ -130,9 +131,24 @@ void StoragePane::draw(uint32_t* fb, int fbW, int fbH, int winL, int winT, const
     }
     // Caixa da doca (0x33 acima do botão STATUS) e o texto à direita.
     const int by = statusTop - 0x33, bx = winL + 0xD;
-    const int v = dockedVehicle(m_bld);
+    const int v = m_launch ? 0 : dockedVehicle(m_bld);
     std::string text;
-    if (v) {
+    if (m_launch && b.padCargo) {
+        // sub_4637B0 ([+0x6C4]): a plataforma — SULV 0x6FF (Eden) / 0x701, RLV 0x700,
+        // míssil 0x702; "<carga> carried in <veículo>", o míssil ou "<veículo> is empty".
+        const int pad = b.padCargo;
+        const int icon = (pad == 0x69 ? (edenBuilt(b) ? 0x6FF : 0x701) : pad == 0x6A ? 0x700 : 0x702) - 0x65;
+        // Caixa na cor da facção (sub_41F3E0) e o ícone no canto (sub_403E00).
+        const uint32_t fillC = rgb555(edenBuilt(b) ? 0x6DC3 : 0x35AD);
+        for (int y = by; y < by + 0x2C; ++y)
+            for (int x = bx; x < bx + 0x2C; ++x)
+                if (x >= 0 && x < fbW && y >= 0 && y < fbH) fb[y * fbW + x] = fillC;
+        if (g_art.ok() && icon < g_art.numAnimations())
+            blitArtFrame(fb, fbW, fbH, icon, 0, bx, by, -1, bx, by, bx + 0x2C, by + 0x2C);
+        if (b.padPayload) text = std::string(unitDisplayName(b.padPayload)) + " carried in " + unitDisplayName(pad);
+        else if (pad == 0x6B) text = unitDisplayName(pad);
+        else text = std::string(unitDisplayName(pad)) + " is empty";
+    } else if (v) {
         const UnitRecord& u = g_units[v];
         const bool eden = (u.owner & 0x0F) < kMaxPlayers && g_playerData[u.owner & 0x0F].isEden;
         const int anim = vehicleAnimIndex(u.type, u.rotation, eden);
@@ -187,9 +203,15 @@ void StoragePane::draw(uint32_t* fb, int fbW, int fbH, int winL, int winT, const
     }
 }
 
+bool StoragePane::bayAvailable(int bay) const {
+    return m_launch ? spaceportPadSwapAvailable(m_bld, bay) : bayTransferAvailable(m_bld, bay);
+}
+
 void StoragePane::pressBay(int bay) {
     if (!m_open || bay < 0 || bay >= bays()) return;
-    if (bayTransferAvailable(m_bld, bay)) sendBayTransfer(m_bld, bay);
+    if (!bayAvailable(bay)) return;
+    if (m_launch) spaceportPadSwap(TethysGame::localPlayer(), m_bld, bay);   // sub_456E50 (0x0A, +0x12 = 1)
+    else sendBayTransfer(m_bld, bay);
 }
 
 bool StoragePane::click(int winL, int winT, int x, int y) {

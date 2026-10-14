@@ -197,6 +197,19 @@ static int drawProductionSection(uint32_t* fb, int fbW, int fbH, const PaneRect&
     return drawMarkupText(fb, fbW, fbH, rc, buf, kTextGreen);
 }
 
+// ---- Plataforma do Spaceport (sub_45BE70) ------------------------------------
+// "Launch Pad:<R><veículo> (Loaded)/(empty)", só o míssil, ou "(empty)".
+static int drawLaunchPadSection(uint32_t* fb, int fbW, int fbH, const PaneRect& rc, const UnitRecord& r) {
+    if (r.type != 0x37) return 0;
+    char buf[128];
+    const int pad = r.padCargo;
+    if (pad == 0x6B) std::snprintf(buf, sizeof(buf), "%s:<R>%s", "Launch Pad", unitDisplayName(pad));
+    else if (pad) std::snprintf(buf, sizeof(buf), "%s:<R>%s %s", "Launch Pad", unitDisplayName(pad),
+                                r.padPayload ? "(Loaded)" : "(empty)");
+    else std::snprintf(buf, sizeof(buf), "%s:<R>%s", "Launch Pad", "(empty)");
+    return drawMarkupText(fb, fbW, fbH, rc, buf, kTextGreen);
+}
+
 void drawUnitInfoPane(uint32_t* fb, int fbW, int fbH, const PaneRect& pane,
                       int unitId, int numSelected, int localPlayer) {
     if (numSelected <= 0 || unitId <= 0 || unitId >= static_cast<int>(g_units.size())) return;
@@ -268,6 +281,8 @@ void drawUnitInfoPane(uint32_t* fb, int fbW, int fbH, const PaneRect& pane,
     sec.t += 2 * lh;                                   // sub_45A690: melhorias (2 linhas)
     sec.t += drawStatusSection(fb, fbW, fbH, sec, r, localPlayer);
     sec.t += drawProductionSection(fb, fbW, fbH, sec, r);
+    // (seções sub_45B070..sub_45BD50 — pendentes)
+    sec.t += drawLaunchPadSection(fb, fbW, fbH, sec, r);
 }
 
 bool infoPaneButton(const PaneRect& pane, int unitId, int localPlayer, PaneButton& out) {

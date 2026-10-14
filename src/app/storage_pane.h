@@ -35,7 +35,10 @@ public:
     bool unloadEnabled() const;      // caminhão com carga e sub_4570D0
     void load();                     // pacote 0x0B
     void unload();                   // pacote 0x0C
-    void open(int buildingId) { m_open = true; m_bld = buildingId; }
+    // launchPad: modo [+0x6C4] = 1 (comando LAUNCH PAD, sub_456730) — as baias
+    // trocam com a carga do SULV e a caixa mostra a plataforma.
+    void open(int buildingId, bool launchPad = false) { m_open = true; m_bld = buildingId; m_launch = launchPad; }
+    bool launchMode() const { return m_open && m_launch; }
     void close() { m_open = false; }
     void update(const std::vector<int>& sel);
     // winL/winT = canto da janela do quadro; pane = área de conteúdo; statusTop =
@@ -51,7 +54,9 @@ private:
     PaneRect bayRect(int winL, int winT, int i) const;
     int bays() const;
     bool m_open = false;
+    bool m_launch = false;
     int m_bld = 0;
+    bool bayAvailable(int bay) const;
 };
 
 } // namespace op2

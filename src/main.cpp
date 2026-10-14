@@ -662,6 +662,32 @@ static int runEarthTest(const std::string& mapName, const std::string& prefix) {
         sp1 = op2::Unit(op2::placeBuilding(0x37, 30, 15, 1));
         for (int p = 0; p < 2; ++p) { op2::g_playerData[p].workers = 60; op2::g_playerData[p].scientists = 20; op2::colonyMarkDirty(p); }
         for (int t = 0; t < 40; ++t) gs.onIdle(renderer, 0.2501f / 4.0f);
+        {   // Painel LAUNCH PAD do jogador 0: SULV + módulo (Command Module 0x5C) na baia 0.
+            op2::UnitRecord& s0 = op2::g_units[sp0.id()];
+            s0.padCargo = 0x69;
+            s0.bayType[0] = 0x5C;
+            gs.setSelection({sp0.id()});
+            gs.pressCommand(op2::UC_LAUNCH_PAD);
+            for (int q = 0; q < 3; ++q) gs.onIdle(renderer, 0.05f);
+            writeBmp32(prefix + "_launch1.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH,
+                       op2::Renderer::NATIVE_HEIGHT);
+            std::printf("[RLV] painel: launch disponivel=%d troca baia0=%d\n", op2::spaceportLaunchAvailable(sp0.id()),
+                        op2::spaceportPadSwapAvailable(sp0.id(), 0));
+            op2::spaceportPadSwap(0, sp0.id(), 0);
+            for (int q = 0; q < 3; ++q) gs.onIdle(renderer, 0.05f);
+            writeBmp32(prefix + "_launch2.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH,
+                       op2::Renderer::NATIVE_HEIGHT);
+            std::printf("[RLV] apos troca: carga=0x%X baia0=0x%X launch disponivel=%d\n", op2::g_units[sp0.id()].padPayload,
+                        op2::g_units[sp0.id()].bayType[0], op2::spaceportLaunchAvailable(sp0.id()));
+            gs.pressCommand(-14);                              // kCmdLaunch
+            int sulv = 0;
+            for (int i = 1; i < (int)op2::g_units.size(); ++i)
+                if (op2::g_units[i].id != -1 && op2::g_units[i].type == 0x69) sulv = i;
+            for (int q = 0; q < 300 && sulv && op2::g_units[sulv].id != -1; ++q) gs.onIdle(renderer, 0.2501f / 4.0f);
+            std::printf("[RLV] SULV lancado=%d removido=%d | modulos j0=0x%X pad=0x%X\n", sulv != 0,
+                        sulv && op2::g_units[sulv].id == -1, op2::g_playerData[0].spaceBits, op2::g_units[sp0.id()].padCargo);
+            gs.setSelection({});
+        }
         op2::g_units[sp1.id()].padCargo = 0x6A;
         std::printf("[RLV] spaceports operando: j0=%d j1=%d\n", op2::structureOperational(op2::g_units[sp0.id()]),
                     op2::structureOperational(op2::g_units[sp1.id()]));
