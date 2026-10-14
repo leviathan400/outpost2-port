@@ -12,6 +12,7 @@
 #include "vehicle_list_pane.h"
 #include "comms_pane.h"
 #include "factories_pane.h"
+#include "labs_pane.h"
 #include "objectives_pane.h"
 #include "storage_pane.h"
 #include "research_pane.h"
@@ -48,6 +49,7 @@ public:
     void debugVehicleList(int row, bool jump);
     // Testes: clica na aba k (0..5) do quadro; na de mensagens escolhe `row`.
     void debugTab(int k, int row = -1);
+    void debugLabs(int mode, int row) { m_labs.open(mode == 2 ? 2 : mode); if (row >= 0) m_labs.select(row); }
     void pressCommand(int cmd) { clickCommand(cmd); }      // testes: botão do painel
     ResearchPane& researchPaneForTest() { return m_research; }
     void setMouse(int nx, int ny) { m_mouseNX = nx; m_mouseNY = ny; }
@@ -126,7 +128,8 @@ private:
     ObjectivesPane m_objectives;   // aba 5 (unk_565AC8: Game Options / objetivos)
     CommsPane m_comms;             // aba 3 (dword_566510: Communications)
     FactoriesPane m_factories;     // aba 0 (dword_5657C8: Factories Report)
-    void closeTabPanes() { m_comms.close(); m_factories.close(); }
+    LabsPane m_labs;               // aba 1 (dword_568248: Labs)
+    void closeTabPanes() { m_comms.close(); m_factories.close(); m_labs.close(); }
     // Painel de aba aberto no quadro (índice em dword_4D5390) ou −1 = o status da
     // seleção (sub_45CC30: unidade escolhida, ou nada).
     int m_tab = -1;
@@ -152,6 +155,7 @@ private:
     static constexpr int kCmdVehicles = -15, kCmdJump = -16;   // &VEHICLES (RCC) / &JUMP da lista
     static constexpr int kCmdMsgJump = -17;                    // &JUMP das mensagens (sub_466A00)
     static constexpr int kCmdDetails = -18;                    // &DETAILS dos relatórios (sub_458CC0)
+    static constexpr int kCmdLabsCompleted = -19, kCmdLabsCurrent = -20;   // modos 1 / 0 (sub_45C460)
     void reportDetails(int unit);                              // sub_457760
     static constexpr int kCmdBuildIt = -2, kCmdStatus = -3;
     PaneRect infoPaneRect() const;

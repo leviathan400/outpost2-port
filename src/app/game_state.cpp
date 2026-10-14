@@ -1019,6 +1019,11 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
         }
         if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_tab == 3 && m_comms.isOpen())
             paneHit = m_comms.click(infoPaneRect(), nx, ny);
+        if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_tab == 1 && m_labs.isOpen()) {
+            bool dbl = false;
+            paneHit = m_labs.click(infoPaneRect(), nx, ny, e.button.clicks >= 2, dbl);
+            if (dbl) clickCommand(kCmdDetails);
+        }
         if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_tab == 0 && m_factories.isOpen()) {
             bool dbl = false;
             paneHit = m_factories.click(infoPaneRect(), nx, ny, e.button.clicks >= 2, dbl);
@@ -1182,6 +1187,27 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
         b.cmd = kCmdDetails; b.label = "&DETAILS"; b.tip = "&Details"; b.hotkey = 'D';
         b.disabled = !m_factories.detailsEnabled();
         out.push_back(b);
+        layoutButtons();
+        return out;
+    }
+    if (m_selected.empty() && m_tab == 1) {
+        // sub_46BB90: modo 0 DETAILS + C&OMPLETED; 1 DETAILS + C&URRENT; 2 C&OMPLETED + C&URRENT.
+        TextButton b{};
+        if (m_labs.mode() != 2) {
+            b.cmd = kCmdDetails; b.label = "&DETAILS"; b.tip = "&Details"; b.hotkey = 'D';
+            b.disabled = !m_labs.detailsEnabled();
+            out.push_back(b);
+        }
+        if (m_labs.mode() != 1) {
+            b = TextButton{};
+            b.cmd = kCmdLabsCompleted; b.label = "C&OMPLETED"; b.tip = "C&ompleted Research"; b.hotkey = 'O';
+            out.push_back(b);
+        }
+        if (m_labs.mode() != 0) {
+            b = TextButton{};
+            b.cmd = kCmdLabsCurrent; b.label = "C&URRENT"; b.tip = "C&urrent Research"; b.hotkey = 'U';
+            out.push_back(b);
+        }
         layoutButtons();
         return out;
     }
@@ -1363,7 +1389,7 @@ bool GameState::tabRect(int k, PaneRect& r) const {
 // origem: sem [+0x484]), volta o painel ao modo 0 (vt[5]) e o põe no quadro
 // (sub_45D020, aba acesa). PROVISÓRIO: só as abas já portadas respondem.
 void GameState::openTab(int k) {
-    if (k != 0 && k != 3 && !(k == 5 && m_mission)) return;
+    if (k != 0 && k != 1 && k != 3 && !(k == 5 && m_mission)) return;
     m_targetCmd = -1;
     m_selected.clear();
     m_lastSel.clear();
@@ -1371,6 +1397,7 @@ void GameState::openTab(int k) {
     closeTabPanes();
     m_tab = k;
     if (k == 0) m_factories.open();
+    if (k == 1) m_labs.open(0);
     if (k == 3) m_comms.open();
     soundPlay(0x57);
 }
@@ -1380,6 +1407,7 @@ void GameState::debugTab(int k, int row) {
     if (tabRect(k, r)) openTab(k);
     if (k == 3 && row >= 0) m_comms.select(row);
     if (k == 0 && row >= 0) m_factories.select(row);
+    if (k == 1 && row >= 0) m_labs.select(row);
 }
 
 PaneRect GameState::infoPaneRect() const {
@@ -1430,8 +1458,14 @@ void GameState::clickCommand(int cmd) {                  // vt[1] do comando
     if (cmd == kCmdVehicles) { closePanes(); m_vehicles.open(); return; }   // dword_567D80
     if (cmd == kCmdDetails) {
         if (m_tab == 0 && m_factories.detailsEnabled()) reportDetails(m_factories.unit());
+        if (m_tab == 1 && m_labs.detailsEnabled()) {
+            if (m_labs.mode() == 0) reportDetails(m_labs.lab());    // sub_4576D0
+            else m_labs.open(2);                                    // botão de modo (sub_45C460)
+        }
         return;
     }
+    if (cmd == kCmdLabsCompleted) { if (m_tab == 1) m_labs.open(1); return; }
+    if (cmd == kCmdLabsCurrent) { if (m_tab == 1) m_labs.open(0); return; }
     if (cmd == kCmdMsgJump) {                               // sub_466A00 → sub_438EC0 → sub_408120
         int px, py;
         if (m_comms.jump(px, py)) requestCenterView(px, py);
@@ -1703,10 +1737,13 @@ void GameState::renderPanel(Renderer& renderer) {
     m_vehicles.update();
     m_comms.update();
     m_factories.update();
+    m_labs.update();
     if (m_tab == 3 && m_comms.isOpen())
         m_comms.draw(fb, VW, VH, kColX, kPaneWinY, pane, m_mouseNX, m_mouseNY);
     else if (m_tab == 0 && m_factories.isOpen())
         m_factories.draw(fb, VW, VH, pane, m_mouseNX, m_mouseNY);
+    else if (m_tab == 1 && m_labs.isOpen())
+        m_labs.draw(fb, VW, VH, pane, m_mouseNX, m_mouseNY);
     else if (m_vehicles.isOpen())
         m_vehicles.draw(fb, VW, VH, pane, m_mouseNX, m_mouseNY);
     else if (m_confirm.isOpen())

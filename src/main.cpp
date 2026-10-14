@@ -1753,6 +1753,18 @@ static int runPaneTest(const std::string& dll, const std::string& prefix) {
         gs.onIdle(renderer, 0.0f);
         std::snprintf(f2, sizeof(f2), "%s_factories.bmp", prefix.c_str());
         writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        gs.debugTab(1, 0);
+        gs.onIdle(renderer, 0.0f);
+        std::snprintf(f2, sizeof(f2), "%s_labs0.bmp", prefix.c_str());
+        writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        gs.debugLabs(1, 2);
+        gs.onIdle(renderer, 0.0f);
+        std::snprintf(f2, sizeof(f2), "%s_labs1.bmp", prefix.c_str());
+        writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        gs.debugLabs(2, -1);
+        gs.onIdle(renderer, 0.0f);
+        std::snprintf(f2, sizeof(f2), "%s_labs2.bmp", prefix.c_str());
+        writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
         gs.debugTab(5);
         gs.onIdle(renderer, 0.0f);
         std::snprintf(f2, sizeof(f2), "%s_options.bmp", prefix.c_str());
