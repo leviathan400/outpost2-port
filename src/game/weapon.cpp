@@ -32,7 +32,8 @@ static const int kAnimBias = 0x65;   // sub_403E00: `lea eax,[ecx-65h]`
 // unidade (desenho), vt[35] (animação da explosão) e vt[11] do descritor
 // (antecipação). Valores lidos do OUTPOST2.EXE.
 enum Launch { LAUNCH_BALLISTIC /*sub_4A3A90*/, LAUNCH_INSTANT /*sub_4A3E00*/, LAUNCH_THOR /*sub_48AF60*/ };
-enum Finder { FIND_LOS /*sub_4A6DD0*/, FIND_NEAR /*sub_4A6AA0*/, FIND_BOX /*sub_4A7400*/ };
+enum Finder { FIND_LOS /*sub_4A6DD0*/, FIND_NEAR /*sub_4A6AA0*/, FIND_BOX /*sub_4A7400*/,
+              FIND_EMP /*sub_4A7060*/ };
 enum DrawKind { DRAW_PROJECTILE /*sub_4A2D50*/, DRAW_LASER /*sub_4A3420*/,
                 DRAW_MICROWAVE /*sub_4A3000*/, DRAW_RAILGUN /*sub_4A2A00*/,
                 DRAW_SCORPION /*sub_4A31D0*/, DRAW_THOR /*sub_48AD70*/ };
@@ -48,6 +49,9 @@ struct WeaponClass {
     int leadAdd, leadMin;
 };
 static const WeaponClass kClasses[] = {
+    // EMP: sub_4A5670 / sub_4A3A90 / sub_4A7060 / sub_4A2D50 / sub_4A6810 / sub_447100;
+    // fire tick sub_4A7580, impacto sub_4A4490, vt[37] sub_4A47F0.
+    {0x3C, 1, 0xE6, 0xE7, LAUNCH_BALLISTIC, FIND_EMP, DRAW_PROJECTILE, 0x2FF, 0, 1, 3},
     // LASER: sub_4A58D0 / sub_4A3E00 / sub_4A7020→sub_4A6DD0 / sub_4A3420 / sub_4A2880 / sub_447130
     {0x3D, 2, 0xE8, 0xE9, LAUNCH_INSTANT, FIND_LOS, DRAW_LASER, 0x2F6, 4, 0, 0},
     // MICROWAVE: sub_4A5A30 / sub_4A3E00 / sub_4A7040 / sub_4A3000 / sub_4A2880 / sub_447150
@@ -552,6 +556,44 @@ static int findTargetNear(int id, uint32_t mask) {
     return 0;
 }
 
+// sub_4A7060 (EMP): a caixa sem visada, mas sem o filtro de AutoTargeted; pula
+// quem já está em EMP, prédios que não consomem energia (bloco +0x24) e as
+// aranhas (desc+4 = map_id 3 Spider / 4 Scorpion).
+static bool empCandidateOk(const UnitRecord& c, uint32_t mask, uint32_t ownerBit) {
+    if ((c.flags & mask) != mask) return false;
+    const int o = ownerOf(c);
+    if (o < kMaxPlayers && (g_playerData[o].allyMask & ownerBit)) return false;
+    if (c.flags & UNIT_EMP) return false;
+    if (c.flags & UNIT_BUILDING) {
+        const StructSheetDesc* d = structSheet(c.type);
+        if (!d || d->player[statsOf(c)].power == 0) return false;
+    }
+    return c.type != mapSpider && c.type != mapScorpion;
+}
+static int findTargetEMP(int id, uint32_t mask) {
+    const UnitRecord& u = g_units[id];
+    const WeapPlayerStats* w = weapStats(static_cast<int16_t>(u.cargo), statsOf(u));
+    int R = w ? w->range : 0;
+    if (turretBonus(u)) { ++R; if (R >= 7) R = 7; }
+    const int Rpx = R << 5;
+    const int sx = unitOX(u), sy = unitOY(u);
+    const int xL = sx - Rpx, xR = sx + Rpx;
+    const uint32_t bit = 1u << ownerOf(u);
+    for (int c = u.lprev; c != 0 && unitOY(g_units[c]) >= sy - Rpx; c = g_units[c].lprev) {
+        const UnitRecord& t = g_units[c];
+        const int x = unitOX(t);
+        if (x <= xL || x >= xR) continue;
+        if (empCandidateOk(t, mask, bit)) return c;
+    }
+    for (int c = u.lnext; c != 0 && unitOY(g_units[c]) <= sy + Rpx; c = g_units[c].lnext) {
+        const UnitRecord& t = g_units[c];
+        const int x = unitOX(t);
+        if (x <= xL || x >= xR) continue;
+        if (empCandidateOk(t, mask, bit)) return c;
+    }
+    return 0;
+}
+
 static int findTarget(int id, uint32_t mask) {
     const WeaponClass* c = classOf(static_cast<int16_t>(g_units[id].cargo));
     if (!c) return 0;
@@ -559,6 +601,7 @@ static int findTarget(int id, uint32_t mask) {
         case FIND_LOS:  return findTargetLOS(id, mask);
         case FIND_BOX:  return findTargetLOS(id, mask, false);
         case FIND_NEAR: return findTargetNear(id, mask);
+        case FIND_EMP:  return findTargetEMP(id, mask);
     }
     return 0;
 }
@@ -609,6 +652,7 @@ static bool fireWeapon(int id) {
     p.flags = (p.flags & ~UNIT_ALT_BARREL) | (sh.flags & UNIT_ALT_BARREL);
     p.sourceId = id;                                            // vt[37] = sub_4A27E0
     ++sh.refCount;
+    if (p.type == 0x3C) p.shooterBit = static_cast<int8_t>(1 << statsOf(sh));   // sub_4A47F0
     // vt[32] (sub_4A3DD0, alvo unidade) / vt[33] (sub_4A3DA0, alvo lugar).
     p.flags &= ~UNIT_IN_FLIGHT;
     p.field23 = 0; p.field22 = 0x12; p.action = 0x36;
@@ -664,7 +708,15 @@ void weaponTick(int id) {                                     // sub_4A7AF0 / su
         else idleTurret(g_units[id]);
         return;
     }
-    if (u.targetIsUnit()) {
+    if (c->type == 0x3C) {
+        // sub_4A7580: alvo morto ou já em EMP (0xA0000) é largado; sem o teste
+        // de alcance antes do disparo (o vt[4] confere).
+        if (u.targetIsUnit() && (!alive(u.target4C) || (g_units[u.target4C].flags & UNIT_EMP))) {
+            u.field4E = 0x7FFF;
+            dropRef(u.target4C);
+            return;
+        }
+    } else if (u.targetIsUnit()) {
         if (!alive(u.target4C) || (c->rangeMode == 1 && !inRange(u))) {
             u.field4E = 0x7FFF;
             dropRef(u.target4C);
@@ -1191,6 +1243,66 @@ static void explode(int pid) {
     }
 }
 
+// vt[34] do EMP (sub_4A4490): nas células do raio, cada unidade danificável
+// fora de EMP (prédio só se consome energia; nunca aranhas) a < raio leva o
+// crédito do atirador e, com chance ((blind-60)/2 + 200) * ((d/4 - d + R) *
+// 0xE7 / R) / 256 contra rnd & 0xFF, fica em EMP por 0x10 (dono aliado do
+// atirador) ou 0x20 passadas (vt[0x5C]) com o som 0xE7.
+static void explodeEMP(int pid) {
+    const UnitRecord& p = g_units[pid];
+    const WeaponSheetDesc* d = weaponSheet(p.type);
+    if (!d) return;
+    const int R = d->radius;
+    const int rt = (R + 31) >> 5;
+    const int ix = p.impactX, iy = p.impactY;
+    const int x0 = (ix >> 5) - rt, x1 = (ix >> 5) + rt;
+    int y0 = (iy >> 5) - rt; if (y0 <= 0) y0 = 0;
+    int y1 = (iy >> 5) + rt; if (y1 > g_gameMap.height() - 1) y1 = g_gameMap.height() - 1;
+    const int base = 0xE7;                                        // 0x39C com dword_56DE64
+    const int source = p.sourceId;
+    const int8_t shooterBit = p.shooterBit;
+    for (int x = x0; x <= x1; ++x) {
+        const int cxp = x * 32 + 16;
+        for (int y = y0; y <= y1; ++y) {
+            const uint32_t cell = g_gameMap.rawCell(x & tileMask(), y);
+            const int occ = static_cast<int>((cell & GameMap::CELL_OCCUPANCY) >> GameMap::CELL_OCC_SHIFT);
+            if (!occ || !alive(occ)) continue;
+            UnitRecord& t = g_units[occ];
+            if (!(t.flags & UNIT_DAMAGEABLE) || (t.flags & UNIT_EMP)) continue;
+            int dx, dy;
+            if (t.flags & UNIT_BUILDING) {
+                const StructSheetDesc* sd = structSheet(t.type);
+                if (!sd || sd->player[statsOf(t)].power == 0) continue;
+                dy = std::abs(iy - y * 32 - 16);
+                dx = (ix > cxp ? ix : cxp) - (ix < cxp ? ix : cxp);
+            } else {
+                if (t.type == mapSpider || t.type == mapScorpion) continue;
+                dy = std::abs(iy - unitOY(t));
+                const int tx = unitOX(t);
+                dx = (tx > ix ? tx : ix) - (tx < ix ? tx : ix);
+            }
+            if (half(pxW()) < dx) dx = pxW() - dx;
+            const int dist = octo(dx, dy);
+            if (R <= dist) continue;
+            if (t.lastAttacker != source) {
+                if (t.lastAttacker) dropRef(t.lastAttacker);
+                if (source > 0 && source < static_cast<int>(g_units.size())) ++g_units[source].refCount;
+                t.lastAttacker = static_cast<int16_t>(source);
+            }
+            t.lastAttackTick = TethysGame::tick();
+            const int c = (armorOf(t) - 60) / 2 + 200;
+            const int a = (dist / 4 - dist + R) * base / R;
+            const int chance = c * a / 256;
+            if (static_cast<int>(TethysGame::rng().next() & 0xFF) > chance) continue;
+            const int ow = ownerOf(t);
+            const bool allied = ow < kMaxPlayers && (g_playerData[ow].allyMask & static_cast<uint32_t>(shooterBit));
+            unitApplyEMP(occ, allied ? 0x10 : 0x20);
+            const UnitRecord& tt = g_units[occ];
+            soundPlayAt(unitOX(tt), unitOY(tt), 0xE7);
+        }
+    }
+}
+
 // ---- Máquina do projétil ----------------------------------------------------------
 // vt[29] do atirador: veículo (sub_44B620) vivo, sem EMP e fora do estado 0xA.
 static bool sourceReady(int src) {
@@ -1227,7 +1339,8 @@ void weaponProjectileAction(int id) {                         // case 54
     }
     if (!p.exploded) {
         p.exploded = 1;
-        explode(id);
+        if (p.type == 0x3C) explodeEMP(id);                      // vt[34] sub_4A4490
+        else explode(id);                                         // vt[34] sub_4A35C0
         UnitRecord& q = g_units[id];
         q.field22 = SUB_WAIT;
         q.field3C = explosionDuration(q);

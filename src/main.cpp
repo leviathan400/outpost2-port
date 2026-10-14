@@ -1353,6 +1353,7 @@ static int runCombatTest(const std::string& mapName, const std::string& prefix, 
     gs.setCamera(bx * 32 - 200 + 48, by * 32 - 240 + 48);
     gs.setSelection({ids[0], ids[1]});
     int lastDmg[4] = {0, 0, 0, 0}, lastTgt[4] = {0x7FFF, 0x7FFF, 0x7FFF, 0x7FFF};
+    uint32_t lastFx[4] = {0, 0, 0, 0};
     int shots = 0;
     for (int t = 1; t <= 600; ++t) {
         op2::TethysGame::advanceTick();
@@ -1369,6 +1370,12 @@ static int runCombatTest(const std::string& mapName, const std::string& prefix, 
         for (int k = 0; k < 4; ++k) {
             const op2::UnitRecord& r = op2::g_units[ids[k]];
             if (r.id == -1) { if (lastDmg[k] >= 0) std::printf("[Combat] t=%d  %d removido\n", t, ids[k]); lastDmg[k] = -1; continue; }
+            const uint32_t fx = r.flags & 0x1C0000u;             // espuma / EMP / ESG
+            if (fx != lastFx[k]) {
+                std::printf("[Combat] t=%d  %d efeitos 0x%X (emp=%d espuma=%d esg=%d)\n", t, ids[k], fx,
+                            r.empTicks, r.foamTicks, r.esgTicks);
+                lastFx[k] = fx;
+            }
             const int tg = r.hasTarget() ? r.target4C : 0x7FFF;
             if (tg != lastTgt[k]) {
                 std::printf("[Combat] t=%d  %d alvo -> %d (torre %d)\n", t, ids[k], tg == 0x7FFF ? -1 : tg, r.turretDir);

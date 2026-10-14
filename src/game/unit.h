@@ -184,6 +184,11 @@ struct UnitRecord {
     // Grupo de IA (src/game/ai_group.cpp): +0x30 stub do grupo (0xFF = nenhum).
     uint8_t  groupStub = 0xFF;
     int16_t  empTicks = 0;
+    // Veículo atingido por espuma (0x40000): contador +0x54 e tick do início +0x60;
+    // por ESG (0x100000): contador +0x58 (prólogo de sub_43DE50, 1x a cada 8 ticks).
+    int16_t  foamTicks = 0;
+    int      foamStart = 0;
+    int16_t  esgTicks = 0;
     int      launchDefense = 0;     // +0x54 míssil (0x69..0x6B): Meteor Defense que atirou
     // Destroço (Wreckage 0x54, vt off_4CF400): +0x58 máscara de quem descobriu,
     // +0x5C tecnologia (vt[0xA0]).
@@ -197,6 +202,7 @@ struct UnitRecord {
     int      impactX = 0, impactY = 0; // +0x34/+0x38 ponto de impacto (pixel)
     int      exploded = 0;         // +0x54
     int16_t  flightTicks = 0;      // +0x58 duração do voo
+    int8_t   shooterBit = 0;       // +0x5A EMP: 1 << dono das estatísticas do atirador (vt[37] sub_4A47F0)
     int      vecX = 0, vecY = 0;   // +0x5C/+0x60 impacto - origem
     int      velQX = 0, velQY = 0; // +0x64/+0x68 vec*4/duração (rastro)
     bool     rawPixel = false;     // pixelX/Y já no sentido do original (centro, sem +16)

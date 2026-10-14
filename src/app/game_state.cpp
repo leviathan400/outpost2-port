@@ -478,6 +478,27 @@ void GameState::onIdle(Renderer& renderer, float dt) {
                 if (drew && tankTurret(r, anim, frame, tAnim, tx, ty) && tAnim >= 0 &&
                     tAnim < g_art.numAnimations())
                     drawSprite(tAnim, 0, ucx + tx, ucy + ty, pc);
+                // Overlays (sub_44C910 / fim de sub_484CF0), fora da doca: espuma
+                // 0x2FE (contador [+0x54] < nF-1) / 0x2FD (endurecida, pelo tempo
+                // desde [+0x60]), ESG 0x619 e EMP 0x2FF ((id + tick) % nF).
+                if (drew && r.field22 != 0x0D && g_art.ok()) {
+                    auto lastF = [](int raw) {
+                        const int a = raw - 0x65;
+                        return a < g_art.numAnimations() ? (int)g_art.animation(a).frames.size() - 1 : 0;
+                    };
+                    const int tick = (int)TethysGame::tick();
+                    if (r.flags & 0x40000u) {
+                        const int n = lastF(0x2FE);
+                        if (r.foamTicks < n) drawSprite(0x2FE - 0x65, n - r.foamTicks, ucx, ucy, -1);
+                        else {
+                            const int cap = lastF(0x2FD) - 1;
+                            const int f = static_cast<int>((static_cast<unsigned>(tick - r.foamStart) & 0xFFFEu) >> 1);
+                            drawSprite(0x2FD - 0x65, f < cap ? f : cap, ucx, ucy, -1);
+                        }
+                    }
+                    if (r.flags & 0x100000u) drawSprite(0x619 - 0x65, (int)((unsigned)((int)i + tick) % (unsigned)(lastF(0x619) + 1)), ucx, ucy, -1);
+                    if (r.flags & UNIT_EMP) drawSprite(0x2FF - 0x65, (int)((unsigned)((int)i + tick) % (unsigned)(lastF(0x2FF) + 1)), ucx, ucy, -1);
+                }
             }
         }
         if (isBld) {
@@ -490,6 +511,28 @@ void GameState::onIdle(Renderer& renderer, float dt) {
             if (anim >= 0 && g_art.ok() && anim < g_art.numAnimations()) {
                 int pc = (ow >= 0 && ow < kMaxPlayers) ? g_playerData[ow].colorNumber : 0;
                 drew = drawSprite(anim, structureFrame(r), ucx, ucy, pc);
+                // EMP / ESG (0x180000) no prédio (sub_408DB0): grade de 16 px no
+                // footprint; cada ponto aparece se rnd(100) > 80 (40 com lado 1),
+                // com a RNG semeada por (tick>>5) + id + [+0x18] + 0x11790718.
+                if (r.flags & 0x180000u) {
+                    const StructSheetDesc* sd = structSheet(r.type);
+                    const int sx = sd ? sd->sizeX : 1, sy = sd ? sd->sizeY : 1;
+                    const int oraw = (r.flags & UNIT_EMP) ? 0x2FF : 0x619;
+                    const int nF = (int)g_art.animation(oraw - 0x65).frames.size();
+                    GameRNG rng;
+                    rng.setSeed((uint32_t)((int)(TethysGame::tick() >> 5) + (int)i + unitOY(r) + 0x11790718));
+                    const int thr = (sx == 1 || sy == 1) ? 0x28 : 0x50;
+                    int px = screenXOf(((unitOX(r) & ~0x1F) - (sx / 2) * 32 + 16));
+                    const int py0 = (unitOY(r) & ~0x1F) - (sy / 2) * 32 - m_camY + 16;
+                    for (int gx = 0; gx < 2 * sx - 1; ++gx, px += 16) {
+                        int py = py0;
+                        for (int gy = 0; gy < 2 * sy - 1; ++gy, py += 16) {
+                            if (rng.getRand(100) <= thr) continue;
+                            const int f = (rng.getRand(100) + (int)(TethysGame::tick() >> 1)) % (nF > 0 ? nF : 1);
+                            drawSprite(oraw - 0x65, f, px, py, -1);
+                        }
+                    }
+                }
                 // Luz de status (fim de sub_408DB0, opção "Overlay"): prédio de
                 // um aliado do jogador local, fora de desmonte/0x60000: 0x96 em
                 // idle (ação 0x12), 0x94 operando, 0x95 parado; no canto do bbox
