@@ -109,7 +109,7 @@ bool GameState::loadMission(const std::string& dllName) {
     if (!loadMap(mission->mapName)) return false;
     m_mission = std::move(mission);
     setCurrentMission(m_mission.get());
-    m_comms.close();
+    closeTabPanes();
     m_tab = 5;                                               // sub_4893A0: unk_565AC8 no início
     m_lastSel.clear();
 
@@ -1019,6 +1019,11 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
         }
         if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_tab == 3 && m_comms.isOpen())
             paneHit = m_comms.click(infoPaneRect(), nx, ny);
+        if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_tab == 0 && m_factories.isOpen()) {
+            bool dbl = false;
+            paneHit = m_factories.click(infoPaneRect(), nx, ny, e.button.clicks >= 2, dbl);
+            if (dbl) clickCommand(kCmdDetails);
+        }
         if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_tab == 5 && m_mission)
             paneHit = m_objectives.click(infoPaneRect(), nx, ny);
         // Botão de comando do quadro (IDLE / ACTIVATE → CommandPacket 0x12 / 0x13).
@@ -1171,6 +1176,15 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
         layoutButtons();
         return out;
     }
+    if (m_selected.empty() && m_tab == 0) {
+        // sub_464BD0: "&DETAILS" largo, habilitado depois de escolher uma fábrica.
+        TextButton b{};
+        b.cmd = kCmdDetails; b.label = "&DETAILS"; b.tip = "&Details"; b.hotkey = 'D';
+        b.disabled = !m_factories.detailsEnabled();
+        out.push_back(b);
+        layoutButtons();
+        return out;
+    }
     if (m_selected.empty() && m_tab == 3) {
         // sub_4670A0 (modo 0, jogo solo): só "&JUMP", largo; habilitado quando a
         // mensagem escolhida tem posição (sub_466970).
@@ -1314,7 +1328,17 @@ void GameState::syncTabToSelection() {
     if (m_selected == m_lastSel) return;
     m_lastSel = m_selected;
     m_tab = -1;
-    m_comms.close();
+    closeTabPanes();
+}
+
+// sub_457760 (DETAILS): unidade viva → centraliza a vista nela (sub_408120) e a
+// seleciona (sub_41A8E0 + sub_41A710) — a troca de seleção põe o painel dela.
+void GameState::reportDetails(int unit) {
+    if (unit <= 0 || unit >= static_cast<int>(g_units.size())) return;
+    const UnitRecord& r = g_units[unit];
+    if (r.id == -1 || (r.flags & UNIT_DEAD)) return;
+    requestCenterView(unitOX(r), unitOY(r));
+    m_selected = {unit};
 }
 
 // Retângulo da aba k (sub_45C940): encostadas a partir de x = 1 no topo da
@@ -1339,13 +1363,14 @@ bool GameState::tabRect(int k, PaneRect& r) const {
 // origem: sem [+0x484]), volta o painel ao modo 0 (vt[5]) e o põe no quadro
 // (sub_45D020, aba acesa). PROVISÓRIO: só as abas já portadas respondem.
 void GameState::openTab(int k) {
-    if (k != 3 && !(k == 5 && m_mission)) return;
+    if (k != 0 && k != 3 && !(k == 5 && m_mission)) return;
     m_targetCmd = -1;
     m_selected.clear();
     m_lastSel.clear();
     closePanes();
-    m_comms.close();
+    closeTabPanes();
     m_tab = k;
+    if (k == 0) m_factories.open();
     if (k == 3) m_comms.open();
     soundPlay(0x57);
 }
@@ -1354,6 +1379,7 @@ void GameState::debugTab(int k, int row) {
     PaneRect r;
     if (tabRect(k, r)) openTab(k);
     if (k == 3 && row >= 0) m_comms.select(row);
+    if (k == 0 && row >= 0) m_factories.select(row);
 }
 
 PaneRect GameState::infoPaneRect() const {
@@ -1402,6 +1428,10 @@ void GameState::clickCommand(int cmd) {                  // vt[1] do comando
     if (cmd == kCmdUnload) { m_storage.unload(); return; }   // pacote 0x0C
     if (cmd == kCmdStatus || cmd == kCmdCancel) { closePanes(); return; }
     if (cmd == kCmdVehicles) { closePanes(); m_vehicles.open(); return; }   // dword_567D80
+    if (cmd == kCmdDetails) {
+        if (m_tab == 0 && m_factories.detailsEnabled()) reportDetails(m_factories.unit());
+        return;
+    }
     if (cmd == kCmdMsgJump) {                               // sub_466A00 → sub_438EC0 → sub_408120
         int px, py;
         if (m_comms.jump(px, py)) requestCenterView(px, py);
@@ -1672,8 +1702,11 @@ void GameState::renderPanel(Renderer& renderer) {
     m_confirm.update(m_selected);
     m_vehicles.update();
     m_comms.update();
+    m_factories.update();
     if (m_tab == 3 && m_comms.isOpen())
         m_comms.draw(fb, VW, VH, kColX, kPaneWinY, pane, m_mouseNX, m_mouseNY);
+    else if (m_tab == 0 && m_factories.isOpen())
+        m_factories.draw(fb, VW, VH, pane, m_mouseNX, m_mouseNY);
     else if (m_vehicles.isOpen())
         m_vehicles.draw(fb, VW, VH, pane, m_mouseNX, m_mouseNY);
     else if (m_confirm.isOpen())

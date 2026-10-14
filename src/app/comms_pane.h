@@ -6,6 +6,7 @@
 
 #include "info_pane.h"
 #include "produce_pane.h"
+#include "report_list.h"
 
 namespace op2 {
 
@@ -34,17 +35,15 @@ public:
     bool click(const PaneRect& pane, int x, int y);
     bool jumpEnabled() const;                            // sub_466970
     bool jump(int& px, int& py) const;                   // sub_466A00
-    int selected() const { return m_sel; }
-    void select(int item) { m_sel = item; }              // testes
+    int selected() const { return m_list.sel; }
+    void select(int item) { m_list.sel = item; }         // testes
 
 private:
-    struct Line { int item; std::string text; };
-    std::vector<Line> lines(int width) const;
+    std::vector<std::string> items() const;
     ListBoxLayout layout(const PaneRect& pane) const;
 
     bool m_open = false;
-    int m_sel = -1;                                      // [+0xBE0] (0 = mais nova)
-    int m_top = 0;                                       // 1ª linha visível
+    ReportList m_list;                                   // escolha = [+0xBE0] (0 = mais nova)
     int m_seen = 0;                                      // [+0x1C8]: nº de série da última mensagem vista
 };
 

@@ -11,6 +11,7 @@
 #include "produce_pane.h"
 #include "vehicle_list_pane.h"
 #include "comms_pane.h"
+#include "factories_pane.h"
 #include "objectives_pane.h"
 #include "storage_pane.h"
 #include "research_pane.h"
@@ -124,6 +125,8 @@ private:
     VehicleListPane m_vehicles;    // lista de veículos (Alt+V / &VEHICLES do Robot Command Center)
     ObjectivesPane m_objectives;   // aba 5 (unk_565AC8: Game Options / objetivos)
     CommsPane m_comms;             // aba 3 (dword_566510: Communications)
+    FactoriesPane m_factories;     // aba 0 (dword_5657C8: Factories Report)
+    void closeTabPanes() { m_comms.close(); m_factories.close(); }
     // Painel de aba aberto no quadro (índice em dword_4D5390) ou −1 = o status da
     // seleção (sub_45CC30: unidade escolhida, ou nada).
     int m_tab = -1;
@@ -148,6 +151,8 @@ private:
     static constexpr int kCmdGameOptions = -4;
     static constexpr int kCmdVehicles = -15, kCmdJump = -16;   // &VEHICLES (RCC) / &JUMP da lista
     static constexpr int kCmdMsgJump = -17;                    // &JUMP das mensagens (sub_466A00)
+    static constexpr int kCmdDetails = -18;                    // &DETAILS dos relatórios (sub_458CC0)
+    void reportDetails(int unit);                              // sub_457760
     static constexpr int kCmdBuildIt = -2, kCmdStatus = -3;
     PaneRect infoPaneRect() const;
     void produceBuildIt();

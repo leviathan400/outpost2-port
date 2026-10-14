@@ -48,6 +48,8 @@ int drawMarkupText(uint32_t* fb, int fbW, int fbH, const PaneRect& rc,
     while (pos <= text.size()) {
         size_t nl = text.find('\n', pos);
         std::string line = text.substr(pos, nl == std::string::npos ? std::string::npos : nl - pos);
+        // sub_416650: '\t' avança 4 larguras de espaço ([+0x3E4]).
+        for (size_t t = line.find('\t'); t != std::string::npos; t = line.find('\t', t + 4)) line.replace(t, 1, "    ");
         std::vector<Seg> segs;
         int align = 0;
         std::string cur;

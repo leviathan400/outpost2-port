@@ -1749,6 +1749,10 @@ static int runPaneTest(const std::string& dll, const std::string& prefix) {
         char f2[256]; std::snprintf(f2, sizeof(f2), "%s_comms.bmp", prefix.c_str());
         writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
         std::printf("[Pane] Communications -> %s\n", f2);
+        gs.debugTab(0, 0);
+        gs.onIdle(renderer, 0.0f);
+        std::snprintf(f2, sizeof(f2), "%s_factories.bmp", prefix.c_str());
+        writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
         gs.debugTab(5);
         gs.onIdle(renderer, 0.0f);
         std::snprintf(f2, sizeof(f2), "%s_options.bmp", prefix.c_str());
