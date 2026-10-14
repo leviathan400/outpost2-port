@@ -150,6 +150,9 @@ static void stepUnit(int id) {
 
     // sub_44C0B0: passo em curso? aplica 1 tick e sai (termina mesmo sem ordem).
     if (u.stepTicks > 0) { applyStepTick(u); return; }
+    // Sem passo: EMP (0x80000) para no sub-estado 0x0A; espuma (0x40000) só não anda.
+    if (u.flags & UNIT_EMP) { u.field22 = 0x0A; return; }
+    if (u.flags & 0x40000u) return;
     // Fim de um passo COM deslocamento: avança o cursor da rota e encaixa a
     // posição no destino ([st+0x78]++, [+0x14/+0x18] = [st+0x48/+0x4C]).
     if (u.velX || u.velY) {

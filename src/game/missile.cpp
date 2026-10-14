@@ -468,6 +468,17 @@ void missileDrawOps(int id, std::vector<WeaponDrawOp>& ops) {
 
 void unitApplyEMP(int id, int ticks) {
     UnitRecord& u = g_units[id];
+    if ((u.flags & UNIT_VEHICLE) && (u.flags & UNIT_ARMED)) {   // sub_484C50: larga guarda/ordem/alvo
+        auto drop = [](int r) {
+            if (r > 0 && r < static_cast<int>(g_units.size()) && g_units[r].refCount) --g_units[r].refCount;
+        };
+        if (u.guardHi & 0x8000) drop(u.guardLo);
+        u.guardHi = 0x7FFF;
+        if (u.field4A & 0x8000) drop(u.orderLo);
+        u.field4A = 0x7FFF;
+        if (u.field4E & 0x8000) drop(u.target4C);
+        u.field4E = 0x7FFF;
+    }
     if (u.flags & UNIT_VEHICLE) {                               // sub_44B5F0
         u.flags |= UNIT_EMP;
         u.flags &= ~UNIT_LIGHTS;

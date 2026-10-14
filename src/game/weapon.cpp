@@ -33,7 +33,7 @@ static const int kAnimBias = 0x65;   // sub_403E00: `lea eax,[ecx-65h]`
 // (antecipação). Valores lidos do OUTPOST2.EXE.
 enum Launch { LAUNCH_BALLISTIC /*sub_4A3A90*/, LAUNCH_INSTANT /*sub_4A3E00*/, LAUNCH_THOR /*sub_48AF60*/ };
 enum Finder { FIND_LOS /*sub_4A6DD0*/, FIND_NEAR /*sub_4A6AA0*/, FIND_BOX /*sub_4A7400*/,
-              FIND_EMP /*sub_4A7060*/ };
+              FIND_EMP /*sub_4A7060*/, FIND_FOAM /*sub_4A7270*/ };
 enum DrawKind { DRAW_PROJECTILE /*sub_4A2D50*/, DRAW_LASER /*sub_4A3420*/,
                 DRAW_MICROWAVE /*sub_4A3000*/, DRAW_RAILGUN /*sub_4A2A00*/,
                 DRAW_SCORPION /*sub_4A31D0*/, DRAW_THOR /*sub_48AD70*/ };
@@ -52,6 +52,9 @@ static const WeaponClass kClasses[] = {
     // EMP: sub_4A5670 / sub_4A3A90 / sub_4A7060 / sub_4A2D50 / sub_4A6810 / sub_447100;
     // fire tick sub_4A7580, impacto sub_4A4490, vt[37] sub_4A47F0.
     {0x3C, 1, 0xE6, 0xE7, LAUNCH_BALLISTIC, FIND_EMP, DRAW_PROJECTILE, 0x2FF, 0, 1, 3},
+    // STICKYFOAM: sub_4A61C0 / sub_4A3A90 / sub_4A7270 / sub_4A2D50 / sub_4A6910 / sub_447240;
+    // fire tick sub_4A7950, impacto sub_4A4F10.
+    {0x47, 1, 0xF2, 0xF3, LAUNCH_BALLISTIC, FIND_FOAM, DRAW_PROJECTILE, 0x47D, 0, 1, 3},
     // LASER: sub_4A58D0 / sub_4A3E00 / sub_4A7020→sub_4A6DD0 / sub_4A3420 / sub_4A2880 / sub_447130
     {0x3D, 2, 0xE8, 0xE9, LAUNCH_INSTANT, FIND_LOS, DRAW_LASER, 0x2F6, 4, 0, 0},
     // MICROWAVE: sub_4A5A30 / sub_4A3E00 / sub_4A7040 / sub_4A3000 / sub_4A2880 / sub_447150
@@ -495,8 +498,9 @@ static bool candidateOk(const UnitRecord& c, uint32_t mask, uint32_t ownerBit) {
 
 // sub_4A6DD0: varre a lista por Y p/ cima e depois p/ baixo a partir do
 // atirador; 1º candidato dentro da caixa e com linha de visada. sub_4A7400
-// (BFG, Thor, SPAM, destruições de torre) é a mesma varredura sem a visada.
-static int findTargetLOS(int id, uint32_t mask, bool los = true) {
+// (BFG, Thor, SPAM, destruições de torre) é a mesma varredura sem a visada;
+// sub_4A7270 (espuma) também pula quem tem espuma ou EMP (0xC0000).
+static int findTargetLOS(int id, uint32_t mask, bool los = true, bool skipFx = false) {
     const UnitRecord& u = g_units[id];
     const WeapPlayerStats* w = weapStats(static_cast<int16_t>(u.cargo), statsOf(u));
     int R = w ? w->range : 0;                     // min(desc deste, desc da arma) = o mesmo
@@ -511,6 +515,7 @@ static int findTargetLOS(int id, uint32_t mask, bool los = true) {
         const int x = unitOX(t);
         if (x <= xL || x >= xR) continue;
         if (!candidateOk(t, mask, bit)) continue;
+        if (skipFx && (t.flags & 0xC0000u)) continue;
         if (los && !lineOfSight(x >> 5, unitOY(t) >> 5, stx, sty)) continue;
         return c;
     }
@@ -519,6 +524,7 @@ static int findTargetLOS(int id, uint32_t mask, bool los = true) {
         const int x = unitOX(t);
         if (x <= xL || x >= xR) continue;
         if (!candidateOk(t, mask, bit)) continue;
+        if (skipFx && (t.flags & 0xC0000u)) continue;
         if (los && !lineOfSight(x >> 5, unitOY(t) >> 5, stx, sty)) continue;
         return c;
     }
@@ -602,6 +608,7 @@ static int findTarget(int id, uint32_t mask) {
         case FIND_BOX:  return findTargetLOS(id, mask, false);
         case FIND_NEAR: return findTargetNear(id, mask);
         case FIND_EMP:  return findTargetEMP(id, mask);
+        case FIND_FOAM: return findTargetLOS(id, mask, false, true);
     }
     return 0;
 }
@@ -701,17 +708,21 @@ void weaponTick(int id) {                                     // sub_4A7AF0 / su
     if (!u.hasTarget()) {
         if (((u.id ^ TethysGame::tick()) & 7) != 0) return;
         uint32_t mask = UNIT_DAMAGEABLE;
-        if (u.field22 == 1) mask |= UNIT_VEHICLE;
-        if (u.field4A != 0x7FFF) mask |= UNIT_ARMED;
+        if (c->type != 0x47) {                                     // sub_4A7950: só 0x400
+            if (u.field22 == 1) mask |= UNIT_VEHICLE;
+            if (u.field4A != 0x7FFF) mask |= UNIT_ARMED;
+        }
         const int t = findTarget(id, mask);
         if (t) setUnitTarget(g_units[id], t);
         else idleTurret(g_units[id]);
         return;
     }
-    if (c->type == 0x3C) {
-        // sub_4A7580: alvo morto ou já em EMP (0xA0000) é largado; sem o teste
-        // de alcance antes do disparo (o vt[4] confere).
-        if (u.targetIsUnit() && (!alive(u.target4C) || (g_units[u.target4C].flags & UNIT_EMP))) {
+    if (c->type == 0x3C || c->type == 0x47) {
+        // sub_4A7580 (EMP) / sub_4A7950 (espuma): alvo morto ou já em EMP
+        // (0xA0000) / com espuma (0x60000) é largado; sem o teste de alcance
+        // antes do disparo (o vt[4] confere).
+        const uint32_t fx = c->type == 0x3C ? UNIT_EMP : 0x40000u;
+        if (u.targetIsUnit() && (!alive(u.target4C) || (g_units[u.target4C].flags & fx))) {
             u.field4E = 0x7FFF;
             dropRef(u.target4C);
             return;
@@ -1006,7 +1017,10 @@ void weaponAutoEngage(int id) {                               // sub_485340
 void unitPeriodicTick(int id) {                               // prólogo de sub_43DE50
     UnitRecord& u = g_units[id];
     if (((u.id ^ TethysGame::tick()) & 7) != 0) return;
-    // (contadores 0x40000/0x100000 — espuma/ESG — entram com essas armas.)
+    if ((u.flags & 0x40000u) && (u.flags & UNIT_VEHICLE) && --u.foamTicks == 0)   // espuma [+0x54]
+        u.flags &= ~0x40000u;
+    if ((u.flags & 0x100000u) && --u.esgTicks == 0)               // ESG [+0x58]
+        u.flags &= ~0x100000u;
     if (u.flags & UNIT_EMP) {                                   // loc_43DEA8: [+0x56]
         if (--u.empTicks != 0) return;
         u.flags &= ~UNIT_EMP;
@@ -1303,6 +1317,70 @@ static void explodeEMP(int pid) {
     }
 }
 
+// vt[34] da espuma (sub_4A4F10): som do impacto; nas células do raio, cada
+// unidade danificável sem espuma com 1500 / (dist + 200) < raio leva o crédito
+// do atirador e dano fixo (veículo 0x3C, prédio 0x0F); se sobrevive e é
+// veículo, gruda (vt[0x60] sub_44B5C0) pela Penetration da espuma do dono das
+// estatísticas dela — e o projétil ganha 0x40000 (sem sprite de explosão).
+static void explodeFoam(int pid) {
+    const UnitRecord& p = g_units[pid];
+    const WeaponSheetDesc* d = weaponSheet(p.type);
+    if (!d) return;
+    const int R = d->radius;
+    const int rt = (R + 31) >> 5;
+    const int ix = p.impactX, iy = p.impactY;
+    const int x0 = (ix >> 5) - rt, x1 = (ix >> 5) + rt;
+    int y0 = (iy >> 5) - rt; if (y0 <= 0) y0 = 0;
+    int y1 = (iy >> 5) + rt; if (y1 > g_gameMap.height() - 1) y1 = g_gameMap.height() - 1;
+    soundPlayAt(ix, iy, 0xF3);                                    // desc+0x258
+    const int source = p.sourceId, attacker = statsOf(p);
+    for (int x = x0; x <= x1; ++x) {
+        for (int y = y0; y <= y1; ++y) {
+            const uint32_t cell = g_gameMap.rawCell(x & tileMask(), y);
+            const int occ = static_cast<int>((cell & GameMap::CELL_OCCUPANCY) >> GameMap::CELL_OCC_SHIFT);
+            if (!occ || !alive(occ)) continue;
+            UnitRecord& t = g_units[occ];
+            if (!(t.flags & UNIT_DAMAGEABLE) || (t.flags & 0x40000u)) continue;
+            int dx, dy;
+            if (t.flags & UNIT_BUILDING) {                        // (+16, como no original)
+                dy = std::abs(iy - y * 32 + 16);
+                dx = std::abs(ix - x * 32 + 16);
+            } else {
+                dy = std::abs(iy - unitOY(t));
+                const int tx = unitOX(t);
+                dx = (tx > ix ? tx : ix) - (tx < ix ? tx : ix);
+            }
+            if (half(pxW()) < dx) dx = pxW() - dx;
+            if (1500 / (octo(dx, dy) + 200) >= R) continue;
+            if (t.lastAttacker != source) {
+                if (t.lastAttacker) dropRef(t.lastAttacker);
+                if (source > 0 && source < static_cast<int>(g_units.size())) ++g_units[source].refCount;
+                t.lastAttacker = static_cast<int16_t>(source);
+            }
+            t.lastAttackTick = TethysGame::tick();
+            t.damage = static_cast<int16_t>(t.damage + ((t.flags & UNIT_BUILDING) ? 0x0F : 0x3C));
+            damageMessage(t, attacker);
+            const int hp = maxHPOf(t);
+            if (hp <= t.damage) {
+                t.damage = static_cast<int16_t>(hp);
+                t.flags |= UNIT_DEAD;
+                killUnit(occ, 5);
+            } else if (t.flags & UNIT_VEHICLE) {
+                const WeapPlayerStats* fw = weapStats(0x47, statsOf(t));
+                unitApplyFoam(occ, fw ? fw->penetration : 0);
+                g_units[pid].flags |= 0x40000u;
+            }
+        }
+    }
+}
+
+void unitApplyFoam(int id, int ticks) {                       // vt[0x60] sub_44B5C0
+    UnitRecord& u = g_units[id];
+    u.flags |= 0x40000u;
+    u.foamTicks = static_cast<int16_t>(ticks);
+    u.foamStart = static_cast<int16_t>(TethysGame::tick());
+}
+
 // ---- Máquina do projétil ----------------------------------------------------------
 // vt[29] do atirador: veículo (sub_44B620) vivo, sem EMP e fora do estado 0xA.
 static bool sourceReady(int src) {
@@ -1340,6 +1418,7 @@ void weaponProjectileAction(int id) {                         // case 54
     if (!p.exploded) {
         p.exploded = 1;
         if (p.type == 0x3C) explodeEMP(id);                      // vt[34] sub_4A4490
+        else if (p.type == 0x47) explodeFoam(id);                 // vt[34] sub_4A4F10
         else explode(id);                                         // vt[34] sub_4A35C0
         UnitRecord& q = g_units[id];
         q.field22 = SUB_WAIT;

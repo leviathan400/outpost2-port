@@ -49,6 +49,9 @@ bool weaponProjectileSubstate(int id);
 // vt[19] (destrutor) do projétil: solta a referência ao atirador ([+0x32]).
 void weaponUnitRemoved(int id);
 
+// vt[0x60] do veículo (sub_44B5C0): espuma por `ticks` passadas de 8 ticks.
+void unitApplyFoam(int id, int ticks);
+
 // Case 47 de sub_43ACA0 para veículo (loc_43D8A3).
 void vehicleDeath(int id);
 
