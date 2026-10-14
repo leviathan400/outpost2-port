@@ -1723,6 +1723,18 @@ static int runPaneTest(const std::string& dll, const std::string& prefix) {
         char fn[256]; std::snprintf(fn, sizeof(fn), "%s_%02X.bmp", prefix.c_str(), r.type);
         writeBmp32(fn, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
         std::printf("[Pane] %s -> %s\n", op2::unitTitle(r).c_str(), fn);
+        if (r.type == 0x1F) {                                    // &VEHICLES (lista de veículos)
+            gs.debugVehicleList(1, false);
+            gs.onIdle(renderer, 0.0f);
+            char f2[256]; std::snprintf(f2, sizeof(f2), "%s_vlist.bmp", prefix.c_str());
+            writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+            gs.debugVehicleList(-1, true);
+            gs.onIdle(renderer, 0.0f);
+            std::snprintf(f2, sizeof(f2), "%s_vjump.bmp", prefix.c_str());
+            writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+            gs.setSelection({});
+            gs.debugVehicleList(-1, false);                      // (fecha via STATUS na próxima)
+        }
         if (r.type == 0x15 || r.type == 0x16)
             std::printf("[Pane]   mina rend=%d var=%d cargas=%d carga=%d\n", r.mineYield, r.mineVariant, r.mineLink,
                         op2::mineLoadAmount((int)i));

@@ -957,6 +957,7 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
             if (k == SDLK_m) m_research.more();
         }
         // STORAGE: Alt+1..6 = botão da baia (sub_40A900(0x31 + i)).
+        if ((SDL_GetModState() & KMOD_ALT) && k == SDLK_v) { closePanes(); m_vehicles.open(); }   // Alt+V
         if ((SDL_GetModState() & KMOD_ALT) && k >= SDLK_1 && k <= SDLK_6 && m_storage.isOpen())
             m_storage.pressBay(static_cast<int>(k - SDLK_1));
         // Atalhos dos botões de comando (letra após o '&' da dica).
@@ -1002,6 +1003,8 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
             paneHit = m_research.click(kColX, kPaneWinY, infoPaneRect(), nx, ny, e.button.clicks >= 2, dbl);
             if (dbl) clickCommand(kCmdAssign);
         }
+        if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_vehicles.isOpen())
+            paneHit = m_vehicles.click(infoPaneRect(), nx, ny);
         if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_storage.isOpen())
             paneHit = m_storage.click(kColX, kPaneWinY, nx, ny);
         if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_selected.empty() && m_mission)
@@ -1100,7 +1103,7 @@ void GameState::areaRect(int ex, int ey, int& x1, int& y1, int& x2, int& y2) con
 // veículo (painel off_4D5B28); prédios usam os botões de texto do quadro.
 std::vector<GameState::CmdButton> GameState::commandButtons() const {
     std::vector<CmdButton> out;
-    if (m_selected.empty() || m_confirm.isOpen()) return out;   // confirmação no lugar da botoeira
+    if (m_selected.empty() || m_confirm.isOpen() || m_vehicles.isOpen()) return out;   // outro painel no lugar da botoeira
     const UnitRecord& u = g_units[m_selected[0]];
     if (u.id == -1 || !(u.flags & 0x42u) || (u.owner & 0x0F) != TethysGame::localPlayer()) return out;
     const std::vector<int>& list = m_selected.size() == 1 ? uiCommandsSingle() : uiCommandsMulti();
@@ -1130,6 +1133,32 @@ std::vector<GameState::CmdButton> GameState::commandButtons() const {
 // quadro (dword_5750EC[+0x40]) e x relativo ao painel.
 std::vector<GameState::TextButton> GameState::structureButtons() const {
     std::vector<TextButton> out;
+    auto layoutButtons = [&]() {
+        const int W = 87, H = 25, x0 = kColX + 9, bottom = kPaneBottom - 2;
+        const int n = static_cast<int>(out.size());
+        for (int i = 0; i < n; ++i) {
+            TextButton& b = out[i];
+            const bool twoRows = n >= 3;
+            const int row = twoRows ? (i < 2 ? 0 : 1) : 1;
+            const int col = (n == 1 || (n == 3 && i == 2)) ? 0 : (i % 2);
+            b.wide = n == 1 || (n == 3 && i == 2);
+            b.l = x0 + col * W;
+            b.t = bottom - (row == 0 ? 2 * H : H);
+            b.r = b.l + (b.wide ? 175 : W);
+            b.b = b.t + H;
+        }
+    };
+    if (m_vehicles.isOpen()) {                               // sub_46B2D0: &JUMP / &STATUS
+        TextButton b{};
+        b.cmd = kCmdJump; b.label = "&JUMP"; b.tip = "&Jump to selected vehicle type"; b.hotkey = 'J';
+        b.disabled = !m_vehicles.jumpEnabled();
+        out.push_back(b);
+        b = TextButton{};
+        b.cmd = kCmdStatus; b.label = "&STATUS"; b.tip = "Back to Structure &Status"; b.hotkey = 'S';
+        out.push_back(b);
+        layoutButtons();
+        return out;
+    }
     if (m_selected.empty() && m_mission) {
         // Aba de objetivos (sub_465830, modo 1): "&GAME OPTIONS" largo.
         TextButton b{};
@@ -1225,6 +1254,13 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
         b.cmd = cmd; b.label = d.label; b.tip = d.tip; b.hotkey = uiCommandHotkey(d);
         out.push_back(b);
     }
+    // sub_459F70: o Robot Command Center (0x1F) ganha "&VEHICLES" junto dos
+    // botões disponíveis (sem nenhum, não aparece).
+    if (!anyPaneOpen() && u.type == 0x1F && !out.empty() && out.size() < 4) {
+        TextButton b{};
+        b.cmd = kCmdVehicles; b.label = "&VEHICLES"; b.tip = "Show &Vehicle List"; b.hotkey = 'V';
+        out.push_back(b);
+    }
     const int W = 87, H = 25, x0 = kColX + 9, bottom = kPaneBottom - 2;
     const int n = static_cast<int>(out.size());
     for (int i = 0; i < n; ++i) {
@@ -1239,6 +1275,14 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
         b.b = b.t + H;
     }
     return out;
+}
+
+void GameState::debugVehicleList(int row, bool jump) {
+    if (!m_vehicles.isOpen()) clickCommand(kCmdVehicles);
+    const PaneRect pane = infoPaneRect();
+    const ListBoxLayout L = listBoxLayout(pane, 0x0A, 0, 0, 0x12);
+    if (row >= 0) m_vehicles.click(pane, L.list.l + 5, L.list.t + 2 + row * L.lineH + 2);
+    if (jump) clickCommand(kCmdJump);
 }
 
 PaneRect GameState::infoPaneRect() const {
@@ -1286,6 +1330,13 @@ void GameState::clickCommand(int cmd) {                  // vt[1] do comando
     if (cmd == kCmdLoad) { m_storage.load(); return; }       // pacote 0x0B
     if (cmd == kCmdUnload) { m_storage.unload(); return; }   // pacote 0x0C
     if (cmd == kCmdStatus || cmd == kCmdCancel) { closePanes(); return; }
+    if (cmd == kCmdVehicles) { closePanes(); m_vehicles.open(); return; }   // dword_567D80
+    if (cmd == kCmdJump) {                                  // sub_46B3D0
+        int px, py;
+        const int v = m_vehicles.jump(px, py);
+        if (v) { requestCenterView(px, py); m_selected = {v}; }
+        return;
+    }
     if (cmd == kCmdAssign) {                                // botão volta ao painel no modo 1
         if (m_research.isOpen() && m_research.assignEnabled()) m_research.open(m_research.lab(), 1);
         return;
@@ -1542,7 +1593,10 @@ void GameState::renderPanel(Renderer& renderer) {
     m_research.update(m_selected);
     m_students.update(m_selected);
     m_confirm.update(m_selected);
-    if (m_confirm.isOpen())
+    m_vehicles.update();
+    if (m_vehicles.isOpen())
+        m_vehicles.draw(fb, VW, VH, pane, m_mouseNX, m_mouseNY);
+    else if (m_confirm.isOpen())
         m_confirm.draw(fb, VW, VH, pane);
     else if (m_students.isOpen())
         m_students.draw(fb, VW, VH, kColX, kPaneWinY, pane, m_mouseNX, m_mouseNY);

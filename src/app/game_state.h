@@ -9,6 +9,7 @@
 #include "../game/terrain_renderer.h"
 #include "location.h"
 #include "produce_pane.h"
+#include "vehicle_list_pane.h"
 #include "objectives_pane.h"
 #include "storage_pane.h"
 #include "research_pane.h"
@@ -41,6 +42,8 @@ public:
 
     void setShowPassability(bool v) { m_showPassability = v; }
     void setSelection(const std::vector<int>& ids) { m_selected = ids; }
+    // Testes: abre a lista de veículos, clica na linha `row` e (opcional) JUMP.
+    void debugVehicleList(int row, bool jump);
     void pressCommand(int cmd) { clickCommand(cmd); }      // testes: botão do painel
     ResearchPane& researchPaneForTest() { return m_research; }
     void setMouse(int nx, int ny) { m_mouseNX = nx; m_mouseNY = ny; }
@@ -115,6 +118,7 @@ private:
                         bool disabled = false; };
     // Painel de produção (BUILD da fábrica) e seus botões (sub_4682C0).
     ProducePane m_produce;
+    VehicleListPane m_vehicles;    // lista de veículos (Alt+V / &VEHICLES do Robot Command Center)
     ObjectivesPane m_objectives;   // aba de objetivos (sem seleção)
     StoragePane m_storage;         // STORAGE (baias)
     ResearchPane m_research;       // ASSIGN (pesquisa do laboratório)
@@ -124,11 +128,14 @@ private:
     static constexpr int kCmdYes = -9, kCmdNo = -10, kCmdStartClass = -11;
     void closePanes() {
         m_produce.close(); m_storage.close(); m_research.close(); m_students.close(); m_confirm.close();
+        m_vehicles.close();
     }
     bool anyPaneOpen() const {
-        return m_produce.isOpen() || m_storage.isOpen() || m_research.isOpen() || m_students.isOpen() || m_confirm.isOpen();
+        return m_produce.isOpen() || m_storage.isOpen() || m_research.isOpen() || m_students.isOpen() || m_confirm.isOpen() ||
+               m_vehicles.isOpen();
     }
     static constexpr int kCmdGameOptions = -4;
+    static constexpr int kCmdVehicles = -15, kCmdJump = -16;   // &VEHICLES (RCC) / &JUMP da lista
     static constexpr int kCmdBuildIt = -2, kCmdStatus = -3;
     PaneRect infoPaneRect() const;
     void produceBuildIt();
