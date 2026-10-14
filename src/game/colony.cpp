@@ -476,6 +476,7 @@ static void killColonists(int p, int n, bool quiet) {
     pd.kids -= dk; pd.workers -= dw; pd.scientists -= ds;
     if (!quiet) moraleDeaths(p, dk, ds, dw);
 }
+void colonyRemoveColonists(int p, int n, bool quiet) { if (p >= 0 && p < kMaxPlayers) killColonists(p, n, quiet); }
 
 // ---- sub_471CC0: população ----------------------------------------------------
 static void populationTick(int p) {

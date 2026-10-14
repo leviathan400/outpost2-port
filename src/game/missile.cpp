@@ -292,8 +292,8 @@ static void launchInOrbit(int id) {
         d.solarSat = d.solarSat + 1 > 15 ? 15 : d.solarSat + 1;
         if (local) soundVoice(0x7C, -1, -1);
     } else if (cargo == 0x67) {
-        // Evacuation Module: bit e sub_471BD0(200, 1) — os colonos (pendente).
-        d.spaceBits |= 1u << (cargo - 0x4D);
+        d.spaceBits |= 1u << (cargo - 0x4D);           // Evacuation Module
+        colonyRemoveColonists(p, 200, true);              // sub_471BD0(200, 1)
     } else if (cargo >= 0x5A && cargo <= 0x68) {
         if (local) soundVoice(cargo == 0x68 ? 0xE3 : 0xD6 + (cargo - 0x5A), -1, -1);
         d.spaceBits |= 1u << (cargo - 0x4D);

@@ -114,6 +114,8 @@ const MoraleRow& moraleRow(int level);
 // vt+0xA0 por classe (sub_483750 base; sub_40C1B0 CC; sub_46E6D0 geradores;
 // sub_46E880 Solar; sub_44AD60 minas/Magma Well).
 bool structureOperational(const UnitRecord& r);
+// sub_471BD0: tira `n` colonos em rodízio (fome; módulo de evacuação com quiet).
+void colonyRemoveColonists(int player, int n, bool quiet);
 
 // Eventos de moral (somam em +0x38): prédio do jogador destruído (sub_44F6C0),
 // prédio inimigo destruído pelo jogador (sub_44FBE0), CC concluído (sub_44F790).
