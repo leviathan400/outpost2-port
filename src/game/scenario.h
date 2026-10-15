@@ -75,6 +75,18 @@ struct MapRectIter {
 void mapRectIterInit(MapRectIter& it, int x, int y, int w, int h, uint32_t playerMask, uint32_t flagMask);
 int  mapRectIterNext(MapRectIter& it);       // id da próxima unidade (0 = fim)
 
+// Unidades num raio (InRangeEnumerator, sub_437A90/sub_437AF0; px INTERNOS):
+// lista por Y de y − r a min(y + r, altura), dx com a volta do mapa,
+// dx² + dy² < r² (sem sinal).
+struct MapRangeIter {
+    int cur = 0;
+    int cx = 0, cy = 0, y0 = 0, y1 = 0;                 // [+0x2C]/[+0x30]/[+0x1C]/[+0x24]
+    uint32_t r2 = 0;                                    // [+0x0C]
+    uint32_t playerMask = 0, flagMask = 0;              // [+0x10] / [+0x14]
+};
+void mapRangeIterInit(MapRangeIter& it, int px, int py, int r, uint32_t playerMask, uint32_t flagMask);
+int  mapRangeIterNext(MapRangeIter& it);
+
 // Unidades SOB um ponto (px INTERNOS): sub_437840 abre a faixa y ± 0x60 na
 // lista por Y; sub_437890 testa o bbox do sprite atual (vt[0x30]/vt[0x34]) e,
 // salvo flag 0x80, o pixel (vt[0x38]). Cabe no LocationEnumerator da DLL.

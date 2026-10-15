@@ -82,6 +82,9 @@ int createPointTrigger(int bEnabled, int bOneShot, int player, int x, int y, con
 // OnePlayerLeftTrigger (off_4E9ED0, sub_492970): os humanos com Command Center
 // operando são todos aliados entre si.
 int createOnePlayerLeftTrigger(int bEnabled, int bOneShot, const char* func);
+// Midas (sub_494900): a cada 4 ticks desconta do tempo; ao zerar, recarrega e
+// dispara p/ os jogadores com mais minério comum + raro.
+int createMidasTrigger(int bEnabled, int bOneShot, int time, const char* func);
 // ?HasFired@Trigger: bit do jogador em [+0x20].
 bool triggerHasFired(int stub, int player);
 

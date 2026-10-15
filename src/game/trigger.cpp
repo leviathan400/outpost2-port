@@ -34,7 +34,7 @@ enum TriggerKind {
     TK_TIME, TK_RESEARCH, TK_VICTORY, TK_FAILURE,
     TK_COUNT, TK_KIT, TK_BUILDING_COUNT, TK_VEHICLE_COUNT, TK_ESCAPE, TK_SET,
     TK_RESOURCE, TK_EVAC, TK_OPERATIONAL, TK_RECT, TK_SPECIAL,
-    TK_DAMAGED, TK_POINT, TK_ONE_LEFT,
+    TK_DAMAGED, TK_POINT, TK_ONE_LEFT, TK_MIDAS,
 };
 
 // _Trigger (off_4E9E50) e derivadas. Campos +0x30/+0x34 conforme a classe.
@@ -132,6 +132,16 @@ int createTimeTrigger(int bEnabled, int bOneShot, int time, const char* func) {
     if (fr == 0xFF) return 0xFF;
     const int id = newTrigger(TK_TIME, bEnabled, bOneShot, fr, nullptr);
     if (Trigger* t = trig(id)) { t->f34 = time; t->f30 = time; }    // sub_4920A0
+    return id;
+}
+
+// CreateMidasTrigger (classe MidasTrigger off_4EA010, sub_494820/sub_4948F0):
+// contador de tempo como o TimeTrigger.
+int createMidasTrigger(int bEnabled, int bOneShot, int time, const char* func) {
+    const int fr = createFuncRef(func);
+    if (fr == 0xFF) return 0xFF;
+    const int id = newTrigger(TK_MIDAS, bEnabled, bOneShot, fr, nullptr);
+    if (Trigger* t = trig(id)) { t->f34 = time; t->f30 = time; }
     return id;
 }
 
@@ -500,6 +510,18 @@ static bool hasFired(Trigger& t) {
             t.playerMask = 0x3F;
             t.f34 += t.f30;
             return true;
+        case TK_MIDAS: {                                      // sub_494900
+            t.f34 -= 4;
+            if (t.f34 > 0) return false;
+            t.f34 += t.f30;
+            t.playerMask = 0;
+            // Dispara p/ os jogadores com o maior minério (comum + raro, +0x20/+0x24).
+            int best = 0;
+            for (int p = 0; p < n; ++p) best = std::max(best, g_playerData[p].ore + g_playerData[p].rareOre);
+            for (int p = 0; p < n; ++p)
+                if (g_playerData[p].ore + g_playerData[p].rareOre == best) t.playerMask |= 1u << p;
+            return true;
+        }
         case TK_RESEARCH: {                                   // sub_492700
             // sub_472C50: o jogador tem a tecnologia (ou a trapaça "produce all",
             // dword_56DE5C). A árvore de pesquisa completa (dword_56B5F0) ainda

@@ -1768,5 +1768,59 @@ void aiBuildRecordTubesTouching(int stub, int x, int y) {           // sub_4257D
 void aiBuildRecordReinforce(int stub, int group, int prio) {        // sub_4258E0
     if (Group* g = grp(stub)) g->reinf.push_back(ReinfRec{group, prio, 0});
 }
+// sub_425170: muro/tubo na lista de +0x31C, com o tipo de célula do map_id
+// (0x11 tubo → 0x1A, 0x12 → 0x17, 0x13 → 0x19, 0x14 → 0x18; outro → 0).
+void aiBuildRecordWall(int stub, int x, int y, int type) {
+    Group* g = grp(stub);
+    if (!g) return;
+    const int cell = type == 0x11 ? 0x1A : type == 0x12 ? 0x17 : type == 0x13 ? 0x19 : type == 0x14 ? 0x18 : 0;
+    g->tubes.push_back(TubeRec{x, y, cell, 0});
+}
+// sub_4259A0: tira o 1º registro de reforço do grupo; a fábrica dele perde a
+// referência ([+0x32]).
+void aiBuildUnRecordReinforce(int stub, int group) {
+    Group* g = grp(stub);
+    if (!g) return;
+    for (size_t i = 0; i < g->reinf.size(); ++i) {
+        if (g->reinf[i].stub != group) continue;
+        if (g->reinf[i].factory) dropRefOf(g->reinf[i].factory);
+        g->reinf.erase(g->reinf.begin() + static_cast<long>(i));
+        return;
+    }
+}
+void aiMineSetupLocs(int stub, int mx, int my, int sx, int sy, int mineType, int smelterType,
+                     int x1, int y1, int x2, int y2) {      // sub_429A50
+    Group* g = grp(stub);
+    if (!g) return;
+    g->area[0] = x1 << 5; g->area[1] = y1 << 5; g->area[2] = x2 << 5; g->area[3] = y2 << 5;
+    g->mine = 0; g->smelter = 0;
+    g->mineDock[0] = (mx << 5) + 0x10; g->mineDock[1] = (my << 5) + 0x10;
+    g->smelterDock[0] = (sx << 5) + 0x10; g->smelterDock[1] = (sy << 5) + 0x10;
+    g->mineType = mineType; g->smelterType = smelterType;
+}
+int aiFirstOfTypeExact(int stub, int type, int cargo) {
+    Group* g = grp(stub);
+    if (!g) return 0;
+    const int cls = aiUnitClass(type, cargo);
+    int found = 0;
+    forClass(*g, cls, [&](Node& n) {
+        const UnitRecord& r = g_units[n.unit];
+        if (r.type == type && (cargo == 0 || static_cast<int16_t>(r.cargo) == cargo)) { found = n.unit; return false; }
+        return true;
+    });
+    return found;
+}
+void aiTakeAllUnits(int stub, int fromStub) {               // sub_42BD00
+    Group* from = grp(fromStub);
+    if (!from || !grp(stub)) return;
+    while (!from->nodes.empty()) {
+        const int u = from->nodes.front().unit;
+        aiRemoveUnit(fromStub, u);                          // vt[11] do outro
+        aiTakeUnit(stub, u);                                // vt[10] deste
+    }
+}
+void aiClearTargCount(int stub) {                           // loc_42B020
+    if (Group* g = grp(stub)) { g->hasTC = false; g->tcDirty = false; g->tc.clear(); }
+}
 
 } // namespace op2

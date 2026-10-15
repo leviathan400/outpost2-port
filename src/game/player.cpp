@@ -27,6 +27,27 @@ uint32_t playerSpaceWord(int player) {
     return (static_cast<uint32_t>(d.rlvCount) & 0xFu) | ((static_cast<uint32_t>(d.solarSat) & 0xFu) << 4) |
            (d.spaceBits & ~0xFFu);
 }
+int unitStrength(int unitId) {                               // sub_45D1B0
+    const UnitRecord& r = g_units[unitId];
+    const int w = static_cast<int16_t>(r.cargo);             // [+0x24]
+    const bool weak = w == 0x3D || w == 0x3E, strong = w == 0x48;
+    switch (r.type) {
+        case 3: case 4: return 4;                            // Spider / Scorpion
+        case 5: return weak ? 5 : strong ? 7 : 6;            // Lynx
+        case 6: return weak ? 7 : strong ? 9 : 8;            // Panther
+        case 7: return weak ? 8 : strong ? 0xC : 0xA;        // Tiger
+        case 0x17: return weak ? 4 : strong ? 7 : 5;         // Guard Post
+        default: return 0;   // (a garagem soma as baias e depois cai aqui: 0)
+    }
+}
+
+int playerTotalStrength(int player) {
+    int s = 0;
+    for (int id : colonyVehicles(player)) s += unitStrength(id);       // dword_56EEF8
+    for (int id : colonyStructures(player)) s += unitStrength(id);     // dword_56EEF4
+    return s / 8;
+}
+
 int playerSpaceCount(int player, int type) {                // sub_490800
     if (player < 0 || player >= kMaxPlayers) return 0;
     const uint32_t w = playerSpaceWord(player);

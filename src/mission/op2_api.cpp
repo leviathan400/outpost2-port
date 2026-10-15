@@ -23,6 +23,7 @@
 #include "../game/game_map.h"
 #include "../game/messages.h"
 #include "../game/player.h"
+#include "../game/production.h"
 #include "../game/scenario.h"
 #include "../game/tethys_game.h"
 #include "../game/trigger.h"
@@ -397,6 +398,73 @@ void __fastcall U_PutInGarage(int* u, void*, int bay, int x, int y) {
     if (*u > 0 && *u < static_cast<int>(g_units.size())) g_units[*u].field22 = 0;
 }
 
+// ---- Jogos de colônia (CES1/CPP1) -------------------------------------------------------
+// ?DoDevelop(map_id): viva → pacote 9 (fábrica, tipo, arma 0, grupo 0xFF) do dono.
+void __fastcall U_DoDevelop(int* u, void*, int type) {
+    if (*u <= 0 || *u >= static_cast<int>(g_units.size())) return;
+    const UnitRecord& r = g_units[*u];
+    if (r.id == -1 || (r.flags & UNIT_DEAD)) return;
+    processProducePacket(r.owner & 0x0F, *u, type, 0, 0xFF);
+}
+int  __fastcall U_GetObjectOnPad(int* u, void*) { return g_units[*u].padCargo; }          // [+0x6E]
+int  __fastcall U_IsBuilding(int* u, void*) { return (g_units[*u].flags & UNIT_BUILDING) ? -1 : 0; }   // shl 1Dh; sar 1Fh
+int  __fastcall P_GetTotalPlayerStrength(DllPlayer* p, void*) { return playerTotalStrength(p->playerNum); }
+ApiLoc* __fastcall L_CtorDefault(ApiLoc* l, void*) { return l; }
+// MAP_RECT::Check(LOCATION&): y dentro; x dentro (ou, com a volta, x >= x1 ou x <= x2).
+int __fastcall R_Check(ApiRect* r, void*, const ApiLoc* l) {
+    if (l->y < r->y1 || l->y > r->y2) return 0;
+    const int x1 = r->x1 << 5, x2 = r->x2 << 5, x = l->x << 5;
+    if (x2 > x1) return (x1 <= x && x <= x2) ? 1 : 0;
+    return (x2 >= x || x1 <= x) ? 1 : 0;
+}
+// MAP_RECT::RandPt: largura com a volta (como o InRectEnumerator), x = (x1 + rand(w)) & máscara,
+// y = y1 + rand(h) (sub_46EF50, nessa ordem).
+ApiLoc* __fastcall R_RandPt(const ApiRect* r, void*, ApiLoc* out) {
+    const int pxMask = g_gameMap.internalWidth() * 32 - 1, pxW = pxMask + 1;
+    int dx = r->x2 - r->x1;
+    const int half = pxMask / 2;
+    if (-half >= dx) dx += pxW;
+    else if (half < dx) dx = -((-dx) & pxMask);
+    const int rx = TethysGame::rng().getRand(dx + 1);
+    const int ry = TethysGame::rng().getRand(r->y2 - r->y1 + 1);
+    out->x = (r->x1 + rx) & (g_gameMap.internalWidth() - 1);
+    out->y = r->y1 + ry;
+    return out;
+}
+// InRangeEnumerator(LOCATION&, raio): unidades a menos de raio*32 px, sem filtro.
+static_assert(sizeof(MapRangeIter) <= 52, "InRangeEnumerator");
+void* __fastcall E_InRangeCtor(void* self, void*, const ApiLoc* loc, int range) {
+    auto* it = new (self) MapRangeIter();
+    mapRangeIterInit(*it, loc->x << 5, loc->y << 5, range << 5, 0xFFFFFFFFu, 0xFFFFFFFFu);
+    return self;
+}
+int __fastcall E_InRangeGetNext(void* self, void*, int* unit) {
+    const int id = mapRangeIterNext(*static_cast<MapRangeIter*>(self));
+    if (!id) return 0;
+    *unit = id;
+    return 1;
+}
+void __fastcall SG_ClearTargCount(int* self, void*) { aiClearTargCount(*self); }
+void __fastcall SG_TakeAllUnits(int* self, void*, int* from) { aiTakeAllUnits(*self, from ? *from : 0xFF); }
+// GetFirstOfType(Unit&, tipo, carga).
+int  __fastcall SG_GetFirstOfTypeCargo(int* self, void*, int* unit, int type, int cargo) {
+    const int id = aiFirstOfTypeExact(*self, type, cargo);
+    if (!id) return 0;
+    *unit = id;
+    return 1;
+}
+void __fastcall BG_RecordWall(int* self, void*, ApiLoc* loc, int type) { aiBuildRecordWall(*self, loc->x, loc->y, type); }
+void __fastcall BG_UnRecordVehGroup(int* self, void*, int* grp) { aiBuildUnRecordReinforce(*self, grp ? *grp : 0xFF); }
+void __fastcall BG_RecordBuildingGroup(int* self, void*, ApiLoc* loc, int type, int cargo, int* grp) {
+    aiBuildRecordBuilding(*self, loc->x, loc->y, type, cargo, grp ? *grp : 0xFF);
+}
+// Setup(LOCATION& mina, LOCATION& smelter, tipo da mina, tipo do smelter, MAP_RECT&) — sub_429A50.
+void __fastcall MG_SetupLocsTypes(int* self, void*, ApiLoc* mine, ApiLoc* smelter, int mineType, int smelterType,
+                                  ApiRect* r) {
+    aiMineSetupLocs(*self, mine->x, mine->y, smelter->x, smelter->y, mineType, smelterType,
+                    r->x1, r->y1, r->x2, r->y2);
+}
+
 // ---- Grupos de mineração e de construção ------------------------------------------------
 int* __fastcall G_CreateMiningGroup(int* ret, DllPlayer p) { *ret = aiCreateGroup(GK_MINE, p.playerNum); return ret; }
 int* __fastcall G_CreateBuildingGroup(int* ret, DllPlayer p) { *ret = aiCreateGroup(GK_BUILD, p.playerNum); return ret; }
@@ -594,6 +662,10 @@ int* __fastcall TR_CreateDamagedTrigger(int* ret, int bEnabled, int bOneShot, in
 }
 int* __fastcall TR_CreatePointTrigger(int* ret, int bEnabled, int bOneShot, int player, int x, int y, const char* fn) {
     *ret = createPointTrigger(bEnabled, bOneShot, player, x, y, fn);
+    return ret;
+}
+int* __fastcall TR_CreateMidasTrigger(int* ret, int bEnabled, int bOneShot, int time, const char* fn) {
+    *ret = createMidasTrigger(bEnabled, bOneShot, time, fn);
     return ret;
 }
 int* __fastcall TR_CreateOnePlayerLeftTrigger(int* ret, int bEnabled, int bOneShot, const char* fn) {
@@ -828,6 +900,22 @@ const std::map<std::string, void*>& table() {
         {"?CreateBuildingGroup@@YI?AVBuildingGroup@@V_Player@@@Z", reinterpret_cast<void*>(&G_CreateBuildingGroup)},
         {"?Setup@MiningGroup@@QAEXVUnit@@0AAUMAP_RECT@@@Z", reinterpret_cast<void*>(&MG_SetupUnits)},
         {"?Setup@MiningGroup@@QAEXAAULOCATION@@0AAUMAP_RECT@@@Z", reinterpret_cast<void*>(&MG_SetupLocs)},
+        {"?Setup@MiningGroup@@QAEXAAULOCATION@@0W4map_id@@1AAUMAP_RECT@@@Z", reinterpret_cast<void*>(&MG_SetupLocsTypes)},
+        {"?DoDevelop@Unit@@QAEXW4map_id@@@Z", reinterpret_cast<void*>(&U_DoDevelop)},
+        {"?GetObjectOnPad@Unit@@QBE?AW4map_id@@XZ", reinterpret_cast<void*>(&U_GetObjectOnPad)},
+        {"?IsBuilding@Unit@@QBEHXZ", reinterpret_cast<void*>(&U_IsBuilding)},
+        {"?GetTotalPlayerStrength@_Player@@QAEHXZ", reinterpret_cast<void*>(&P_GetTotalPlayerStrength)},
+        {"??0LOCATION@@QAE@XZ", reinterpret_cast<void*>(&L_CtorDefault)},
+        {"?Check@MAP_RECT@@QAEHAAULOCATION@@@Z", reinterpret_cast<void*>(&R_Check)},
+        {"?RandPt@MAP_RECT@@QBE?AULOCATION@@XZ", reinterpret_cast<void*>(&R_RandPt)},
+        {"??0InRangeEnumerator@@QAE@ABULOCATION@@H@Z", reinterpret_cast<void*>(&E_InRangeCtor)},
+        {"?GetNext@InRangeEnumerator@@QAEHAAVUnit@@@Z", reinterpret_cast<void*>(&E_InRangeGetNext)},
+        {"?ClearTargCount@ScGroup@@QAEXXZ", reinterpret_cast<void*>(&SG_ClearTargCount)},
+        {"?TakeAllUnits@ScGroup@@QAEXAAV1@@Z", reinterpret_cast<void*>(&SG_TakeAllUnits)},
+        {"?GetFirstOfType@ScGroup@@QAEHAAVUnit@@W4map_id@@1@Z", reinterpret_cast<void*>(&SG_GetFirstOfTypeCargo)},
+        {"?RecordWall@BuildingGroup@@QAEXAAULOCATION@@W4map_id@@@Z", reinterpret_cast<void*>(&BG_RecordWall)},
+        {"?UnRecordVehGroup@BuildingGroup@@QAEXAAVScGroup@@@Z", reinterpret_cast<void*>(&BG_UnRecordVehGroup)},
+        {"?RecordBuilding@BuildingGroup@@QAEXAAULOCATION@@W4map_id@@1AAVScGroup@@@Z", reinterpret_cast<void*>(&BG_RecordBuildingGroup)},
         {"?SetRect@BuildingGroup@@QAEXAAUMAP_RECT@@@Z", reinterpret_cast<void*>(&BG_SetRect)},
         {"?RecordBuilding@BuildingGroup@@QAEXAAULOCATION@@W4map_id@@1@Z", reinterpret_cast<void*>(&BG_RecordBuilding)},
         {"?RecordTube@BuildingGroup@@QAEXAAULOCATION@@@Z", reinterpret_cast<void*>(&BG_RecordTube)},
@@ -856,6 +944,7 @@ const std::map<std::string, void*>& table() {
         {"?ClipToMap@MAP_RECT@@QAEXXZ", reinterpret_cast<void*>(&R_ClipToMap)},
         {"?CreateDamagedTrigger@@YI?AVTrigger@@HHAAVScGroup@@HPBD@Z", reinterpret_cast<void*>(&TR_CreateDamagedTrigger)},
         {"?CreatePointTrigger@@YI?AVTrigger@@HHHHHPBD@Z", reinterpret_cast<void*>(&TR_CreatePointTrigger)},
+        {"?CreateMidasTrigger@@YI?AVTrigger@@HHHPBD@Z", reinterpret_cast<void*>(&TR_CreateMidasTrigger)},
         {"?CreateOnePlayerLeftTrigger@@YI?AVTrigger@@HHPBD@Z", reinterpret_cast<void*>(&TR_CreateOnePlayerLeftTrigger)},
         {"?isDiscovered@Unit@@QBEHXZ", reinterpret_cast<void*>(&U_IsDiscovered)},
         {"?HasFired@Trigger@@QAEHH@Z", reinterpret_cast<void*>(&TRG_HasFired)},

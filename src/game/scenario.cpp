@@ -413,6 +413,40 @@ int mapRectIterNext(MapRectIter& it) {
     return 0;
 }
 
+void mapRangeIterInit(MapRangeIter& it, int px, int py, int r, uint32_t playerMask, uint32_t flagMask) {
+    it.cur = 0;
+    it.playerMask = playerMask;
+    it.flagMask = flagMask;
+    it.r2 = static_cast<uint32_t>(r * r);
+    it.y0 = py - r;
+    it.y1 = py + r < g_gameMap.height() * 32 ? py + r : g_gameMap.height() * 32;
+    it.cx = px;
+    it.cy = py;
+}
+
+int mapRangeIterNext(MapRangeIter& it) {
+    const int pxW = g_gameMap.internalWidth() * 32, pxMask = pxW - 1;
+    const int off = g_gameMap.internalXOffset() * 32;
+    for (int id = it.cur ? unitListNext(it.cur) : unitListFirst(); id != 0; id = unitListNext(id)) {
+        it.cur = id;
+        const UnitRecord& r = g_units[id];
+        int ux, uy;
+        unitOrigPixel(r, ux, uy);
+        if (uy < it.y0) continue;                               // (sub_4374F0 começa aqui)
+        if (uy >= it.y1) return 0;
+        if (!(r.flags & 0x46u) || !(it.playerMask & (1u << (r.owner & 0x0F))) || !(r.flags & it.flagMask) ||
+            r.field22 == 0x0D || r.id == -1 || (r.flags & UNIT_DEAD))
+            continue;
+        int dx = it.cx - (ux + off);
+        const int half = pxMask / 2;
+        if (-half >= dx) dx += pxW;
+        else if (half < dx) dx = -((-dx) & pxMask);
+        const int dy = uy - it.cy;
+        if (static_cast<uint32_t>(dx * dx + dy * dy) < it.r2) return id;
+    }
+    return 0;
+}
+
 void mapPointIterInit(MapPointIter& it, int px, int py, uint32_t playerMask, uint32_t flagMask) {
     it.cur = 0;
     it.playerMask = playerMask;

@@ -39,6 +39,11 @@ void aiSetDeleteWhenEmpty(int stub, int on); // sub_42B330
 int  aiUnitCount(int stub, int cls);         // sub_42BE60 (0x11 = total)
 int  aiTotalUnitCount(int stub);             // +0x2F0
 int  aiFirstOfType(int stub, int cls);       // id da 1ª unidade da classe (0 se nenhuma)
+// GetFirstOfType(Unit&, tipo, carga): 1º membro do tipo na classe de (tipo,
+// carga); carga 0 = qualquer arma ([+0x24]).
+int  aiFirstOfTypeExact(int stub, int type, int cargo);
+void aiTakeAllUnits(int stub, int fromStub);  // sub_42BD00
+void aiClearTargCount(int stub);              // loc_42B020
 int  aiUnitClass(int type, int weapon);      // sub_49D1B0
 
 // FightGroup (retângulos em TILES do port; o original guarda em pixels)
@@ -66,6 +71,10 @@ void aiGroupDestroyed(int stub);
 
 // MiningGroup::Setup (sub_429970): retângulo em tiles INTERNOS (MAP_RECT).
 void aiMineSetup(int stub, int mineId, int smelterId, int x1, int y1, int x2, int y2);
+// sub_429A50: pelas posições (tiles internos) e tipos; mina/smelter achados
+// depois pela doca (ids 0).
+void aiMineSetupLocs(int stub, int mx, int my, int sx, int sy, int mineType, int smelterType,
+                     int x1, int y1, int x2, int y2);
 // BuildingGroup (tiles INTERNOS): SetRect (sub_425AB0), RecordBuilding
 // (sub_4252A0), RecordUnitBlock (sub_4254F0, a partir de `first`), RecordTube
 // (sub_425090), RecordTubesTouching (sub_4257D0), RecordVehReinforceGroup (sub_4258E0).
@@ -75,6 +84,8 @@ void aiBuildRecordBlock(int stub, const MissionUnitRecord* recs, int n, int firs
 void aiBuildRecordTube(int stub, int x, int y);
 void aiBuildRecordTubesTouching(int stub, int x, int y);
 void aiBuildRecordReinforce(int stub, int group, int prio);
+void aiBuildRecordWall(int stub, int x, int y, int type);   // sub_425170
+void aiBuildUnRecordReinforce(int stub, int group);         // sub_4259A0
 
 // Grupo padrão do jogador (_Player::SetDefaultGroup / GetDefaultGroup).
 void aiSetDefaultGroup(int player, int stub);
