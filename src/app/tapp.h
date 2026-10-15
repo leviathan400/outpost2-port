@@ -37,6 +37,10 @@ public:
     void setUIState(UIState* next);
 
     void requestQuit() { m_quit = true; }
+    // LOAD GAME do shell: carrega o arquivo e ativa o jogo.
+    bool activateSaved(const std::string& path);
+    // TethysGame::LoadGame (DLL): carga adiada no próximo turno do jogo.
+    void requestDelayedLoad(const std::string& path);
     bool hasShell() const { return m_shell != nullptr; }   // falso nos testes por linha de comando
     Renderer& renderer() { return *m_renderer; }
 

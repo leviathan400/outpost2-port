@@ -25,6 +25,7 @@ public:
     // GetProcAddress pelo nome do export (função ou dado). nullptr se não existe.
     void* proc(const std::string& name) const;
     uint8_t* base() const { return m_base; }
+    uint32_t size() const { return m_size; }
 
 private:
     uint8_t* m_base = nullptr;

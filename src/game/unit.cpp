@@ -9,6 +9,8 @@
 #include "command.h"
 #include "structure.h"
 #include "colony.h"
+#include "save_game.h"
+#include "save_stream.h"
 
 namespace op2 {
 
@@ -82,6 +84,20 @@ void buildingFootprint(map_id type, int& w, int& h) {
 // sub_439B90 empurra o slot com [+0x08] = tick; sub_439910 reusa o 1º que foi
 // liberado há mais de 0x80 ticks e não tem referências ([+0x32] == 0).
 static std::deque<int> s_freeRing;
+
+void unitsSerialize(SaveStream& s) {
+    uint32_t n = static_cast<uint32_t>(g_units.size());
+    s.io(n);
+    if (s.loading()) { if (!s.ok() || n > 0x10000) { s.fail(); return; } g_units.assign(n, UnitRecord{}); }
+    for (UnitRecord& u : g_units) {
+        s.ioExcept(u, {SaveStream::member(u, u.order.waypoints), SaveStream::member(u, u.routeDirs),
+                       SaveStream::member(u, u.routeCache)});
+        s.ioVec(u.order.waypoints);
+        s.ioVec(u.routeDirs);
+        s.ioVec(u.routeCache);
+    }
+    s.ioDeque(s_freeRing);
+}
 
 void resetUnits() {
     colonyReset();

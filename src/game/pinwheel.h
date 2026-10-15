@@ -38,6 +38,9 @@ void pinwheelSetComp(int stub, int comp, int lo, int hi, const int* recs);
 
 void strategiesTick();                                            // dword_4E4194 → vt[9]
 void strategiesReset();
+struct Stub;
+Stub* pinwheelNewForLoad();
+void strategiesSerializeLists(class SaveStream& s);
 void pinwheelDump();                                              // diagnóstico (stdout)
 
 } // namespace op2

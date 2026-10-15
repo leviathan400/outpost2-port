@@ -2,6 +2,7 @@
 
 #include "ui_state.h"
 #include "../shell/shell_menu.h"
+#include "save_dialog.h"
 
 namespace op2 {
 
@@ -28,6 +29,7 @@ public:
 
 private:
     ShellMenu m_menu;
+    SaveSlotsDialog m_loadDlg;      // LOAD GAME (Dialog 241)
     bool m_hasReturn = false, m_hasResults = false;
     int m_reason = 0;
     GameStartInfo m_results;

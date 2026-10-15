@@ -38,6 +38,9 @@
 #include "../game/command.h"
 #include "../game/missile.h"
 #include "../audio/sound.h"
+#include "../game/save_game.h"
+#include "../game/save_stream.h"
+#include "../app/tapp.h"
 
 namespace op2 {
 
@@ -48,6 +51,11 @@ namespace {
 struct DllPlayer { int playerNum; signed char checkValue[8]; };
 static_assert(sizeof(DllPlayer) == 12, "_Player: 12 bytes");
 DllPlayer g_dllPlayer[7];
+} // namespace
+
+void dllPlayersSerialize(SaveStream& s) { s.io(g_dllPlayer); }
+
+namespace {
 
 struct ApiLoc { int x, y; };   // LOCATION por valor (8 bytes, na pilha)
 
@@ -73,6 +81,10 @@ int portXClamped(int x) {
 // ---- _Player ------------------------------------------------------------------
 void __fastcall P_GoEden(DllPlayer* p, void*)                 { Player[p->playerNum].GoEden(); }
 void __fastcall P_GoAI(DllPlayer* p, void*)                   { Player[p->playerNum].GoAI(); }
+// TethysGame::SaveGame é vazio no original (retn); LoadGame posta a carga
+// adiada (TFrame::PostDelayedLoadMessage).
+void __fastcall TG_SaveGame(const char*) {}
+void __fastcall TG_LoadGame(const char* name) { if (name) gTApp.requestDelayedLoad(name); }
 void __fastcall P_GoHuman(DllPlayer* p, void*)                { Player[p->playerNum].GoHuman(); }
 void __fastcall P_GoPlymouth(DllPlayer* p, void*)             { Player[p->playerNum].GoPlymouth(); }
 void __fastcall P_SetColorNumber(DllPlayer* p, void*, int v)  { Player[p->playerNum].SetColorNumber(v); }
@@ -831,6 +843,8 @@ const std::map<std::string, void*>& table() {
         {"?Player@@3PAV_Player@@A", &g_dllPlayer[0]},
         {"?GoEden@_Player@@QAEXXZ", reinterpret_cast<void*>(&P_GoEden)},
         {"?GoAI@_Player@@QAEXXZ", reinterpret_cast<void*>(&P_GoAI)},
+        {"?SaveGame@TethysGame@@SIXPBD@Z", reinterpret_cast<void*>(&TG_SaveGame)},
+        {"?LoadGame@TethysGame@@SIXPBD@Z", reinterpret_cast<void*>(&TG_LoadGame)},
         {"?GoHuman@_Player@@QAEXXZ", reinterpret_cast<void*>(&P_GoHuman)},
         {"?GoPlymouth@_Player@@QAEXXZ", reinterpret_cast<void*>(&P_GoPlymouth)},
         {"?SetColorNumber@_Player@@QAEXH@Z", reinterpret_cast<void*>(&P_SetColorNumber)},

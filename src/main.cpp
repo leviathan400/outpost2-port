@@ -34,6 +34,7 @@
 #include "mission/mission.h"
 #include "game/research.h"
 #include "game/start_info.h"
+#include "game/save_game.h"
 #include "game/building_sheet.h"
 #include "game/colony.h"
 #include "game/missile.h"
@@ -251,9 +252,12 @@ static int runScreenshot(int argc, char* argv[], const std::string& outPath) {
     if (!renderer.init("OP2 screenshot", 1280, 960, false)) { SDL_Quit(); return 1; }
     op2::ShellMenu shellMenu;
     shellMenu.init("OP2SHRES.DLL");
+    op2::SaveSlotsDialog slotsDlg;                           // --savedlg / --loaddlg
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
-        if (a == "--tutorials") shellMenu.showTutorials();
+        if (a == "--savedlg") slotsDlg.open(op2::SaveSlotsDialog::kSave, "Eden Mission 1");
+        else if (a == "--loaddlg") slotsDlg.open(op2::SaveSlotsDialog::kLoad, "");
+        else if (a == "--tutorials") shellMenu.showTutorials();
         else if (a == "--menu") shellMenu.showMainMenu();
         else if (a == "--campaign") shellMenu.showNewCampaign();
         else if (a == "--prefs") shellMenu.showPreferences();
@@ -274,6 +278,7 @@ static int runScreenshot(int argc, char* argv[], const std::string& outPath) {
     }
     renderer.clear(0xFF000000);
     shellMenu.render(renderer);
+    slotsDlg.render(renderer);
     bool ok = writeBmp32(outPath, renderer.getFramebuffer(),
                          op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
     std::cout << "[Screenshot] " << (ok ? "salvo em " : "falha ao salvar ") << outPath << std::endl;
@@ -1552,6 +1557,69 @@ static int runCampaignTest(const std::string& dll1, const std::string& dll2, int
     return 0;
 }
 
+// Hash do estado da simulação (unidades, jogadores, colônia, RNG, relógio).
+static uint64_t simHash() {
+    uint64_t h = 1469598103934665603ull;
+    auto mix = [&](int64_t v) { h = (h ^ static_cast<uint64_t>(v)) * 1099511628211ull; };
+    mix(op2::TethysGame::tick());
+    mix(op2::TethysGame::getRandState());
+    for (size_t i = 1; i < op2::g_units.size(); ++i) {
+        const op2::UnitRecord& r = op2::g_units[i];
+        if (r.id == -1) continue;
+        mix(static_cast<int64_t>(i)); mix(r.type); mix(r.owner); mix(r.pixelX); mix(r.pixelY); mix(r.damage);
+        mix(r.action); mix(r.field22); mix(r.flags); mix(r.cargo);
+    }
+    for (int p = 0; p < 7; ++p) {
+        const op2::PlayerData& d = op2::g_playerData[p];
+        mix(d.ore); mix(d.rareOre); mix(d.foodStored); mix(d.workers); mix(d.scientists); mix(d.kids); mix(d.morale);
+        mix(op2::g_colony[p].moraleValue); mix(op2::g_colony[p].powerGenerated);
+    }
+    return h;
+}
+
+// --savetest <DLL> <t1> <t2>: roda t1 ticks, salva (SGAME9.OP2), roda t2 e
+// anota o hash; recarrega o arquivo num GameState novo, roda t2 e compara.
+static int runSaveTest(const std::string& dll, int t1, int t2) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 savetest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    const std::string path = op2::saveSlotPath(9);
+    uint64_t hSaved = 0, hA = 0, hB = 0;
+    int tickA = 0, tickB = 0;
+    {
+        op2::GameState gs;
+        if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+        gs.onActivate();
+        while (static_cast<int>(op2::TethysGame::tick()) < t1 && !gs.gameEnded()) gs.onIdle(renderer, 0.02f);
+        if (gs.gameEnded()) { std::printf("[SaveTest] partida encerrada antes do tick %d\n", t1); return 6; }
+        if (!gs.saveToFile(path, "savetest")) { std::printf("[SaveTest] falhou ao gravar\n"); return 3; }
+        hSaved = simHash();
+        const int stop = static_cast<int>(op2::TethysGame::tick()) + t2;
+        while (static_cast<int>(op2::TethysGame::tick()) < stop && !gs.gameEnded()) gs.onIdle(renderer, 0.02f);
+        hA = simHash();
+        tickA = static_cast<int>(op2::TethysGame::tick());
+    }
+    {
+        op2::GameState gs;
+        if (!gs.loadSavedGame(path)) { std::printf("[SaveTest] falhou ao carregar\n"); return 4; }
+        gs.onActivate();
+        const uint64_t hLoaded = simHash();
+        std::printf("[SaveTest] hash ao gravar %016llx, ao carregar %016llx (%s)\n", (unsigned long long)hSaved,
+                    (unsigned long long)hLoaded, hSaved == hLoaded ? "igual" : "DIFERENTE");
+        const int stop = static_cast<int>(op2::TethysGame::tick()) + t2;
+        while (static_cast<int>(op2::TethysGame::tick()) < stop && !gs.gameEnded()) gs.onIdle(renderer, 0.02f);
+        hB = simHash();
+        tickB = static_cast<int>(op2::TethysGame::tick());
+    }
+    std::printf("[SaveTest] depois de +%d ticks: original %016llx (t=%d), recarregado %016llx (t=%d) -> %s\n", t2,
+                (unsigned long long)hA, tickA, (unsigned long long)hB, tickB, hA == hB ? "IGUAL" : "DIVERGIU");
+    renderer.shutdown();
+    SDL_Quit();
+    return hA == hB ? 0 : 5;
+}
+
 static int runAiTest(const std::string& dll, int tx, int ty, int ticks) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
     op2::g_ResManager.init(".");
@@ -2641,6 +2709,8 @@ int main(int argc, char* argv[]) {
             return runQuakeTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--disastertest") == 0 && i + 3 < argc)
             return runDisasterTest(argv[i + 1], argv[i + 2], argv[i + 3]);
+        if (std::strcmp(argv[i], "--savetest") == 0 && i + 3 < argc)
+            return runSaveTest(argv[i + 1], atoi(argv[i + 2]), atoi(argv[i + 3]));
         if (std::strcmp(argv[i], "--campaigntest") == 0 && i + 3 < argc)
             return runCampaignTest(argv[i + 1], argv[i + 2], atoi(argv[i + 3]));
         if (std::strcmp(argv[i], "--routetest") == 0 && i + 5 < argc)

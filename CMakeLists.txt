@@ -54,6 +54,7 @@ add_executable(outpost2_modern
     src/game/scenario.cpp
     src/game/research.cpp
     src/game/start_info.cpp
+    src/game/save_game.cpp
     src/game/disaster.cpp
     src/game/commands.cpp
     src/game/production.cpp
@@ -94,6 +95,7 @@ add_executable(outpost2_modern
     src/app/info_pane.cpp
     src/app/shell_state.cpp
     src/app/game_state.cpp
+    src/app/save_dialog.cpp
     src/core/config.cpp
 )
 

@@ -22,6 +22,11 @@ struct MissionUnitRecord;
 enum GroupKind { GK_SC = 0, GK_FIGHT = 1, GK_MINE = 2, GK_BUILD = 3 };
 
 void aiGroupsReset();
+// Jogo salvo: objeto vazio p/ a tabela de stubs e as listas (dword_4E0B64,
+// grupos padrão).
+struct Stub;
+Stub* aiGroupNewForLoad();
+void aiGroupsSerializeLists(class SaveStream& s);
 void aiGroupsTick();                         // sub_403110, passo dos grupos
 void aiGroupsDump();                         // diagnóstico (stdout)
 

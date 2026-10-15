@@ -1,4 +1,6 @@
 #include "building_sheet.h"
+#include "save_game.h"
+#include "save_stream.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -348,6 +350,12 @@ uint8_t* unitStatBlock(int type, int player) {
     if (type >= 1 && type <= 0x10) return reinterpret_cast<uint8_t*>(&s_veh[type].player[player]);
     if (s_weap[type].loaded) return reinterpret_cast<uint8_t*>(&s_weap[type].player[player]);
     return reinterpret_cast<uint8_t*>(&s_other[type].block[player][0]);
+}
+
+void sheetsSerialize(SaveStream& s) {                          // sub_446670
+    for (int t = 1; t <= 0x72; ++t)
+        for (int p = 0; p < 7; ++p)
+            if (uint8_t* b = unitStatBlock(t, p)) s.raw(b, 0x44);
 }
 
 void reloadSheets() {

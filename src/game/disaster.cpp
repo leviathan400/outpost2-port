@@ -15,6 +15,8 @@
 #include "tethys_game.h"
 #include "unit.h"
 #include "walls.h"
+#include "save_game.h"
+#include "save_stream.h"
 
 namespace op2 {
 
@@ -771,6 +773,8 @@ static void lavaSetCell(int x, int y) {                      // sub_432890 (vt[2
 // estiver nele é infectado (prédio) ou morre (veículo). Iniciado uma vez
 // (sub_49E180: [+4] = 0x710071, [+0x10] = 0) — não é reiniciado por partida.
 static Spreader s_microbe = {0x710071u, 0, 0};
+
+void disasterSerialize(SaveStream& s) { s.io(s_lava); s.io(s_microbe); }
 
 static bool virusAt(int tx, int ty) { return (cellAt(tx & iMask(), ty) & 0x40000000u) != 0; }
 

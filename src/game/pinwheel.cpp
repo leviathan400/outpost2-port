@@ -10,6 +10,7 @@
 #include "player.h"
 #include "scenario.h"
 #include "tethys_game.h"
+#include "save_stream.h"
 #include "trigger.h"
 #include "unit.h"
 
@@ -44,6 +45,14 @@ struct Pinwheel : Stub {
     Comp comp[3];                                                    // +0x64 / +0x74 / +0x84
     int fraction = 0;                                                // +0x94
     int strength = 0;                                                // +0x98
+    int saveKind() const override { return 4; }
+    void saveIo(SaveStream& s) override {
+        s.ioVec(pts);
+        s.io(maxWeight); s.io(maxLink); s.io(player); s.io(contactDelay); s.io(state); s.io(next);
+        s.io(stealth); s.io(waveMax); s.io(waveMin); s.io(noMax); s.io(noMin);
+        for (Comp& c : comp) { s.io(c.lo); s.io(c.hi); s.ioVec(c.recs); s.io(c.sum); }
+        s.io(fraction); s.io(strength);
+    }
 };
 
 std::vector<int> s_strategies;          // dword_4E4194 (cabeça = mais nova)
@@ -369,6 +378,8 @@ void strategiesTick() {                                             // sub_40311
 }
 
 void strategiesReset() { s_strategies.clear(); }
+Stub* pinwheelNewForLoad() { return new Pinwheel(); }
+void strategiesSerializeLists(SaveStream& s) { s.ioVec(s_strategies); }
 
 void pinwheelDump() {
     for (int id : s_strategies) {

@@ -8,6 +8,8 @@
 #include <memory>
 
 #include "building_sheet.h"
+#include "save_game.h"
+#include "save_stream.h"
 #include "player.h"
 #include "tethys_game.h"
 #include "unit_names.h"
@@ -253,6 +255,14 @@ static void propagate(int player, int start) {               // sub_472D80
             stack.push_back(d);
         }
     }
+}
+
+void researchSerialize(SaveStream& s) {                        // sub_4734C0
+    uint32_t n = static_cast<uint32_t>(s_techs.size());
+    s.io(n);
+    if (s.loading() && n != s_techs.size()) { s.fail(); return; }
+    for (auto& t : s_techs) s.io(t->researched);
+    s.io(s_uiCache);
 }
 
 void researchApplyTech(int player, int index) {               // sub_473860

@@ -42,6 +42,8 @@
 #include "../game/scenario.h"
 #include "../game/ai_group.h"
 #include "../game/start_info.h"
+#include "../game/save_game.h"
+#include "../game/save_stream.h"
 #include "../mission/mission.h"
 #include "../gfx/artfile.h"
 #include "../gfx/art_blit.h"
@@ -94,7 +96,47 @@ bool GameState::loadMap(const std::string& mapName) {
     return true;
 }
 
-bool GameState::loadMission(const std::string& dllName, const GameStartInfo* gsi) {
+// Estado da interface no jogo salvo (o lugar de sub_4083B0): câmera e a
+// GameStartInfo (TethysGame+0xA4 no original).
+std::vector<uint8_t> GameState::uiStateSave() {
+    SaveStream s(false);
+    s.io(m_camX); s.io(m_camY);
+    GameStartInfo& g = m_gsi;
+    s.io(g.flags); s.ioStr(g.dll); s.io(g.playerWord); s.io(g.endCode); s.io(g.missionNumber);
+    s.io(g.food); s.io(g.ore); s.io(g.rareOre); s.io(g.workers); s.io(g.scientists); s.io(g.kids);
+    s.io(g.spaceWord); s.io(g.localPlayer); s.io(g.endTick); s.io(g.playerBlock);
+    s.io(g.techCount); s.io(g.techLevel); s.ioVec(g.techIdx); s.ioVec(g.techMask);
+    return s.buffer();
+}
+bool GameState::uiStateLoad(const std::vector<uint8_t>& blob) {
+    SaveStream s(true);
+    s.setBuffer(blob);
+    s.io(m_camX); s.io(m_camY);
+    GameStartInfo& g = m_gsi;
+    s.io(g.flags); s.ioStr(g.dll); s.io(g.playerWord); s.io(g.endCode); s.io(g.missionNumber);
+    s.io(g.food); s.io(g.ore); s.io(g.rareOre); s.io(g.workers); s.io(g.scientists); s.io(g.kids);
+    s.io(g.spaceWord); s.io(g.localPlayer); s.io(g.endTick); s.io(g.playerBlock);
+    s.io(g.techCount); s.io(g.techLevel); s.ioVec(g.techIdx); s.ioVec(g.techMask);
+    clampCamera();
+    return s.ok();
+}
+
+bool GameState::saveToFile(const std::string& path, const std::string& description) {
+    if (!m_mission) return false;
+    return saveGameWrite(path, description, uiStateSave());          // sub_48A120
+}
+
+bool GameState::loadSavedGame(const std::string& path) {
+    SaveHeader h;
+    if (!saveReadHeader(path, h)) {
+        std::cerr << "[Load] " << path << " nao e um jogo salvo desta versao" << std::endl;
+        return false;
+    }
+    std::cout << "[Load] " << path << ": '" << h.description << "' " << h.dll << " tick " << h.tick << std::endl;
+    return loadMission(h.dll, nullptr, &path);
+}
+
+bool GameState::loadMission(const std::string& dllName, const GameStartInfo* gsi, const std::string* savePath) {
     loadSettings();
     if (m_mission) { setCurrentMission(nullptr); m_mission.reset(); }
     resetTriggers();
@@ -141,6 +183,19 @@ bool GameState::loadMission(const std::string& dllName, const GameStartInfo* gsi
     lavaReset();                                 // sub_4322A0 (início da partida)
     TethysGame::SetDaylightMoves(0);
     TethysGame::SetDaylightEverywhere(0);
+    // Jogo salvo (sub_402CB0 & cia.): no lugar do InitProc, o estado do arquivo.
+    if (savePath) {
+        std::vector<uint8_t> extra;
+        if (!saveGameRead(*savePath, extra) || !uiStateLoad(extra)) {
+            std::cerr << "[Load] falhou: " << *savePath << std::endl;
+            setCurrentMission(nullptr);
+            m_mission.reset();
+            resetTriggers();
+            return false;
+        }
+        std::cout << "[Load] ok: tick " << TethysGame::tick() << ", unidades " << (g_units.size() - 1) << std::endl;
+        return true;
+    }
     // Campanha: sobras da missão anterior (sub_4898F0), antes do InitProc.
     if (gsi && gsi->campaign()) startInfoApplyCampaign(m_gsi);
     // sub_402E10: grupo padrão de cada computador (sub_402E70) e InitProc.
@@ -260,13 +315,12 @@ void GameState::onActivate() {
 // abrem a caixa "Success" com "Save Game" / "Continue" (sub_41D5E0, Dialog 262).
 void GameState::beginGameEnd() {
     const int code = gameEndCode();
-    if (code == 10 || code == 11 || !gTApp.hasShell()) { finishGameEnd(false); return; }
+    if (code == 10 || code == 11 || !gTApp.hasShell()) { finishGameEnd(); return; }
     m_endPhase = 1;
     m_endWaitStart = SDL_GetTicks();
 }
 
-void GameState::finishGameEnd(bool save) {
-    if (save) std::cout << "[Mission] Save Game: salvamento ainda nao portado (OnSaveSlot)" << std::endl;
+void GameState::finishGameEnd() {
     const int code = gameEndCode();
     startInfoCollectResults(m_gsi, m_mission ? m_mission->desc : nullptr, code);   // sub_489A30
     if (code == 3 && m_gsi.campaign()) ++m_gsi.missionNumber;                    // +0x16A
@@ -299,11 +353,16 @@ void GameState::drawSuccessDialog(Renderer& renderer) {
 }
 
 void GameState::onIdle(Renderer& renderer, float dt) {
+    if (!m_pendingLoad.empty()) {                            // TFrame::PostDelayedLoadMessage
+        const std::string path = m_pendingLoad;
+        m_pendingLoad.clear();
+        if (!loadSavedGame(path)) { gTApp.activateShell(); return; }
+    }
     if (m_endPhase == 1 && SDL_GetTicks() - m_endWaitStart >= 2000) {
         const int code = gameEndCode();
         // sub_402820: DescBlock[0] > 0 = missão de campanha (e dword_56DEF8 = 0).
         if (code == 3 && m_mission && m_mission->desc && m_mission->desc->missionType > 0) m_endPhase = 2;
-        else { finishGameEnd(false); return; }
+        else { finishGameEnd(); return; }
     }
     const Uint8* ks = SDL_GetKeyboardState(nullptr);
     int speed = static_cast<int>(600 * dt);
@@ -320,7 +379,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     // Avança o relógio de simulação na cadência do GameSpeed (m_tickPeriod).
     const float kTickPeriod = m_tickPeriod;
     m_tickAccum += dt;
-    if (m_endPhase) m_tickAccum = 0.0f;                      // partida encerrada: sem turnos
+    if (m_endPhase || m_saveDlg.active()) m_tickAccum = 0.0f;   // encerrada / diálogo modal: sem turnos
     while (m_tickAccum >= kTickPeriod) {
         TethysGame::advanceTick();
         TethysGame::advanceDaylight(g_gameMap.internalWidth());   // início do turno (sub_489DD0)
@@ -852,7 +911,8 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     Font::drawText(fb, VW, VH, l4, 8, 44, 0xFFE0C080, true);
     }
 
-    if (m_endPhase == 2) drawSuccessDialog(renderer);
+    if (m_endPhase == 2 && !m_saveDlg.active()) drawSuccessDialog(renderer);
+    m_saveDlg.render(renderer);
     renderer.present();
 }
 
@@ -981,6 +1041,19 @@ void GameState::selectBox(int x0, int y0, int x1, int y1) {
 }
 
 void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
+    if (m_saveDlg.active()) {                                // TFileDialog (modal)
+        const SaveSlotsDialog::Result r = m_saveDlg.handleEvent(renderer, e);
+        if (r == SaveSlotsDialog::kDoSave) {
+            saveToFile(m_saveDlg.path(), m_saveDlg.description());   // TApp::SaveGame
+        } else if (r == SaveSlotsDialog::kDoLoad) {
+            m_endAfterSave = false;
+            m_endPhase = 0;
+            if (!loadSavedGame(m_saveDlg.path())) gTApp.activateShell();
+            return;
+        }
+        if (r != SaveSlotsDialog::kNone && m_endAfterSave) { m_endAfterSave = false; finishGameEnd(); }
+        return;
+    }
     if (m_endPhase) {                                        // diálogo modal / espera
         if (e.type == SDL_MOUSEMOTION) renderer.screenToNative(e.motion.x, e.motion.y, m_mouseNX, m_mouseNY);
         if (m_endPhase != 2) return;
@@ -988,14 +1061,26 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
             int nx, ny;
             renderer.screenToNative(e.button.x, e.button.y, nx, ny);
             const int b = successButtonAt(nx, ny);
-            if (b) finishGameEnd(b == 1);                    // 1 = IDOK "Save Game"
+            if (b == 1) { m_endAfterSave = true; m_saveDlg.open(SaveSlotsDialog::kSave, m_mission ? m_mission->levelDesc : ""); }
+            else if (b == 2) finishGameEnd();
         } else if (e.type == SDL_KEYDOWN) {
-            if (e.key.keysym.sym == SDLK_RETURN) finishGameEnd(true);
-            else if (e.key.keysym.sym == SDLK_ESCAPE) finishGameEnd(false);
+            if (e.key.keysym.sym == SDLK_RETURN) {           // IDOK = "Save Game" (OnSaveSlot)
+                m_endAfterSave = true;
+                m_saveDlg.open(SaveSlotsDialog::kSave, m_mission ? m_mission->levelDesc : "");
+            } else if (e.key.keysym.sym == SDLK_ESCAPE) finishGameEnd();
         }
         return;
     }
     if (e.type == SDL_KEYDOWN) {
+        // Aceleradores 130 do OUT2RES: Ctrl+S = 40017 (OnSaveSlot), Ctrl+L = 40018.
+        if ((SDL_GetModState() & KMOD_CTRL) && e.key.keysym.sym == SDLK_s && m_mission) {
+            m_saveDlg.open(SaveSlotsDialog::kSave, m_mission->levelDesc);
+            return;
+        }
+        if ((SDL_GetModState() & KMOD_CTRL) && e.key.keysym.sym == SDLK_l) {
+            m_saveDlg.open(SaveSlotsDialog::kLoad, "");
+            return;
+        }
         if (e.key.keysym.sym == SDLK_ESCAPE) gTApp.activateShell();
         if (e.key.keysym.sym == SDLK_g) m_showPassability = !m_showPassability;
         if (e.key.keysym.sym == SDLK_F3) m_showDebugHud = !m_showDebugHud;

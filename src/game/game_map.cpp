@@ -5,10 +5,21 @@
 
 #include "../res/res_manager.h"
 #include "terrain_cost.h"
+#include "save_game.h"
+#include "save_stream.h"
 
 namespace op2 {
 
 GameMap g_gameMap;
+
+void GameMap::serializeRuntime(SaveStream& s) {
+    const size_t n = m_tiles.size();
+    s.ioVec(m_tiles);
+    if (s.loading() && m_tiles.size() != n) s.fail();
+    s.ioVec(m_light);
+    s.ioVec(m_light2);
+}
+void mapSerialize(SaveStream& s) { g_gameMap.serializeRuntime(s); }
 
 bool GameMap::loadFromStream(StreamIO& s) {
     return load(s.data(), s.size());

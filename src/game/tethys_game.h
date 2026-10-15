@@ -77,6 +77,9 @@ public:
         return createUnit(unit, type, loc, owner, cargo, rotation) ? 1 : 0;
     }
 
+    static void serialize(class SaveStream& s);
+    static uint64_t getRandState() { return (static_cast<uint64_t>(s_rng.s0()) << 32) | s_rng.s1(); }   // jogo salvo (TethysGame, 0x484 bytes no original)
+
 private:
     static uint32_t s_tick;        // dword_56DEDC
     static int      s_daylightPhase;      // dword_5472A0

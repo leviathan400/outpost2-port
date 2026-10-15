@@ -27,6 +27,7 @@
 #include "trigger.h"
 #include "unit.h"
 #include "weapon.h"
+#include "save_stream.h"
 
 namespace op2 {
 
@@ -123,6 +124,21 @@ struct Group : Stub {
     bool hasClass(int c) const {
         for (const Node& n : nodes) if (n.cls == c) return true;
         return false;
+    }
+    int saveKind() const override { return 3; }
+    void saveIo(SaveStream& s) override {
+        s.io(kind); s.io(player); s.io(deleteAt); s.io(lights);
+        s.ioVec(nodes);
+        s.io(combine); s.io(combineTarget); s.io(combineTick);
+        s.io(patrolN); s.io(patrolStart); s.io(patrolPts); s.io(patrolOn); s.io(follow);
+        s.io(rect); s.io(targetGroup); s.io(attackType); s.io(targetUnit);
+        s.ioVec(guarded);
+        s.io(mode);
+        s.io(hasTC); s.io(tcDirty); s.ioVec(tc);
+        s.io(mine); s.io(smelter); s.io(mineDock); s.io(smelterDock); s.io(mineType); s.io(smelterType);
+        s.io(area);
+        s.ioVec(blds); s.ioVec(mines); s.ioVec(tubes); s.ioVec(reinf);
+        s.io(bState); s.io(conVec); s.io(factory); s.io(bIndex); s.io(bay);
     }
     int firstOf(int c) const {
         for (size_t i = 0; i < nodes.size(); ++i) if (nodes[i].cls == c) return static_cast<int>(i);
@@ -1468,6 +1484,13 @@ int aiUnitClass(int type, int weapon) {                      // sub_49D1B0
         case 0x17: return 0x0E;
         default: return (type >= 1 && type <= 0x0F) ? 9 : 0x0F;
     }
+}
+
+Stub* aiGroupNewForLoad() { return new Group(); }
+void aiGroupsSerializeLists(SaveStream& s) {
+    s.ioVec(s_groups);
+    s.io(s_defaultGroup);
+    s.io(s_defaultExternal);
 }
 
 void aiGroupsReset() {

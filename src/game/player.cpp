@@ -4,6 +4,8 @@
 #include "colony.h"
 #include "research.h"
 #include "tethys_game.h"
+#include "save_game.h"
+#include "save_stream.h"
 #include "unit.h"
 
 namespace op2 {
@@ -36,6 +38,13 @@ void _Player::GoHuman() {
     aiDefaultGroupDelete(m_index);
     colonyMarkDirty(m_index);
     d().pathRefine = TethysGame::cheatFlag(14) ? 1 : 0;
+}
+
+void playersSerialize(SaveStream& s) {
+    for (PlayerData& d : g_playerData) {
+        s.ioExcept(d, {SaveStream::member(d, d.research)});
+        s.ioSet(d.research);
+    }
 }
 
 void _Player::MarkResearchComplete(int techID) { researchMarkComplete(m_index, techIndex(techID)); }

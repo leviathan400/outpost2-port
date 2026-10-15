@@ -12,6 +12,8 @@
 #include <cstdio>
 #include "tethys_game.h"
 #include "../mission/mission.h"
+#include "save_game.h"
+#include "save_stream.h"
 #include "../res/res_manager.h"
 
 namespace op2 {
@@ -796,6 +798,17 @@ void colonyForceMorale(int player, int level) {      // sub_4229F0 cases 21..25
         s_forceMask[level] |= bit;
     }
     dirtyAll();
+}
+
+void colonySerialize(SaveStream& s) {
+    for (int p = 0; p < kMaxPlayers; ++p) {
+        ColonyState& c = g_colony[p];
+        s.ioExcept(c, {SaveStream::member(c, c.components)});
+        s.ioVec(c.components);
+        s.ioVec(s_structList[p]);
+        s.ioVec(s_vehicleList[p]);
+    }
+    s.io(s_forceMask);
 }
 
 void colonyPlayerBlockSave(int p, int out[0x12]) {

@@ -309,6 +309,7 @@ void ShellMenu::dispatchButton(int id) {
         case 1011: setState(MenuState::Preferences); break;
         case 1010: setState(MenuState::About); break;
         case 1013: m_quitRequested = true; break;
+        case 1007: m_loadRequested = true; break;            // LOAD GAME (TFileDialog)
         default: std::cout << "[Menu] botão " << id << " (ainda sem função)" << std::endl; break;
         }
         break;

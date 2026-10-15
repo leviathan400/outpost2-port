@@ -8,6 +8,8 @@
 
 #include "game_map.h"
 #include "tethys_game.h"
+#include "save_game.h"
+#include "save_stream.h"
 
 namespace op2 {
 
@@ -22,6 +24,16 @@ static Recent s_recent[0x32];                   // +0x1330, 50 x 16 bytes
 static int s_lastPowerId = 0, s_lastMoraleId = 0, s_lastFoodId = 0;
 static uint32_t s_lastPowerT = 0, s_lastMoraleT = 0, s_lastFoodT = 0;
 static uint32_t s_lastCommonT = 0, s_lastRareT = 0, s_lastDisabledT = 0;
+
+void messagesSerialize(SaveStream& s) {
+    for (GameMessage& m : s_ring) { s.io(m.x); s.io(m.y); s.io(m.soundId); s.ioStr(m.text); }
+    s.io(s_start); s.io(s_count); s.io(s_serial);
+    s.ioStr(s_status);
+    s.io(s_recent);
+    s.io(s_lastPowerId); s.io(s_lastMoraleId); s.io(s_lastFoodId);
+    s.io(s_lastPowerT); s.io(s_lastMoraleT); s.io(s_lastFoodT);
+    s.io(s_lastCommonT); s.io(s_lastRareT); s.io(s_lastDisabledT);
+}
 
 void resetMessages() {
     s_start = s_count = 0;

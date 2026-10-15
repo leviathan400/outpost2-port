@@ -21,6 +21,7 @@ public:
     int getRand(int n);
 
     uint32_t s0() const { return m_s0; }
+    void setState(uint32_t a, uint32_t b) { m_s0 = a; m_s1 = b; }
     uint32_t s1() const { return m_s1; }
 
 private:

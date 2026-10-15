@@ -71,6 +71,16 @@ bool TApp::createFrames(const std::string& initialMap, const std::string& initia
     return true;
 }
 
+bool TApp::activateSaved(const std::string& path) {
+    if (!m_game->loadSavedGame(path)) return false;
+    setUIState(m_game);
+    return true;
+}
+
+void TApp::requestDelayedLoad(const std::string& path) {
+    if (m_game) m_game->requestDelayedLoad(path);
+}
+
 void TApp::setUIState(UIState* next) {
     if (next == m_cur) return;
     if (m_cur) m_cur->onDeactivate();

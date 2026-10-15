@@ -129,6 +129,8 @@ public:
     static constexpr int CELLTYPE_DOZED  = 0x15;
     static constexpr int CELLTYPE_RUBBLE = 0x16;
     void setTileAndCellType(int x, int y, int tile, int cellType);
+    // Jogo salvo: células vivas (ocupação, muros, terraplenagem) e a luz.
+    void serializeRuntime(class SaveStream& s);
 
 private:
     std::vector<TerrainType> m_terrainTypes;

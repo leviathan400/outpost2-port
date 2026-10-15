@@ -17,6 +17,10 @@
 #include "unit.h"
 #include "ai_group.h"
 #include "../mission/mission.h"
+#include "ai_group.h"
+#include "pinwheel.h"
+#include "save_game.h"
+#include "save_stream.h"
 
 namespace op2 {
 
@@ -29,6 +33,15 @@ struct FuncReference : Stub {
     std::string name;
     int fromScript = 0;
     void (*fn)() = nullptr;
+    int saveKind() const override { return 1; }
+    void saveIo(SaveStream& s) override {
+        s.ioStr(name);
+        s.io(fromScript);
+        if (s.loading()) {                                   // sub_4034B0 de novo
+            MissionScript* m = currentMission();
+            fn = (fromScript && m) ? reinterpret_cast<void (*)()>(m->proc(name)) : nullptr;
+        }
+    }
 };
 
 enum TriggerKind {
@@ -48,6 +61,25 @@ struct Trigger : Stub {
     int f38 = 0, f3C = 0, f40 = 0, f44 = 0, f48 = 0, f4C = 0, f50 = 0;   // +0x38..+0x50
     std::vector<int> set;      // SetTrigger: +0x38.. stubs dos triggers do conjunto
     const char* text = nullptr;  // Victory/FailureCondition: +0x30 (texto da DLL)
+    int saveKind() const override { return 2; }
+    void saveIo(SaveStream& s) override {
+        int k = kind;
+        s.io(k); kind = static_cast<TriggerKind>(k);
+        s.io(oneShot); s.io(playerMask); s.io(funcRef);
+        s.io(f30); s.io(f34); s.io(f38); s.io(f3C); s.io(f40); s.io(f44); s.io(f48); s.io(f4C); s.io(f50);
+        s.ioVec(set);
+        // O texto mora na DLL: vai como deslocamento na imagem (a DLL é recarregada).
+        MissionScript* m = currentMission();
+        const uint8_t* base = m ? m->module.base() : nullptr;
+        const uint32_t size = m ? m->module.size() : 0;
+        int32_t rva = -1;
+        if (!s.loading() && text && base && reinterpret_cast<const uint8_t*>(text) >= base &&
+            reinterpret_cast<const uint8_t*>(text) < base + size)
+            rva = static_cast<int32_t>(reinterpret_cast<const uint8_t*>(text) - base);
+        s.io(rva);
+        if (s.loading()) text = (rva >= 0 && base && static_cast<uint32_t>(rva) < size)
+                                    ? reinterpret_cast<const char*>(base + rva) : nullptr;
+    }
 };
 
 static Stub* s_stubs[kMaxStubs] = {};
@@ -91,6 +123,37 @@ static int allocStub(Stub* s) {
 }
 
 int stubAllocate(Stub* s) { return allocStub(s); }
+
+// Seção dos stubs (sub_47ABB0 / sub_47B6C0): tabela inteira (tipo + campos) e
+// as listas de instâncias; depois os grupos e as estratégias.
+void triggersSerialize(SaveStream& s) {
+    s.io(s_lastStub);
+    for (int i = 0; i < kMaxStubs; ++i) {
+        int kind = s_stubs[i] ? s_stubs[i]->saveKind() : 0;
+        s.io(kind);
+        if (s.loading()) {
+            delete s_stubs[i];
+            s_stubs[i] = nullptr;
+            switch (kind) {
+                case 1: s_stubs[i] = new FuncReference(); break;
+                case 2: s_stubs[i] = new Trigger(); break;
+                case 3: s_stubs[i] = aiGroupNewForLoad(); break;
+                case 4: s_stubs[i] = pinwheelNewForLoad(); break;
+                default: break;
+            }
+            if (kind && !s_stubs[i]) { s.fail(); return; }
+        }
+        if (!s_stubs[i]) continue;
+        s.io(s_stubs[i]->id);
+        s.io(s_stubs[i]->enabled);
+        s_stubs[i]->saveIo(s);
+        if (!s.ok()) return;
+    }
+    s.ioVec(s_triggers); s.ioVec(s_victory); s.ioVec(s_failure); s.ioVec(s_special);
+    s.io(s_endCode); s.io(s_endTick); s.io(s_speed);
+    aiGroupsSerializeLists(s);
+    strategiesSerializeLists(s);
+}
 Stub* stubObject(int idx) { return idx >= 0 && idx < kMaxStubs ? s_stubs[idx] : nullptr; }
 
 static Trigger* trig(int stub) {

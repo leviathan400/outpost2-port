@@ -20,6 +20,7 @@
 #include "storage_pane.h"
 #include "research_pane.h"
 #include "game_frame.h"
+#include "save_dialog.h"
 
 namespace op2 {
 
@@ -36,7 +37,15 @@ public:
     bool load(const std::string& mapName);
     // Inicia uma missão a partir da DLL (T##/E##/P##.DLL) — single player de
     // sub_4893A0: DescBlock, mapa, jogadores, InitProc; triggers por turno.
-    bool loadMission(const std::string& dllName, const GameStartInfo* gsi = nullptr);
+    bool loadMission(const std::string& dllName, const GameStartInfo* gsi = nullptr,
+                     const std::string* savePath = nullptr);
+    // Jogo salvo (TApp::SaveGame / LoadGame): grava a partida em andamento /
+    // recarrega a DLL e o mapa da missão do arquivo e restaura o estado.
+    bool saveToFile(const std::string& path, const std::string& description);
+    bool loadSavedGame(const std::string& path);
+    bool gameEnded() const { return m_endPhase != 0; }   // vitória/derrota: turnos parados
+    // TethysGame::LoadGame (export p/ as DLLs): carga adiada (PostDelayedLoadMessage).
+    void requestDelayedLoad(const std::string& path) { m_pendingLoad = path; }
     GameState();
     ~GameState();
     bool hasMap() const { return m_terrain.ok(); }
@@ -88,10 +97,15 @@ private:
     // GameStartInfo copiada em TethysGame+0xA4 (sub_4893A0) e o fim da partida
     // (sub_49C830): 1 = espera de 2 s, 2 = diálogo "Success" (Dialog 262).
     GameStartInfo m_gsi;
+    std::string m_pendingLoad;
+    SaveSlotsDialog m_saveDlg;         // Ctrl+S / Ctrl+L (comandos 40017 / 40018)
+    bool m_endAfterSave = false;       // "Save Game" da caixa Success
+    std::vector<uint8_t> uiStateSave();
+    bool uiStateLoad(const std::vector<uint8_t>& blob);
     int m_endPhase = 0;
     uint32_t m_endWaitStart = 0;
     void beginGameEnd();
-    void finishGameEnd(bool save);
+    void finishGameEnd();
     void drawSuccessDialog(Renderer& renderer);
     int successButtonAt(int x, int y) const;
     std::string m_mapName;

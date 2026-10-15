@@ -30,6 +30,8 @@ struct MissionScript {
     void (*aiProc)() = nullptr;
     int  (*statusProc)() = nullptr;
     const AIModDesc* desc = nullptr;
+    void* saveBuffer = nullptr;   // +0x10 (GetSaveRegions)
+    int   saveLength = 0;         // +0x14
     std::string dllName, mapName, levelDesc, techtreeName;
 
     bool load(const std::string& dll, std::string& error);

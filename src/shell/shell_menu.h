@@ -69,6 +69,8 @@ public:
     // export MapName da DLL da missão) e limpa o pedido. Consumido pelo ShellState
     // para o TApp trocar para o jogo (ActivateGame). Ver [[op2-engine-architecture]].
     bool consumeLaunch(std::string& outMap);
+    // LOAD GAME (botão 1007) pediu o diálogo de slots?
+    bool consumeLoadRequest() { const bool r = m_loadRequested; m_loadRequested = false; return r; }
     // GameStartInfo do último pedido (campanha); false se o pedido não tem.
     bool launchStartInfo(GameStartInfo& out) const { if (m_launchHasGsi) out = m_launchGsi; return m_launchHasGsi; }
     // Volta do jogo (CreateShell + mensagem 0x73a): motivo do fim e resultados.
@@ -94,6 +96,7 @@ private:
     bool m_launchRequested = false;
     std::string m_launchMap;
     bool m_launchHasGsi = false;
+    bool m_loadRequested = false;
     GameStartInfo m_launchGsi;
 
     // Campanha: a cópia do shell (0x13015a34) e as telas da campanha.

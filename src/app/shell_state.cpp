@@ -28,6 +28,8 @@ void ShellState::onIdle(Renderer& renderer, float dt) {
 
     renderer.clear(0xFF000000);
     m_menu.render(renderer);
+    if (m_menu.consumeLoadRequest()) m_loadDlg.open(SaveSlotsDialog::kLoad, "");
+    m_loadDlg.render(renderer);
     renderer.present();
 
     // o menu pediu para iniciar uma missão?
@@ -45,6 +47,12 @@ void ShellState::onIdle(Renderer& renderer, float dt) {
 }
 
 void ShellState::handleEvent(Renderer& renderer, const SDL_Event& e) {
+    if (m_loadDlg.active()) {
+        if (m_loadDlg.handleEvent(renderer, e) == SaveSlotsDialog::kDoLoad &&
+            !gTApp.activateSaved(m_loadDlg.path()))
+            std::cerr << "[Shell] nao foi possivel carregar " << m_loadDlg.path() << std::endl;
+        return;
+    }
     switch (e.type) {
     case SDL_MOUSEMOTION: {
         int nx, ny;

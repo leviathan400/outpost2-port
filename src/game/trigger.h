@@ -23,10 +23,15 @@ namespace op2 {
 struct MissionScript;
 
 // ScStub (base de triggers e grupos): [+4] stubIndex, [+8] habilitado.
+class SaveStream;
 struct Stub {
     virtual ~Stub() = default;
     int id = 0xFF;          // +0x04
     int enabled = 0;        // +0x08
+    // Jogo salvo: tipo (1 FuncReference, 2 Trigger, 3 grupo, 4 Pinwheel) e os
+    // campos próprios (id/enabled são gravados pela tabela).
+    virtual int saveKind() const { return 0; }
+    virtual void saveIo(SaveStream&) {}
 };
 // sub_47B460: aloca o próximo índice livre (0xFF se a tabela encheu).
 int stubAllocate(Stub* s);

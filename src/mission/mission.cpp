@@ -40,7 +40,16 @@ bool MissionScript::load(const std::string& dll, std::string& error) {
     statusProc = reinterpret_cast<int (*)()>(module.proc("StatusProc"));
     desc = static_cast<const AIModDesc*>(module.proc("DescBlock"));
     if (!desc) { error = "DescBlock ausente"; unload(); return false; }
-    // (GetSaveRegions: regiões de save — entra com o salvamento de jogo.)
+    // sub_402A10: GetSaveRegions(&this->+0x10) = {buffer, tamanho} da memória
+    // da DLL que vai no jogo salvo; sem o export, nada (+0x10 = 0).
+    saveBuffer = nullptr;
+    saveLength = 0;
+    if (auto gsr = reinterpret_cast<void (__cdecl*)(void*)>(module.proc("GetSaveRegions"))) {
+        struct { void* buf; int len; } bd = {nullptr, 0};
+        gsr(&bd);
+        saveBuffer = bd.buf;
+        saveLength = bd.len;
+    }
     if (const char* m = static_cast<const char*>(module.proc("MapName"))) mapName = m;
     if (const char* l = static_cast<const char*>(module.proc("LevelDesc"))) levelDesc = l;
     if (const char* t = static_cast<const char*>(module.proc("TechtreeName"))) techtreeName = t;
