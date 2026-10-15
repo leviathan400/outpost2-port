@@ -30,6 +30,8 @@
 #include "game/disaster.h"
 #include "game/commands.h"
 #include "game/messages.h"
+#include "game/pinwheel.h"
+#include "mission/mission.h"
 #include "game/research.h"
 #include "game/building_sheet.h"
 #include "game/colony.h"
@@ -1473,6 +1475,43 @@ static int runAiTest(const std::string& dll, int tx, int ty, int ticks) {
     return 0;
 }
 
+// --pinwheeltest <DLL> <chamadas> <ticks>: carrega o jogo de colônia, chama o
+// AIStateChange exportado pela DLL <chamadas> vezes (avança o estado da IA sem
+// esperar os prazos) e acompanha o Pinwheel e os grupos a cada 500 ticks.
+static int runPinwheelTest(const std::string& dll, int calls, int ticks) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 pinwheeltest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { std::printf("[PW] falhou\n"); renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    op2::MissionScript* m = op2::currentMission();
+    auto fn = m ? reinterpret_cast<void (*)()>(m->proc("AIStateChange")) : nullptr;
+    if (!fn) { std::printf("[PW] sem AIStateChange\n"); renderer.shutdown(); SDL_Quit(); return 3; }
+    for (int k = 0; k < calls; ++k) fn();
+    op2::pinwheelDump();
+    std::fflush(stdout);
+    int last = op2::TethysGame::tick();
+    while (op2::TethysGame::tick() < ticks) {
+        gs.onIdle(renderer, 0.2501f / 4.0f);
+        if (op2::TethysGame::tick() - last >= 500) {
+            last = op2::TethysGame::tick();
+            int enemies = 0;
+            for (size_t i = 1; i < op2::g_units.size(); ++i) {
+                const op2::UnitRecord& r = op2::g_units[i];
+                if (r.id != -1 && !(r.flags & op2::UNIT_DEAD) && (r.owner & 0x0F) == 1 && (r.flags & op2::UNIT_VEHICLE)) ++enemies;
+            }
+            std::printf("[PW] t=%d veiculos do j1=%d\n", last, enemies);
+            op2::pinwheelDump();
+            std::fflush(stdout);
+        }
+    }
+    renderer.shutdown(); SDL_Quit();
+    return 0;
+}
+
 static int runMissionTest(const std::string& dll, const std::string& outPath, int ticks) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
     op2::g_ResManager.init(".");
@@ -1493,7 +1532,11 @@ static int runMissionTest(const std::string& dll, const std::string& outPath, in
         gs.onIdle(renderer, 0.2501f / 4.0f);
         const std::string m = op2::statusBarText();
         if (m != lastMsg) { std::printf("[MissionTest] t=%d msg: %s\n", op2::TethysGame::tick(), m.c_str()); lastMsg = m; }
-        if (k % 2500 == 2499) { std::printf("[MissionTest] --- t=%d\n", op2::TethysGame::tick()); op2::aiGroupsDump(); }
+        if (k % 2500 == 2499) {
+            std::printf("[MissionTest] --- t=%d\n", op2::TethysGame::tick());
+            op2::aiGroupsDump();
+            op2::pinwheelDump();
+        }
     }
     {   int hurt = 0, dead = 0;
         for (size_t i = 1; i < op2::g_units.size(); ++i) {
@@ -2482,6 +2525,8 @@ int main(int argc, char* argv[]) {
             return runDisasterTest(argv[i + 1], argv[i + 2], argv[i + 3]);
         if (std::strcmp(argv[i], "--aitest") == 0 && i + 4 < argc)
             return runAiTest(argv[i + 1], atoi(argv[i + 2]), atoi(argv[i + 3]), atoi(argv[i + 4]));
+        if (std::strcmp(argv[i], "--pinwheeltest") == 0 && i + 3 < argc)
+            return runPinwheelTest(argv[i + 1], atoi(argv[i + 2]), atoi(argv[i + 3]));
         if (std::strcmp(argv[i], "--missiontest") == 0 && i + 2 < argc)
             return runMissionTest(argv[i + 1], argv[i + 2], i + 3 < argc ? atoi(argv[i + 3]) : 200);
         if (std::strcmp(argv[i], "--combattest") == 0 && i + 6 < argc) {

@@ -23,6 +23,7 @@
 #include "../game/game_map.h"
 #include "../game/messages.h"
 #include "../game/player.h"
+#include "../game/pinwheel.h"
 #include "../game/production.h"
 #include "../game/scenario.h"
 #include "../game/tethys_game.h"
@@ -465,6 +466,18 @@ void __fastcall MG_SetupLocsTypes(int* self, void*, ApiLoc* mine, ApiLoc* smelte
                     r->x1, r->y1, r->x2, r->y2);
 }
 
+// ---- Pinwheel (CPS1) ---------------------------------------------------------------------
+// ?CreatePinwheel(_Player&) (__fastcall: retorno oculto em ECX, _Player* em EDX).
+int* __fastcall PW_Create(int* ret, DllPlayer* p) { *ret = pinwheelCreate(p ? p->playerNum : 0); return ret; }
+void __fastcall PW_SetPoints(int* self, void*, const int* defs) { pinwheelSetPoints(*self, defs); }
+void __fastcall PW_SetContactDelay(int* self, void*, int d) { pinwheelSetContactDelay(*self, d); }
+void __fastcall PW_SetAttackFraction(int* self, void*, int f) { pinwheelSetAttackFraction(*self, f); }
+void __fastcall PW_SetNoRange(int* self, void*, int lo, int hi) { pinwheelSetNoRange(*self, lo, hi); }
+void __fastcall PW_SetWavePeriod(int* self, void*, int lo, int hi) { pinwheelSetWavePeriod(*self, lo, hi); }
+void __fastcall PW_SetAttackComp(int* self, void*, int lo, int hi, const int* r) { pinwheelSetComp(*self, 0, lo, hi, r); }
+void __fastcall PW_SetGuardComp(int* self, void*, int lo, int hi, const int* r) { pinwheelSetComp(*self, 1, lo, hi, r); }
+void __fastcall PW_SetSapperComp(int* self, void*, int lo, int hi, const int* r) { pinwheelSetComp(*self, 2, lo, hi, r); }
+
 // ---- Grupos de mineração e de construção ------------------------------------------------
 int* __fastcall G_CreateMiningGroup(int* ret, DllPlayer p) { *ret = aiCreateGroup(GK_MINE, p.playerNum); return ret; }
 int* __fastcall G_CreateBuildingGroup(int* ret, DllPlayer p) { *ret = aiCreateGroup(GK_BUILD, p.playerNum); return ret; }
@@ -902,6 +915,15 @@ const std::map<std::string, void*>& table() {
         {"?Setup@MiningGroup@@QAEXAAULOCATION@@0AAUMAP_RECT@@@Z", reinterpret_cast<void*>(&MG_SetupLocs)},
         {"?Setup@MiningGroup@@QAEXAAULOCATION@@0W4map_id@@1AAUMAP_RECT@@@Z", reinterpret_cast<void*>(&MG_SetupLocsTypes)},
         {"?DoDevelop@Unit@@QAEXW4map_id@@@Z", reinterpret_cast<void*>(&U_DoDevelop)},
+        {"?CreatePinwheel@@YI?AVPinwheel@@AAV_Player@@@Z", reinterpret_cast<void*>(&PW_Create)},
+        {"?SetPoints@Pinwheel@@QAEXPAUPWDef@@@Z", reinterpret_cast<void*>(&PW_SetPoints)},
+        {"?SetContactDelay@Pinwheel@@QAEXH@Z", reinterpret_cast<void*>(&PW_SetContactDelay)},
+        {"?SetAttackFraction@Pinwheel@@QAEXH@Z", reinterpret_cast<void*>(&PW_SetAttackFraction)},
+        {"?SetNoRange@Pinwheel@@QAEXHH@Z", reinterpret_cast<void*>(&PW_SetNoRange)},
+        {"?SetWavePeriod@Pinwheel@@QAEXHH@Z", reinterpret_cast<void*>(&PW_SetWavePeriod)},
+        {"?SetAttackComp@Pinwheel@@QAEXHHPAUMrRec@@@Z", reinterpret_cast<void*>(&PW_SetAttackComp)},
+        {"?SetGuardComp@Pinwheel@@QAEXHHPAUMrRec@@@Z", reinterpret_cast<void*>(&PW_SetGuardComp)},
+        {"?SetSapperComp@Pinwheel@@QAEXHHPAUMrRec@@@Z", reinterpret_cast<void*>(&PW_SetSapperComp)},
         {"?GetObjectOnPad@Unit@@QBE?AW4map_id@@XZ", reinterpret_cast<void*>(&U_GetObjectOnPad)},
         {"?IsBuilding@Unit@@QBEHXZ", reinterpret_cast<void*>(&U_IsBuilding)},
         {"?GetTotalPlayerStrength@_Player@@QAEHXZ", reinterpret_cast<void*>(&P_GetTotalPlayerStrength)},

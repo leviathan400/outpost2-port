@@ -43,11 +43,18 @@ int  aiFirstOfType(int stub, int cls);       // id da 1ª unidade da classe (0 s
 // carga); carga 0 = qualquer arma ([+0x24]).
 int  aiFirstOfTypeExact(int stub, int type, int cargo);
 void aiTakeAllUnits(int stub, int fromStub);  // sub_42BD00
+// Pacote 0x2A (sub_40E210 case 42): a unidade viva sai do mapa (morta, ação
+// 0x2A, sub-estado 0x0B → removida no laço). Usado pelo modo 6 (ExitMap) e
+// pelo TakeUnit com o grupo cheio.
+void unitExitMap(int unitId);
 void aiClearTargCount(int stub);              // loc_42B020
 int  aiUnitClass(int type, int weapon);      // sub_49D1B0
 
 // FightGroup (retângulos em TILES do port; o original guarda em pixels)
 void aiFightSetRect(int stub, int x1, int y1, int x2, int y2);
+// [+0x344] direto em px internos, depois do vt[9]; guard = também empilha em
+// +0x364 (os retângulos guardados), como faz o Pinwheel.
+void aiFightSetRectPx(int stub, const int rc[4], bool guard);
 void aiFightAddGuardedRect(int stub, int x1, int y1, int x2, int y2);
 void aiFightClearGuardedRects(int stub);
 void aiFightSetMode(int stub, int mode);     // sub_428470

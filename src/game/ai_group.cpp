@@ -394,10 +394,10 @@ int fallbackCat(const Group& g, const TargetList& L) {
 void modeIdle(Group& g, Node& n) {
     switch (g.mode) {
         case 0: case 2: case 3: case 4: case 5: orderStop(n); break;   // sub_429130 / ...
-        case 6: {                                                    // sub_42A270 (0x2A)
-            // (sair do mapa: pacote 0x2A — não portado)
+        case 6:                                                      // sub_42A270 (0x2A)
+            n.tick = tick();
+            unitExitMap(n.unit);
             break;
-        }
         default: break;                                              // 1: nada
     }
 }
@@ -1487,7 +1487,7 @@ bool aiIsGroup(int stub) { return grp(stub) != nullptr; }
 void aiTakeUnit(int stub, int unitId) {                      // sub_42B960
     Group* g = grp(stub);
     if (!g || !alive(unitId)) return;
-    if (g->nodes.size() >= 32) return;                       // (cheio: pacote 0x2A — não portado)
+    if (g->nodes.size() >= 32) { unitExitMap(unitId); return; }   // cheio: pacote 0x2A
     UnitRecord& r = g_units[unitId];
     if (r.groupStub != 0xFF && r.groupStub != stub) aiRemoveUnit(r.groupStub, unitId);
     if (r.groupStub == stub) return;
@@ -1580,6 +1580,21 @@ void aiFightSetRect(int stub, int x1, int y1, int x2, int y2) {
     g->rect[0] = x1 << 5; g->rect[1] = y1 << 5; g->rect[2] = x2 << 5; g->rect[3] = y2 << 5;
     if (g->mode == 0 && g->guarded.size() < 8)                // GuardRect: também é guardado
         g->guarded.push_back({g->rect[0], g->rect[1], g->rect[2], g->rect[3]});
+}
+void aiFightSetRectPx(int stub, const int rc[4], bool guard) {
+    Group* g = grp(stub);
+    if (!g) return;
+    resetTicks(*g);                                          // vt[9]
+    for (int k = 0; k < 4; ++k) g->rect[k] = rc[k];
+    if (guard) g->guarded.push_back({rc[0], rc[1], rc[2], rc[3]});
+}
+void unitExitMap(int unitId) {
+    if (!valid(unitId)) return;
+    UnitRecord& r = g_units[unitId];
+    if (r.id == -1 || (r.flags & UNIT_DEAD)) return;
+    r.flags |= UNIT_DEAD;
+    r.action = 0x2A;
+    r.field22 = SUB_REMOVE;
 }
 void aiFightAddGuardedRect(int stub, int x1, int y1, int x2, int y2) {
     Group* g = grp(stub);

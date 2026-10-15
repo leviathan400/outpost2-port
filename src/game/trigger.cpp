@@ -11,6 +11,7 @@
 #include "colony.h"
 #include "game_map.h"
 #include "player.h"
+#include "pinwheel.h"
 #include "scenario.h"
 #include "tethys_game.h"
 #include "unit.h"
@@ -69,6 +70,7 @@ void resetTriggers() {
     s_lastStub = 0;
     s_triggers.clear(); s_victory.clear(); s_failure.clear();
     aiGroupsReset();
+    strategiesReset();
     s_special.clear();
     s_endCode = 0;
     s_endTick = 0x7FFFFFFF;
@@ -756,8 +758,9 @@ void missionTriggerTick(MissionScript* mission) {          // sub_403110
         if (auto fn = triggerCallback(*t)) fire.push_back(fn);
     }
     for (auto fn : fire) fn();
-    // 2) "Strategy" (dword_4E4194, vt[9]) — não portado; grupos (dword_4E0B64):
+    // 2) "Strategy" (dword_4E4194, vt[9]: o Pinwheel); grupos (dword_4E0B64):
     //    vt[12], DeleteWhenEmpty e vt[13].
+    strategiesTick();
     aiGroupsTick();
     // 3) AIProc da missão.
     if (mission && mission->aiProc) mission->aiProc();
