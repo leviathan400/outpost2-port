@@ -11,6 +11,7 @@
 #include "messages.h"
 #include <cstdio>
 #include "tethys_game.h"
+#include "../mission/mission.h"
 #include "../res/res_manager.h"
 
 namespace op2 {
@@ -1008,14 +1009,27 @@ static void colonyPlayerTick(int p) {
         c.dirty = 1;
     }
     if (c.dirty) allocate(p);
+    // loc_4727E2: refinamento de rota ([+0x1B8]). Opção 15 liga, 14 desliga;
+    // humano numa missão normal sem Robot Command Center operando (estatística
+    // +0x1AC) fica sem; os demais com.
+    const MissionScript* m = currentMission();
+    if (TethysGame::cheatFlag(15)) pd.pathRefine = 1;
+    else if (TethysGame::cheatFlag(14)) pd.pathRefine = 0;
+    else if (m && m->desc && !m->desc->boolUnitMission && pd.isHuman && !c.stat(ST_ROBOT_GRP + 4))
+        pd.pathRefine = 0;
+    else pd.pathRefine = 1;
     moraleTick(p);                                         // sub_44E550 (fim de sub_471F30)
 }
 
 void tickColony() {
-    // sub_489DD0: p/ cada jogador (exceto humanos em certos tipos de missão,
-    // [dword_4EFD24+0xC] — sem descritor de missão no port).
-    for (int p = 0; p < TethysGame::noPlayers() && p < kMaxPlayers; ++p)
+    // sub_489DD0: p/ cada jogador, menos os humanos numa missão só de unidades
+    // ([dword_4EFD24+0xC]).
+    const MissionScript* m = currentMission();
+    const bool unitMission = m && m->desc && m->desc->boolUnitMission;
+    for (int p = 0; p < TethysGame::noPlayers() && p < kMaxPlayers; ++p) {
+        if (unitMission && g_playerData[p].isHuman) continue;
         colonyPlayerTick(p);
+    }
 }
 
 } // namespace op2

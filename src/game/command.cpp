@@ -39,7 +39,7 @@ static bool spiralNext(int& outX, int& outY) {
 static void resetUnitOrder(UnitRecord& u) {
     u.order.curWaypoint = 0;
     u.field3C = 0;
-    u.routeDirs.clear();          // invalida a rota antiga; o tick recomputa
+    u.clearRoute();          // invalida a rota antiga; o tick recomputa
     u.routeIdx = 0;
     // sub_43A910 NÃO mexe no passo em curso ([st+0x64]): ele termina normalmente.
 }

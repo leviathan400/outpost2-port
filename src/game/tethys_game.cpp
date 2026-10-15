@@ -11,7 +11,7 @@ int TethysGame::s_daylightEverywhere = 0;
 int      TethysGame::s_numPlayers = 0;
 int      TethysGame::s_localPlayer = 0;
 GameRNG  TethysGame::s_rng;
-int      TethysGame::s_cheat[8] = {};
+int      TethysGame::s_cheat[16] = {};
 uint32_t TethysGame::s_startFlags = 0;
 
 void TethysGame::reset(uint32_t seed, int numPlayers, int localPlayer) {

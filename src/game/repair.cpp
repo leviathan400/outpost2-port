@@ -72,7 +72,7 @@ void orderRepair(int id, int type, const std::vector<uint32_t>& wps, uint32_t tg
     u.order.multiFlag = 3;                                  // [ordem+0x3C] = 3
     u.order.field40 = 0;
     u.order.waypoints.push_back(unitTargetWaypoint(u, tgt));
-    u.routeDirs.clear(); u.routeIdx = 0;
+    u.clearRoute();
 }
 
 // sub_44C490: vira p/ o alvo (direção arredondada a 8).

@@ -203,7 +203,7 @@ static void stepUnit(int id) {
             if (ob.curWaypoint == ob.countMinus1) {      // loc_44C1C0: fim da lista
                 u.field20 = 0; u.field22 = 0;
                 u.field23 = 1;                           // [+0x23] = sub-estado anterior (movimento)
-                u.routeDirs.clear(); u.routeIdx = 0;
+                u.clearRoute();
                 // Patrulhar: a ordem fica; o tick da ação (case 40) recomeça.
                 if (u.action == 0x28 || u.action == 0x27) return;   // (0x27: case 39)
                 // 3/4: o giro e a doca vêm no tick da ação (moveDockArrive).
@@ -216,22 +216,19 @@ static void stepUnit(int id) {
                 return;
             }
             waypointAdvance(u);                          // sub_44BEC0
-            u.routeDirs.clear(); u.routeIdx = 0;
+            u.clearRoute();
             if (guard < 64) continue;
             u.field22 = 0; return;
         }
 
-        // (Re)computa a rota se necessário (rota real do pathfinder).
+        // (Re)computa a rota se necessário: sub_4401F0 (curta/corredor/longa
+        // com cache e refinamento).
         if (u.routeIdx >= static_cast<int>(u.routeDirs.size())) {
-            SearchContext sc; sc.unitId = id;
-            sc.startX = curX; sc.startY = curY; sc.destX = destX; sc.destY = destY;
-            int dirs[600]; int reached = 0;
-            int n = pfSearchRoute(sc, dirs, 600, &reached);
-            u.routeDirs.assign(dirs, dirs + n);
-            u.routeIdx = 0;
+            pfPlanRoute(id, curX, curY, destX, destY, mode, dist);
+            const int n = static_cast<int>(u.routeDirs.size());
             if (n == 0) {
                 // loc_44C16D: sem rota p/ um ponto intermediário → o próximo.
-                if (ob.curWaypoint < ob.countMinus1 && guard < 64) { ++ob.curWaypoint; continue; }
+                if (ob.curWaypoint < ob.countMinus1 && guard < 64) { ++ob.curWaypoint; u.clearRoute(); continue; }   // sub_44C2F0
                 // sub_4401F0: as vizinhas enteráveis passam pela função de custo
                 // (objetivo = negativo) — uma vizinha-objetivo vira o próximo passo.
                 {
@@ -246,7 +243,7 @@ static void stepUnit(int id) {
                 // que pode ser um tubo e não contar como objetivo): chegou.
                 if (ob.curWaypoint == ob.countMinus1 && curX == destX && curY == destY) {
                     u.field20 = 0; u.field22 = 0; u.field23 = 1;
-                    u.routeDirs.clear(); u.routeIdx = 0;
+                    u.clearRoute();
                     if (u.action == 0x28 || u.action == 0x27) return;
                     if (u.action == 3 || u.action == 4) { u.hasOrder = false; u.order = OrderBlock{}; return; }
                     if (u.action == CMD_MOVE) { u.action = 0; unitArrived(id); }   // sub_44D5B0...
@@ -261,7 +258,7 @@ static void stepUnit(int id) {
 
     pfSetGoal(mode, destX, destY, dist);
     if (!setupStep(id, u.routeDirs[u.routeIdx] & 7)) {
-        u.routeDirs.clear(); u.routeIdx = 0; u.field22 = 0;
+        u.clearRoute(); u.field22 = 0;
         return;
     }
     // Estado "em movimento" — é o que faz o sprite animar. A máquina de ações do

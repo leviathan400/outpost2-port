@@ -128,7 +128,7 @@ static int goTo(int id, int x, int y, int mode) {
     u.order.flags |= 1;
     u.order.multiFlag = mode;                                // modo do último ponto
     u.order.field40 = 0;
-    u.routeDirs.clear(); u.routeIdx = 0;
+    u.clearRoute();
     return 1;
 }
 

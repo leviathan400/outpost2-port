@@ -1434,6 +1434,72 @@ static int runCombatTest(const std::string& mapName, const std::string& prefix, 
 // roda ~200 ticks e grava a tela; lista unidades e objetivos.
 // IA: carrega a missão, manda os veículos do jogador 0 a um ponto (tile do
 // port) e acompanha os grupos inimigos.
+// --routetest <DLL> <x> <y> <ticks> <opção>: até 4 veículos de cada jogador
+// (0 e 1) andam até (x, y); opção 0 = regra normal do +0x1B8, 14 = refinamento
+// desligado p/ todos, 15 = ligado p/ todos. Mostra posição e chegada.
+static int runRouteTest(const std::string& dll, int tx, int ty, int ticks, int opt) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 routetest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    if (opt) op2::TethysGame::setCheatFlag(opt, 1);
+    for (int k = 0; k < 40; ++k) gs.onIdle(renderer, 0.2501f / 4.0f);
+    std::vector<int> ids;
+    for (int p = 0; p < 2; ++p) {
+        op2::CommandPacket pkt;
+        pkt.type = op2::CMD_MOVE;
+        pkt.waypoints.push_back(op2::packLocation(tx, ty));
+        for (size_t i = 1; i < op2::g_units.size() && pkt.unitIds.size() < 4; ++i) {
+            const op2::UnitRecord& r = op2::g_units[i];
+            if (r.id != -1 && (r.owner & 0x0F) == p && (r.flags & op2::UNIT_VEHICLE) && !(r.flags & op2::UNIT_DEAD))
+                pkt.unitIds.push_back(static_cast<int>(i));
+        }
+        for (int id : pkt.unitIds) {
+            ids.push_back(id);
+            const op2::UnitRecord& r = op2::g_units[id];
+            std::printf("[Route] j%d unidade %d tipo 0x%X em (%d,%d) refino=%d\n", p, id, r.type, r.pixelX >> 5,
+                        r.pixelY >> 5, op2::g_playerData[p].pathRefine);
+        }
+        if (!pkt.unitIds.empty()) op2::processCommandPacket(p, pkt);
+    }
+    std::vector<int> arrived(ids.size(), -1), steps(ids.size(), 0), lastX(ids.size()), lastY(ids.size()),
+        lastDmg(ids.size(), 0);
+    for (size_t k = 0; k < ids.size(); ++k) {
+        lastX[k] = op2::g_units[ids[k]].pixelX >> 5;
+        lastY[k] = op2::g_units[ids[k]].pixelY >> 5;
+    }
+    for (int t = 0; t < ticks; ++t) {
+        gs.onIdle(renderer, 0.2501f / 4.0f);
+        for (size_t k = 0; k < ids.size(); ++k) {
+            const op2::UnitRecord& r = op2::g_units[ids[k]];
+            const int x = r.pixelX >> 5, y = r.pixelY >> 5;
+            if (x != lastX[k] || y != lastY[k]) { ++steps[k]; lastX[k] = x; lastY[k] = y; }
+            if (r.id != -1 && r.damage != lastDmg[k]) {
+                std::printf("[Route] unidade %d t=%d (%d,%d) dano %d -> %d acao=%d\n", ids[k], t, x, y, lastDmg[k], r.damage,
+                            r.action);
+                lastDmg[k] = r.damage;
+            }
+            if (arrived[k] < 0 && !r.hasOrder) {
+                arrived[k] = t;
+                std::printf("[Route] unidade %d parou em t=%d (%d,%d) apos %d casas id=%d flags=%X acao=%d dano=%d\n",
+                            ids[k], t, x, y, steps[k], r.id, r.flags, r.action, r.damage);
+            }
+        }
+        if (t % 400 == 399) {
+            std::printf("[Route] t=%d", t + 1);
+            for (size_t k = 0; k < ids.size(); ++k) std::printf(" %d:(%d,%d)", ids[k], lastX[k], lastY[k]);
+            std::printf("\n");
+        }
+    }
+    renderer.shutdown();
+    SDL_Quit();
+    return 0;
+}
+
 static int runAiTest(const std::string& dll, int tx, int ty, int ticks) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
     op2::g_ResManager.init(".");
@@ -2523,6 +2589,8 @@ int main(int argc, char* argv[]) {
             return runQuakeTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--disastertest") == 0 && i + 3 < argc)
             return runDisasterTest(argv[i + 1], argv[i + 2], argv[i + 3]);
+        if (std::strcmp(argv[i], "--routetest") == 0 && i + 5 < argc)
+            return runRouteTest(argv[i + 1], atoi(argv[i + 2]), atoi(argv[i + 3]), atoi(argv[i + 4]), atoi(argv[i + 5]));
         if (std::strcmp(argv[i], "--aitest") == 0 && i + 4 < argc)
             return runAiTest(argv[i + 1], atoi(argv[i + 2]), atoi(argv[i + 3]), atoi(argv[i + 4]));
         if (std::strcmp(argv[i], "--pinwheeltest") == 0 && i + 3 < argc)

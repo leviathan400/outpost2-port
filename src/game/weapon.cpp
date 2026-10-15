@@ -950,7 +950,7 @@ void unitOrderAttack(int id, int type, const std::vector<uint32_t>& wps, uint32_
     }
     if (inRangeTo(u, u.orderTarget()) && wps.empty()) {
         u.hasOrder = false; u.order = OrderBlock{};          // já ao alcance: sem rota
-        u.routeDirs.clear(); u.routeIdx = 0;
+        u.clearRoute();
         if (u.field4E != 0x7FFF && u.target4C == u.orderLo) return;
         if (u.targetIsUnit() && u.hasTarget()) dropRef(u.target4C);
         u.field4E = 0x7FFF;
@@ -976,7 +976,7 @@ void unitOrderAttack(int id, int type, const std::vector<uint32_t>& wps, uint32_
     const WeaponClass* wc = classOf(static_cast<int16_t>(u.cargo));
     u.order.multiFlag = wc ? wc->rangeMode : 0;              // [ordem+0x3C] = desc+0x250 (modo do objetivo)
     u.order.waypoints.push_back(targetWaypoint(u, tgt));
-    u.routeDirs.clear(); u.routeIdx = 0;
+    u.clearRoute();
 }
 
 void processAttackPacket(int owner, int type, const std::vector<int>& ids,

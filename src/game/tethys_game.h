@@ -46,10 +46,12 @@ public:
         s_daylightPhase = phase & 0xFFFF;
         s_daylightPos = (internalWidth * s_daylightPhase) >> 16;
     }
-    // Trapaças (CommandPacket 0x2B, sub-ids 0..7 → dword_56DE58[i]): 0 recursos
-    // ilimitados, 1 produz tudo, 4 unidades rápidas, 5 produção rápida.
-    static int  cheatFlag(int i)             { return (i >= 0 && i < 8) ? s_cheat[i] : 0; }
-    static void setCheatFlag(int i, int v)   { if (i >= 0 && i < 8) s_cheat[i] = v; }
+    // Opções de jogo (CommandPacket 0x2B, sub-id i → dword_56DE58[i]): 0 recursos
+    // ilimitados, 1 produz tudo, 4 unidades rápidas, 5 produção rápida; 14
+    // (dword_56DE90, comando 40172) e 15 (dword_56DE94) desligam / ligam o
+    // refinamento de rota dos jogadores (sub_471F30).
+    static int  cheatFlag(int i)             { return (i >= 0 && i < 16) ? s_cheat[i] : 0; }
+    static void setCheatFlag(int i, int v)   { if (i >= 0 && i < 16) s_cheat[i] = v; }
     // Moral forçada (CommandPacket 0x2B → colony.cpp). player -1 = todos.
     static void ForceMoraleGreat(int player);
     static void ForceMoraleGood(int player);
@@ -84,7 +86,7 @@ private:
     static int      s_numPlayers;  // dword_56DEC0
     static int      s_localPlayer; // dword_56DEE8
     static GameRNG  s_rng;         // unk_56B1E0
-    static int      s_cheat[8];    // dword_56DE58..
+    static int      s_cheat[16];    // dword_56DE58..
     static uint32_t s_startFlags;  // dword_56DEFC
 };
 

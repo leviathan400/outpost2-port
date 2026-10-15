@@ -585,7 +585,7 @@ void sendOreRoute(const std::vector<int>& sel, const std::vector<uint32_t>& pts,
 
 // Volta a andar (loc_43D6E5: sub_44C2F0, [+0x23] = [+0x22], [+0x22] = 1).
 static void resume(UnitRecord& u) {
-    u.routeDirs.clear(); u.routeIdx = 0;
+    u.clearRoute();
     u.field23 = u.field22;
     u.field22 = 1;
     u.field20 = 1;

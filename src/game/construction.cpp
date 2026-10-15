@@ -57,7 +57,7 @@ static void setBuildOrder(UnitRecord& u, uint32_t loc, int l, int t, int r, int 
     u.order.countMinus1 = 0;
     u.order.waypoints.assign(1, loc);
     u.order.flags |= 1;
-    u.routeDirs.clear(); u.routeIdx = 0;
+    u.clearRoute();
     u.buildL = static_cast<int16_t>(l); u.buildT = static_cast<int16_t>(t);   // [+0x62]/[+0x64]
     u.buildR = static_cast<int16_t>(r); u.buildB = static_cast<int16_t>(b);   // [+0x66]/[+0x68]
 }

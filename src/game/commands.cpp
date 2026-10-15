@@ -332,7 +332,7 @@ void unitFinishStop(int id) {                                // sub_43ACA0 case 
     // (prédio: vt[48] — sub-estado/produção — entra com os botões de prédio.)
     u.hasOrder = false;
     u.order = OrderBlock{};
-    u.routeDirs.clear();
+    u.clearRoute();
     u.routeIdx = 0;
     u.field20 = 0;
 }
@@ -350,7 +350,7 @@ void unitPatrolTick(int id) {                                // sub_43ACA0 case 
     // (No port o objetivo/rota é refeito pelo stepUnit; [+0x20] = 1 mantém o
     // movimento ligado, como na partida da ordem.)
     ob.flags &= ~1u;
-    u.routeDirs.clear(); u.routeIdx = 0;
+    u.clearRoute();
     u.field23 = u.field22;
     u.field22 = 1;
     u.field20 = 1;
@@ -428,7 +428,7 @@ static void sendScatter(const std::vector<int>& sel) {
         u.order = OrderBlock{};
         u.order.count = 1;
         u.order.waypoints.push_back(packLocation((px >> 5) & (g_gameMap.width() - 1), ty >> 5));
-        u.routeDirs.clear(); u.routeIdx = 0;
+        u.clearRoute();
     }
 }
 

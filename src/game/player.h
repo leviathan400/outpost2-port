@@ -40,6 +40,8 @@ struct PlayerData {
     int kids        = 0;   // +0x9C
     int canAccumulateOre = 0;      // +0x188 (_Player::canAccumulateOre; liga c/ pesquisa)
     int canAccumulateRareOre = 0;  // +0x198 (_Player::canAccumulateRareOre)
+    int pathRefine  = 1;   // +0x1B8 refinamento de rota (sub_440660/sub_440C50);
+                           // sub_490190 = 1, sub_471F30 recalcula
     int techLevel   = 0;   // gerido pelo subsistema de pesquisa (dword_56B5F0)
     std::set<int> research;  // tecnologias concluídas (MarkResearchComplete)
 };

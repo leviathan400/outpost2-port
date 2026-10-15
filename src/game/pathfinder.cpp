@@ -1,4 +1,7 @@
 #include "pathfinder.h"
+
+#include <cstdio>
+#include <cstdlib>
 #include "weapon.h"
 
 #include "game_map.h"
@@ -515,6 +518,356 @@ int pfMoveCost(int x, int y) {         // sub_438390
     if (!pfOccupantPassable(occId, g_pf.unitId)) return PF_BLOCKED;  // inimigo/ocupado
     if (o.field22 == 0) return base + base;           // veículo parado → ×2
     return base * 4;                                  // veículo movendo → ×4
+}
+
+// ---- Planejador de rota (sub_4401F0) -----------------------------------------
+
+namespace {
+
+int pmMask() { return g_gameMap.width() - 1; }    // dword_54EBC4
+int pmW()    { return g_gameMap.width(); }        // dword_54EBC8
+int pmH()    { return g_gameMap.height(); }       // dword_54EBD0
+
+// Corredor de busca (var_C24 de sub_440660 / sub_440C50): por linha, intervalos
+// [x1, x2] em ordem de x; o nó-sentinela do original tem x1 = x2 = 0x7FFFFFFF.
+struct Corridor {
+    struct Span { int x1, x2, base; };
+    std::vector<std::vector<Span>> rows;
+    explicit Corridor(int h) : rows(h > 0 ? static_cast<size_t>(h) : 0) {}
+
+    // sub_440A30: acha o 1º intervalo com x2 >= x1; se ele começa até x2, estica
+    // (min/max); senão insere antes dele. Depois engole os seguintes que começam
+    // até o novo x2.
+    void add(int row, int x1, int x2) {
+        if (row < 0 || row >= static_cast<int>(rows.size())) return;
+        std::vector<Span>& v = rows[static_cast<size_t>(row)];
+        size_t i = 0;
+        while (i < v.size() && v[i].x2 < x1) ++i;
+        if (i < v.size() && v[i].x1 <= x2) {
+            if (v[i].x1 >= x1) v[i].x1 = x1;
+            if (v[i].x2 <= x2) v[i].x2 = x2;
+        } else {
+            v.insert(v.begin() + static_cast<long>(i), Span{x1, x2, 0});
+        }
+        while (i + 1 < v.size() && v[i + 1].x1 <= v[i].x2) {
+            if (v[i + 1].x2 > v[i].x2) v[i].x2 = v[i + 1].x2;
+            v.erase(v.begin() + static_cast<long>(i) + 1);
+        }
+    }
+    // sub_441250 (início): numeração das células, linha a linha.
+    int number() {
+        int base = 0;
+        for (auto& v : rows)
+            for (Span& s : v) { s.base = base; base += s.x2 - s.x1 + 1; }
+        return base;
+    }
+    int cell(int x, int y) const {
+        if (y < 0 || y >= static_cast<int>(rows.size())) return -1;
+        const std::vector<Span>& v = rows[static_cast<size_t>(y)];
+        size_t i = 0;
+        while (i < v.size() && v[i].x2 < x) ++i;
+        if (i == v.size() || x < v[i].x1) return -1;
+        return v[i].base + x - v[i].x1;
+    }
+};
+
+// Meia-largura das linhas do borrão (unk_4D0518), k = 1..8.
+const int kBlobW[8] = {8, 8, 8, 7, 7, 6, 5, 4};
+
+// Borrão em volta de (cx, cy): linhas cy+k−1 e cy−k com [cx−w, cx+w−1],
+// cortando na emenda da largura (trecho repetido em sub_440660 e sub_440C50).
+void addBlob(Corridor& C, int cx, int cy) {
+    const int W = pmW(), mask = pmMask(), H = pmH();
+    for (int k = 1; k <= 8; ++k) {
+        const int w = kBlobW[k - 1];
+        const int rowsK[2] = {cy + k - 1, cy - k};
+        for (int row : rowsK) {
+            if (row < 0 || row >= H) continue;
+            int l = cx - w, r = cx + w - 1;
+            if (l < 0) {
+                if (r > 0) { C.add(row, l & mask, W - 1); l = 0; }
+                else { r &= mask; l &= mask; }
+            }
+            if (r > W - 1) {
+                if (l < W) { C.add(row, 0, r & mask); r = W - 1; }
+                else { r &= mask; l &= mask; }
+            }
+            C.add(row, l, r);
+        }
+    }
+}
+
+// sub_441250: busca de menor custo dentro do corredor, de (sx, sy) até uma
+// célula-objetivo (pfMoveCost < 0). Custo do passo = média dos custos das duas
+// células (×723/512 na diagonal); estimativa = 576·(maior + menor/2) até
+// (hx, hy). A lista aberta é a lista dupla do original, em ordem decrescente de
+// chave, com o "dedo" de inserção (var_C004) — os empates saem na mesma ordem.
+int corridorSearch(Corridor& C, int sx, int sy, int hx, int hy, std::vector<int>& out,
+                   int maxSteps, int& reached) {
+    const int mask = pmMask(), H = pmH();
+    const int total = C.number();
+    struct Rec { int state = 0, dir = 0, g = 0, cost = 0, h = 0, depth = 0, parent = 0, node = -1; };
+    struct ONode { int key, x, y, cell, skip, prev, next; };
+    const int si = C.cell(sx & mask, sy);
+    if (si < 0) { reached = 0; return -1; }
+    std::vector<Rec> cells(static_cast<size_t>(total));
+    std::vector<ONode> on;
+    on.push_back({0x7FFFFFFF, 0, 0, 0, 0, -1, 1});            // var_C03C
+    on.push_back({static_cast<int>(0x80000000), 0, 0, 0, 0, 0, -1});   // var_C020
+    int cursor = 1;                                            // var_C004
+    auto insert = [&](int n) {
+        const int k = on[static_cast<size_t>(n)].key;
+        int p = cursor;
+        if (on[static_cast<size_t>(p)].key > k) {
+            while (on[static_cast<size_t>(on[static_cast<size_t>(p)].next)].key > k) p = on[static_cast<size_t>(p)].next;
+        } else if (on[static_cast<size_t>(p)].key < k) {
+            do p = on[static_cast<size_t>(p)].prev; while (on[static_cast<size_t>(p)].key < k);
+        }
+        ONode& nn = on[static_cast<size_t>(n)];
+        nn.next = on[static_cast<size_t>(p)].next;
+        nn.prev = p;
+        on[static_cast<size_t>(p)].next = n;
+        on[static_cast<size_t>(nn.next)].prev = n;
+        cursor = n;
+    };
+    auto unlink = [&](int n) {
+        if (cursor == n) cursor = on[static_cast<size_t>(n)].next;
+        const int pv = on[static_cast<size_t>(n)].prev, nx = on[static_cast<size_t>(n)].next;
+        on[static_cast<size_t>(pv)].next = nx;
+        on[static_cast<size_t>(nx)].prev = pv;
+    };
+    Rec& s = cells[static_cast<size_t>(si)];
+    s.state = 1; s.g = 0; s.cost = pfMoveCost(sx, sy); s.depth = -1;
+    on.push_back({0, sx, sy, si, 9, 0, 0});
+    insert(static_cast<int>(on.size()) - 1);
+    int cur;
+    for (;;) {
+        const int n = on[1].prev;
+        if (n == 0) { reached = 0; return 0; }
+        if (cursor == n) cursor = on[static_cast<size_t>(n)].next;
+        const ONode node = on[static_cast<size_t>(n)];
+        on[1].prev = node.prev;
+        on[static_cast<size_t>(node.prev)].next = 1;
+        cur = node.cell;
+        if (cells[static_cast<size_t>(cur)].state == 4) break;
+        cells[static_cast<size_t>(cur)].state = 2;
+        for (int d = 0; d < 8; ++d) {
+            if (d == node.skip) continue;
+            const int nx = (node.x + kDir8[d].dx) & mask, ny = node.y + kDir8[d].dy;
+            if (ny < 0 || ny >= H) continue;
+            const int ci = C.cell(nx, ny);
+            if (ci < 0) continue;
+            Rec& r = cells[static_cast<size_t>(ci)];
+            const Rec& c = cells[static_cast<size_t>(cur)];
+            int key;
+            if (r.state == 0) {
+                const int cost = pfMoveCost(nx, ny);
+                r.cost = cost;
+                if (cost == PF_BLOCKED) { r.state = 2; continue; }
+                if (cost < 0) { r.state = 4; r.cost = -cost; }
+                else r.state = 1;
+                int step = (c.cost + r.cost) / 2;
+                if (d & 1) step = step * 723 / 512;
+                r.g = c.g + step;
+                int ax = pfWrapDX(nx - hx), ay = hy - ny;
+                if (ax < 0) ax = -ax;
+                if (ay < 0) ay = -ay;
+                const int mx = ax < ay ? ay : ax, mn = ax < ay ? ax : ay;
+                r.h = ((mx + mn / 2) * 9 * 512) / 8;
+                key = r.g + r.h;
+            } else {
+                if (r.cost == PF_BLOCKED) continue;
+                int step = (r.cost + c.cost) / 2;
+                if (d & 1) step = step * 723 / 512;
+                const int ng = c.g + step;
+                if (r.g <= ng) continue;
+                r.g = ng;
+                key = ng + r.h;
+                if ((r.state & 5) && r.node >= 0) unlink(r.node);
+                else r.state = 1;
+            }
+            r.depth = cells[static_cast<size_t>(cur)].depth + 1;
+            r.dir = d;
+            r.parent = cur;
+            on.push_back({key, nx, ny, ci, (d + 4) & 7, 0, 0});
+            r.node = static_cast<int>(on.size()) - 1;
+            insert(r.node);
+        }
+    }
+    reached = 1;
+    while (cells[static_cast<size_t>(cur)].depth >= maxSteps) cur = cells[static_cast<size_t>(cur)].parent;
+    const int steps = cells[static_cast<size_t>(cur)].depth + 1;
+    out.assign(static_cast<size_t>(steps), 0);
+    for (;;) {
+        const Rec& r = cells[static_cast<size_t>(cur)];
+        out[static_cast<size_t>(r.depth)] = r.dir;
+        cur = r.parent;
+        if (cells[static_cast<size_t>(cur)].depth < 0) break;
+    }
+    return steps;
+}
+
+// sub_440BA0 (objetivo exato a dist² <= 4): passos pela direção do delta que
+// falta. O teste de entrada é sempre a partir da ORIGEM (o original não avança a
+// posição) — mantido.
+int shortSearch(int sx, int sy, int dx, int dy, std::vector<int>& out, int maxSteps, int& reached) {
+    const int mask = pmMask();
+    out.clear();
+    while ((dx || dy) && maxSteps > static_cast<int>(out.size())) {
+        const int d = pfDirFromDelta(dx, dy);
+        if (!pfCanEnter((sx + kDir8[d].dx) & mask, sy + kDir8[d].dy)) { reached = 0; out.clear(); return 0; }
+        out.push_back(d);
+        dx -= kDir8[d].dx;
+        dy -= kDir8[d].dy;
+    }
+    reached = 1;
+    return static_cast<int>(out.size());
+}
+
+// sub_440660 (dist² <= 0x240 com refinamento): corredor = borrão a cada dois
+// pontos da reta de Bresenham até o alvo; depois sub_441250 até 0x258 passos.
+int mediumSearch(int sx, int sy, int dx, int dy, int destX, int destY, std::vector<int>& out, int& reached) {
+    Corridor C(pmH());
+    const int ax2 = 2 * (dx < 0 ? -dx : dx), ay2 = 2 * (dy < 0 ? -dy : dy);
+    bool xMajor;
+    int minor, major, majorLen2, minorLen2, minorD, majorD;
+    if (ay2 <= ax2) {
+        xMajor = true; minor = sy; major = 0; majorLen2 = ax2; minorLen2 = ay2; minorD = dy; majorD = dx;
+    } else {
+        xMajor = false; major = sy; minor = 0; majorLen2 = ay2; minorLen2 = ax2; minorD = dx; majorD = dy;
+    }
+    const int minorStep = minorD > 0 ? 1 : -1, majorStep = majorD > 0 ? 1 : -1;
+    int err = -(minorLen2 / 2 + majorLen2 / 2);
+    bool blob = true;
+    for (;;) {
+        const int xo = xMajor ? major : minor, cy = xMajor ? minor : major;
+        err += minorLen2;
+        if (err >= 0) { err -= majorLen2; minor += minorStep; }
+        major += majorStep;
+        const int cx = (sx + xo) & pmMask();
+        if (blob) addBlob(C, cx, cy);
+        blob = !blob;
+        if (cx == destX && cy == destY) break;
+    }
+    return corridorSearch(C, sx, sy, destX, destY, out, 0x258, reached);
+}
+
+// sub_441160: até 64 direções do cache da busca longa viram a rota; para na
+// 1ª célula-objetivo (e o cache acaba ali).
+void plainSegment(UnitRecord& u) {
+    const int count = static_cast<int>(u.routeCache.size());
+    const int end = u.cacheIdx + 0x40 < count ? u.cacheIdx + 0x40 : count;
+    u.routeDirs.clear();
+    while (u.cacheIdx < end) {
+        const int d = u.routeCache[static_cast<size_t>(u.cacheIdx)];
+        u.cacheX = (u.cacheX + kDir8[d].dx) & pmMask();
+        u.cacheY += kDir8[d].dy;
+        u.routeDirs.push_back(d);
+        ++u.cacheIdx;
+        if (pfMoveCost(u.cacheX, u.cacheY) < 0) {
+            u.routeCache.resize(static_cast<size_t>(u.cacheIdx));
+            break;
+        }
+    }
+}
+
+// sub_440C50: refaz o próximo trecho (48 direções do cache) com sub_441250
+// num corredor em volta das posições ímpares; as pares só conferem a entrada.
+// Devolve o nº de passos ou −1 (o chamador descarta o cache e busca de novo).
+int refineSegment(UnitRecord& u, int sx, int sy) {
+    const int count = static_cast<int>(u.routeCache.size());
+    if (count <= 2) { plainSegment(u); return static_cast<int>(u.routeDirs.size()); }
+    Corridor C(pmH());
+    const int end = u.cacheIdx + 0x30 < count ? u.cacheIdx + 0x30 : count;
+    while (u.cacheIdx < end) {
+        const int i = u.cacheIdx, d = u.routeCache[static_cast<size_t>(i)];
+        u.cacheX = (u.cacheX + kDir8[d].dx) & pmMask();
+        u.cacheY += kDir8[d].dy;
+        if (!(i & 1)) {
+            if (!pfCanEnter(u.cacheX, u.cacheY)) { u.routeDirs.clear(); return -1; }
+        } else {
+            addBlob(C, u.cacheX, u.cacheY);
+        }
+        ++u.cacheIdx;
+    }
+    u.routeDirs.clear();
+    if (u.cacheX == sx && u.cacheY == sy) return 0;
+    pfSetTarget(u.cacheX, u.cacheY);                         // sub_438290
+    std::vector<int> out;
+    int reached = 0;
+    int n = corridorSearch(C, sx, sy, u.cacheX, u.cacheY, out, 0x40, reached);
+    if (!reached) return -1;
+    if (u.cacheIdx != count && n >= 12) n -= 6;
+    u.routeDirs.assign(out.begin(), out.begin() + n);
+    return n;
+}
+
+} // namespace
+
+int pfPlanRoute(int id, int sx, int sy, int destX, int destY, int mode, int dist) {
+    UnitRecord& u = g_units[static_cast<size_t>(id)];
+    const int mask = pmMask();
+    pfPush();                                                // sub_438180
+    pfSetContext(id);                                        // sub_438260
+    const bool shortOk = mode == 0;
+    bool refine = g_playerData[u.owner & 0x0F].pathRefine != 0;   // [jogador+0x1B8]
+    if (mode == 3) refine = true;
+    pfSetGoal(mode, destX, destY, dist);
+    const int dx = pfWrapDX(destX - sx), dy = destY - sy;    // [+0x20]/[+0x24]
+    u.routeDirs.clear();
+    u.routeIdx = 0;
+    int reached = 0;
+    if (pfMoveCost(sx, sy) < 0) { pfPop(); return 1; }       // já no objetivo
+    bool any = false;
+    for (int d = 0; d < 8 && !any; ++d) any = pfCanEnter((sx + kDir8[d].dx) & mask, sy + kDir8[d].dy) != 0;
+    if (!any) { pfPop(); return 0; }
+    for (int guard = 0;; ++guard) {
+        if (u.cacheIdx >= static_cast<int>(u.routeCache.size())) {      // loc_440393
+            u.routeCache.clear();
+            u.cacheIdx = 0;
+            int d2 = dx * dx + dy * dy;
+            if (mode == 0) {
+                int k = 0;
+                while (k < 8 && !pfCanEnter((destX + kDir8[k].dx) & mask, destY + kDir8[k].dy)) ++k;
+                if (k == 8 || !pfCanEnter(destX, destY)) d2 = 0x7FFFFFFF;
+            }
+            reached = 0;
+            std::vector<int> out;
+            if (shortOk && d2 <= 4) {
+                shortSearch(sx, sy, dx, dy, out, 0x258, reached);
+                u.routeDirs = out;
+                if (reached) break;
+            }
+            if (refine && d2 <= 0x240) {
+                mediumSearch(sx, sy, dx, dy, destX, destY, out, reached);
+                u.routeDirs = out;
+                if (reached) break;
+            }
+            static int dirs[0x258];
+            SearchContext sc;
+            sc.unitId = id; sc.startX = sx; sc.startY = sy; sc.destX = destX; sc.destY = destY;
+            const int n = pfSearchRoute(sc, dirs, 0x258, &reached);   // sub_43F5B0
+            u.routeDirs.clear();
+            if (n <= 0) break;
+            u.routeCache.assign(dirs, dirs + n);
+            u.cacheX = sx;
+            u.cacheY = sy;
+        }
+        if (!refine) { plainSegment(u); break; }             // sub_441160
+        if (refineSegment(u, sx, sy) >= 0) break;            // sub_440C50
+        u.routeCache.clear();                                // [+0xBC] = 0 → loc_440393
+        u.cacheIdx = 0;
+        // Guarda do port: o original repete sem limite (a mesma busca dá o
+        // mesmo cache); aqui, depois de 8 tentativas, fica sem rota.
+        if (guard >= 8) { u.routeDirs.clear(); break; }
+    }
+    pfPop();                                                 // sub_438200
+    static const bool trace = std::getenv("OP2_PFTRACE") != nullptr;
+    if (trace)
+        std::printf("[PF] u%d (%d,%d)->(%d,%d) m%d ref%d passos=%d cache=%d/%d chegou=%d\n", id, sx, sy, destX, destY,
+                    mode, refine ? 1 : 0, static_cast<int>(u.routeDirs.size()), u.cacheIdx,
+                    static_cast<int>(u.routeCache.size()), reached);
+    return reached;
 }
 
 } // namespace op2

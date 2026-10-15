@@ -151,8 +151,14 @@ struct UnitRecord {
     // --- Execução de rota (consumo da rota do pathfinder) --------------------
     // NB: executor sobre a rota REAL de pfSearchRoute; o integrador byte-exato
     // (sub_44B650, com o modelo completo do objeto Unit/descritor) é refinamento.
-    std::vector<int> routeDirs;    // direções (0..7) da rota atual
-    int   routeIdx   = 0;          // próximo passo da rota
+    std::vector<int> routeDirs;    // direções (0..7) da rota atual ([st+0x7C], n +0x74)
+    int   routeIdx   = 0;          // próximo passo da rota ([st+0x78])
+    // Cache da busca longa (sub_43F5B0): direções [st+0xD4] (n +0xBC), lidas
+    // até +0xC0, posição de leitura +0xC4/+0xC8 (pfPlanRoute).
+    std::vector<uint8_t> routeCache;
+    int   cacheIdx = 0, cacheX = 0, cacheY = 0;
+    // sub_44C350 / sub_44B650: zera +0x74/+0x78 e o cache (+0xBC).
+    void clearRoute() { routeDirs.clear(); routeIdx = 0; routeCache.clear(); cacheIdx = 0; }
     // Passo em curso — estado de movimento [unit+0x34] do original (sub_44B650
     // monta, sub_44C0B0 aplica 1x por tick):
     int      stepTicks = 0;        // [st+0x64] ticks restantes do passo

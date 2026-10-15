@@ -110,6 +110,15 @@ struct SearchContext {
 // FASE A (reta rumo ao alvo) portada; FASE B (contorno de obstáculo) em progresso.
 int pfSearchRoute(const SearchContext& ctx, int* outDirs, int maxDirs, int* reached);
 
+// pfPlanRoute (sub_4401F0): monta a próxima rota da unidade em routeDirs.
+// Objetivo exato (modo 0) a dist² <= 4: sub_440BA0. Com o refinamento do dono
+// ([jogador+0x1B8], ou modo 3) e dist² <= 0x240: busca no corredor da reta
+// (sub_440660 + sub_441250). Senão, a busca longa sub_43F5B0 enche o cache
+// (routeCache, +0xD4/+0xBC/+0xC0, posição +0xC4/+0xC8), que sai em trechos de
+// 64 direções (sub_441160) ou refeitos de 48 em 48 no corredor (sub_440C50).
+// Devolve o "chegou" ([+0x38]).
+int pfPlanRoute(int unitId, int sx, int sy, int destX, int destY, int mode, int dist);
+
 // --- Helpers de ocupação (sub_44BD60 / sub_44D4E0 / sub_490C50) --------------
 // Jogador `a` é aliado de `b`? (sub_490C50: bit a no allyMask de b.)
 bool pfPlayersAllied(int a, int b);
