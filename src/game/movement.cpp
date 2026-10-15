@@ -40,13 +40,13 @@ static void applyStepTick(UnitRecord& u) {
 // pode ser dado (a rota é descartada e recalculada).
 static bool setupStep(int id, int dir) {
     UnitRecord& u = g_units[id];
-    const int mask = g_gameMap.width() - 1;
+    // Máscara da largura interna (dword_54EBC4): nos mapas < 512 a coluna
+    // vizinha da borda cai fora do mapa e pfCanEnter a recusa (tipo 6).
+    const int mask = g_gameMap.internalWidth() - 1;
     const int curX = u.pixelX >> 5, curY = u.pixelY >> 5;
     const int nx = (curX + kDir8[dir].dx) & mask;
     const int ny = curY + kDir8[dir].dy;
-    // Limites jogáveis dword_54EBD4..E0. Em x o engine guarda o mapa deslocado
-    // de 32 tiles (sub_4353F0: x1=32, x2=W+31; mapas >=512 de largura: sem
-    // limite) — nas coordenadas do port (0..W-1) isso cobre a largura toda.
+    // Limites jogáveis dword_54EBD4..E0 (em y; em x a borda é o tipo 6).
     const MAP_RECT& clip = g_gameMap.clipRect();
     if (ny < clip.y1 || ny > clip.y2) return false;
 
@@ -196,7 +196,7 @@ static void stepUnit(int id) {
         if (ob.curWaypoint > ob.countMinus1) ob.curWaypoint = ob.countMinus1;
         waypointGoal(ob, destX, destY, mode, dist);      // sub_44C2F0
         // sub_4401F0 case 3: o alvo da busca é a casa à esquerda ([+0x14] − 1).
-        if (mode == 3) destX = (destX - 1) & (g_gameMap.width() - 1);
+        if (mode == 3) destX = (destX - 1) & (g_gameMap.internalWidth() - 1);
         pfSetContext(id);
         pfSetGoal(mode, destX, destY, dist);
         if (pfMoveCost(curX, curY) < 0) {                // sub_440550: chegou ao objetivo
@@ -234,7 +234,7 @@ static void stepUnit(int id) {
                 {
                     int goalDir = -1;
                     for (int d = 0; d < 8 && goalDir < 0; ++d) {
-                        const int nx = (curX + kDir8[d].dx) & (g_gameMap.width() - 1), ny = curY + kDir8[d].dy;
+                        const int nx = (curX + kDir8[d].dx) & (g_gameMap.internalWidth() - 1), ny = curY + kDir8[d].dy;
                         if (pfCanEnter(nx, ny) && pfMoveCost(nx, ny) < 0) goalDir = d;
                     }
                     if (goalDir >= 0) { u.routeDirs.assign(1, goalDir); u.routeIdx = 0; break; }

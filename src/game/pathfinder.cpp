@@ -16,6 +16,19 @@ std::vector<PfContext> g_pfStack;
 
 static constexpr int kSentinel = static_cast<int>(0x80000000);
 
+// Espaço do pathfinder = largura INTERNA do original (dword_54EBC8/54EBC4): nos
+// mapas com menos de 512 colunas ela é 2W, e as colunas que ficam fora do mapa
+// guardam o valor 6 com que sub_4353F0 enche o grid (tipo 6 = intransponível),
+// então a busca não dá a volta pela borda. Em x o port usa 0..W−1; as colunas
+// W..2W−1 (e x < 0) são as de fora. Nos mapas de 512 a largura interna é W e
+// o mapa dá a volta.
+static int pfW()     { return g_gameMap.internalWidth(); }
+static int pfMaskX() { return g_gameMap.internalWidth() - 1; }
+static uint32_t pfCell(int x, int y) {
+    if (g_gameMap.internalXOffset() && (x < 0 || x >= g_gameMap.width())) return 6u;
+    return g_gameMap.rawCell(x, y);
+}
+
 // ---- Pilha / contexto -------------------------------------------------------
 
 void pfResetContext() {               // sub_438100
@@ -129,7 +142,7 @@ int pfOccupantPassable(int occId, int searcherId) {  // sub_44BD60
 
 int pfCanEnter(int x, int y) {         // sub_4382C0
     if (y < 0 || y >= g_gameMap.height()) return 0;
-    uint32_t cell = g_gameMap.rawCell(x, y);
+    uint32_t cell = pfCell(x, y);
 
     if (cell & GameMap::CELL_WALLBITS) {             // 0xA8000000
         if (cell & GameMap::CELL_HARDBLOCK) return 0; // 0x28000000
@@ -212,7 +225,7 @@ int pfSmoothPath(int* dirs, int count) {   // sub_43FC50 (ecx=dirs, edx=count)
 
 int pfWallFollow(int& dir, int& x, int& y, int turnSign) {  // sub_43FBB0
     int rev = 8 - turnSign;                 // var_4: passo de rotação reverso
-    int mask = g_gameMap.width() - 1;
+    int mask = pfMaskX();
     for (int guard = 0; guard < 8; ++guard) {   // no original é ilimitado; guard = 1 volta
         int d = dir & 7;
         int nx = (x + kDir8[d].dx) & mask;
@@ -231,8 +244,8 @@ int pfWallFollow(int& dir, int& x, int& y, int turnSign) {  // sub_43FBB0
 // Distância horizontal com wrap em X, mapeada p/ [-metade, +metade] (loc_43F609
 // do asm): diff = dx; se diff < -half → +width; se diff > half → -((-diff)&mask).
 static int pfWrapDX(int diff) {
-    int mask = g_gameMap.width() - 1;      // dword_54EBC4
-    int w    = g_gameMap.width();           // dword_54EBC8
+    int mask = pfMaskX();                   // dword_54EBC4
+    int w    = pfW();                       // dword_54EBC8
     int half = mask >> 1;
     if (-half > diff) diff += w;
     else if (half < diff) diff = -(((-diff)) & mask);
@@ -315,9 +328,12 @@ int pfSearchRoute(const SearchContext& ctx, int* outDirs, int maxDirs, int* reac
     int curY = ctx.startY;
     int pathLen = 0;
     int failedOnce = 0;                                // var_3858
-    int mask = g_gameMap.width() - 1;
+    int mask = pfMaskX();
+    // Clip (54EBD4/D8/DC/E0) em x interno → x do port (−deslocamento; nos mapas
+    // de 512 fica −1..0x7FFFFFFF, sem limite).
     const MAP_RECT& clip = g_gameMap.clipRect();
-    int cx1 = clip.x1, cy1 = clip.y1, cx2 = clip.x2, cy2 = clip.y2;  // 54EBD4/D8/DC/E0
+    const int xoff = g_gameMap.internalXOffset();
+    int cx1 = clip.x1 - xoff, cy1 = clip.y1, cx2 = clip.x2 - xoff, cy2 = clip.y2;
     static int dirA[640], posAx[640], posAy[640];
     static int dirB[640], posBx[640], posBy[640];
 
@@ -436,7 +452,7 @@ StepChoice pfChooseStep(int unitId, int currentDir, int avoidDir) {
     for (;;) {
         ebx = (ebx + 1) & 7;               // próxima direção
         if (ebx == back) break;            // tentou todas menos a de trás
-        int newX = (curX + kDir8[ebx].dx) & (g_gameMap.width() - 1);  // wrap em X
+        int newX = (curX + kDir8[ebx].dx) & pfMaskX();  // wrap em X
         int newY = curY + kDir8[ebx].dy;
         if (newY <= 0) newY = 0;
         if (newY >= g_gameMap.height()) newY = g_gameMap.height() - 1;
@@ -466,7 +482,7 @@ StepChoice pfChooseStep(int unitId, int currentDir, int avoidDir) {
 
 int pfMoveCost(int x, int y) {         // sub_438390
     if (y < 0 || y >= g_gameMap.height()) return PF_BLOCKED;
-    uint32_t cell = g_gameMap.rawCell(x, y);
+    uint32_t cell = pfCell(x, y);
 
     int base;
     // Modo 3 (sub_438850): parede/tubo bloqueia sem exceção.
@@ -524,8 +540,8 @@ int pfMoveCost(int x, int y) {         // sub_438390
 
 namespace {
 
-int pmMask() { return g_gameMap.width() - 1; }    // dword_54EBC4
-int pmW()    { return g_gameMap.width(); }        // dword_54EBC8
+int pmMask() { return pfMaskX(); }                // dword_54EBC4
+int pmW()    { return pfW(); }                    // dword_54EBC8
 int pmH()    { return g_gameMap.height(); }       // dword_54EBD0
 
 // Corredor de busca (var_C24 de sub_440660 / sub_440C50): por linha, intervalos

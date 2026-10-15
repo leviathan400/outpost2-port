@@ -13,7 +13,7 @@ PathScratch g_pathScratch;
 // (E/N/O/S com y clampeado), perna cresce a cada 2 viradas, usa pfCanEnter com o
 // contexto da unidade que busca. Guard contra laço infinito (mapa sem célula livre).
 static bool spiralNext(int& outX, int& outY) {
-    int mask = g_gameMap.width() - 1;
+    int mask = g_gameMap.internalWidth() - 1;   // dword_54EBC4
     int H = g_gameMap.height();
     PathScratch& s = g_pathScratch;
     for (int guard = 0; guard < 1 << 16; ++guard) {
