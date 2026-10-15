@@ -1,5 +1,6 @@
 #include "player.h"
 
+#include "ai_group.h"
 #include "colony.h"
 #include "research.h"
 #include "unit.h"
@@ -19,6 +20,22 @@ void _Player::SetTechLevel(int v) {
     d().techLevel = v;
     researchSetTechLevel(m_index, v);
 }
+// sub_4905A0. (+0x4BC = 0 é da fila de rede; +0x1B8 = 1 liga o refinamento de
+// rota sub_440660/sub_440C50, ainda não portado; dword_56DEC4 = humanos − 1.)
+void _Player::GoAI() {
+    if (!d().isHuman) return;
+    d().isHuman = 0;
+    aiDefaultGroupCreate(m_index);
+}
+// sub_4905E0 (sem a fila de pacotes de rede +0x4C8..): +0xA0 = 1 (recalcular a
+// colônia) e +0x1B8 = opção 40172 (dword_56DE90).
+void _Player::GoHuman() {
+    if (d().isHuman) return;
+    d().isHuman = 1;
+    aiDefaultGroupDelete(m_index);
+    colonyMarkDirty(m_index);
+}
+
 void _Player::MarkResearchComplete(int techID) { researchMarkComplete(m_index, techIndex(techID)); }
 int _Player::HasTechnology(int techID) const { return researchHas(m_index, techIndex(techID)) ? 1 : 0; }
 

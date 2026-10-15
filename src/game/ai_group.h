@@ -94,8 +94,14 @@ void aiBuildRecordReinforce(int stub, int group, int prio);
 void aiBuildRecordWall(int stub, int x, int y, int type);   // sub_425170
 void aiBuildUnRecordReinforce(int stub, int group);         // sub_4259A0
 
-// Grupo padrão do jogador (_Player::SetDefaultGroup / GetDefaultGroup).
+// Grupo padrão do jogador (_Player::SetDefaultGroup sub_4035A0 / GetDefaultGroup).
+// Cada computador ganha do jogo um FightGroup em modo 5 (sub_402E70); unidades
+// que passam para ele (vt[0x68] → sub_403080) entram nesse grupo.
 void aiSetDefaultGroup(int player, int stub);
 int  aiDefaultGroup(int player);
+void aiDefaultGroupCreate(int player);           // sub_402E70 (GoAI)
+void aiDefaultGroupsStart();                     // sub_402E10, antes do InitProc
+void aiDefaultGroupDelete(int player);           // sub_402F50 (GoHuman)
+void aiUnitOwnerChanged(int unitId, int player); // sub_403080
 
 } // namespace op2

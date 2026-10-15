@@ -1,5 +1,6 @@
 #include "repair.h"
 #include "../audio/sound.h"
+#include "ai_group.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -227,6 +228,7 @@ void vehicleTransfer(int id, int player) {                    // vt[0x68] sub_44
     if (r.flags & UNIT_VEHICLE) colonyVehicleAdded(id);
     colonyMarkDirty(old);
     colonyMarkDirty(player);
+    aiUnitOwnerChanged(id, player);                          // sub_403080
 }
 
 void processRepairPacket(int owner, int type, const std::vector<int>& ids,

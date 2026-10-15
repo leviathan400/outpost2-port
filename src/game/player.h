@@ -81,8 +81,8 @@ public:
     // --- colônia / controle ---
     int  IsHuman() const { return d().isHuman; }
     int  IsEden() const  { return d().isEden; }
-    void GoAI()       { d().isHuman = 0; }
-    void GoHuman()    { d().isHuman = 1; }
+    void GoAI();      // sub_4905A0: humano → computador + grupo padrão (sub_402E70)
+    void GoHuman();   // sub_4905E0: computador → humano, apaga o grupo padrão
     void GoEden()     { d().isEden = 1; }   // escreve 1 em +0x2C
     void GoPlymouth() { d().isEden = 0; }   // escreve 0 em +0x2C
     void SetColorNumber(int v) { d().colorNumber = v; }

@@ -131,7 +131,10 @@ struct Group : Stub {
 };
 
 std::vector<int> s_groups;          // dword_4E0B64 (cabeça = mais novo)
+// dword_4EFCD8 +0x1C/+0x20: por jogador, o grupo padrão e se ele veio da missão
+// (SetDefaultGroup: 1 = não é apagado pelo jogo).
 int s_defaultGroup[kMaxPlayers] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+int s_defaultExternal[kMaxPlayers] = {};
 
 Group* grp(int stub) { return dynamic_cast<Group*>(stubObject(stub)); }
 
@@ -1470,6 +1473,7 @@ int aiUnitClass(int type, int weapon) {                      // sub_49D1B0
 void aiGroupsReset() {
     s_groups.clear();
     for (int& d : s_defaultGroup) d = 0xFF;
+    for (int& e : s_defaultExternal) e = 0;
 }
 
 int aiCreateGroup(int kind, int player) {
@@ -1629,8 +1633,72 @@ void aiFightSetPatrol(int stub, int n, int start, const int* xs, const int* ys) 
 }
 void aiFightClearPatrol(int stub) { if (Group* g = grp(stub)) { resetTicks(*g); g->patrolOn = 0; } }
 
-void aiSetDefaultGroup(int player, int stub) { if (player >= 0 && player < kMaxPlayers) s_defaultGroup[player] = stub; }
+// sub_4035A0: o grupo padrão criado pelo jogo é destruído (vt[0]) e o da missão
+// passa a valer, marcado como externo.
+void aiSetDefaultGroup(int player, int stub) {
+    if (player < 0 || player >= kMaxPlayers) return;
+    if (!s_defaultExternal[player] && grp(s_defaultGroup[player])) {
+        aiGroupDestroyed(s_defaultGroup[player]);
+        stubDestroy(s_defaultGroup[player]);
+    }
+    s_defaultGroup[player] = stub;
+    s_defaultExternal[player] = 1;
+}
 int aiDefaultGroup(int player) { return player >= 0 && player < kMaxPlayers ? s_defaultGroup[player] : 0xFF; }
+
+// sub_402E70: CombatBase (FightGroup) do jogador de computador em modo 5
+// (AttackEnemy). A área é o clipRect do mapa (dword_54EBD4..E0) com x1/y1 >= 0,
+// x2 <= dword_54EBC4 e y2 <= altura − 1, gravada como está em +0x344: em TILES
+// num campo que o resto do grupo lê em pixels (assim no original).
+void aiDefaultGroupCreate(int player) {
+    if (player < 0 || player >= kMaxPlayers) return;
+    const int stub = aiCreateGroup(GK_FIGHT, player);
+    s_defaultGroup[player] = stub;
+    s_defaultExternal[player] = 0;
+    Group* g = grp(stub);
+    if (!g) return;
+    aiFightSetMode(stub, 5);                                 // sub_428470(5)
+    resetTicks(*g);                                          // vt[9]
+    g->attackType = 0;                                       // [+0x358]
+    const MAP_RECT& c = g_gameMap.clipRect();
+    int rc[4] = {c.x1 > 0 ? c.x1 : 0, c.y1 > 0 ? c.y1 : 0, c.x2, c.y2};
+    if (rc[2] >= imask()) rc[2] = imask();
+    if (rc[3] >= g_gameMap.height() - 1) rc[3] = g_gameMap.height() - 1;
+    resetTicks(*g);                                          // vt[9]
+    for (int k = 0; k < 4; ++k) g->rect[k] = rc[k];
+}
+
+// sub_402E10 (antes do InitProc): grupo padrão p/ cada um dos 6 jogadores que
+// não é humano ([+0x28] == 0); os humanos ficam sem (−1).
+void aiDefaultGroupsStart() {
+    for (int p = 0; p < 6; ++p) {
+        if (!g_playerData[p].isHuman) aiDefaultGroupCreate(p);
+        else s_defaultGroup[p] = 0xFF;
+    }
+}
+
+// sub_402F50 (GoHuman): apaga o grupo padrão criado pelo jogo; o da missão só é
+// esquecido.
+void aiDefaultGroupDelete(int player) {
+    if (player < 0 || player >= kMaxPlayers || s_defaultGroup[player] == 0xFF) return;
+    if (!s_defaultExternal[player] && grp(s_defaultGroup[player])) {
+        aiGroupDestroyed(s_defaultGroup[player]);
+        stubDestroy(s_defaultGroup[player]);
+    }
+    s_defaultGroup[player] = 0xFF;
+    s_defaultExternal[player] = 0;
+}
+
+// sub_403080 (fim do vt[0x68] de veículos e prédios): a unidade sai do grupo em
+// que estava (vt[11]) e, se o novo dono é computador, entra no grupo padrão dele
+// (vt[10]).
+void aiUnitOwnerChanged(int unitId, int player) {
+    if (!valid(unitId)) return;
+    const int cur = g_units[unitId].groupStub;
+    if (cur != 0xFF) aiRemoveUnit(cur, unitId);
+    if (player < 0 || player >= kMaxPlayers || g_playerData[player].isHuman) return;
+    if (s_defaultGroup[player] != 0xFF) aiTakeUnit(s_defaultGroup[player], unitId);
+}
 
 void aiGroupsDump() {
     for (int id : s_groups) {

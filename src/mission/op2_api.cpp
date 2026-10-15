@@ -18,6 +18,7 @@
 #include "mission.h"
 #include "../game/salvage.h"
 #include "../game/garage.h"
+#include "../game/repair.h"
 #include "../audio/music.h"
 #include "../game/colony.h"
 #include "../game/game_map.h"
@@ -71,6 +72,8 @@ int portXClamped(int x) {
 
 // ---- _Player ------------------------------------------------------------------
 void __fastcall P_GoEden(DllPlayer* p, void*)                 { Player[p->playerNum].GoEden(); }
+void __fastcall P_GoAI(DllPlayer* p, void*)                   { Player[p->playerNum].GoAI(); }
+void __fastcall P_GoHuman(DllPlayer* p, void*)                { Player[p->playerNum].GoHuman(); }
 void __fastcall P_GoPlymouth(DllPlayer* p, void*)             { Player[p->playerNum].GoPlymouth(); }
 void __fastcall P_SetColorNumber(DllPlayer* p, void*, int v)  { Player[p->playerNum].SetColorNumber(v); }
 void __fastcall P_SetOre(DllPlayer* p, void*, int v)          { Player[p->playerNum].SetOre(v); }
@@ -651,17 +654,9 @@ void __fastcall U_DoTransfer(int* u, void*, int player) {
     if (*u <= 0 || *u >= static_cast<int>(g_units.size())) return;
     UnitRecord& r = g_units[*u];
     if (r.id == -1 || (r.flags & UNIT_DEAD) || player < 0 || player >= kMaxPlayers) return;
-    // vt[0x68] (veículo, sub_44CB60): solta alvos, cancela 31/36/37/39, troca de lista e de dono.
-    if (r.flags & UNIT_ARMED) unitResetCombat(*u);
-    if (r.action == 31 || r.action == 36 || r.action == 37 || r.action == 39) {
-        r.action = 0; r.field20 = 1; r.field3C = 0;
-    }
-    const int old = r.owner & 0x0F;
-    if (r.flags & UNIT_VEHICLE) colonyVehicleRemoved(*u);
-    r.owner = static_cast<uint8_t>((r.owner & 0xF0) | (player & 0x0F));
-    if (r.flags & UNIT_VEHICLE) colonyVehicleAdded(*u);
-    colonyMarkDirty(old);
-    colonyMarkDirty(player);
+    // vt[0x68] (veículo, sub_44CB60): solta alvos, cancela 31/36/37/39, troca de
+    // lista e de dono, e passa pelo grupo padrão (sub_403080).
+    vehicleTransfer(*u, player);
 }
 // Triggers Rect / SpecialTarget.
 int* __fastcall TR_CreateRectTrigger(int* ret, int bEnabled, int bOneShot, int player, int x, int y, int w, int h,
@@ -835,6 +830,8 @@ const std::map<std::string, void*>& table() {
     static const std::map<std::string, void*> t = {
         {"?Player@@3PAV_Player@@A", &g_dllPlayer[0]},
         {"?GoEden@_Player@@QAEXXZ", reinterpret_cast<void*>(&P_GoEden)},
+        {"?GoAI@_Player@@QAEXXZ", reinterpret_cast<void*>(&P_GoAI)},
+        {"?GoHuman@_Player@@QAEXXZ", reinterpret_cast<void*>(&P_GoHuman)},
         {"?GoPlymouth@_Player@@QAEXXZ", reinterpret_cast<void*>(&P_GoPlymouth)},
         {"?SetColorNumber@_Player@@QAEXH@Z", reinterpret_cast<void*>(&P_SetColorNumber)},
         {"?SetOre@_Player@@QAEXH@Z", reinterpret_cast<void*>(&P_SetOre)},

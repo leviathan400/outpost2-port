@@ -40,6 +40,7 @@
 #include "../game/disaster.h"
 #include "../game/commands.h"
 #include "../game/scenario.h"
+#include "../game/ai_group.h"
 #include "../mission/mission.h"
 #include "../gfx/artfile.h"
 #include "../gfx/art_blit.h"
@@ -118,7 +119,8 @@ bool GameState::loadMission(const std::string& dllName) {
     resetPlayers(d->numPlayers);
     // GameStartInfo do shell p/ jogo single player: o jogador 0 é o humano, os
     // demais computador ([+0x28] isHuman).
-    for (int p = 0; p < d->numPlayers; ++p) { if (p == 0) Player[p].GoHuman(); else Player[p].GoAI(); }
+    // (o registro vem pronto do GameStartInfo: só o campo, sem GoAI/GoHuman).
+    for (int p = 0; p < d->numPlayers; ++p) g_playerData[p].isHuman = (p == 0) ? 1 : 0;
     // sub_4893A0: planilhas relidas (sub_445070) e árvore da missão (sub_4733B0).
     reloadSheets();
     loadMoraleSheet();
@@ -131,7 +133,8 @@ bool GameState::loadMission(const std::string& dllName) {
     lavaReset();                                 // sub_4322A0 (início da partida)
     TethysGame::SetDaylightMoves(0);
     TethysGame::SetDaylightEverywhere(0);
-    // sub_402E10: (IA dos jogadores de computador, sub_402E70 — pendente) e InitProc.
+    // sub_402E10: grupo padrão de cada computador (sub_402E70) e InitProc.
+    aiDefaultGroupsStart();
     const int ok = m_mission->initProc ? m_mission->initProc() : 1;
     researchStartGame();                         // sub_472C30 (depois do InitProc)
     std::cout << "[Mission] InitProc -> " << ok << "; unidades=" << (g_units.size() - 1) << std::endl;
