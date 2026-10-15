@@ -82,14 +82,19 @@ void TApp::activateShell() {
     setUIState(m_shell);
 }
 
+void TApp::activateShell(int reason, const GameStartInfo* results) {
+    if (m_shell) m_shell->setReturn(reason, results);
+    setUIState(m_shell);
+}
+
 bool TApp::activateGame(const std::string& mapName) {
     if (!m_game->load(mapName)) return false;   // mapa invalido: fica no shell
     setUIState(m_game);
     return true;
 }
 
-bool TApp::activateMission(const std::string& dllName) {
-    if (!m_game->loadMission(dllName)) return false;
+bool TApp::activateMission(const std::string& dllName, const GameStartInfo* gsi) {
+    if (!m_game->loadMission(dllName, gsi)) return false;
     setUIState(m_game);
     return true;
 }

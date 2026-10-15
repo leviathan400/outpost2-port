@@ -33,6 +33,7 @@
 #include "game/pinwheel.h"
 #include "mission/mission.h"
 #include "game/research.h"
+#include "game/start_info.h"
 #include "game/building_sheet.h"
 #include "game/colony.h"
 #include "game/missile.h"
@@ -258,6 +259,18 @@ static int runScreenshot(int argc, char* argv[], const std::string& outPath) {
         else if (a == "--prefs") shellMenu.showPreferences();
         else if (a == "--colony") shellMenu.showColonyGames();
         else if (a == "--about") shellMenu.showAbout();
+        else if ((a == "--cmenu" || a == "--cbrief" || a == "--cobj" || a == "--cchap" || a == "--cstory") &&
+                 i + 1 < argc) {
+            bool eden = true;
+            int dif = 1;
+            for (int j = 1; j < argc; ++j) {
+                if (std::string(argv[j]) == "--plymouth") eden = false;
+                if (std::string(argv[j]) == "--hard") dif = 2;
+                if (std::string(argv[j]) == "--easy") dif = 0;
+            }
+            const int scr = a == "--cmenu" ? 0 : a == "--cbrief" ? 1 : a == "--cobj" ? 2 : a == "--cchap" ? 3 : 4;
+            shellMenu.debugCampaign(eden, dif, atoi(argv[i + 1]), scr);
+        }
     }
     renderer.clear(0xFF000000);
     shellMenu.render(renderer);
@@ -1500,6 +1513,45 @@ static int runRouteTest(const std::string& dll, int tx, int ty, int ticks, int o
     return 0;
 }
 
+// --campaigntest <DLL1> <DLL2> <ticks>: campanha (GameStartInfo flag 8, Eden,
+// normal) na DLL1; depois de <ticks>, resultados como se cumprida (sub_489A30)
+// e a DLL2 começa com eles (sub_4898F0). Mostra recursos e pesquisa.
+static int runCampaignTest(const std::string& dll1, const std::string& dll2, int ticks) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 campaigntest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    auto show = [](const char* tag) {
+        const op2::PlayerData& d = op2::g_playerData[0];
+        int techs = 0;
+        for (int i = 0; i < op2::techCount(); ++i) if (op2::researchHas(0, i)) ++techs;
+        std::printf("[Camp] %s: dif=%d minerio=%d raro=%d comida=%d trab=%d cient=%d criancas=%d rlv=%d moral=%d tecnologias=%d\n",
+                    tag, d.difficulty, d.ore, d.rareOre, d.foodStored, d.workers, d.scientists, d.kids, d.rlvCount,
+                    d.morale, techs);
+    };
+    op2::GameStartInfo gsi;
+    gsi.flags = 8;
+    gsi.playerWord[0] = 4 | 8;
+    op2::GameState gs;
+    if (!gs.loadMission(dll1, &gsi)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    show("inicio 1");
+    for (int k = 0; k < ticks; ++k) gs.onIdle(renderer, 0.2501f / 4.0f);
+    show("fim 1");
+    op2::startInfoCollectResults(gsi, op2::currentMission() ? op2::currentMission()->desc : nullptr, 3);
+    ++gsi.missionNumber;
+    std::printf("[Camp] resultados: missao=%d minerio=%d comida=%d trab=%d espaco=%X tecnicas=%d/%d\n", gsi.missionNumber,
+                gsi.ore, gsi.food, gsi.workers, gsi.spaceWord, static_cast<int>(gsi.techIdx.size()), gsi.techCount);
+    op2::GameState gs2;
+    if (!gs2.loadMission(dll2, &gsi)) { renderer.shutdown(); SDL_Quit(); return 3; }
+    gs2.onActivate();
+    show("inicio 2");
+    renderer.shutdown();
+    SDL_Quit();
+    return 0;
+}
+
 static int runAiTest(const std::string& dll, int tx, int ty, int ticks) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
     op2::g_ResManager.init(".");
@@ -2589,6 +2641,8 @@ int main(int argc, char* argv[]) {
             return runQuakeTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--disastertest") == 0 && i + 3 < argc)
             return runDisasterTest(argv[i + 1], argv[i + 2], argv[i + 3]);
+        if (std::strcmp(argv[i], "--campaigntest") == 0 && i + 3 < argc)
+            return runCampaignTest(argv[i + 1], argv[i + 2], atoi(argv[i + 3]));
         if (std::strcmp(argv[i], "--routetest") == 0 && i + 5 < argc)
             return runRouteTest(argv[i + 1], atoi(argv[i + 2]), atoi(argv[i + 3]), atoi(argv[i + 4]), atoi(argv[i + 5]));
         if (std::strcmp(argv[i], "--aitest") == 0 && i + 4 < argc)

@@ -210,6 +210,18 @@ static int createLaunchUnit(int type, int px, int py, int owner, int cargo, int 
     return u.id();
 }
 
+// sub_4898F0: RLV que volta de uma missão de campanha — no pixel (0,0), ação
+// 0x1A, sub-estado 6 (em órbita) e espera `delay` ticks antes de procurar um
+// Spaceport (sub_480150).
+int missileCampaignRLV(int owner, int delay) {
+    const int id = createLaunchUnit(kRLV, 0, 0, owner, 0, 0, 0);
+    if (!id) return 0;
+    UnitRecord& m = g_units[id];
+    m.field22 = SUB_WAIT;
+    m.field3C = delay;
+    return id;
+}
+
 int setEMPMissile(int x, int y, int owner, int tx, int ty) {   // ?SetEMPMissile
     return createLaunchUnit(kEMPMissile, x << 5, y << 5, owner, 0, tx << 5, ty << 5);
 }

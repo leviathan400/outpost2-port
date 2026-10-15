@@ -18,9 +18,19 @@ public:
     void handleEvent(Renderer& renderer, const SDL_Event& e) override;
 
     ShellMenu& menu() { return m_menu; }
+    // Volta do jogo com motivo e resultados (consumido no próximo onActivate).
+    void setReturn(int reason, const GameStartInfo* results) {
+        m_hasReturn = true;
+        m_reason = reason;
+        m_hasResults = results != nullptr;
+        if (results) m_results = *results;
+    }
 
 private:
     ShellMenu m_menu;
+    bool m_hasReturn = false, m_hasResults = false;
+    int m_reason = 0;
+    GameStartInfo m_results;
 };
 
 } // namespace op2

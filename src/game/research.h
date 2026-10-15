@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -50,6 +51,11 @@ int  techIndex(int techID);               // sub_472CD0 (−1 se não existe)
 int  researchTopicIndex(int type);        // desc+0x1E4 após o carregamento
 
 void researchStartGame();                              // sub_472C30
+void researchApplyTech(int player, int index);         // sub_473860 (sem propagar)
+// Pesquisa que passa de uma missão de campanha à seguinte (MissionResults
+// +0x1D7/+0x1DD/+0x2DD): sub_473640 grava, sub_473770 reaplica.
+void researchSaveResults(int& count, std::vector<uint8_t>& idx, std::vector<uint8_t>& mask);
+bool researchLoadResults(int count, const std::vector<uint8_t>& idx, const std::vector<uint8_t>& mask);
 void researchMarkComplete(int player, int index);      // sub_473830
 void researchSetTechLevel(int player, int level);      // sub_472F70(player, level*1000)
 bool researchHas(int player, int index);               // sub_472C50

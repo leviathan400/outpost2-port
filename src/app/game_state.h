@@ -7,6 +7,7 @@
 #include "ui_state.h"
 #include "../game/game_map.h"
 #include "../game/terrain_renderer.h"
+#include "../game/start_info.h"
 #include "location.h"
 #include "produce_pane.h"
 #include "vehicle_list_pane.h"
@@ -35,7 +36,7 @@ public:
     bool load(const std::string& mapName);
     // Inicia uma missão a partir da DLL (T##/E##/P##.DLL) — single player de
     // sub_4893A0: DescBlock, mapa, jogadores, InitProc; triggers por turno.
-    bool loadMission(const std::string& dllName);
+    bool loadMission(const std::string& dllName, const GameStartInfo* gsi = nullptr);
     GameState();
     ~GameState();
     bool hasMap() const { return m_terrain.ok(); }
@@ -84,6 +85,15 @@ private:
     void loadSettings();
     bool loadMap(const std::string& mapName);
     std::unique_ptr<MissionScript> m_mission;   // dword_4EFCD8
+    // GameStartInfo copiada em TethysGame+0xA4 (sub_4893A0) e o fim da partida
+    // (sub_49C830): 1 = espera de 2 s, 2 = diálogo "Success" (Dialog 262).
+    GameStartInfo m_gsi;
+    int m_endPhase = 0;
+    uint32_t m_endWaitStart = 0;
+    void beginGameEnd();
+    void finishGameEnd(bool save);
+    void drawSuccessDialog(Renderer& renderer);
+    int successButtonAt(int x, int y) const;
     std::string m_mapName;
     TerrainRenderer m_terrain;   // desenha sobre o g_gameMap (singleton do engine)
     int m_camX = 0, m_camY = 0;

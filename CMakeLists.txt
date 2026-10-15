@@ -24,6 +24,7 @@ set(SDL2_DLL "${SDL2_ROOT}/lib/${SDL2_ARCH}/SDL2.dll")
 add_executable(outpost2_modern
     src/main.cpp
     src/shell/shell_menu.cpp
+    src/shell/rtf_text.cpp
     src/gfx/renderer.cpp
     src/gfx/bitmap.cpp
     src/gfx/font.cpp
@@ -52,6 +53,7 @@ add_executable(outpost2_modern
     src/game/walls.cpp
     src/game/scenario.cpp
     src/game/research.cpp
+    src/game/start_info.cpp
     src/game/disaster.cpp
     src/game/commands.cpp
     src/game/production.cpp

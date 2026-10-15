@@ -24,6 +24,7 @@ bool isEmpBlast(int type);       // 0x4A
 
 // ?SetEMPMissile: míssil em (x, y) do dono, alvo (tx, ty) — tiles do port.
 int setEMPMissile(int x, int y, int owner, int tx, int ty);
+int missileCampaignRLV(int owner, int delay);   // sub_4898F0 (RLV em órbita)
 // sub_40E210 case 25 (pacote 0x19) → sub_424140: lança a carga da plataforma do
 // Spaceport ([+0x6E], com o módulo [+0x72]) do ponto de lançamento do sprite;
 // alvo em px do port. false se recusado.

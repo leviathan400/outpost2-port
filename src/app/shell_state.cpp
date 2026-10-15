@@ -13,7 +13,13 @@ bool ShellState::init(const std::string& resDll) {
 }
 
 void ShellState::onActivate() {
-    // volta ao menu principal ao reentrar no shell (ex.: ESC no jogo)
+    // Volta do fim de uma partida: a tela depende do motivo (0x73a); senão
+    // (ESC no jogo), o menu principal.
+    if (m_hasReturn) {
+        m_hasReturn = false;
+        m_menu.afterGame(m_reason, m_hasResults ? &m_results : nullptr);
+        return;
+    }
     m_menu.showMainMenu();
 }
 
@@ -27,7 +33,9 @@ void ShellState::onIdle(Renderer& renderer, float dt) {
     // o menu pediu para iniciar uma missão?
     std::string dllName;
     if (m_menu.consumeLaunch(dllName)) {
-        if (!gTApp.activateMission(dllName))
+        GameStartInfo gsi;
+        const bool hasGsi = m_menu.launchStartInfo(gsi);
+        if (!gTApp.activateMission(dllName, hasGsi ? &gsi : nullptr))
             std::cerr << "[Shell] nao foi possivel iniciar a missao (" << dllName << ")" << std::endl;
         return;
     }

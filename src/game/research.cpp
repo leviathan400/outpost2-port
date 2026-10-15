@@ -255,6 +255,48 @@ static void propagate(int player, int start) {               // sub_472D80
     }
 }
 
+void researchApplyTech(int player, int index) {               // sub_473860
+    if (index < 0 || index >= techCount() || player < 0 || player > 6) return;
+    applyTech(player, index);
+}
+
+// sub_473640: a partir da raiz, cada técnica entra quando o contador de
+// pré-requisitos vistos chega ao total ([+0x24]); as pesquisadas (máscara !=
+// 0) vão para a lista na ordem em que entram (pilha LIFO).
+void researchSaveResults(int& count, std::vector<uint8_t>& idx, std::vector<uint8_t>& mask) {
+    idx.clear();
+    mask.clear();
+    const int n = techCount();
+    count = n - 1;
+    if (n <= 0) return;
+    std::vector<int> seen(static_cast<size_t>(n), 0);
+    std::vector<int> stack{0};
+    while (!stack.empty()) {
+        const int node = stack.back();
+        stack.pop_back();
+        for (int d : s_techs[node]->dependents) {
+            if (++seen[static_cast<size_t>(d)] != static_cast<int>(s_techs[d]->requires.size())) continue;
+            if (s_techs[d]->researched & 0xFFu) {
+                idx.push_back(static_cast<uint8_t>(d));
+                mask.push_back(static_cast<uint8_t>(s_techs[d]->researched & 0xFFu));
+            }
+            stack.push_back(d);
+        }
+    }
+}
+
+// sub_473770: só vale com a mesma árvore (nº de técnicas − 1 igual); cada
+// técnica da lista é aplicada (sub_473860) aos jogadores da máscara.
+bool researchLoadResults(int count, const std::vector<uint8_t>& idx, const std::vector<uint8_t>& mask) {
+    if (!count) return true;
+    if (techCount() - count != 1) return false;
+    const int players = TethysGame::noPlayers();
+    for (size_t i = 0; i < idx.size() && static_cast<int>(i) < count; ++i)
+        for (int b = 0; b < players; ++b)
+            if (mask[i] & (1u << b)) researchApplyTech(b, idx[i]);
+    return true;
+}
+
 void researchStartGame() {                                    // sub_472C30
     if (!techCount()) return;
     for (int p = 0; p < 6; ++p) propagate(p, 0);

@@ -1,5 +1,6 @@
 #include "shell_menu.h"
 #include "font.h"
+#include "../res/res_manager.h"
 #include <iostream>
 #include <cstdio>
 #include <algorithm>
@@ -42,6 +43,19 @@ namespace {
     constexpr int kCgListW = kCgW - 32, kCgListH = 200;
     constexpr int kCgRowH = 22;
     constexpr int kCgBtnY = kCgY + 258;
+}
+
+// Campanha (OP2Shell.dll): MISSION MENU (Dialog 219, 124x126 DLU), STORY TITLE
+// (Dialog 216, 402x234 DLU, com o RICHEDIT "StoryText" criado em (20,25)
+// 565x295 px) e CHAPTERS (Dialog 215, 300x130 DLU). DLU → px: x·1,5 e y·1,6.
+namespace {
+    constexpr int kMmX = 640 - 190 - 10, kMmY = 146, kMmW = 190, kMmH = 215;
+    constexpr int kRvX = 17, kRvY = 40, kRvW = 606, kRvH = 384;
+    constexpr int kRvTextX = kRvX + 20, kRvTextY = kRvY + 32, kRvTextW = 565, kRvTextH = 295;
+    constexpr int kRvBtnY = kRvTextY + kRvTextH + 20;
+    constexpr int kChX = 95, kChY = 120, kChW = 450, kChH = 235;
+    constexpr int kChListX = kChX + 10, kChListY = kChY + 30, kChListW = 429, kChListH = 158;
+    constexpr int kChRowH = 18;
 }
 
 // NEW CAMPAIGN / PREFERENCES / ABOUT
@@ -180,6 +194,34 @@ void ShellMenu::rebuildControls() {
         addButton(2, "CANCEL", kNcX + 150, kNcY + 165, 95, 26);
         break;
     }
+    case MenuState::MissionMenu: {
+        // Dialog 219: botões 1091/1090/1005/1095 e 1094 (LEAVE CAMPAIGN).
+        const int x = kMmX + 27, y0 = kMmY + 30;
+        addButton(1091, "MISSION BRIEFING", x, y0, 135, 23);
+        addButton(1090, "SPECIFIC OBJECTIVES", x, y0 + 32, 135, 23);
+        addButton(1005, "STORY", x, y0 + 64, 135, 23);
+        addButton(1095, "START MISSION", x, y0 + 96, 135, 23, true);
+        addButton(1094, "LEAVE CAMPAIGN", x, y0 + 144, 135, 23);
+        break;
+    }
+    case MenuState::RtfView: {
+        // Botões 1082 (rótulo trocado conforme a tela) e 1089.
+        const char* b1 = m_rtfKind == 0 ? "OBJECTIVES" : m_rtfKind == 1 ? "BRIEFING" : "SELECT CHAPTER";
+        const char* b2 = (m_rtfKind == 2 && m_gsi.missionNumber == 12) ? "MAIN MENU" : "MISSION MENU";
+        addButton(1082, b1, kRvX + 158, kRvBtnY, 135, 23);
+        addButton(1089, b2, kRvX + 308, kRvBtnY, 135, 23, true);
+        break;
+    }
+    case MenuState::Chapters: {
+        Control lc; lc.kind = CtrlKind::List; lc.id = 1081;
+        lc.x = kChListX; lc.y = kChListY; lc.w = kChListW; lc.h = kChListH;
+        lc.listSel = &m_selChapter; lc.listCount = static_cast<int>(m_chapters.size());
+        m_controls.push_back(lc);
+        addButton(1080, "VIEW STORY", kChX + 78, kChListY + kChListH + 12, 135, 23, true);
+        addButton(1089, m_gsi.missionNumber == 12 ? "MAIN MENU" : "MISSION MENU", kChX + 237,
+                  kChListY + kChListH + 12, 135, 23);
+        break;
+    }
     case MenuState::Preferences: {
         auto addCheck = [&](const char* t, int y, bool* tgt) {
             Control c; c.kind = CtrlKind::Check; c.text = t;
@@ -278,7 +320,7 @@ void ShellMenu::dispatchButton(int id) {
             std::cout << "[Tutorials] START: " << dll << " -> "
                       << (map.empty() ? "(MapName nao encontrado)" : map) << std::endl;
             // O shell entrega a DLL da missão ao jogo (StartSingleGame → sub_4893A0).
-            if (!map.empty()) { m_launchMap = dll; m_launchRequested = true; }
+            if (!map.empty()) { m_launchMap = dll; m_launchRequested = true; m_launchHasGsi = false; }
         } else if (id == 2) setState(MenuState::MainMenu);
         break;
     case MenuState::ColonyGames:
@@ -286,14 +328,62 @@ void ShellMenu::dispatchButton(int id) {
         else std::cout << "[Colony] botão " << id << std::endl;
         break;
     case MenuState::NewCampaign:
-        if (id == 1) {   // OK: inicia a missão 1 da colônia escolhida (E01/P01)
-            const char* dll = (m_campaignColony == 0) ? "E01.DLL" : "P01.DLL";
-            std::string map = missionMapName(dll);
-            std::cout << "[Campaign] " << (m_campaignColony == 0 ? "Eden" : "Plymouth")
-                      << " dif " << m_campaignDifficulty << " -> " << dll << " -> "
-                      << (map.empty() ? "(MapName nao encontrado)" : map) << std::endl;
-            if (!map.empty()) { m_launchMap = dll; m_launchRequested = true; }
+        if (id == 1) {   // OK (0x13002fd5): zera a estrutura, campanha, colônia e dificuldade
+            m_gsi = GameStartInfo{};
+            m_gsi.missionNumber = 0;                         // +0x16A
+            m_gsi.flags |= 8;
+            uint32_t w = 0;
+            if (m_campaignColony == 0) w |= 4;               // Eden; Plymouth: cor 1 (bit 5)
+            else w = (w & ~0xE4u) | 0x20u;
+            if (m_campaignDifficulty == 2) w = (w & ~8u) | 0x10u;
+            else if (m_campaignDifficulty == 0) w &= ~0x18u;
+            else w = (w & ~0x10u) | 8u;
+            m_gsi.playerWord[0] = w;
+            std::cout << "[Campaign] " << colonyName() << " dif " << m_campaignDifficulty << std::endl;
+            setState(MenuState::MissionMenu);                // EndDialog(0x73b)
         } else if (id == 2) setState(MenuState::MainMenu);
+        break;
+    case MenuState::MissionMenu:
+        switch (id) {
+        case 1090: openRtf(1); break;                        // 0x73c
+        case 1091: openRtf(0); break;                        // 0x73d
+        case 1005: openChapters(); break;                    // 0x735
+        case 1095: {                                         // 0x733: StartSingleGame
+            char dll[16];
+            std::snprintf(dll, sizeof(dll), m_gsi.eden() ? "E%02d.DLL" : "P%02d.DLL", m_gsi.missionNumber + 1);
+            m_gsi.dll = dll;                                 // sub_4893A0
+            if (!missionMapName(dll).empty()) {
+                m_launchMap = dll;
+                m_launchRequested = true;
+                m_launchHasGsi = true;
+                m_launchGsi = m_gsi;
+            }
+            break;
+        }
+        case 1094: setState(MenuState::MainMenu); break;     // 0x720
+        default: break;
+        }
+        break;
+    case MenuState::RtfView:
+        if (id == 1082) {
+            if (m_rtfKind == 0) openRtf(1);                  // briefing → objetivos (0x73c)
+            else if (m_rtfKind == 1) openRtf(0);             // objetivos → briefing (0x73d)
+            else openChapters();                             // história → capítulos (0x735)
+        } else if (id == 1089) {
+            if (m_rtfKind == 2 && m_gsi.missionNumber == 12) setState(MenuState::MainMenu);
+            else setState(MenuState::MissionMenu);
+        }
+        break;
+    case MenuState::Chapters:
+        if (id == 1080) {                                    // VIEW STORY: item data = capítulo
+            if (m_selChapter >= 0 && m_selChapter < static_cast<int>(m_chapters.size())) {
+                m_storyChapter = m_selChapter + 1;
+                openRtf(2);                                  // 0x737
+            }
+        } else if (id == 1089) {
+            if (m_gsi.missionNumber == 12) setState(MenuState::MainMenu);
+            else setState(MenuState::MissionMenu);
+        }
         break;
     case MenuState::Preferences:
         if (id == 1) setState(MenuState::MainMenu);
@@ -337,7 +427,7 @@ void ShellMenu::handleMouseDown(int x, int y, uint8_t button) {
     Control& c = m_controls[idx];
     if (c.kind == CtrlKind::List) {
         if (c.listSel) {   // seleciona o item sob o cursor
-            int rowH = (m_state == MenuState::Tutorials) ? kTutRowH : kCgRowH;
+            int rowH = (m_state == MenuState::Tutorials) ? kTutRowH : m_state == MenuState::Chapters ? kChRowH : kCgRowH;
             int top  = (m_state == MenuState::Tutorials) ? (c.y + 4) : (c.y + 8);
             int scroll = (m_state == MenuState::Tutorials) ? m_tutorialScroll : 0;
             int row = (y - top) / rowH;
@@ -363,6 +453,11 @@ void ShellMenu::handleMouseUp(int x, int y, uint8_t button) {
 }
 
 void ShellMenu::handleMouseWheel(int delta) {
+    if (m_state == MenuState::RtfView) {
+        const int maxScroll = std::max(0, static_cast<int>(m_rtfLines.size()) - rtfVisibleLines());
+        m_rtfScroll = std::max(0, std::min(maxScroll, m_rtfScroll - delta * 3));
+        return;
+    }
     if (m_state == MenuState::Tutorials) {
         int total = (int)m_tutorialList.size();
         int maxScroll = (total > kTutVisible) ? (total - kTutVisible) : 0;
@@ -425,8 +520,15 @@ void ShellMenu::handleKeyDown(int keyCode) {
         break;
     }
 
+    case SDLK_PAGEUP:
+    case SDLK_PAGEDOWN:
+        if (m_state == MenuState::RtfView)
+            handleMouseWheel(keyCode == SDLK_PAGEUP ? rtfVisibleLines() / 3 : -(rtfVisibleLines() / 3));
+        break;
+
     case SDLK_ESCAPE:
-        if (m_state != MenuState::MainMenu) setState(MenuState::MainMenu);
+        if (m_state == MenuState::RtfView || m_state == MenuState::Chapters) setState(MenuState::MissionMenu);
+        else if (m_state != MenuState::MainMenu) setState(MenuState::MainMenu);
         else m_quitRequested = true;
         break;
     }
@@ -463,6 +565,9 @@ void ShellMenu::render(Renderer& renderer) {
     case MenuState::Tutorials:   renderTutorialsDialog(renderer); break;
     case MenuState::Preferences: renderPreferencesDialog(renderer); break;
     case MenuState::About:       renderAboutDialog(renderer); break;
+    case MenuState::MissionMenu: renderMissionMenu(renderer); break;
+    case MenuState::RtfView:     renderRtfView(renderer); break;
+    case MenuState::Chapters:    renderChapters(renderer); break;
     default: break;
     }
 
@@ -613,6 +718,149 @@ void ShellMenu::renderTutorialsDialog(Renderer& renderer) {
     renderer.fillRect(sbX + 2, thumbY, kTutSbW - 4, thumbH, 0xFF3A557E);
     renderer.drawBevelRect(sbX + 2, thumbY, kTutSbW - 4, thumbH, 0xFF5A7AA8, 0xFF223144);
     // Botões START / BACK desenhados por drawControls().
+}
+
+// ------------------------------- campanha ---------------------------------
+
+std::string ShellMenu::colonyName() const { return m_gsi.eden() ? "Eden" : "Plymouth"; }
+
+void ShellMenu::debugCampaign(bool eden, int difficulty, int missionNumber, int screen) {
+    m_gsi = GameStartInfo{};
+    m_gsi.flags = 8;
+    m_gsi.playerWord[0] = (eden ? 4u : 0x20u) | (static_cast<uint32_t>(difficulty) << 3);
+    m_gsi.missionNumber = missionNumber;
+    switch (screen) {
+        case 1: openRtf(0); break;
+        case 2: openRtf(1); break;
+        case 3: openChapters(); break;
+        case 4: m_storyChapter = missionNumber + 1; openRtf(2); break;
+        default: setState(MenuState::MissionMenu); break;
+    }
+}
+
+int ShellMenu::rtfVisibleLines() const { return kRvTextH / (Font::getTextHeight() + 2); }
+
+// Mensagem 0x73a da janela do shell (motivo − 1 → tabela 0x130090b4). Os filmes
+// (opção Game/ShowMovies, mensagem 0x72b) não existem aqui: vai direto ao passo
+// seguinte ([+0x540]).
+void ShellMenu::afterGame(int reason, const GameStartInfo* results) {
+    if (results) m_gsi = *results;
+    if (results && m_gsi.campaign() && reason == 3) {        // 0x13008b3e
+        if (m_gsi.missionNumber == 12) openChapters();       // fim da campanha: 0x735
+        else setState(MenuState::MissionMenu);               // 0x73b
+        return;
+    }
+    if (results && m_gsi.campaign() && reason == 4) {        // 0x13008c61
+        setState(MenuState::MissionMenu);
+        return;
+    }
+    // (3 fora da campanha → 0x73e ENTER YOUR NAME e 7..9 → estatísticas: telas
+    // ainda não portadas; os demais motivos vão ao menu principal.)
+    setState(MenuState::MainMenu);
+}
+
+// Dialog 216 com o RICHEDIT: B_%s%02i.rtf (briefing), O_%s%02i_%c.rtf
+// (objetivos; e/m/h pela dificuldade) e S_%s%02i.rtf (capítulo).
+void ShellMenu::openRtf(int kind) {
+    m_rtfKind = kind;
+    const char* col = m_gsi.eden() ? "e" : "p";
+    const int n = m_gsi.missionNumber + 1;
+    char file[32], title[64];
+    if (kind == 0) {
+        std::snprintf(file, sizeof(file), "B_%s%02i.rtf", col, n);
+        std::snprintf(title, sizeof(title), "%s Mission %i: Briefing", colonyName().c_str(), n);
+    } else if (kind == 1) {
+        const uint32_t d = m_gsi.playerWord[0] & 0x18;
+        const char c = d == 0 ? 'e' : d == 0x10 ? 'h' : 'm';
+        std::snprintf(file, sizeof(file), "O_%s%02i_%c.rtf", col, n, c);
+        std::snprintf(title, sizeof(title), "%s Mission %i: Objectives", colonyName().c_str(), n);
+    } else {
+        std::snprintf(file, sizeof(file), "S_%s%02i.rtf", col, m_storyChapter);
+        std::snprintf(title, sizeof(title), "%s Part %i", colonyName().c_str(), m_storyChapter);
+    }
+    m_rtfTitle = title;
+    m_rtfLines.clear();
+    m_rtfScroll = 0;
+    if (auto s = g_ResManager.openStream(file)) {
+        const std::vector<uint8_t>& b = s->bytes();
+        m_rtfLines = rtfLayout(rtfParse(std::string(b.begin(), b.end())), kRvTextW - 8);
+    } else {
+        std::cerr << "[Campaign] nao achou " << file << std::endl;
+    }
+    setState(MenuState::RtfView);
+}
+
+// Dialog 215: linhas do ch_title.txt (Eden a partir da 0, Plymouth da 13) até
+// o capítulo da missão atual (missões concluídas + 1).
+void ShellMenu::openChapters() {
+    m_chapters.clear();
+    if (auto s = g_ResManager.openStream("ch_title.txt")) {
+        const std::vector<uint8_t>& b = s->bytes();
+        std::string all(b.begin(), b.end());
+        std::vector<std::string> lines;
+        size_t p = 0;
+        while (p <= all.size()) {
+            size_t e = all.find('\n', p);
+            if (e == std::string::npos) e = all.size();
+            std::string l = all.substr(p, e - p);
+            while (!l.empty() && (l.back() == '\r' || l.back() == '\n')) l.pop_back();
+            lines.push_back(l);
+            p = e + 1;
+        }
+        const int off = m_gsi.eden() ? 0 : 13;
+        for (int k = off; k <= m_gsi.missionNumber + off && k < static_cast<int>(lines.size()); ++k)
+            m_chapters.push_back(lines[static_cast<size_t>(k)]);
+    } else {
+        std::cerr << "[Campaign] Could not open story file." << std::endl;
+    }
+    m_selChapter = 0;
+    setState(MenuState::Chapters);
+}
+
+void ShellMenu::renderMissionMenu(Renderer& renderer) {
+    char title[64];
+    std::snprintf(title, sizeof(title), "%s Mission %i Menu", colonyName().c_str(), m_gsi.missionNumber + 1);
+    renderer.drawDialogFrame(kMmX, kMmY, kMmW, kMmH, title);
+}
+
+void ShellMenu::renderRtfView(Renderer& renderer) {
+    renderer.fillRect(0, 0, 640, 480, 0x88000000);
+    renderer.drawDialogFrame(kRvX, kRvY, kRvW, kRvH, m_rtfTitle);
+    renderer.fillRect(kRvTextX, kRvTextY, kRvTextW, kRvTextH, 0xFF000000);   // EM_SETBKGNDCOLOR(0)
+    renderer.drawBevelRect(kRvTextX - 1, kRvTextY - 1, kRvTextW + 2, kRvTextH + 2, 0xFF05080E, 0xFF35445B);
+    uint32_t* fb = renderer.getFramebuffer();
+    const int lh = Font::getTextHeight() + 2, vis = rtfVisibleLines();
+    for (int i = 0; i < vis; ++i) {
+        const int li = m_rtfScroll + i;
+        if (li >= static_cast<int>(m_rtfLines.size())) break;
+        for (const RtfLine::Piece& pc : m_rtfLines[static_cast<size_t>(li)].pieces)
+            Font::drawText(fb, 640, 480, pc.text, kRvTextX + 4 + pc.x, kRvTextY + 4 + i * lh, pc.color);
+    }
+    // Barra de rolagem (só a posição).
+    const int total = static_cast<int>(m_rtfLines.size());
+    if (total > vis) {
+        const int trackX = kRvTextX + kRvTextW - 10, trackH = kRvTextH - 4;
+        const int thumbH = std::max(16, trackH * vis / total);
+        const int maxScroll = total - vis;
+        const int thumbY = kRvTextY + 2 + (trackH - thumbH) * m_rtfScroll / maxScroll;
+        renderer.fillRect(trackX, kRvTextY + 2, 8, trackH, 0xFF11161F);
+        renderer.fillRect(trackX + 1, thumbY, 6, thumbH, 0xFF3A557E);
+    }
+}
+
+void ShellMenu::renderChapters(Renderer& renderer) {
+    renderer.fillRect(0, 0, 640, 480, 0x88000000);
+    renderer.drawDialogFrame(kChX, kChY, kChW, kChH, "CHAPTERS");
+    renderer.fillRect(kChListX, kChListY, kChListW, kChListH, 0xFF0D121B);
+    renderer.drawBevelRect(kChListX, kChListY, kChListW, kChListH, 0xFF05080E, 0xFF35445B);
+    for (size_t i = 0; i < m_chapters.size(); ++i) {
+        const int y = kChListY + 8 + static_cast<int>(i) * kChRowH;
+        if (y + 14 > kChListY + kChListH) break;
+        const bool sel = static_cast<int>(i) == m_selChapter;
+        if (sel) renderer.fillRect(kChListX + 2, y - 2, kChListW - 4, kChRowH - 2, 0xFF203858);
+        Font::drawText(renderer.getFramebuffer(), 640, 480, m_chapters[i], kChListX + 10, y,
+                       sel ? 0xFFFFFF99 : 0xFFCCD6E8);
+    }
 }
 
 } // namespace op2

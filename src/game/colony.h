@@ -147,6 +147,11 @@ void colonyForceMorale(int player, int level);      // level 0=Great .. 4=Rotten
 void colonyFreeMorale(int player);
 // O bit do jogador está em alguma das cinco máscaras (moral "(Steady)").
 bool colonyMoraleForced(int player);
+// Bloco [jogador+0x34..+0x7B] (0x12 dwords) que a campanha leva de uma missão
+// à seguinte (MissionResults +0x18F): nível de moral e os campos de sub_44E550.
+// +0x3C e +0x58 não estão modelados (ficam 0 / não são lidos).
+void colonyPlayerBlockSave(int player, int out[0x12]);
+void colonyPlayerBlockLoad(int player, const int in[0x12]);
 
 // sub_42FF00: redução de dano do DIRT (0, 625..2500 de 10000) p/ o prédio.
 int colonyDirtProtection(const UnitRecord& r);

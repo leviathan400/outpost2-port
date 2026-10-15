@@ -41,6 +41,7 @@
 #include "../game/commands.h"
 #include "../game/scenario.h"
 #include "../game/ai_group.h"
+#include "../game/start_info.h"
 #include "../mission/mission.h"
 #include "../gfx/artfile.h"
 #include "../gfx/art_blit.h"
@@ -93,7 +94,7 @@ bool GameState::loadMap(const std::string& mapName) {
     return true;
 }
 
-bool GameState::loadMission(const std::string& dllName) {
+bool GameState::loadMission(const std::string& dllName, const GameStartInfo* gsi) {
     loadSettings();
     if (m_mission) { setCurrentMission(nullptr); m_mission.reset(); }
     resetTriggers();
@@ -121,6 +122,13 @@ bool GameState::loadMission(const std::string& dllName) {
     // demais computador ([+0x28] isHuman).
     // (o registro vem pronto do GameStartInfo: só o campo, sem GoAI/GoHuman).
     for (int p = 0; p < d->numPlayers; ++p) g_playerData[p].isHuman = (p == 0) ? 1 : 0;
+    // sub_4893A0: a estrutura vai para TethysGame+0xA4; dificuldade de cada
+    // jogador = bits 3-4 da palavra dele (+0x30).
+    m_gsi = gsi ? *gsi : GameStartInfo{};
+    m_gsi.dll = dllName;
+    m_endPhase = 0;
+    if (gsi)
+        for (int p = 0; p < d->numPlayers && p < 6; ++p) g_playerData[p].difficulty = gsi->difficulty(p);
     // sub_4893A0: planilhas relidas (sub_445070) e árvore da missão (sub_4733B0).
     reloadSheets();
     loadMoraleSheet();
@@ -133,6 +141,8 @@ bool GameState::loadMission(const std::string& dllName) {
     lavaReset();                                 // sub_4322A0 (início da partida)
     TethysGame::SetDaylightMoves(0);
     TethysGame::SetDaylightEverywhere(0);
+    // Campanha: sobras da missão anterior (sub_4898F0), antes do InitProc.
+    if (gsi && gsi->campaign()) startInfoApplyCampaign(m_gsi);
     // sub_402E10: grupo padrão de cada computador (sub_402E70) e InitProc.
     aiDefaultGroupsStart();
     const int ok = m_mission->initProc ? m_mission->initProc() : 1;
@@ -245,7 +255,56 @@ void GameState::onActivate() {
     std::cout << "[GameState] ativo: " << m_mapName << std::endl;
 }
 
+// sub_49C830: códigos 10/11 (demo) saem direto; os demais esperam 2 s
+// (Sleep(2000) com o cursor de espera) e, numa missão de campanha cumprida,
+// abrem a caixa "Success" com "Save Game" / "Continue" (sub_41D5E0, Dialog 262).
+void GameState::beginGameEnd() {
+    const int code = gameEndCode();
+    if (code == 10 || code == 11 || !gTApp.hasShell()) { finishGameEnd(false); return; }
+    m_endPhase = 1;
+    m_endWaitStart = SDL_GetTicks();
+}
+
+void GameState::finishGameEnd(bool save) {
+    if (save) std::cout << "[Mission] Save Game: salvamento ainda nao portado (OnSaveSlot)" << std::endl;
+    const int code = gameEndCode();
+    startInfoCollectResults(m_gsi, m_mission ? m_mission->desc : nullptr, code);   // sub_489A30
+    if (code == 3 && m_gsi.campaign()) ++m_gsi.missionNumber;                    // +0x16A
+    const GameStartInfo results = m_gsi;
+    m_endPhase = 0;
+    setCurrentMission(nullptr);
+    m_mission.reset();
+    resetTriggers();
+    gTApp.activateShell(code, &results);                     // ActivateShell(motivo, resultados)
+}
+
+// Dialog 262 (OUT2RES.DLL, 186x94 DLU): texto + dois botões (25,57) e (102,58).
+static constexpr int kSdW = 279, kSdH = 153;
+static constexpr int kSdX = (Renderer::NATIVE_WIDTH - kSdW) / 2, kSdY = (Renderer::NATIVE_HEIGHT - kSdH) / 2;
+
+int GameState::successButtonAt(int x, int y) const {
+    if (y >= kSdY + 93 && y < kSdY + 93 + 23) {
+        if (x >= kSdX + 37 && x < kSdX + 37 + 75) return 1;
+        if (x >= kSdX + 153 && x < kSdX + 153 + 75) return 2;
+    }
+    return 0;
+}
+
+void GameState::drawSuccessDialog(Renderer& renderer) {
+    renderer.drawDialogFrame(kSdX, kSdY, kSdW, kSdH, "");
+    Font::drawTextCentered(renderer.getFramebuffer(), Renderer::NATIVE_WIDTH, Renderer::NATIVE_HEIGHT, "Success",
+                           kSdX + kSdW / 2, kSdY + 45, 0xFFFFFFFF, true);
+    renderer.drawButton(kSdX + 37, kSdY + 93, 75, 23, "Save Game", successButtonAt(m_mouseNX, m_mouseNY) == 1, false);
+    renderer.drawButton(kSdX + 153, kSdY + 93, 75, 23, "Continue", successButtonAt(m_mouseNX, m_mouseNY) == 2, false);
+}
+
 void GameState::onIdle(Renderer& renderer, float dt) {
+    if (m_endPhase == 1 && SDL_GetTicks() - m_endWaitStart >= 2000) {
+        const int code = gameEndCode();
+        // sub_402820: DescBlock[0] > 0 = missão de campanha (e dword_56DEF8 = 0).
+        if (code == 3 && m_mission && m_mission->desc && m_mission->desc->missionType > 0) m_endPhase = 2;
+        else { finishGameEnd(false); return; }
+    }
     const Uint8* ks = SDL_GetKeyboardState(nullptr);
     int speed = static_cast<int>(600 * dt);
     if (speed < 1) speed = 1;
@@ -261,6 +320,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     // Avança o relógio de simulação na cadência do GameSpeed (m_tickPeriod).
     const float kTickPeriod = m_tickPeriod;
     m_tickAccum += dt;
+    if (m_endPhase) m_tickAccum = 0.0f;                      // partida encerrada: sem turnos
     while (m_tickAccum >= kTickPeriod) {
         TethysGame::advanceTick();
         TethysGame::advanceDaylight(g_gameMap.internalWidth());   // início do turno (sub_489DD0)
@@ -275,14 +335,11 @@ void GameState::onIdle(Renderer& renderer, float dt) {
             soundUpdate();                       // sub_47F250: fila de vozes
         }
         m_tickAccum -= kTickPeriod;
-        // Fim de jogo (TethysGame +0x98): chegado o tick, a partida acaba e
-        // volta ao shell.
+        // Fim de jogo (TethysGame +0x98): chegado o tick, sub_49C830.
         if (gameEndCode() && TethysGame::tick() >= gameEndTick()) {
-            setCurrentMission(nullptr);
-            m_mission.reset();
-            resetTriggers();
-            gTApp.activateShell();
-            return;
+            beginGameEnd();
+            if (!m_endPhase) return;
+            break;
         }
     }
     // Minimapa segurado (sub_4587B0 → sub_41F9E0): relê o cursor e centra a vista.
@@ -795,6 +852,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     Font::drawText(fb, VW, VH, l4, 8, 44, 0xFFE0C080, true);
     }
 
+    if (m_endPhase == 2) drawSuccessDialog(renderer);
     renderer.present();
 }
 
@@ -923,6 +981,20 @@ void GameState::selectBox(int x0, int y0, int x1, int y1) {
 }
 
 void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
+    if (m_endPhase) {                                        // diálogo modal / espera
+        if (e.type == SDL_MOUSEMOTION) renderer.screenToNative(e.motion.x, e.motion.y, m_mouseNX, m_mouseNY);
+        if (m_endPhase != 2) return;
+        if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+            int nx, ny;
+            renderer.screenToNative(e.button.x, e.button.y, nx, ny);
+            const int b = successButtonAt(nx, ny);
+            if (b) finishGameEnd(b == 1);                    // 1 = IDOK "Save Game"
+        } else if (e.type == SDL_KEYDOWN) {
+            if (e.key.keysym.sym == SDLK_RETURN) finishGameEnd(true);
+            else if (e.key.keysym.sym == SDLK_ESCAPE) finishGameEnd(false);
+        }
+        return;
+    }
     if (e.type == SDL_KEYDOWN) {
         if (e.key.keysym.sym == SDLK_ESCAPE) gTApp.activateShell();
         if (e.key.keysym.sym == SDLK_g) m_showPassability = !m_showPassability;

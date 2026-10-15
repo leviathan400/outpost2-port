@@ -7,6 +7,8 @@
 #include "../gfx/renderer.h"
 #include "../gfx/bitmap.h"
 #include "../res/pe_resource.h"
+#include "../game/start_info.h"
+#include "rtf_text.h"
 
 namespace op2 {
 
@@ -18,7 +20,10 @@ enum class MenuState {
     Tutorials,
     Preferences,
     About,
-    QuitConfirm
+    QuitConfirm,
+    MissionMenu,   // Dialog 219 (mensagem 0x73b da janela do shell)
+    RtfView,       // Dialog 216 + RICHEDIT: briefing 0x73d, objetivos 0x73c, história 0x737
+    Chapters       // Dialog 215 (0x735): capítulos do ch_title.txt
 };
 
 enum class CtrlKind { Button, Radio, Check, List };
@@ -64,6 +69,10 @@ public:
     // export MapName da DLL da missão) e limpa o pedido. Consumido pelo ShellState
     // para o TApp trocar para o jogo (ActivateGame). Ver [[op2-engine-architecture]].
     bool consumeLaunch(std::string& outMap);
+    // GameStartInfo do último pedido (campanha); false se o pedido não tem.
+    bool launchStartInfo(GameStartInfo& out) const { if (m_launchHasGsi) out = m_launchGsi; return m_launchHasGsi; }
+    // Volta do jogo (CreateShell + mensagem 0x73a): motivo do fim e resultados.
+    void afterGame(int reason, const GameStartInfo* results);
 
     // Abre diretamente uma sub-tela (usado pelo modo --screenshot para captura).
     void showTutorials() { setState(MenuState::Tutorials); }
@@ -72,6 +81,9 @@ public:
     void showPreferences() { setState(MenuState::Preferences); }
     void showColonyGames() { setState(MenuState::ColonyGames); }
     void showAbout() { setState(MenuState::About); }
+    // Depuração (--screenshot): campanha na missão n (concluídas), tela 0 menu,
+    // 1 briefing, 2 objetivos, 3 capítulos, 4 história (capítulo n+1).
+    void debugCampaign(bool eden, int difficulty, int missionNumber, int screen);
 
 private:
     MenuState m_state = MenuState::Splash;
@@ -81,6 +93,18 @@ private:
     // Pedido de início de missão (START/OK): nome do .map resolvido via MapName.
     bool m_launchRequested = false;
     std::string m_launchMap;
+    bool m_launchHasGsi = false;
+    GameStartInfo m_launchGsi;
+
+    // Campanha: a cópia do shell (0x13015a34) e as telas da campanha.
+    GameStartInfo m_gsi;
+    int m_rtfKind = 0;             // 0 briefing, 1 objetivos, 2 história
+    int m_storyChapter = 1;        // 0x13015e14 (1 = primeiro)
+    std::string m_rtfTitle;
+    std::vector<RtfLine> m_rtfLines;
+    int m_rtfScroll = 0;
+    std::vector<std::string> m_chapters;
+    int m_selChapter = 0;
 
     // Original art resources from OP2SHRES.DLL
     Bitmap m_bgBitmap;     // Bitmap 190 (640x480 space/planet art)
@@ -123,6 +147,13 @@ private:
     void renderPreferencesDialog(Renderer& renderer);
     void renderColonyGamesDialog(Renderer& renderer);
     void renderTutorialsDialog(Renderer& renderer);
+    void renderMissionMenu(Renderer& renderer);
+    void renderRtfView(Renderer& renderer);
+    void renderChapters(Renderer& renderer);
+    void openRtf(int kind);
+    void openChapters();
+    std::string colonyName() const;
+    int rtfVisibleLines() const;
 };
 
 } // namespace op2

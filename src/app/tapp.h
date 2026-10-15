@@ -4,6 +4,7 @@
 
 namespace op2 {
 
+struct GameStartInfo;
 class Renderer;
 class UIState;
 class ShellState;
@@ -27,12 +28,16 @@ public:
 
     // Troca de estado (equivale a ActivateShell/ActivateGame/SetUIState).
     void activateShell();
+    // TApp::ActivateShell(GameTermReasons, MissionResults*): o shell recebe o
+    // motivo do fim e os resultados (CreateShell) e decide a próxima tela (0x73a).
+    void activateShell(int reason, const GameStartInfo* results);
     bool activateGame(const std::string& mapName);
     // Inicia uma missão pela DLL (T##/E##/P##.DLL) e ativa o jogo.
-    bool activateMission(const std::string& dllName);
+    bool activateMission(const std::string& dllName, const GameStartInfo* gsi = nullptr);
     void setUIState(UIState* next);
 
     void requestQuit() { m_quit = true; }
+    bool hasShell() const { return m_shell != nullptr; }   // falso nos testes por linha de comando
     Renderer& renderer() { return *m_renderer; }
 
 private:

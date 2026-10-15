@@ -798,6 +798,22 @@ void colonyForceMorale(int player, int level) {      // sub_4229F0 cases 21..25
     dirtyAll();
 }
 
+void colonyPlayerBlockSave(int p, int out[0x12]) {
+    const ColonyState& c = g_colony[p];
+    const int v[0x12] = {g_playerData[p].morale, c.moraleEvents, 0, c.moraleValue, c.moraleTrend, c.crowding,
+                         c.foodState, c.disabledPct, c.recreationLoad, 0, c.medicalLoad, c.hasNursery,
+                         c.hasUniversity, c.disasterTechs, c.dirtCoverage, c.idlePct, c.phdPct, c.hasGorf};
+    for (int i = 0; i < 0x12; ++i) out[i] = v[i];
+}
+void colonyPlayerBlockLoad(int p, const int in[0x12]) {
+    ColonyState& c = g_colony[p];
+    g_playerData[p].morale = in[0];
+    c.moraleEvents = in[1]; c.moraleValue = in[3]; c.moraleTrend = in[4]; c.crowding = in[5];
+    c.foodState = in[6]; c.disabledPct = in[7]; c.recreationLoad = in[8]; c.medicalLoad = in[10];
+    c.hasNursery = in[11]; c.hasUniversity = in[12]; c.disasterTechs = in[13]; c.dirtCoverage = in[14];
+    c.idlePct = in[15]; c.phdPct = in[16]; c.hasGorf = in[17];
+}
+
 bool colonyMoraleForced(int player) {
     for (uint32_t m : s_forceMask) if (m & (1u << player)) return true;
     return false;
