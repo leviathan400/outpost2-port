@@ -1074,7 +1074,7 @@ void GameState::selectAt(int nx, int ny, bool additive) {
         int dx = ucx - nx, dy = ucy - ny, d2 = dx * dx + dy * dy;
         if (d2 < bestD2) { bestD2 = d2; best = i; }
     }
-    if (best) {
+    if (best && m_selected.size() < 0x20) {               // sub_41A9E0: teto de 32
         m_selected.push_back(best);
         soundPlay(unitSelectSound(g_units[best].type));   // sub_41AAA0: desc+0x1F0
     }
@@ -1092,8 +1092,10 @@ void GameState::selectBox(int x0, int y0, int x1, int y1) {
         if (r.id == -1 || (r.flags & UNIT_DEAD)) continue;
         if ((r.owner & 0x0F) != me || !(r.flags & UNIT_VEHICLE)) continue;
         int ucx = screenXOf(r.pixelX) + 16, ucy = r.pixelY + 16 - m_camY;
-        if (ucx >= bx0 && ucx <= bx1 && ucy >= by0 && ucy <= by1)
+        if (ucx >= bx0 && ucx <= bx1 && ucy >= by0 && ucy <= by1) {
+            if (m_selected.size() >= 0x20) break;   // sub_41A9E0: a seleção para em 32
             m_selected.push_back(i);
+        }
     }
     // sub_41AAA0: 1 unidade → som dela (desc+0x1F0); várias → 0x55.
     if (m_selected.size() == 1) soundPlay(unitSelectSound(g_units[m_selected[0]].type));
