@@ -519,14 +519,14 @@ void GameState::onIdle(Renderer& renderer, float dt) {
 
     // Colchete de seleção (sub_43E950): guardo o frame do corpo de cada unidade
     // selecionada durante o desenho e traço os cantos depois, por cima de tudo.
-    struct SelDeco { int cx, cy, anim, frame; };
+    struct SelDeco { int id, cx, cy, anim, frame; };
     std::vector<SelDeco> selDeco;
     auto isSel = [&](int id) {
         for (int s : m_selected) if (s == id) return true;
         return false;
     };
     auto recDeco = [&](int id, int cx, int cy, int anim, int frame) {
-        if (isSel(id)) selDeco.push_back({cx, cy, anim, frame});
+        if (isSel(id)) selDeco.push_back({id, cx, cy, anim, frame});
     };
 
     // Passe de sombra (sub_49E8C0): vt[30] das unidades com 0x10000000 — a
@@ -827,32 +827,61 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         }
     }
 
-    // Colchete de seleção (sub_43E950): 4 cantos em "L" brancos (0x7FFF) ao redor
-    // do retângulo do sprite; cada perna = dimensão/6 (idiv 6 do original). Não é
-    // um retângulo contínuo. Recortado à vista.
+    // Colchete + barra de vida (sub_43E950) das unidades selecionadas.
+    const int vw = viewportW(), vh = viewportH();
+    uint32_t* fb = renderer.getFramebuffer();
+    auto put = [&](int x, int y, uint32_t c) {         // 1 px recortado à vista
+        if (x >= 0 && x < vw && y >= 0 && y < vh) fb[y * Renderer::NATIVE_WIDTH + x] = c;
+    };
+    auto hseg = [&](int x, int y, int len, uint32_t c) {   // len<0 = p/ a esquerda
+        const int s = len < 0 ? -1 : 1;
+        for (int k = 0; k <= (len < 0 ? -len : len); ++k) put(x + k * s, y, c);
+    };
+    auto vseg = [&](int x, int y, int len, uint32_t c) {
+        const int s = len < 0 ? -1 : 1;
+        for (int k = 0; k <= (len < 0 ? -len : len); ++k) put(x, y + k * s, c);
+    };
     for (const SelDeco& d : selDeco) {
         int ox, oy, w, h;
         if (!artFrameBounds(d.anim, d.frame, ox, oy, w, h)) continue;
         const int l = d.cx + ox, t = d.cy + oy, rt = l + w, bt = t + h;
-        const int lx = w / 6, ly = h / 6;              // comprimento das pernas
-        const uint32_t c = 0xFFFFFFFFu;                // branco (edi=0x7FFF no caso comum)
-        const int vw = viewportW(), vh = viewportH();
-        uint32_t* fb = renderer.getFramebuffer();
-        auto px = [&](int x, int y) {                  // 1 px recortado à vista
-            if (x >= 0 && x < vw && y >= 0 && y < vh) fb[y * Renderer::NATIVE_WIDTH + x] = c;
-        };
-        auto hseg = [&](int x, int y, int len) {       // len negativo = p/ a esquerda
-            const int s = len < 0 ? -1 : 1;
-            for (int k = 0; k <= (len < 0 ? -len : len); ++k) px(x + k * s, y);
-        };
-        auto vseg = [&](int x, int y, int len) {
-            const int s = len < 0 ? -1 : 1;
-            for (int k = 0; k <= (len < 0 ? -len : len); ++k) px(x, y + k * s);
-        };
-        hseg(l, t, lx);       vseg(l, t, ly);          // canto superior-esquerdo
-        hseg(rt, t, -lx);     vseg(rt, t, ly);         // canto superior-direito
-        hseg(l, bt, lx);      vseg(l, bt, -ly);        // canto inferior-esquerdo
-        hseg(rt, bt, -lx);    vseg(rt, bt, -ly);       // canto inferior-direito
+        // Colchete: 4 cantos em "L" brancos (0x7FFF), cada perna = dimensão/6
+        // (idiv 6 do original). Não é um retângulo contínuo.
+        const uint32_t WHITE = 0xFFFFFFFFu;            // edi=0x7FFF no caso comum
+        const int lx = w / 6, ly = h / 6;
+        hseg(l, t, lx, WHITE);     vseg(l, t, ly, WHITE);     // superior-esquerdo
+        hseg(rt, t, -lx, WHITE);   vseg(rt, t, ly, WHITE);    // superior-direito
+        hseg(l, bt, lx, WHITE);    vseg(l, bt, -ly, WHITE);   // inferior-esquerdo
+        hseg(rt, bt, -lx, WHITE);  vseg(rt, bt, -ly, WHITE);  // inferior-direito
+
+        // Barra de vida acima do colchete. maxHP por jogador (planilha), dano
+        // em +0x1E; cor por faixa: >=40% verde (0x3E0), >25% amarelo (0x7FE0),
+        // <=25% vermelho (0x7C00) piscando com o bit 1 do relógio.
+        if (d.id <= 0 || d.id >= (int)g_units.size()) continue;
+        const UnitRecord& r = g_units[d.id];
+        const int pl = (r.owner >> 4) & 0x0F;
+        int maxHP = 0;
+        if (r.flags & UNIT_VEHICLE) { const VehPlayerStats* v = vehicleSheet(r.type, pl); maxHP = v ? v->hitPoints : 0; }
+        else if (r.flags & UNIT_BUILDING) { const StructSheetDesc* ss = structSheet(r.type); maxHP = ss ? ss->player[pl].hitPoints : 0; }
+        if (maxHP <= 0) continue;
+        int dmg = r.damage; if (dmg < 0) dmg = 0; if (dmg > maxHP) dmg = maxHP;
+        const int hpRest = maxHP - dmg;
+        uint32_t barCol;                               // conversão RGB555→888 (31→255)
+        bool draw = true;
+        if (hpRest * 10 >= maxHP * 4) barCol = 0xFF00FF00u;       // verde  (>= 40%)
+        else if (hpRest * 4 > maxHP) barCol = 0xFFFFFF00u;        // amarelo (> 25%)
+        else { barCol = 0xFFFF0000u; draw = (TethysGame::tick() & 2) != 0; }  // vermelho piscando
+        const int barW = (w > 56) ? 48 : 24;           // var_188: 0x30 se largo, senão 0x18
+        const int bx = (l + rt) / 2 - barW / 2;        // centrado na unidade
+        const int by = t - 7;                          // var_1B0 = topo do colchete - 7
+        // Moldura: laterais brancas, topo e base pretas (6 px de altura).
+        vseg(bx, by, 6, WHITE);  vseg(bx + barW + 2, by, 6, WHITE);
+        hseg(bx, by, barW + 2, 0xFF000000u);  hseg(bx, by + 6, barW + 2, 0xFF000000u);
+        if (draw) {                                    // preenchimento proporcional
+            const int fillW = hpRest * barW / maxHP;
+            for (int yy = by + 1; yy <= by + 5; ++yy)
+                for (int xx = bx + 1; xx <= bx + fillW; ++xx) put(xx, yy, barCol);
+        }
     }
     // Modo de posicionamento do kit (sub_451AC0 → sub_41B5B0: retângulo do
     // tamanho da área no cursor). PROVISÓRIO: contorno da área (verde) e do
