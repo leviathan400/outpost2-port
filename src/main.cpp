@@ -289,7 +289,7 @@ static int runScreenshot(int argc, char* argv[], const std::string& outPath) {
 
 // --selshot <DLL> <out.bmp>: carrega a missão, seleciona o 1º veículo (ou
 // prédio), centra a câmera nele e salva um quadro — p/ ver o colchete de seleção.
-static int runSelShot(const std::string& dll, const std::string& outPath) {
+static int runSelShot(const std::string& dll, const std::string& outPath, bool hover) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) { std::cerr << "SDL_Init: " << SDL_GetError() << std::endl; return 1; }
     op2::g_ResManager.init(".");
     op2::g_art.load();
@@ -307,7 +307,7 @@ static int runSelShot(const std::string& dll, const std::string& outPath) {
     if (!pick) for (size_t i = 1; i < op2::g_units.size(); ++i)
         if (op2::g_units[i].id != -1) { pick = (int)i; break; }
     if (pick) {
-        gs.setSelection({pick});
+        if (hover) gs.debugSetHover(pick); else gs.setSelection({pick});
         gs.setCamera(op2::unitOX(op2::g_units[pick]) - 416 / 2,
                      op2::unitOY(op2::g_units[pick]) - 416 / 2);
     }
@@ -2718,7 +2718,7 @@ int main(int argc, char* argv[]) {
             return runPlayShot(argv[i + 1], argv[i + 2], pass);
         }
         if (std::strcmp(argv[i], "--selshot") == 0 && i + 2 < argc)
-            return runSelShot(argv[i + 1], argv[i + 2]);
+            return runSelShot(argv[i + 1], argv[i + 2], i + 3 < argc && std::strcmp(argv[i + 3], "hover") == 0);
         if (std::strcmp(argv[i], "--structtest") == 0 && i + 2 < argc)
             return runStructTest(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--paneshot") == 0 && i + 2 < argc)

@@ -129,6 +129,14 @@ private:
 
     // --- Seleção / interação (a "MAINE" / command pane) ---
     std::vector<int> m_selected;   // ids de unidades selecionadas
+    // Hover (sub_41B620/loc_41B6B9): sem seleção, a unidade sob o cursor há >10
+    // ticks ganha o colchete (cinza) + barra. +0x14 = unidade, +0x18 = tick base.
+    int  m_hoverUnit = 0;
+    int  m_hoverStartTick = 0;
+    int  unitAtView(int vx, int vy) const;   // unidade (qualquer dono) sob o cursor, raio 20
+public:
+    void debugSetHover(int id) { m_hoverUnit = id; m_hoverStartTick = -1000; }  // só p/ --selshot
+private:
     bool m_dragging = false;       // arrastando caixa de seleção?
     int  m_dragSX = 0, m_dragSY = 0;   // início da caixa (coords nativas)
     int  m_mouseNX = 0, m_mouseNY = 0; // mouse atual (coords nativas)

@@ -519,14 +519,18 @@ void GameState::onIdle(Renderer& renderer, float dt) {
 
     // Colchete de seleção (sub_43E950): guardo o frame do corpo de cada unidade
     // selecionada durante o desenho e traço os cantos depois, por cima de tudo.
-    struct SelDeco { int id, cx, cy, anim, frame; };
+    // O hover (sem seleção, unidade sob o cursor há >10 ticks) entra em cinza.
+    struct SelDeco { int id, cx, cy, anim, frame; bool hover; };
     std::vector<SelDeco> selDeco;
     auto isSel = [&](int id) {
         for (int s : m_selected) if (s == id) return true;
         return false;
     };
+    const bool hoverOn = m_selected.empty() && m_hoverUnit > 0 &&
+                         static_cast<int>(TethysGame::tick()) - m_hoverStartTick > 0x0A;
     auto recDeco = [&](int id, int cx, int cy, int anim, int frame) {
-        if (isSel(id)) selDeco.push_back({id, cx, cy, anim, frame});
+        if (isSel(id)) selDeco.push_back({id, cx, cy, anim, frame, false});
+        else if (hoverOn && id == m_hoverUnit) selDeco.push_back({id, cx, cy, anim, frame, true});
     };
 
     // Passe de sombra (sub_49E8C0): vt[30] das unidades com 0x10000000 — a
@@ -845,14 +849,16 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         int ox, oy, w, h;
         if (!artFrameBounds(d.anim, d.frame, ox, oy, w, h)) continue;
         const int l = d.cx + ox, t = d.cy + oy, rt = l + w, bt = t + h;
-        // Colchete: 4 cantos em "L" brancos (0x7FFF), cada perna = dimensão/6
-        // (idiv 6 do original). Não é um retângulo contínuo.
-        const uint32_t WHITE = 0xFFFFFFFFu;            // edi=0x7FFF no caso comum
+        // Colchete: 4 cantos em "L", cada perna = dimensão/6 (idiv 6 do original).
+        // Não é um retângulo contínuo. Seleção = branco (0x7FFF); hover = cinza
+        // (0x4210, arg_0&1 no original, (128,128,128) em RGB888).
+        const uint32_t CLR = d.hover ? 0xFF808080u : 0xFFFFFFFFu;
+        const uint32_t WHITE = 0xFFFFFFFFu;            // moldura da barra
         const int lx = w / 6, ly = h / 6;
-        hseg(l, t, lx, WHITE);     vseg(l, t, ly, WHITE);     // superior-esquerdo
-        hseg(rt, t, -lx, WHITE);   vseg(rt, t, ly, WHITE);    // superior-direito
-        hseg(l, bt, lx, WHITE);    vseg(l, bt, -ly, WHITE);   // inferior-esquerdo
-        hseg(rt, bt, -lx, WHITE);  vseg(rt, bt, -ly, WHITE);  // inferior-direito
+        hseg(l, t, lx, CLR);     vseg(l, t, ly, CLR);     // superior-esquerdo
+        hseg(rt, t, -lx, CLR);   vseg(rt, t, ly, CLR);    // superior-direito
+        hseg(l, bt, lx, CLR);    vseg(l, bt, -ly, CLR);   // inferior-esquerdo
+        hseg(rt, bt, -lx, CLR);  vseg(rt, bt, -ly, CLR);  // inferior-direito
 
         // Barra de vida acima do colchete. maxHP por jogador (planilha), dano
         // em +0x1E; cor por faixa: >=40% verde (0x3E0), >25% amarelo (0x7FE0),
@@ -1060,6 +1066,21 @@ int GameState::screenXOf(int worldPixelX) const {
     return sx;
 }
 
+int GameState::unitAtView(int vx, int vy) const {
+    // Hit-test do hover: unidade mais próxima do cursor (qualquer dono), no mesmo
+    // raio do clique. O original testa o sprite; aqui basta a proximidade.
+    int best = 0, bestD2 = 20 * 20;
+    for (int i = 1; i < static_cast<int>(g_units.size()); ++i) {
+        const UnitRecord& r = g_units[i];
+        if (r.id == -1 || (r.flags & UNIT_DEAD)) continue;
+        if (!(r.flags & (UNIT_VEHICLE | UNIT_BUILDING))) continue;   // efeitos não
+        int ucx = screenXOf(unitOX(r)), ucy = unitOY(r) - m_camY;
+        int dx = ucx - vx, dy = ucy - vy, d2 = dx * dx + dy * dy;
+        if (d2 < bestD2) { bestD2 = d2; best = i; }
+    }
+    return best;
+}
+
 void GameState::selectAt(int nx, int ny, bool additive) {
     // Seleciona a unidade do jogador mais próxima do clique (em coords de tela,
     // então o wrap horizontal já está resolvido), dentro de um raio.
@@ -1210,6 +1231,12 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
     }
     if (e.type == SDL_MOUSEMOTION) {
         renderer.screenToNative(e.motion.x, e.motion.y, m_mouseNX, m_mouseNY);
+        // Hover: a unidade sob o cursor na vista; ao mudar, zera o relógio do
+        // realce (+0x14/+0x18 em sub_41B620).
+        const int hvx = m_mouseNX - kViewX, hvy = m_mouseNY - kViewY;
+        const int hv = (hvx >= 0 && hvx < viewportW() && hvy >= 0 && hvy < viewportH())
+                       ? unitAtView(hvx, hvy) : 0;
+        if (hv != m_hoverUnit) { m_hoverUnit = hv; m_hoverStartTick = static_cast<int>(TethysGame::tick()); }
     }
     if (e.type == SDL_MOUSEBUTTONDOWN) {
         int nx, ny; renderer.screenToNative(e.button.x, e.button.y, nx, ny);
