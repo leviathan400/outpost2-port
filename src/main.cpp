@@ -287,6 +287,39 @@ static int runScreenshot(int argc, char* argv[], const std::string& outPath) {
     return ok ? 0 : 1;
 }
 
+// --selshot <DLL> <out.bmp>: carrega a missão, seleciona o 1º veículo (ou
+// prédio), centra a câmera nele e salva um quadro — p/ ver o colchete de seleção.
+static int runSelShot(const std::string& dll, const std::string& outPath) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) { std::cerr << "SDL_Init: " << SDL_GetError() << std::endl; return 1; }
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 selshot", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    for (int i = 0; i < 3; ++i) gs.onIdle(renderer, 0.1f);
+    int pick = 0;
+    for (size_t i = 1; i < op2::g_units.size(); ++i) {
+        const op2::UnitRecord& r = op2::g_units[i];
+        if (r.id != -1 && (r.flags & op2::UNIT_VEHICLE)) { pick = (int)i; break; }
+    }
+    if (!pick) for (size_t i = 1; i < op2::g_units.size(); ++i)
+        if (op2::g_units[i].id != -1) { pick = (int)i; break; }
+    if (pick) {
+        gs.setSelection({pick});
+        gs.setCamera(op2::unitOX(op2::g_units[pick]) - 416 / 2,
+                     op2::unitOY(op2::g_units[pick]) - 416 / 2);
+    }
+    gs.onIdle(renderer, 0.0f);
+    bool ok = writeBmp32(outPath, renderer.getFramebuffer(),
+                         op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+    std::cout << "[SelShot] unidade " << pick << " -> " << (ok ? outPath : "falha") << std::endl;
+    renderer.shutdown();
+    SDL_Quit();
+    return ok ? 0 : 1;
+}
+
 // --playshot <map> <out.bmp>: carrega o jogo, roda alguns frames e salva o
 // framebuffer (terreno + unidades + HUD) para inspeção visual.
 static int runPlayShot(const std::string& mapName, const std::string& outPath, bool passOverlay) {
@@ -2684,6 +2717,8 @@ int main(int argc, char* argv[]) {
             bool pass = (i + 3 < argc && std::strcmp(argv[i + 3], "pass") == 0);
             return runPlayShot(argv[i + 1], argv[i + 2], pass);
         }
+        if (std::strcmp(argv[i], "--selshot") == 0 && i + 2 < argc)
+            return runSelShot(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--structtest") == 0 && i + 2 < argc)
             return runStructTest(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--paneshot") == 0 && i + 2 < argc)

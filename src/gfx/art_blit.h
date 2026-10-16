@@ -19,4 +19,11 @@ bool blitArtFrame(uint32_t* fb, int fbW, int fbH, int animIdx, int frameIdx,
                   int cx, int cy, int playerColor,
                   int clipX0, int clipY0, int clipX1, int clipY1);
 
+// Retângulo que o frame ocupa RELATIVO ao ponto (cx,cy) passado ao blit (i.e.,
+// já descontado o hotspot). Exclui as pictures de sombra (type&4). Equivale ao
+// que vt[0x30]/vt[0x34] do original devolvem para o colchete de seleção
+// (sub_43E950). Devolve false se o frame não tem pixels. (ox,oy) = canto
+// superior-esquerdo; (w,h) = dimensões.
+bool artFrameBounds(int animIdx, int frameIdx, int& ox, int& oy, int& w, int& h);
+
 } // namespace op2

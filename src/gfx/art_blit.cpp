@@ -54,4 +54,27 @@ bool blitArtFrame(uint32_t* fb, int fbW, int fbH, int animIdx, int frameIdx,
     return true;
 }
 
+bool artFrameBounds(int animIdx, int frameIdx, int& ox, int& oy, int& w, int& h) {
+    if (!g_art.ok() || animIdx < 0 || animIdx >= g_art.numAnimations()) return false;
+    const ArtAnimation& an = g_art.animation(animIdx);
+    if (an.frames.empty()) return false;
+    const int nf = static_cast<int>(an.frames.size());
+    if (frameIdx < 0 || frameIdx >= nf) frameIdx = ((frameIdx % nf) + nf) % nf;
+    const int hotX = static_cast<int>(an.header[5]);
+    const int hotY = static_cast<int>(an.header[6]);
+    int l = 0x7FFFFFFF, t = 0x7FFFFFFF, r = -0x7FFFFFFF, b = -0x7FFFFFFF;
+    for (const auto& p : an.frames[frameIdx].pics) {
+        const ArtImage& m = g_art.image(p.image);
+        if (m.isShadow()) continue;                 // a sombra não conta no colchete
+        const int pl = p.x - hotX, pt = p.y - hotY;
+        if (pl < l) l = pl;
+        if (pt < t) t = pt;
+        if (pl + static_cast<int>(m.width)  > r) r = pl + static_cast<int>(m.width);
+        if (pt + static_cast<int>(m.height) > b) b = pt + static_cast<int>(m.height);
+    }
+    if (l > r) return false;
+    ox = l; oy = t; w = r - l; h = b - t;
+    return true;
+}
+
 } // namespace op2

@@ -517,6 +517,18 @@ void GameState::onIdle(Renderer& renderer, float dt) {
                             0, 0, viewportW(), viewportH());
     };
 
+    // Colchete de seleção (sub_43E950): guardo o frame do corpo de cada unidade
+    // selecionada durante o desenho e traço os cantos depois, por cima de tudo.
+    struct SelDeco { int cx, cy, anim, frame; };
+    std::vector<SelDeco> selDeco;
+    auto isSel = [&](int id) {
+        for (int s : m_selected) if (s == id) return true;
+        return false;
+    };
+    auto recDeco = [&](int id, int cx, int cy, int anim, int frame) {
+        if (isSel(id)) selDeco.push_back({cx, cy, anim, frame});
+    };
+
     // Passe de sombra (sub_49E8C0): vt[30] das unidades com 0x10000000 — a
     // poeira do tornado — antes de tudo.
     for (size_t i = 1; i < g_units.size(); ++i) {
@@ -599,6 +611,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
                 if (r.type == mapCargoTruck) frame = truckFrame(r, (int)i);   // vt[8] sub_44C7B0
                 int pc = (ow >= 0 && ow < kMaxPlayers) ? g_playerData[ow].colorNumber : 0;
                 drew = drawSprite(anim, frame, ucx, ucy, pc);
+                if (drew) recDeco((int)i, ucx, ucy, anim, frame);
                 // Torre (sub_484CF0): anim da arma p/ a direção da torre [+0x2D],
                 // frame 0, no ponto de encaixe do frame atual do chassi.
                 int tAnim, tx, ty;
@@ -640,7 +653,9 @@ void GameState::onIdle(Renderer& renderer, float dt) {
             if (guardPost) anim = gpAnim;
             if (anim >= 0 && g_art.ok() && anim < g_art.numAnimations()) {
                 int pc = (ow >= 0 && ow < kMaxPlayers) ? g_playerData[ow].colorNumber : 0;
-                drew = drawSprite(anim, guardPost ? 0 : structureFrame(r), ucx, ucy, pc);
+                const int bldFrame = guardPost ? 0 : structureFrame(r);
+                drew = drawSprite(anim, bldFrame, ucx, ucy, pc);
+                if (drew) recDeco((int)i, ucx, ucy, anim, bldFrame);
                 // EMP / ESG (0x180000) no prédio (sub_408DB0): grade de 16 px no
                 // footprint; cada ponto aparece se rnd(100) > 80 (40 com lado 1),
                 // com a RNG semeada por (tick>>5) + id + [+0x18] + 0x11790718.
@@ -812,16 +827,32 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         }
     }
 
-    // Caixas de seleção ao redor das unidades selecionadas.
-    for (int id : m_selected) {
-        if (id <= 0 || id >= (int)g_units.size()) continue;
-        const UnitRecord& r = g_units[id];
-        if (r.id == -1 || (r.flags & UNIT_DEAD)) continue;
-        // Centrada na posição INTERPOLADA (casa com o sprite durante o deslize).
-        int ucx = screenXOf(unitOX(r)), ucy = unitOY(r) - m_camY;
-        if (ucx < -16 || ucx > viewportW() + 16 || ucy < -16 || ucy > viewportH() + 16)
-            continue;
-        renderer.drawRect(ucx - 15, ucy - 15, 30, 30, 0xFF40FF40);   // verde (selecionado)
+    // Colchete de seleção (sub_43E950): 4 cantos em "L" brancos (0x7FFF) ao redor
+    // do retângulo do sprite; cada perna = dimensão/6 (idiv 6 do original). Não é
+    // um retângulo contínuo. Recortado à vista.
+    for (const SelDeco& d : selDeco) {
+        int ox, oy, w, h;
+        if (!artFrameBounds(d.anim, d.frame, ox, oy, w, h)) continue;
+        const int l = d.cx + ox, t = d.cy + oy, rt = l + w, bt = t + h;
+        const int lx = w / 6, ly = h / 6;              // comprimento das pernas
+        const uint32_t c = 0xFFFFFFFFu;                // branco (edi=0x7FFF no caso comum)
+        const int vw = viewportW(), vh = viewportH();
+        uint32_t* fb = renderer.getFramebuffer();
+        auto px = [&](int x, int y) {                  // 1 px recortado à vista
+            if (x >= 0 && x < vw && y >= 0 && y < vh) fb[y * Renderer::NATIVE_WIDTH + x] = c;
+        };
+        auto hseg = [&](int x, int y, int len) {       // len negativo = p/ a esquerda
+            const int s = len < 0 ? -1 : 1;
+            for (int k = 0; k <= (len < 0 ? -len : len); ++k) px(x + k * s, y);
+        };
+        auto vseg = [&](int x, int y, int len) {
+            const int s = len < 0 ? -1 : 1;
+            for (int k = 0; k <= (len < 0 ? -len : len); ++k) px(x, y + k * s);
+        };
+        hseg(l, t, lx);       vseg(l, t, ly);          // canto superior-esquerdo
+        hseg(rt, t, -lx);     vseg(rt, t, ly);         // canto superior-direito
+        hseg(l, bt, lx);      vseg(l, bt, -ly);        // canto inferior-esquerdo
+        hseg(rt, bt, -lx);    vseg(rt, bt, -ly);       // canto inferior-direito
     }
     // Modo de posicionamento do kit (sub_451AC0 → sub_41B5B0: retângulo do
     // tamanho da área no cursor). PROVISÓRIO: contorno da área (verde) e do
