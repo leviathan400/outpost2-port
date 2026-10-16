@@ -81,6 +81,7 @@ int createOperationalTrigger(int bEnabled, int bOneShot, int player, int type, i
 // DamagedTrigger (off_4E9F70, sub_4934F0/sub_493510): o grupo tem menos que
 // `count` unidades (sub_42BE60(0x11)).
 int createDamagedTrigger(int bEnabled, int bOneShot, int groupStub, int count, const char* func);
+int createAttackedTrigger(int bEnabled, int bOneShot, int groupStub, const char* func);
 // PointTrigger (off_4E9F10, sub_492D80/sub_492DC0): unidade do jogador (−1 =
 // qualquer) sob o ponto (tiles INTERNOS; iterador sub_437840).
 int createPointTrigger(int bEnabled, int bOneShot, int player, int x, int y, const char* func);

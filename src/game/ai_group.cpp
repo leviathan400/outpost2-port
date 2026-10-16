@@ -294,6 +294,22 @@ void addAttackers(Group& g, TargetList& L, const int* rc) {
     }
 }
 
+// ScGroup::HasBeenAttacked (sub_42BDA0): algum membro foi atacado nos últimos
+// 30 ticks por uma unidade viva, sem a flag 0x20000, que não é aliada do dono.
+bool aiGroupHasBeenAttacked(int stub) {
+    const Group* g = grp(stub);
+    if (!g) return false;
+    for (const Node& n : g->nodes) {
+        const UnitRecord& m = g_units[n.unit];
+        if (!m.lastAttacker || tick() - m.lastAttackTick > 0x1E) continue;
+        const int a = m.lastAttacker;
+        if (!valid(a) || (g_units[a].flags & UNIT_DEAD)) continue;   // +4==-1 / flag 0x20000
+        if (allyOf(ownerOf(g_units[a]), g->player)) continue;
+        return true;
+    }
+    return false;
+}
+
 int distMaxMin(int x, int y, const UnitRecord& t) {
     int tx, ty;
     origPos(t, tx, ty);

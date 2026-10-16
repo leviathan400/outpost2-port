@@ -680,6 +680,10 @@ int* __fastcall TR_CreateDamagedTrigger(int* ret, int bEnabled, int bOneShot, in
     *ret = createDamagedTrigger(bEnabled, bOneShot, group ? *group : 0xFF, count, fn);
     return ret;
 }
+int* __fastcall TR_CreateAttackedTrigger(int* ret, int bEnabled, int bOneShot, int* group, const char* fn) {
+    *ret = createAttackedTrigger(bEnabled, bOneShot, group ? *group : 0xFF, fn);
+    return ret;
+}
 int* __fastcall TR_CreatePointTrigger(int* ret, int bEnabled, int bOneShot, int player, int x, int y, const char* fn) {
     *ret = createPointTrigger(bEnabled, bOneShot, player, x, y, fn);
     return ret;
@@ -976,6 +980,7 @@ const std::map<std::string, void*>& table() {
         {"?Inflate@MAP_RECT@@QAEXHH@Z", reinterpret_cast<void*>(&R_Inflate)},
         {"?ClipToMap@MAP_RECT@@QAEXXZ", reinterpret_cast<void*>(&R_ClipToMap)},
         {"?CreateDamagedTrigger@@YI?AVTrigger@@HHAAVScGroup@@HPBD@Z", reinterpret_cast<void*>(&TR_CreateDamagedTrigger)},
+        {"?CreateAttackedTrigger@@YI?AVTrigger@@HHAAVScGroup@@PBD@Z", reinterpret_cast<void*>(&TR_CreateAttackedTrigger)},
         {"?CreatePointTrigger@@YI?AVTrigger@@HHHHHPBD@Z", reinterpret_cast<void*>(&TR_CreatePointTrigger)},
         {"?CreateMidasTrigger@@YI?AVTrigger@@HHHPBD@Z", reinterpret_cast<void*>(&TR_CreateMidasTrigger)},
         {"?CreateOnePlayerLeftTrigger@@YI?AVTrigger@@HHPBD@Z", reinterpret_cast<void*>(&TR_CreateOnePlayerLeftTrigger)},

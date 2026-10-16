@@ -48,7 +48,7 @@ enum TriggerKind {
     TK_TIME, TK_RESEARCH, TK_VICTORY, TK_FAILURE,
     TK_COUNT, TK_KIT, TK_BUILDING_COUNT, TK_VEHICLE_COUNT, TK_ESCAPE, TK_SET,
     TK_RESOURCE, TK_EVAC, TK_OPERATIONAL, TK_RECT, TK_SPECIAL,
-    TK_DAMAGED, TK_POINT, TK_ONE_LEFT, TK_MIDAS,
+    TK_DAMAGED, TK_POINT, TK_ONE_LEFT, TK_MIDAS, TK_ATTACKED,
 };
 
 // _Trigger (off_4E9E50) e derivadas. Campos +0x30/+0x34 conforme a classe.
@@ -337,6 +337,14 @@ int createDamagedTrigger(int bEnabled, int bOneShot, int groupStub, int count, c
     if (fr == 0xFF) return 0xFF;
     const int id = newTrigger(TK_DAMAGED, bEnabled, bOneShot, fr, nullptr);
     if (Trigger* t = trig(id)) { t->f30 = groupStub; t->f34 = count; }   // sub_4934F0
+    return id;
+}
+
+int createAttackedTrigger(int bEnabled, int bOneShot, int groupStub, const char* func) {
+    const int fr = createFuncRef(func);
+    if (fr == 0xFF) return 0xFF;
+    const int id = newTrigger(TK_ATTACKED, bEnabled, bOneShot, fr, nullptr);
+    if (Trigger* t = trig(id)) t->f30 = groupStub;                       // sub_4932D0
     return id;
 }
 
@@ -743,6 +751,11 @@ static bool hasFired(Trigger& t) {
         case TK_DAMAGED:                                      // sub_493510
             if (!stubObject(t.f30)) return false;
             if (aiUnitCount(t.f30, 0x11) >= t.f34) return false;
+            t.playerMask = 0x3F;
+            return true;
+        case TK_ATTACKED:                                     // sub_4932E0
+            if (!stubObject(t.f30)) return false;
+            if (!aiGroupHasBeenAttacked(t.f30)) return false;
             t.playerMask = 0x3F;
             return true;
         case TK_POINT: {                                      // sub_492DC0

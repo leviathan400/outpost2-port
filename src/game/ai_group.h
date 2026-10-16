@@ -42,6 +42,7 @@ int  aiAddUnitsFromBlock(int stub, const MissionUnitRecord* recs, int n,
 void aiSetLights(int stub, int on);          // +0x2FC
 void aiSetDeleteWhenEmpty(int stub, int on); // sub_42B330
 int  aiUnitCount(int stub, int cls);         // sub_42BE60 (0x11 = total)
+bool aiGroupHasBeenAttacked(int stub);       // ScGroup::HasBeenAttacked (sub_42BDA0)
 int  aiTotalUnitCount(int stub);             // +0x2F0
 int  aiFirstOfType(int stub, int cls);       // id da 1ª unidade da classe (0 se nenhuma)
 // GetFirstOfType(Unit&, tipo, carga): 1º membro do tipo na classe de (tipo,
