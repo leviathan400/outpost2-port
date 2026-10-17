@@ -1,3 +1,4 @@
+#include "salvage.h"
 #include "commands.h"
 #include "repair.h"
 #include "../audio/sound.h"
@@ -482,6 +483,7 @@ UiClick uiCommandClick(int cmd, const std::vector<int>& sel) {
             s_hint = "Set path to initial patrol point";
             return UiClick::TARGET;
         case UC_SCATTER: sendScatter(sel); return UiClick::DONE;        // sub_4556B0 (0x15)
+        case UC_SALVAGE: return UiClick::TARGET;                        // sub_453B20 (modo região)
         case UC_DETONATE: sendDetonate(sel); return UiClick::DONE;      // sub_457E40 (0x24 no próprio tile)
         case UC_REPAIR: case UC_TAKE_OVER: case UC_DISMANTLE:          // sub_4548B0 etc. (modo 7)
             return UiClick::TARGET;
@@ -497,9 +499,10 @@ UiClick uiCommandClick(int cmd, const std::vector<int>& sel) {
 bool uiCommandIsLine(int cmd) {
     return cmd == UC_WALL || cmd == UC_LAVA_WALL || cmd == UC_MICROBE_WALL || cmd == UC_TUBE;
 }
-bool uiCommandIsArea(int cmd) { return uiCommandIsLine(cmd) || cmd == UC_BULLDOZE; }
+bool uiCommandIsArea(int cmd) { return uiCommandIsLine(cmd) || cmd == UC_BULLDOZE || cmd == UC_SALVAGE; }
 
 UiClick uiCommandArea(int cmd, const std::vector<int>& sel, int x1, int y1, int x2, int y2) {
+    if (cmd == UC_SALVAGE) { sendSalvage(sel, x1, y1, x2, y2); soundPlay(0x56); return UiClick::DONE; }
     const bool ok = cmd == UC_BULLDOZE ? sendBulldoze(sel, x1, y1, x2, y2)          // sub_453780
                                        : sendBuildWall(sel, x1, y1, x2, y2, wallTypeOf(cmd));   // sub_452660
     if (!ok) { soundPlay(0x58); return UiClick::TARGET; }   // sub_41AAA0: recusado

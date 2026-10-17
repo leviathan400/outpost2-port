@@ -105,6 +105,8 @@ static bool dozerCan(int x, int y) {
     return ct != 0x15 && ct != 0x1A;
 }
 
+using CellPred = bool (*)(const UnitRecord&, int, int);   // vt[0x90]: célula é alvo?
+
 // vt[0x90] do veículo: muro/tubo (sub_40A470) ou dozer (sub_40A300).
 static bool canWork(const UnitRecord& u, int x, int y) {
     if (y < 0 || y >= g_gameMap.height()) return false;
@@ -134,8 +136,11 @@ static int goTo(int id, int x, int y, int mode) {
 
 // sub_409DB0: percorre a área a partir de (x,y) até achar uma célula de trabalho.
 // cur != nullptr (muro): grava a célula e para ao lado; nullptr (dozer): vai em cima.
-static int nextCell(int id, int x, int y, uint8_t& code, int16_t* curX, int16_t* curY) {
+// `cellOk` = vt[0x90] da unidade (nullptr → canWork: dozer/muro; salvage passa o seu).
+static int nextCell(int id, int x, int y, uint8_t& code, int16_t* curX, int16_t* curY,
+                    CellPred cellOk = nullptr) {
     UnitRecord& u = g_units[id];
+    auto ok = [&](const UnitRecord& uu, int xx, int yy) { return cellOk ? cellOk(uu, xx, yy) : canWork(uu, xx, yy); };
     const int x1 = u.buildL, y1 = u.buildT, x2 = u.buildR, y2 = u.buildB;
     int dir = code & 6, step = 1, limit = 0;
     switch (dir) {
@@ -146,7 +151,7 @@ static int nextCell(int id, int x, int y, uint8_t& code, int16_t* curX, int16_t*
     }
     if (code & 0x80) dir = (dir + 4) & 6;
     pfSetContext(id);
-    for (int guard = 0; !canWork(u, x, y); ++guard) {
+    for (int guard = 0; !ok(u, x, y); ++guard) {
         if (guard > 0x10000) return 0;
         switch (dir) {
             case 0:
@@ -180,7 +185,7 @@ static int nextCell(int id, int x, int y, uint8_t& code, int16_t* curX, int16_t*
 }
 
 // sub_40A0A0: canto mais próximo (distância maior + menor/2) → código de percurso.
-static int startArea(int id, uint8_t& code, int16_t* curX, int16_t* curY) {
+static int startArea(int id, uint8_t& code, int16_t* curX, int16_t* curY, CellPred cellOk = nullptr) {
     const UnitRecord& u = g_units[id];
     const int ux = u.pixelX >> 5, uy = u.pixelY >> 5;
     const int halfW = g_gameMap.width() / 2;
@@ -195,7 +200,17 @@ static int startArea(int id, uint8_t& code, int16_t* curX, int16_t* curY) {
     if (dist(x2, y2) < best) { best = dist(x2, y2); code = 2; sx = x2; sy = y2; }
     if (dist(x2, y1) < best) { best = dist(x2, y1); code = 4; sx = x2; sy = y1; }
     if (dist(x1, y2) < best) { code = 0; sx = x1; sy = y2; }
-    return nextCell(id, sx, sy, code, curX, curY);
+    return nextCell(id, sx, sy, code, curX, curY, cellOk);
+}
+
+// Varredura em serpentina exposta ao salvage (sub_40A260 = next, sub_40A0A0 = start),
+// modo dozer (vai em cima da célula, curX/curY null). `pred` é o vt[0x90].
+int earthAreaScanStart(int id, uint8_t& code, CellPred pred) { return startArea(id, code, nullptr, nullptr, pred); }
+int earthAreaScanNext(int id, uint8_t& code, CellPred pred) {
+    const UnitRecord& u = g_units[id];
+    const int ux = (u.pixelX >> 5) & wmask(), uy = u.pixelY >> 5;
+    code ^= 0x40;                                            // sub_40A2E0 (como o dozer)
+    return nextCell(id, ux, uy, code, nullptr, nullptr, pred);
 }
 
 // ---- Pacotes -------------------------------------------------------------------

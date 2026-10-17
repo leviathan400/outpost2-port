@@ -4,6 +4,8 @@
 
 namespace op2 {
 
+struct UnitRecord;
+
 // Obras de terreno — porta:
 //   Earthworker (muro/tubo): comando sub_452640 (modo 4: arrastar uma reta de
 //     até 8 tiles, sub_41C410) → sub_452660 pacote 7 {retângulo, tipo} →
@@ -45,6 +47,13 @@ void wallDragConstrain(int sx, int sy, int& ex, int& ey);
 // poeira 0x619) e destrói (sub_4A25F0); tubo custa 100 de dano à máquina.
 bool sendRemoveWall(const std::vector<int>& sel, int tileX, int tileY);
 void removeWallTick(int id);     // jpt_43B312 case 8
+
+// Varredura em serpentina da área (sub_40A0A0/sub_409DB0), modo dozer (em cima),
+// reutilizada pelo SALVAGE do GORF: `pred` é o vt[0x90] (célula é um alvo?).
+// Retorna 0 (fim), 1 (andando até o alvo) ou 2 (já no alvo). O código do percurso
+// fica em `code` (como [+0x6A]/[+0x70] do original).
+int earthAreaScanStart(int id, unsigned char& code, bool (*pred)(const UnitRecord&, int, int));
+int earthAreaScanNext(int id, unsigned char& code, bool (*pred)(const UnitRecord&, int, int));
 
 void earthworkStart(int id);     // jpt_43AD56 casos 1, 7 e 8 ([+0x20] = 1)
 void wallBuildTick(int id);      // jpt_43B312 case 7

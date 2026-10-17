@@ -640,6 +640,9 @@ static bool vehicleTick(int id) {
     else if (r.field20 && (r.action == 0x0F || r.action == 0x11)) salvageActionStart(id);   // jpt_43AD56 15/17
     else if (!r.field20 && r.field22 == 0 && (r.action == 0x0F || r.action == 0x11))
         salvageActionTick(id);                                                         // casos 15/17
+    else if (r.field20 && r.action == 0x1F && !r.hasOrder) salvageRegionStart(id);                     // jpt_43AD56 case 31
+    else if (!r.field20 && r.field22 == 0 && r.action == 0x1F && !r.hasOrder)
+        salvageRegionTick(id);                                                         // SALVAGE de região
     {   // def_43B312: armado (0x10 xor 0x80), sem 0x20000/0x80000 → vt[5] da arma.
         UnitRecord& u = g_units[id];
         if ((((u.flags << 24) ^ (u.flags << 27)) & 0x80000000u) && !(u.flags & 0xA0000u))

@@ -1949,6 +1949,39 @@ static int runSalvageTest(const std::string& mapName) {
     std::printf("[Salvage] beacon pesquisado por 0: %d; surveyor em (%d,%d) msg=%s\n",
                 [&] { for (size_t k = 1; k < op2::g_units.size(); ++k) if (op2::g_units[k].id != -1 && op2::g_units[k].type == 0x51) return (int)(op2::g_units[k].surveyedMask & 1); return -1; }(), s.pixelX >> 5, s.pixelY >> 5,
                 op2::statusBarText().c_str());
+    // --- Comando SALVAGE de região (ação 0x1F): varredura + coleta + GORF ---
+    const int sx0 = bx + 12, sy0 = by + 2;                 // região de 3x3 com entulho
+    if (!types.empty())
+        for (int dy = 0; dy < 3; ++dy)
+            for (int dx = 0; dx < 3; ++dx)
+                op2::g_gameMap.setTileAndCellType(sx0 + dx, sy0 + dy, types[0].word(6), 0x16);
+    op2::Unit gorf;
+    op2::TethysGame::CreateUnit(gorf, static_cast<op2::map_id>(0x39), op2::LOCATION{sx0 + 6, sy0}, 0);
+    op2::g_units[gorf.id()].flags |= 0xE000u;              // POWERED|WORKERS|SCIENTISTS (operando)
+    op2::Unit st;
+    op2::TethysGame::CreateUnit(st, op2::mapCargoTruck, op2::LOCATION{sx0 - 2, sy0 + 1}, 0);
+    const int oreBefore = op2::g_playerData[0].ore;
+    op2::sendSalvage({st.id()}, sx0, sy0, sx0 + 3, sy0 + 3);
+    int gdx = -1, gdy = -1; const bool gdok = op2::dockCell(gorf.id(), gdx, gdy);
+    std::printf("[Salvage] REGIAO: caminhao %d acao=0x%X; GORF %d operando=%d doca ok=%d (%d,%d)\n", st.id(),
+                op2::g_units[st.id()].action, gorf.id(), op2::structureOperational(op2::g_units[gorf.id()]), gdok, gdx, gdy);
+    (void)oreBefore;
+    int delivered = 0;
+    for (int k = 0; k < 4000; ++k) {
+        op2::g_units[gorf.id()].flags |= 0xE000u;         // mantém o GORF operando (sem rede no teste)
+        const int oreNow = op2::g_playerData[0].ore;
+        op2::TethysGame::advanceTick();
+        op2::tickColony();
+        op2::tickMovement();
+        op2::tickUnits();
+        if (op2::g_playerData[0].ore > oreNow) delivered += op2::g_playerData[0].ore - oreNow;   // antes do recalc
+    }
+    int rubbleLeft = 0;
+    for (int dy = 0; dy < 3; ++dy)
+        for (int dx = 0; dx < 3; ++dx)
+            if ((op2::g_gameMap.rawCell(sx0 + dx, sy0 + dy) & 0x1F) == 0x16) ++rubbleLeft;
+    std::printf("[Salvage] REGIAO: entulho restante %d/9; minerio entregue ao GORF +%d; caminhao carga %d acao 0x%X\n",
+                rubbleLeft, delivered, op2::g_units[st.id()].cargo, op2::g_units[st.id()].action);
     renderer.shutdown(); SDL_Quit();
     return 0;
 }

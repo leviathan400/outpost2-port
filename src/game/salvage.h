@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 namespace op2 {
 
 // Destroço (WRECK_FLAG 0x54, vtable off_4CF400), entulho e beacons — o que os
@@ -24,6 +26,13 @@ void unitArrived(int id);
 // Ações 0x0F / 0x11: início (ramo [+0x20]) e tick.
 void salvageActionStart(int id);
 bool salvageActionTick(int id);      // true se tratou
+
+// SALVAGE do GORF em região (comando UC_SALVAGE, ação 0x1F). sendSalvage grava a
+// região e inicia; start/tick rodam a varredura (serpentina do earthwork), a
+// coleta e a ida/descarga ao GORF.
+void sendSalvage(const std::vector<int>& sel, int x1, int y1, int x2, int y2);
+void salvageRegionStart(int id);     // ação 0x1F, field20
+bool salvageRegionTick(int id);      // ação 0x1F, chegou
 // vt[2] do destroço; true = remover.
 bool wreckTick(int id);
 // Desenho (sub_405A50): anim crua e frame, ou false.

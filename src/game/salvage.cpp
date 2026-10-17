@@ -3,7 +3,10 @@
 #include <cstdlib>
 
 #include "building_sheet.h"
+#include "colony.h"
+#include "command.h"
 #include "docking.h"
+#include "earthwork.h"
 #include "game_map.h"
 #include "messages.h"
 #include "mining.h"
@@ -207,6 +210,119 @@ bool salvageActionTick(int id) {
         return true;
     }
     return false;
+}
+
+// ---- SALVAGE do GORF em região (comando, ação 0x1F) ----------------------------
+// vt[0x90] da varredura: a célula tem entulho (cellType 0x16) ou um destroço de
+// nave conhecido pelo dono. (sub_409DB0 para na 1ª célula aceita.)
+static bool salvageTarget(const UnitRecord& u, int x, int y) {
+    const int xx = x & tileMask();
+    if (static_cast<int>(g_gameMap.rawCell(xx, y) & 0x1F) == 0x16) return true;
+    for (int i = 1; i < static_cast<int>(g_units.size()); ++i) {
+        const UnitRecord& w = g_units[i];
+        if (w.id != -1 && w.type == 0x54 && !(w.flags & UNIT_DEAD) &&
+            tileX(w) == xx && tileY(w) == y && wreckKnownBy(w, ownerOf(u))) return true;
+    }
+    return false;
+}
+
+// Coleta o entulho/destroço no tile atual (a mesma transformação da ação 0x0F).
+static void salvageCollectHere(int id) {
+    UnitRecord& u = g_units[id];
+    const int x = tileX(u), y = tileY(u);
+    const int tile = static_cast<int>((g_gameMap.rawCell(x, y) >> 5) & 0x7FF);
+    int kind = 0, amount = 0;
+    if (rubbleTile(tile, false)) { kind = 6; amount = 0xD7; }
+    else if (rubbleTile(tile, true)) { kind = 7; amount = 0xFA; }
+    else if (const int w = wreckAtTile(u)) {
+        kind = 9; amount = g_units[w].wreckTech - 0x1F40; g_units[w].field22 = SUB_REMOVE;
+    }
+    if (!kind) return;
+    truckSetCargo(id, kind, amount, 0);
+    UnitRecord& t = g_units[id];
+    if (kind != 9) g_gameMap.setTileAndCellType(x, y, g_gameMap.bulldozedTile(tile), 0x15);
+    else if (ownerOf(t) == TethysGame::localPlayer())
+        postMessage(unitOX(t), unitOY(t), "Wreckage Loaded", 0xB0);
+}
+
+// GORF (tipo 0x39) operando do dono, mais próximo do caminhão.
+static int findGorf(int owner, const UnitRecord& u) {
+    int best = 0, bestD = 0x7FFFFFFF;
+    const int ux = tileX(u), uy = tileY(u);
+    for (int i = 1; i < static_cast<int>(g_units.size()); ++i) {
+        const UnitRecord& g = g_units[i];
+        if (g.id == -1 || g.type != 0x39 || ownerOf(g) != owner || !structureOperational(g)) continue;
+        const int dx = std::abs(tileX(g) - ux), dy = std::abs(tileY(g) - uy), d = dx + dy;
+        if (d < bestD) { bestD = d; best = i; }
+    }
+    return best;
+}
+
+// Doca do GORF (sub_405F10).
+static bool gorfDock(int gorf, int& dx, int& dy) { return gorf && dockCell(gorf, dx, dy); }
+
+// Manda o caminhão até a doca do GORF.
+static bool routeToGorf(int id, int gorf) {
+    int dx, dy;
+    if (!gorfDock(gorf, dx, dy)) return false;
+    UnitRecord& u = g_units[id];
+    u.hasOrder = true;
+    u.order = OrderBlock{};
+    u.order.count = 1;
+    u.order.waypoints.assign(1, packLocation(dx & tileMask(), dy));
+    u.order.flags |= 1;
+    u.clearRoute();
+    return true;
+}
+
+static bool nearGorf(const UnitRecord& u, int gorf) {
+    int dx, dy;
+    if (!gorfDock(gorf, dx, dy)) return false;
+    return std::abs(dx - tileX(u)) <= 1 && std::abs(dy - tileY(u)) <= 1;
+}
+
+// Pacote 0x1F (sub_40E210 case 31 → sub_4237B0): grava a região e inicia a ação.
+void sendSalvage(const std::vector<int>& sel, int x1, int y1, int x2, int y2) {
+    const int me = TethysGame::localPlayer();
+    for (int id : sel) {
+        if (!valid(id)) continue;
+        UnitRecord& u = g_units[id];
+        if (ownerOf(u) != me || u.type != mapCargoTruck || !commandable(u)) continue;
+        u.buildL = static_cast<int16_t>(x1 & tileMask()); u.buildT = static_cast<int16_t>(y1);
+        u.buildR = static_cast<int16_t>((x2 - 1) & tileMask()); u.buildB = static_cast<int16_t>(y2 - 1);
+        u.action = 0x1F; u.field20 = 1; u.field22 = 0; u.field23 = 0; u.field3C = 0;
+        break;                                               // 1 caminhão (como o original)
+    }
+}
+
+// A fase é lida pela CARGA (o movimento sobrescreve field23 na chegada): cheio →
+// volta ao GORF; vazio → varre a região atrás de entulho.
+void salvageRegionStart(int id) {                            // field20 + !hasOrder
+    UnitRecord& u = g_units[id];
+    if (u.cargo != 0) {                                      // cheio → GORF
+        const int g = findGorf(ownerOf(u), u);
+        if (g && routeToGorf(id, g)) { u.field22 = 1; u.field20 = 1; }
+        else { u.field20 = 0; u.field22 = 0; }               // sem GORF: para (segura a carga)
+        return;
+    }
+    const int r = earthAreaScanStart(id, u.dozeCode, salvageTarget);   // entulho mais próximo
+    UnitRecord& v = g_units[id];
+    if (r == 0) { v.action = 0; v.field20 = 0; v.field22 = 0; return; }   // região limpa
+    if (r == 2) { v.field20 = 0; v.field22 = 0; return; }                 // já em cima → coleta no tick
+    v.field22 = 1; v.field20 = 1;                                         // andando até o entulho
+}
+
+bool salvageRegionTick(int id) {                             // chegou (field22==0, !field20)
+    UnitRecord& u = g_units[id];
+    if (u.action != 0x1F) return false;
+    if (u.cargo != 0) {                                      // voltou ao GORF
+        const int g = findGorf(ownerOf(u), u);
+        if (g && nearGorf(u, g)) { gorfReceiveRubble(g, u.cargo & 0x0F, (u.cargo >> 4) & 0xFFF); u.cargo = 0; }  // sub_46E4E0
+    } else {
+        salvageCollectHere(id);                              // chegou num entulho → coleta
+    }
+    g_units[id].field20 = 1;                                 // re-decide no próximo tick (GORF ou varredura)
+    return true;
 }
 
 // ---- Spaceport: baia ↔ caminhão (sub_47F470, flag 0) ---------------------------
