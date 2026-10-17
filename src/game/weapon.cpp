@@ -1169,8 +1169,12 @@ void weaponAutoEngage(int id) {                               // sub_485340
     // Aproximação (loc_485507): atacando e andando, com o alvo da ordem vivo —
     // ao alcance, refaz a ordem (sem rota: para e aponta a arma).
     if (u.action == 0x24 && u.field22 == 1 && (u.orderTarget() & 0x80000000u) && alive(u.orderLo)) {
-        if (inRangeTo(u, u.orderTarget())) unitOrderAttack(id, u.action, {}, u.orderTarget(), 0, 0);
-        // (alvo que se moveu: re-rota pela posição [ordem+0x50] — pendente)
+        // Ao alcance → re-emite (para e aponta); senão, com a ordem no último
+        // waypoint (loc_485586: [ordem+8]==[ordem+4]) o alvo se moveu → re-emite
+        // p/ re-rotear pela posição ATUAL do alvo (unitOrderAttack a relê).
+        if (inRangeTo(u, u.orderTarget()) ||
+            (u.hasOrder && u.order.curWaypoint == u.order.countMinus1))
+            unitOrderAttack(id, u.action, {}, u.orderTarget(), 0, 0);
     }
 }
 
