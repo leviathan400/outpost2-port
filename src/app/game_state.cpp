@@ -2148,6 +2148,9 @@ void GameState::renderPanel(Renderer& renderer) {
     }
     else if (!m_selected.empty())
         drawUnitInfoPane(fb, VW, VH, pane, m_selected[0], static_cast<int>(m_selected.size()), me);
+    // Texto do objeto de ajuda (unk_575570): a descrição do controle sob o
+    // cursor ou, sobre o mapa, as coordenadas do tile (sub_436E50 monta "x,y").
+    std::string help;
     // Botoeira do veículo (sub_46D540): ícones verdes do op2_art (anim crua − 0x65).
     {
         const std::vector<CmdButton> btns = commandButtons();
@@ -2171,17 +2174,10 @@ void GameState::renderPanel(Renderer& renderer) {
                 renderer.fillRect(b.l, b.t, b.r - b.l, 1, kBevelLit);
             }
         }
-        // Dica (sem o '&'). PROVISÓRIO: caixa junto ao cursor — o desenho do
-        // gerenciador de dicas do original (dword_5750D8) ainda não foi portado.
-        if (hover) {
-            std::string t;
-            for (char ch : hover->tip) if (ch != '&') t += ch;
-            const int w = UiFont::width(t) + 8, h = 14;
-            int tx = std::min(m_mouseNX + 4, VW - w - 2), ty = m_mouseNY - h - 4;
-            renderer.fillRect(tx, ty, w, h, 0xFF101810);
-            renderer.drawRect(tx, ty, w, h, 0xFF40C040);
-            UiFont::draw(fb, VW, VH, t, tx + 4, ty + 2, 0xFFE0FFE0, false);
-        }
+        // A ajuda do botão sob o cursor vai para a linha de estado (sub_40AA44:
+        // o botão pede o texto ao próprio comando e o entrega a unk_575570),
+        // não para uma caixa flutuante.
+        if (hover) help = hover->tip;
     }
     // Botões de texto do prédio: arte 0x98 (87x25) / 0x97 larga (175x25), com os
     // quadros do descritor (sub_4554B0, variante de texto): 0 normal, 1 aceso e
@@ -2198,6 +2194,7 @@ void GameState::renderPanel(Renderer& renderer) {
             // Botão (sub_40AEE0): sub_403E00 com o hotspot no canto do retângulo.
             blitArtFrame(fb, VW, VH, anim, over ? 1 : 0, b.l + d, b.t + d, -1, px0, 0, VW, VH);
         }
+        if (over) help = b.tip;
         std::string t;
         for (char ch : b.label) if (ch != '&') t += ch;
         const int td = over ? 1 : 0;
@@ -2223,16 +2220,39 @@ void GameState::renderPanel(Renderer& renderer) {
             std::snprintf(num, sizeof(num), "%d", pd.rareOre);
             UiFont::draw(fb, VW, VH, num, oreX + m_frame.width(24) + 2, y2, 0xFFFFFFFF, false);
         }
-        // Texto (linha 2): coordenadas do tile sob o mouse e a última mensagem
-        // (sub_49BF10) ou a ajuda do modo de mira (unk_575570). PROVISÓRIO: a
-        // composição exata dos dois objetos de texto ainda não foi portada.
+        // Linha 1: o objeto de ajuda (unk_575570) — a descrição do controle sob o
+        // cursor ou, sobre o mapa, "x,y" (sub_436E50: x = tile − deslocamento
+        // interno + 1, y = tile + 1). sub_411BF0 guarda o texto em MAIÚSCULAS e
+        // sub_411990 o desenha em branco ([+0x9C] = 0xFFFFFF), com a letra depois
+        // do '&' em vermelho ([+0xA0] = 0xFF) e sublinhada (PatBlt de 1 px).
         int tx0 = kClientX + 2;
         const int mvx = m_mouseNX - kViewX, mvy = m_mouseNY - kViewY;
-        if (mvx >= 0 && mvx < viewportW() && mvy >= 0 && mvy < viewportH()) {
+        if (help.empty() && mvx >= 0 && mvx < viewportW() && mvy >= 0 && mvy < viewportH()) {
             int tx = (m_camX + mvx) / 32, ty = (m_camY + mvy) / 32;
             if (g_gameMap.ok()) tx &= (g_gameMap.width() - 1);
             char c[32]; std::snprintf(c, sizeof(c), "%d,%d", tx + 1, ty + 1);
-            UiFont::draw(fb, VW, VH, c, tx0, y1, 0xFFE0E0E0, false);
+            help = c;
+        }
+        if (!help.empty()) {
+            std::string up;
+            for (char ch : help) up += static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+            const size_t amp = up.find('&');
+            int hx = tx0;
+            const int lh = UiFont::lineHeight();
+            auto put = [&](const std::string& s, uint32_t c) {
+                UiFont::draw(fb, VW, VH, s, hx, y1, c, false);
+                hx += UiFont::width(s);
+            };
+            if (amp == std::string::npos || amp + 1 >= up.size()) {
+                put(up, 0xFFFFFFFFu);
+            } else {
+                put(up.substr(0, amp), 0xFFFFFFFFu);
+                const std::string acc = up.substr(amp + 1, 1);
+                const int accX = hx, accW = UiFont::width(acc);
+                put(acc, 0xFFFF0000u);
+                renderer.fillRect(accX, y1 + lh - 1, accW, 1, 0xFFFF0000u);
+                put(up.substr(amp + 2), 0xFFFFFFFFu);
+            }
         }
         const std::string& msg = (m_targetCmd >= 0 && !uiCommandHint().empty()) ? uiCommandHint() : statusBarText();
         std::string clipped = msg;
