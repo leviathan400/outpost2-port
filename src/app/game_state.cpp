@@ -332,6 +332,9 @@ void GameState::finishGameEnd() {
     gTApp.activateShell(code, &results);                     // ActivateShell(motivo, resultados)
 }
 
+// Arestas do botão aceso sem quadro próprio (sub_40AEE0: duas linhas 0x39CF).
+static constexpr uint32_t kBevelLit = 0xFF707078u;
+
 // Dialog 262 (OUT2RES.DLL, 186x94 DLU): texto + dois botões (25,57) e (102,58).
 static constexpr int kSdW = 279, kSdH = 153;
 static constexpr int kSdX = (Renderer::NATIVE_WIDTH - kSdW) / 2, kSdY = (Renderer::NATIVE_HEIGHT - kSdH) / 2;
@@ -1308,13 +1311,17 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
             }
         }
         // Botão de comando do quadro (IDLE / ACTIVATE → CommandPacket 0x12 / 0x13).
+        // O clique num botão habilitado toca o som 0x57 (sub_40A900, caso 517).
         if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit) {
             for (const TextButton& b : structureButtons())
-                if (nx >= b.l && nx < b.r && ny >= b.t && ny < b.b) { clickCommand(b.cmd); break; }
+                if (nx >= b.l && nx < b.r && ny >= b.t && ny < b.b) {
+                    if (!b.disabled) { soundPlay(0x57); clickCommand(b.cmd); }
+                    break;
+                }
         }
         if (e.button.button == SDL_BUTTON_LEFT && !inView) {
             for (const CmdButton& b : commandButtons())
-                if (nx >= b.l && nx < b.r && ny >= b.t && ny < b.b) { clickCommand(b.cmd); break; }
+                if (nx >= b.l && nx < b.r && ny >= b.t && ny < b.b) { soundPlay(0x57); clickCommand(b.cmd); break; }
         }
         if (e.button.button == SDL_BUTTON_LEFT && inView && m_targetCmd >= 0 && uiCommandIsArea(m_targetCmd)) {
             // Área (sub_41B550 modos 1/4): o arrasto começa aqui e termina ao soltar.
@@ -2147,14 +2154,22 @@ void GameState::renderPanel(Renderer& renderer) {
         const CmdButton* hover = nullptr;
         for (const CmdButton& b : btns) {
             const int anim = b.iconRaw - 0x65;
-            if (g_art.ok() && anim >= 0 && anim < g_art.numAnimations()) {
-                // Botão (sub_40AEE0): sub_403E00 com o hotspot no canto do retângulo.
-                blitArtFrame(fb, VW, VH, anim, 0, b.l, b.t, -1, px0, 0, VW, VH);
-            }
             const bool over = m_mouseNX >= b.l && m_mouseNX < b.r && m_mouseNY >= b.t && m_mouseNY < b.b;
             if (over) hover = &b;
-            if (over || b.cmd == m_targetCmd) renderer.drawRect(b.l - 1, b.t - 1, b.r - b.l + 2, b.b - b.t + 2,
-                                                               b.cmd == m_targetCmd ? 0xFFFFFF60 : 0xFFE0E0E0);
+            // Aceso (sub_40AEE0, flag 0x40): os ícones de comando não têm quadro
+            // próprio p/ isso ([+0x8A] = 0xFFFF, ver sub_4554B0), então o
+            // original desenha o MESMO quadro 1 px abaixo e à direita e pinta as
+            // arestas esquerda e superior em 0x39CF — o efeito de botão afundado.
+            const bool lit = over || b.cmd == m_targetCmd;
+            const int d = lit ? 1 : 0;
+            if (g_art.ok() && anim >= 0 && anim < g_art.numAnimations()) {
+                // Botão (sub_40AEE0): sub_403E00 com o hotspot no canto do retângulo.
+                blitArtFrame(fb, VW, VH, anim, 0, b.l + d, b.t + d, -1, px0, 0, VW, VH);
+            }
+            if (lit) {
+                renderer.fillRect(b.l, b.t, 1, b.b - b.t, kBevelLit);
+                renderer.fillRect(b.l, b.t, b.r - b.l, 1, kBevelLit);
+            }
         }
         // Dica (sem o '&'). PROVISÓRIO: caixa junto ao cursor — o desenho do
         // gerenciador de dicas do original (dword_5750D8) ainda não foi portado.
@@ -2168,20 +2183,26 @@ void GameState::renderPanel(Renderer& renderer) {
             UiFont::draw(fb, VW, VH, t, tx + 4, ty + 2, 0xFFE0FFE0, false);
         }
     }
-    // Botões de texto do prédio: arte 0x98 (87x25) / 0x97 larga (175x25), frame 0
-    // normal e 1 aceso (PROVISÓRIO: aceso com o mouse em cima; cor do texto a confirmar).
+    // Botões de texto do prédio: arte 0x98 (87x25) / 0x97 larga (175x25), com os
+    // quadros do descritor (sub_4554B0, variante de texto): 0 normal, 1 aceso e
+    // 0xFFFF p/ desabilitado — que, não existindo, o original desenha como o
+    // quadro 0 deslocado de 1 px (sub_40AEE0). O rótulo sai em 0xDDFF22 e, com a
+    // flag de desabilitado, em 0x636363 (o `and 0FFBF9C7Ah / add 636363h` do
+    // fim de sub_40AEE0); aceso, ele também desce 1 px.
     for (const TextButton& b : structureButtons()) {
-        const bool over = m_mouseNX >= b.l && m_mouseNX < b.r && m_mouseNY >= b.t && m_mouseNY < b.b;
+        const bool over = !b.disabled && m_mouseNX >= b.l && m_mouseNX < b.r &&
+                          m_mouseNY >= b.t && m_mouseNY < b.b;
         const int anim = b.wide ? 0x97 - 0x65 : 0x98 - 0x65;
+        const int d = b.disabled ? 1 : 0;
         if (g_art.ok() && anim < g_art.numAnimations()) {
             // Botão (sub_40AEE0): sub_403E00 com o hotspot no canto do retângulo.
-            blitArtFrame(fb, VW, VH, anim, over ? 1 : 0, b.l, b.t, -1, px0, 0, VW, VH);
+            blitArtFrame(fb, VW, VH, anim, over ? 1 : 0, b.l + d, b.t + d, -1, px0, 0, VW, VH);
         }
         std::string t;
         for (char ch : b.label) if (ch != '&') t += ch;
-        // Desabilitado (BUILD IT sem item pagável): texto apagado (PROVISÓRIO).
-        UiFont::drawCentered(fb, VW, VH, t, (b.l + b.r) / 2, UiFont::centeredY(b.t, b.b),
-                               b.disabled ? 0xFF603020 : over ? 0xFFFF7050 : 0xFFE04030, false);
+        const int td = over ? 1 : 0;
+        UiFont::drawCentered(fb, VW, VH, t, (b.l + b.r) / 2 + td, UiFont::centeredY(b.t, b.b) + td,
+                             b.disabled ? 0xFF636363 : 0xFFDDFF22, false);
     }
 
     // --- Barra de status sob a vista (sub_4998D0 / sub_499A30) ---
