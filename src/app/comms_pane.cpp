@@ -41,7 +41,7 @@ void CommsPane::draw(uint32_t* fb, int fbW, int fbH, int winX, int winY, const P
     if (!m_open) return;
     const ListBoxLayout L = layout(pane);
     drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.t + 2, pane.r - 0xE, L.list.t},
-                   "Communications: Messages", 0xFF00FF00u, true);     // sub_459B60
+                   "Communications: Messages", 0xFF00FF00u, true, kMarkupLine);     // sub_459B60
     // "%i: %s" (sub_439400 = tick/100, "Current Mark") — retângulo da janela do quadro.
     const std::string mark = std::to_string(TethysGame::tick() / 100) + ": Current Mark";
     drawMarkupText(fb, fbW, fbH, PaneRect{winX + 0xA, winY + 0x37, pane.r - 0xC, winY + 0x37 + 0xF},

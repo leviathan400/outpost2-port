@@ -45,7 +45,7 @@ static std::vector<std::string> objectiveLines(int width) {
 void ObjectivesPane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, int mx, int my) const {
     const ListBoxLayout L = objLayout(pane);
     drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.t + 2, pane.r - 0xE, L.list.t},
-                   "Mission Objectives (Alt+O)", 0xFF00FF00u, true);           // sub_459B60 (verde)
+                   "Mission Objectives (Alt+O)", 0xFF00FF00u, true, kMarkupLine);           // sub_459B60 (verde)
     drawListBoxFrame(fb, fbW, fbH, L);
     const std::vector<std::string> lines = objectiveLines(L.list.r - L.list.l - 8);
     const int top = std::min(m_top, std::max(0, static_cast<int>(lines.size()) - 1));

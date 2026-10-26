@@ -40,11 +40,15 @@ ListBoxLayout listBoxLayout(const PaneRect& pane, int arg8, int argC, int arg10,
     ListBoxLayout L{};
     int aw, ah; artSize(kArrowUp, aw, ah);
     L.list = PaneRect{pane.l + arg8 + 0xD, pane.t + argC + 0xD, pane.r - arg10 - 0xE, pane.b - ah - arg14 - 0x10};
+    // sub_430260: a altura do item é a da fonte ([ebx+1Ch] = tmHeight), as linhas
+    // são (altura − 3) / item (no máximo 0x40) e a BASE da lista recua para
+    // topo + linhas × item + 4 — as setas ficam embaixo dessa base recuada.
+    L.lineH = markupLineHeight();
+    L.rows = std::min(0x40, std::max(1, (L.list.b - L.list.t - 3) / L.lineH));
+    L.list.b = L.list.t + L.rows * L.lineH + 4;
     L.up = PaneRect{L.list.l - 3, L.list.b + 2, L.list.l - 3 + aw, L.list.b + 2 + ah};
     int dw, dh; artSize(kArrowDown, dw, dh);
     L.down = PaneRect{L.list.r - dw - 2, L.list.b + 2, L.list.r - 2, L.list.b + 2 + dh};
-    L.lineH = markupLineHeight();
-    L.rows = std::max(1, (L.list.b - L.list.t - 4) / L.lineH);
     return L;
 }
 
@@ -127,7 +131,7 @@ void ProducePane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, int
     const Layout L = layout(pane);
     // Título (sub_468320 → sub_459B60): nome da fábrica (vt+0x40) e a instrução.
     std::string title = unitTitle(g_units[m_factory]) + "\nSelect Item to Produce";
-    drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.t + 2, pane.r - 0xE, L.list.t}, title, 0xFF00FF00u, true);   // unk_578F08: verde
+    drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.t + 2, pane.r - 0xE, L.list.t}, title, 0xFF00FF00u, true, kMarkupLine);   // unk_578F08: verde
     // Lista (sub_430400): moldura 0x4E0, fundo, item selecionado com fundo
     // 0x1CE7 e moldura 0x3DEF; texto na fonte do painel (verde).
     auto fill = [&](int x, int y, int w, int h, uint32_t c) {

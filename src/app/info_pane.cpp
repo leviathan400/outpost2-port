@@ -35,12 +35,17 @@ static uint32_t rgb555(uint16_t c) {
     return 0xFF000000u | (r << 16) | (g << 8) | b;
 }
 
-int markupLineHeight() { return UiFont::lineHeight(); }   // sub_416A00: tmHeight
+int markupLineHeight() { return UiFont::lineHeight(); }   // sub_416A00 com arg_14 = -1: tmHeight
 
 int drawMarkupText(uint32_t* fb, int fbW, int fbH, const PaneRect& rc,
-                   const std::string& text, uint32_t defaultColor, bool bold) {
+                   const std::string& text, uint32_t defaultColor, bool bold, int lineH) {
     struct Seg { std::string s; uint32_t color; int align; };   // 0 esq, 1 centro, 2 dir
-    const int lh = markupLineHeight();
+    // sub_416A00, arg_14 = altura de linha: −1 usa tmHeight; qualquer outro valor
+    // é o passo entre as linhas, com o texto deslocado de (arg_14 − tmHeight)/2
+    // dentro da linha (var_10). Os painéis de relatório e os itens de lista
+    // passam 0Ch = 12.
+    const int lh = lineH < 0 ? markupLineHeight() : lineH;
+    const int pad = lineH < 0 ? 0 : (lineH - UiFont::lineHeight(bold)) / 2;
     int y = rc.t;
     size_t pos = 0;
     uint32_t color = defaultColor;
@@ -81,14 +86,14 @@ int drawMarkupText(uint32_t* fb, int fbW, int fbH, const PaneRect& rc,
         // colidiria com o da esquerda desce p/ a linha seguinte.
         if (wl && wr && rc.l + wl + UiFont::width(" ", bold) > rc.r - wr) {
             for (const auto& s : segs)
-                if (s.align == 0) { UiFont::draw(fb, fbW, fbH, s.s, xl, y, s.color, bold); xl += UiFont::width(s.s, bold); }
+                if (s.align == 0) { UiFont::draw(fb, fbW, fbH, s.s, xl, y + pad, s.color, bold); xl += UiFont::width(s.s, bold); }
             y += lh;
             for (auto& s : segs) if (s.align == 0) s.s.clear();
         }
         int xr = rc.r - wr, xc = (rc.l + rc.r - wc) / 2;
         for (const auto& s : segs) {
             int& x = (s.align == 0) ? xl : (s.align == 1) ? xc : xr;
-            UiFont::draw(fb, fbW, fbH, s.s, x, y, s.color, bold);
+            UiFont::draw(fb, fbW, fbH, s.s, x, y + pad, s.color, bold);
             x += UiFont::width(s.s, bold);
         }
         y += lh;
@@ -185,7 +190,7 @@ static int drawResourceSection(uint32_t* fb, int fbW, int fbH, const PaneRect& r
     if (r.type != 0x19 && r.type != 0x1A) return 0;
     char buf[128];
     std::snprintf(buf, sizeof(buf), "%s:<R>%s", "Resource", r.type == 0x19 ? "Common Metals" : "Rare Metals");
-    return drawMarkupText(fb, fbW, fbH, rc, buf, kTextGreen);
+    return drawMarkupText(fb, fbW, fbH, rc, buf, kTextGreen, false, kMarkupLine);
 }
 
 // ---- Demanda da colônia (sub_45B540) — registro do jogador LOCAL --------------
@@ -217,7 +222,7 @@ static int drawDemandSection(uint32_t* fb, int fbW, int fbH, const PaneRect& rc,
         }
         default: return 0;
     }
-    return drawMarkupText(fb, fbW, fbH, rc, buf, kTextGreen);
+    return drawMarkupText(fb, fbW, fbH, rc, buf, kTextGreen, false, kMarkupLine);
 }
 
 // ---- Rendimento da mina (sub_45B350): vt[0x104] -------------------------------
@@ -226,7 +231,7 @@ static int drawYieldSection(uint32_t* fb, int fbW, int fbH, const PaneRect& rc, 
     if (r.type != 0x15 && r.type != 0x16 && r.type != 0x2A) return 0;
     char buf[64];
     std::snprintf(buf, sizeof(buf), "%s:<R>%i", "Yield", mineLoadAmount(id));   // ("%i%" no original)
-    return drawMarkupText(fb, fbW, fbH, rc, buf, kTextGreen);
+    return drawMarkupText(fb, fbW, fbH, rc, buf, kTextGreen, false, kMarkupLine);
 }
 
 // ---- Arma do Guard Post (sub_45BBD0): melhorias do bloco do jogador LOCAL -----
@@ -236,7 +241,7 @@ static int drawWeaponSection(uint32_t* fb, int fbW, int fbH, const PaneRect& rc,
     char buf[256];
     std::snprintf(buf, sizeof(buf), "%s:<R>%s\n<L>%s\n%s", "Weapon", unitDisplayName(w),
                   improveText(blockDword(w, me, 0x3C)).c_str(), improveText(blockDword(w, me, 0x40)).c_str());
-    return drawMarkupText(fb, fbW, fbH, rc, buf, kTextGreen);
+    return drawMarkupText(fb, fbW, fbH, rc, buf, kTextGreen, false, kMarkupLine);
 }
 
 // ---- Observatório (sub_45B440): estatística +0x10C do jogador local -----------
@@ -245,7 +250,7 @@ static int drawObservatorySection(uint32_t* fb, int fbW, int fbH, const PaneRect
     const char* t = g_colony[me].stat(ST_OBSERVATORY)
         ? "Observatory Active: Targeting data available."
         : "Observatory not Active: No targeting data available.";
-    return drawMarkupText(fb, fbW, fbH, rc, wrapForPane(t, rc), kTextGreen);
+    return drawMarkupText(fb, fbW, fbH, rc, wrapForPane(t, rc), kTextGreen, false, kMarkupLine);
 }
 
 // ---- Estoque (sub_45B070) ------------------------------------------------------
@@ -271,7 +276,7 @@ static int drawStorageSection(uint32_t* fb, int fbW, int fbH, const PaneRect& rc
     char buf[128];
     if (!cap) std::snprintf(buf, sizeof(buf), "%s:<R>%i %s", "In Storage", n, unit);
     else std::snprintf(buf, sizeof(buf), "%s:<R>%i/%i %s", "In Storage", n, cap, unit);
-    return drawMarkupText(fb, fbW, fbH, rc, buf, kTextGreen);
+    return drawMarkupText(fb, fbW, fbH, rc, buf, kTextGreen, false, kMarkupLine);
 }
 
 // ---- Seção de Status (sub_45A8F0) -------------------------------------------
@@ -329,8 +334,8 @@ static int drawStatusSection(uint32_t* fb, int fbW, int fbH, const PaneRect& rc,
     char st[96];
     std::snprintf(st, sizeof(st), "<C0>%s:<R><C%d>%s", "Status", statusColor, status.c_str());
     std::string all = std::string(st) + "\n" + power + "\n" + workers + "\n" + sci;
-    drawMarkupText(fb, fbW, fbH, rc, all, kTextGreen);
-    return 4 * markupLineHeight();
+    drawMarkupText(fb, fbW, fbH, rc, all, kTextGreen, false, kMarkupLine);
+    return 4 * kMarkupLine;
 }
 
 // ---- Seção de Produção (sub_45AEB0) -----------------------------------------
@@ -347,7 +352,7 @@ static int drawProductionSection(uint32_t* fb, int fbW, int fbH, const PaneRect&
     if (r.action == 0x12 || !structureOperational(r)) level = 0;
     char buf[128];
     std::snprintf(buf, sizeof(buf), "%s:<R>%s\n<L>%s:<R>%d", "Production", what, "Production Level", level);
-    return drawMarkupText(fb, fbW, fbH, rc, buf, kTextGreen);
+    return drawMarkupText(fb, fbW, fbH, rc, buf, kTextGreen, false, kMarkupLine);
 }
 
 // ---- Plataforma do Spaceport (sub_45BE70) ------------------------------------
@@ -360,7 +365,7 @@ static int drawLaunchPadSection(uint32_t* fb, int fbW, int fbH, const PaneRect& 
     else if (pad) std::snprintf(buf, sizeof(buf), "%s:<R>%s %s", "Launch Pad", unitDisplayName(pad),
                                 r.padPayload ? "(Loaded)" : "(empty)");
     else std::snprintf(buf, sizeof(buf), "%s:<R>%s", "Launch Pad", "(empty)");
-    return drawMarkupText(fb, fbW, fbH, rc, buf, kTextGreen);
+    return drawMarkupText(fb, fbW, fbH, rc, buf, kTextGreen, false, kMarkupLine);
 }
 
 // Barra de progresso (sub_45C260): moldura 0x3DEF; feito em c1, o resto em c2.

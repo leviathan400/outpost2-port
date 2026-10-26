@@ -1,5 +1,6 @@
 #include "ui_font.h"
 
+#include <cstdio>
 #include <cstring>
 #include <vector>
 
@@ -32,6 +33,35 @@ FaceData s_face[2];
 bool s_init = false;
 
 #ifdef _WIN32
+// Altura e ascent como o GDI da época os calculava: usWinAscent/usWinDescent da
+// tabela OS/2 da própria fonte, escalados pelo corpo pedido (|lfHeight| px) e
+// arredondados para cima. O GDI de hoje devolve as medidas CONFERIDAS do
+// "hinting" (tabela VDMX) e dá, para a Arial −11, tmHeight 14/ascent 11 em vez
+// de 13/10 — e 14 quebra o layout do original: sub_416A00 soma
+// (alturaForçada − tmHeight)/2 A CADA SEGMENTO da linha, então com a altura
+// forçada 0Ch (12) dos painéis esse termo só é 0 — como o original obviamente
+// pretendia — se tmHeight for 12 ou 13. A Arial instalada ainda traz os mesmos
+// 1854/434 de 1997, então o cálculo reproduz o valor da época (13/10).
+bool metricsFromOS2(HDC dc, int px, int& height, int& ascent) {
+    auto tag = [](const char* s) {
+        return static_cast<DWORD>(static_cast<uint8_t>(s[0])) |
+               (static_cast<DWORD>(static_cast<uint8_t>(s[1])) << 8) |
+               (static_cast<DWORD>(static_cast<uint8_t>(s[2])) << 16) |
+               (static_cast<DWORD>(static_cast<uint8_t>(s[3])) << 24);
+    };
+    auto be16 = [](const uint8_t* p) { return static_cast<int>((p[0] << 8) | p[1]); };
+    uint8_t os2[96]{}, head[56]{};
+    if (GetFontData(dc, tag("OS/2"), 0, os2, sizeof(os2)) == GDI_ERROR) return false;
+    if (GetFontData(dc, tag("head"), 0, head, sizeof(head)) == GDI_ERROR) return false;
+    const int em = be16(head + 18);                  // unitsPerEm
+    const int winAsc = be16(os2 + 74), winDesc = be16(os2 + 76);
+    if (em <= 0 || winAsc <= 0) return false;
+    const auto up = [em, px](int v) { return (v * px + em - 1) / em; };
+    ascent = up(winAsc);
+    height = ascent + up(winDesc);
+    return true;
+}
+
 void buildFace(FaceData& f, int weight) {           // sub_415C00
     HDC dc = CreateCompatibleDC(nullptr);
     if (!dc) return;
@@ -49,6 +79,8 @@ void buildFace(FaceData& f, int weight) {           // sub_415C00
     GetTextMetricsA(dc, &tm);
     f.height = tm.tmHeight;                          // [+0x44]
     f.ascent = tm.tmAscent;                          // [+0x48]
+    int h = 0, a = 0;
+    if (metricsFromOS2(dc, -lf.lfHeight, h, a)) { f.height = h; f.ascent = a; }
     MAT2 mat{};
     mat.eM11.value = 1; mat.eM22.value = 1;          // identidade
     for (int c = 0x20; c < 256; ++c) {
@@ -127,6 +159,40 @@ void UiFont::draw(uint32_t* fb, int fbW, int fbH, const std::string& text, int x
         }
         x += g.adv;
     }
+}
+
+void uiFontDumpSizes() {
+#ifdef _WIN32
+    HDC dc = CreateCompatibleDC(nullptr);
+    std::printf("[FontTest] LOGPIXELSY=%d\n", GetDeviceCaps(dc, LOGPIXELSY));
+    for (int h = -8; h >= -16; --h) {
+        LOGFONTA lf{};
+        lf.lfHeight = h;
+        lf.lfWeight = FW_NORMAL;
+        lf.lfCharSet = DEFAULT_CHARSET;
+        lf.lfOutPrecision = OUT_TT_ONLY_PRECIS;
+        lf.lfPitchAndFamily = 0x52;
+        std::strcpy(lf.lfFaceName, "Arial");
+        HFONT fo = CreateFontIndirectA(&lf);
+        HGDIOBJ old = SelectObject(dc, fo);
+        TEXTMETRICA tm{};
+        GetTextMetricsA(dc, &tm);
+        SIZE sz{};
+        GetTextExtentPoint32A(dc, "Added to Storage", 16, &sz);
+        OUTLINETEXTMETRICA otm{};
+        otm.otmSize = sizeof(otm);
+        GetOutlineTextMetricsA(dc, sizeof(otm), &otm);
+        std::printf("[FontTest] lfHeight=%d tmHeight=%d asc=%d desc=%d intLead=%d | otmAsc=%d otmDesc=%d "
+                    "em=%d macAsc=%d macDesc=%d macLead=%d | \"Added to Storage\"=%d\n",
+                    h, (int)tm.tmHeight, (int)tm.tmAscent, (int)tm.tmDescent,
+                    (int)tm.tmInternalLeading, (int)otm.otmAscent, (int)otm.otmDescent,
+                    (int)otm.otmEMSquare, (int)otm.otmMacAscent, (int)otm.otmMacDescent,
+                    (int)otm.otmMacLineGap, (int)sz.cx);
+        SelectObject(dc, old);
+        DeleteObject(fo);
+    }
+    DeleteDC(dc);
+#endif
 }
 
 void UiFont::drawCentered(uint32_t* fb, int fbW, int fbH, const std::string& text, int cx, int y,

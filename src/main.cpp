@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <set>
 #include "gfx/renderer.h"
+#include "gfx/ui_font.h"
 #include "shell/shell_menu.h"
 #include "shell/scores.h"
 #include "core/config.h"
@@ -341,6 +342,27 @@ static int runScoreTest() {
     back.setInt("ColonyGameScores", "Count", before);
     back.save();
     std::printf("[ScoreTest] restaurado Count=%d\n", before);
+    return 0;
+}
+
+// --fonttest: métricas da fonte da interface (sub_415C00: tmHeight em [+0x44],
+// tmAscent em [+0x48]) e a largura de algumas cadeias do original, para conferir
+// o espaçamento das linhas dos painéis contra as posições fixas do original.
+static int runFontTest() {
+    std::printf("[FontTest] normal: altura=%d ascent=%d | negrito: altura=%d ascent=%d\n",
+                op2::UiFont::lineHeight(false), op2::UiFont::ascent(false),
+                op2::UiFont::lineHeight(true), op2::UiFont::ascent(true));
+    const char* kSamples[] = {"Added to Storage", "Food in Storage", "Mission Objectives (Alt+O)",
+                              "Display Completed Objectives", "0123456789"};
+    for (const char* s : kSamples)
+        std::printf("[FontTest] \"%s\" largura=%d (negrito %d)\n", s,
+                    op2::UiFont::width(s, false), op2::UiFont::width(s, true));
+    // A página Food desenha 8 linhas a partir do topo e "Added to Storage" em
+    // +0x6E (sub_469FD0); com a altura de linha certa as duas não se tocam.
+    const int lh = op2::UiFont::lineHeight(false);
+    std::printf("[FontTest] página Food: 8 linhas = %d, \"Added to Storage\" em %d -> %s\n",
+                8 * lh, 0x6E, 8 * lh <= 0x6E ? "OK" : "SOBREPOE");
+    op2::uiFontDumpSizes();
     return 0;
 }
 
@@ -2779,6 +2801,7 @@ int main(int argc, char* argv[]) {
             return runPlayShot(argv[i + 1], argv[i + 2], pass);
         }
         if (std::strcmp(argv[i], "--scoretest") == 0) return runScoreTest();
+        if (std::strcmp(argv[i], "--fonttest") == 0) return runFontTest();
         if (std::strcmp(argv[i], "--selshot") == 0 && i + 2 < argc)
             return runSelShot(argv[i + 1], argv[i + 2], i + 3 < argc && std::strcmp(argv[i + 3], "hover") == 0);
         if (std::strcmp(argv[i], "--structtest") == 0 && i + 2 < argc)

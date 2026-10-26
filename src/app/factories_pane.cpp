@@ -56,7 +56,7 @@ void FactoriesPane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, i
     if (!m_open) return;
     const ListBoxLayout L = layout(pane);
     drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.t + 2, pane.r - 0xE, L.list.t},
-                   "Factories Report", 0xFF00FF00u, true);             // sub_459B60
+                   "Factories Report", 0xFF00FF00u, true, kMarkupLine);             // sub_459B60
     m_list.draw(fb, fbW, fbH, L, pane, items(), mx, my);
 }
 

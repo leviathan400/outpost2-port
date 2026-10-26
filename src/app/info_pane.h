@@ -18,9 +18,14 @@ struct PaneRect { int l, t, r, b; };
 // troca a cor (n = 0..5); <N> faz o resto do texto ser literal (sem tags).
 // Retorna a altura usada.
 // bold = fonte de título (unk_578F08, Arial −11 negrito); senão unk_5772A8.
+// lineH = o arg_14 de sub_416A00: −1 usa a altura da fonte (tmHeight); os
+// painéis de relatório, as seções do quadro e os itens de lista passam
+// kMarkupLine (0x0C), o passo fixo do original.
 int drawMarkupText(uint32_t* fb, int fbW, int fbH, const PaneRect& rc,
-                   const std::string& text, uint32_t defaultColor, bool bold = false);
+                   const std::string& text, uint32_t defaultColor, bool bold = false,
+                   int lineH = -1);
 int markupLineHeight();
+constexpr int kMarkupLine = 0x0C;
 // Barra (sub_45C260): moldura 0x3DEF, parte feita em c1 e o resto em c2 (RGB555).
 void drawProgressBar(uint32_t* fb, int fbW, int fbH, int l, int t, int r, int b, int cur, int max,
                      uint16_t c1, uint16_t c2);

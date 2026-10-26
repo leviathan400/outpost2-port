@@ -55,7 +55,7 @@ void VehicleListPane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane,
     if (!m_open) return;
     const ListBoxLayout L = layout(pane);
     drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.t + 2, pane.r - 0xE, L.list.t},
-                   "Vehicle List (Alt+V)", 0xFF00FF00u, true);   // sub_459B60 (unk_578F08)
+                   "Vehicle List (Alt+V)", 0xFF00FF00u, true, kMarkupLine);   // sub_459B60 (unk_578F08)
     drawListBoxFrame(fb, fbW, fbH, L);
     auto fill = [&](int x, int y, int w, int h, uint32_t c) {
         for (int yy = std::max(0, y); yy < std::min(fbH, y + h); ++yy)
@@ -72,7 +72,7 @@ void VehicleListPane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane,
             frame(L.list.l + 2, y, L.list.r - L.list.l - 4, L.lineH, rgb555(0x3DEF));
         }
         const std::string row = std::string(unitDisplayName(t)) + "s<R>" + std::to_string(m_count[t]);   // "%ss<R>%i"
-        drawMarkupText(fb, fbW, fbH, PaneRect{L.list.l + 4, y + 1, L.list.r - 4, y + L.lineH}, row, 0xFF00FF00u);
+        drawMarkupText(fb, fbW, fbH, PaneRect{L.list.l + 4, y + 1, L.list.r - 4, y + L.lineH}, row, 0xFF00FF00u, false, kMarkupLine);
     }
     const bool canUp = m_top > 0, canDown = m_top + L.rows < static_cast<int>(m_types.size());
     drawListBoxArrows(fb, fbW, fbH, L, pane, canUp, canDown, mx, my);

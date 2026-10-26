@@ -101,7 +101,7 @@ void ReportList::draw(uint32_t* fb, int fbW, int fbH, const ListBoxLayout& L, co
             if (first) fill(x, y, w, 1, rgb555(0x3DEF));
             if (last) fill(x, y + L.lineH - 1, w, 1, rgb555(0x3DEF));
         }
-        drawMarkupText(fb, fbW, fbH, PaneRect{L.list.l + 4, y + 1, L.list.r - 4, y + L.lineH}, ln.text, 0xFF00FF00u);
+        drawMarkupText(fb, fbW, fbH, PaneRect{L.list.l + 4, y + 1, L.list.r - 4, y + L.lineH}, ln.text, 0xFF00FF00u, false, kMarkupLine);
     }
     drawListBoxArrows(fb, fbW, fbH, L, clip, t > 0, t + L.rows < n, mx, my);
 }

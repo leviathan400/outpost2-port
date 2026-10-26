@@ -29,4 +29,8 @@ public:
     static int ascent(bool bold = false);
 };
 
+// Diagnóstico (--fonttest): imprime o DPI do DC e as métricas da Arial para
+// vários lfHeight, para achar o tamanho cujas métricas são as do original.
+void uiFontDumpSizes();
+
 } // namespace op2

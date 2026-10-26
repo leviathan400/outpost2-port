@@ -67,7 +67,7 @@ void SpacePane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, int m
     const ListBoxLayout L = layout(pane);
     drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.t + 2, pane.r - 0xE, L.list.t},
                    m_mode == 0 ? "Space Program: Satellites" : "Space Program: Starship",
-                   0xFF00FF00u, true);                                 // sub_46CF40
+                   0xFF00FF00u, true, kMarkupLine);                                 // sub_46CF40
     m_list.draw(fb, fbW, fbH, L, pane, items(), mx, my);
 }
 

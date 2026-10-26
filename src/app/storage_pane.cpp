@@ -120,7 +120,7 @@ void StoragePane::draw(uint32_t* fb, int fbW, int fbH, int winL, int winT, const
     const UnitRecord& b = g_units[m_bld];
     // Título (unk_578F08, verde).
     drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.t + 1, pane.r - 0xD, pane.t + 20},
-                   unitTitle(b), 0xFF00FF00u, true);
+                   unitTitle(b), 0xFF00FF00u, true, kMarkupLine);
     const int n = resourceMode() ? 0 : bays();
     for (int i = 0; i < n; ++i) {
         const PaneRect r = bayRect(winL, winT, i);

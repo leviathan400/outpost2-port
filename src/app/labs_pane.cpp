@@ -99,7 +99,7 @@ void LabsPane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, int mx
     static const char* kTitle[3] = {"Labs: Current Research", "Labs: Completed Research", "Labs: Research Summary"};
     const ListBoxLayout L = layout(pane);
     drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.t + 2, pane.r - 0xE, L.list.t},
-                   kTitle[m_mode], 0xFF00FF00u, true);                 // sub_46BB10 → sub_459B60
+                   kTitle[m_mode], 0xFF00FF00u, true, kMarkupLine);                 // sub_46BB10 → sub_459B60
     m_list.draw(fb, fbW, fbH, L, pane, items(), mx, my);
 }
 

@@ -182,7 +182,7 @@ void ResourcesPane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, i
     const ColonyState& c = g_colony[me];
     const ListBoxLayout L = layout(pane);
     drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.t + 2, pane.r - 0xE, pane.t + 0x16},
-                   kTitle[m_mode], kGreen, true);                       // sub_469250 → sub_459B60
+                   kTitle[m_mode], kGreen, true, kMarkupLine);                       // sub_469250 → sub_459B60
     // Páginas (texto em L+0xD, conteúdo+0x14 — ou +0x28 nos metais —, R−0xE).
     PaneRect rc{pane.l + 0xD, pane.t + 0x14, pane.r - 0xE, pane.b};
     switch (m_mode) {
@@ -202,7 +202,7 @@ void ResourcesPane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, i
                 "Assigned as Workers", c.scientistsAsWorkers,
                 "Assigned to Research", c.researchAssigned,
                 "Available", c.scientistsLeft);
-            drawMarkupText(fb, fbW, fbH, rc, s, kGreen);
+            drawMarkupText(fb, fbW, fbH, rc, s, kGreen, false, kMarkupLine);
             break;
         }
         case 2: {                                           // sub_469B90
@@ -210,7 +210,7 @@ void ResourcesPane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, i
             const int lv = (pd.morale >= 0 && pd.morale <= 4) ? pd.morale : 4;
             std::string name = kLevel[lv];
             if (colonyMoraleForced(me)) name += std::string(" ") + "(Steady)";
-            drawMarkupText(fb, fbW, fbH, rc, name + "<R>" + std::to_string(c.moraleValue), kGreen);
+            drawMarkupText(fb, fbW, fbH, rc, name + "<R>" + std::to_string(c.moraleValue), kGreen, false, kMarkupLine);
             drawProgressBar(fb, fbW, fbH, rc.l, rc.t + 0xF, rc.r, rc.t + 0xF + 6, c.moraleValue, 0x63, 0x3E0, 0x1E0);
             break;
         }
@@ -225,7 +225,7 @@ void ResourcesPane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, i
                 "Power Generated", c.powerGenerated, "Power Consumed", consumed, "Unused Power", c.powerLeft,
                 "Inactive Power Capacity", c.powerIdle, "Structures Disabled/Power", c.unpoweredCount,
                 "Additional Power Needed", more);
-            drawMarkupText(fb, fbW, fbH, rc, s, kGreen);
+            drawMarkupText(fb, fbW, fbH, rc, s, kGreen, false, kMarkupLine);
             break;
         }
         case 4: {                                           // sub_469FD0
@@ -234,14 +234,14 @@ void ResourcesPane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, i
                 "Agridomes", c.stat(ST_AGRI_GRP), "Active", c.stat(ST_AGRI_GRP + 4),
                 "Disabled", c.stat(ST_AGRI_GRP + 8), "Idled", c.stat(ST_AGRI_GRP + 12),
                 "Food Produced", c.foodProduced, "Food Consumed", c.foodEaten, "Food in Storage", pd.foodStored);
-            drawMarkupText(fb, fbW, fbH, rc, s, kGreen);
+            drawMarkupText(fb, fbW, fbH, rc, s, kGreen, false, kMarkupLine);
             PaneRect r2 = rc;
             r2.t += 0x6E;
             drawMarkupText(fb, fbW, fbH, r2, c.foodNet < 0 ? fmt("<C1>%s<R>%i", "Taken from Storage", -c.foodNet)
-                                                          : fmt("%s<R>%i", "Added to Storage", c.foodNet), kGreen);
+                                                          : fmt("%s<R>%i", "Added to Storage", c.foodNet), kGreen, false, kMarkupLine);
             if (c.foodDeficit) {
                 r2.t += 0xF;
-                drawMarkupText(fb, fbW, fbH, r2, fmt("<C2>%s<R>%i", "Food Shortage", c.foodDeficit), kGreen);
+                drawMarkupText(fb, fbW, fbH, r2, fmt("<C2>%s<R>%i", "Food Shortage", c.foodDeficit), kGreen, false, kMarkupLine);
             }
             break;
         }
@@ -261,7 +261,7 @@ void ResourcesPane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, i
                 "Idled", c.stat(store + 12),
                 "Metal in Storage", rare ? pd.rareOre : pd.ore, "Storage Capacity", rare ? c.rareCapacity : c.oreCapacity);
             rc.t = pane.t + 0x28;
-            drawMarkupText(fb, fbW, fbH, rc, s, kGreen);
+            drawMarkupText(fb, fbW, fbH, rc, s, kGreen, false, kMarkupLine);
             break;
         }
         default: break;

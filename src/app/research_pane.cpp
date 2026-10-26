@@ -80,7 +80,7 @@ void ResearchPane::draw(uint32_t* fb, int fbW, int fbH, int winL, int winT, cons
     if (m_mode == 0) {
         const ListBoxLayout L = topicsLayout(pane);
         drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.t + 2, pane.r - 0xE, L.list.t},
-                       labName + "\nAvailable Topics", 0xFF00FF00u, true);
+                       labName + "\nAvailable Topics", 0xFF00FF00u, true, kMarkupLine);
         drawListBoxFrame(fb, fbW, fbH, L);
         auto rgb555 = [](uint16_t c) {
             return 0xFF000000u | (uint32_t(((c >> 10) & 31) << 3) << 16) | (uint32_t(((c >> 5) & 31) << 3) << 8) | uint32_t((c & 31) << 3);
