@@ -2100,6 +2100,10 @@ static int runPaneTest(const std::string& dll, const std::string& prefix) {
         gs.onIdle(renderer, 0.0f);
         std::snprintf(f2, sizeof(f2), "%s_options.bmp", prefix.c_str());
         writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        gs.debugGameOptions();                       // painel "Game Options"
+        gs.onIdle(renderer, 0.0f);
+        std::snprintf(f2, sizeof(f2), "%s_gameopt.bmp", prefix.c_str());
+        writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
     }
     renderer.shutdown(); SDL_Quit();
     return 0;

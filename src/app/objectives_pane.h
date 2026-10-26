@@ -13,6 +13,11 @@ namespace op2 {
 // sub_4663A0 dá "<C0>texto" (cumprido) / "<C2>texto" (pendente), sub_4653B0
 // desenha o título "Mission Objectives (Alt+O)" e sub_465830 o botão largo
 // "&GAME OPTIONS".
+// dword_57563C: mostrar também os objetivos já cumpridos (a opção "Display
+// Completed Objectives" do Game Options).
+bool objectivesShowCompleted();
+void objectivesSetShowCompleted(bool on);
+
 class ObjectivesPane {
 public:
     void draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, int mx, int my) const;

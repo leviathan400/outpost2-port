@@ -72,6 +72,7 @@ add_executable(outpost2_modern
     src/app/space_pane.cpp
     src/app/game_frame.cpp
     src/app/objectives_pane.cpp
+    src/app/game_options_pane.cpp
     src/app/storage_pane.cpp
     src/app/research_pane.cpp
     src/gfx/ui_font.cpp

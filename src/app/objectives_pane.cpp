@@ -11,6 +11,10 @@
 
 namespace op2 {
 
+static bool s_showCompleted = false;            // dword_57563C
+bool objectivesShowCompleted() { return s_showCompleted; }
+void objectivesSetShowCompleted(bool on) { s_showCompleted = on; }
+
 static ListBoxLayout objLayout(const PaneRect& pane) { return listBoxLayout(pane, 0, 0xA, 0, 0x12); }
 
 // Linhas da lista: cada objetivo pendente quebrado por palavras na largura da
@@ -19,7 +23,7 @@ static std::vector<std::string> objectiveLines(int width) {
     std::vector<std::string> out;
     for (const std::string& line : missionObjectives()) {
         const std::string tag = line.substr(0, 4), text = line.substr(4);
-        if (tag == "<C0>") continue;                     // cumprido: fora (dword_57563C == 0)
+        if (tag == "<C0>" && !objectivesShowCompleted()) continue;   // cumprido: fora se dword_57563C == 0
         std::string cur, word;
         for (size_t i = 0; i <= text.size(); ++i) {
             if (i == text.size() || text[i] == ' ') {

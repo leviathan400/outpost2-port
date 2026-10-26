@@ -21,6 +21,7 @@
 #include "research_pane.h"
 #include "game_frame.h"
 #include "save_dialog.h"
+#include "game_options_pane.h"
 
 namespace op2 {
 
@@ -135,6 +136,7 @@ private:
     int  m_hoverStartTick = 0;
     int  unitAtView(int vx, int vy) const;   // unidade (qualquer dono) sob o cursor, raio 20
 public:
+    void debugGameOptions() { m_gameOptions.open(); }   // só p/ --panetest
     void debugSetHover(int id) { m_hoverUnit = id; m_hoverStartTick = -1000; }  // só p/ --selshot
 private:
     bool m_dragging = false;       // arrastando caixa de seleção?
@@ -162,6 +164,7 @@ private:
     ProducePane m_produce;
     VehicleListPane m_vehicles;    // lista de veículos (Alt+V / &VEHICLES do Robot Command Center)
     ObjectivesPane m_objectives;   // aba 5 (unk_565AC8: Game Options / objetivos)
+    GameOptionsPane m_gameOptions; // "&GAME OPTIONS" da aba 5
     CommsPane m_comms;             // aba 3 (dword_566510: Communications)
     FactoriesPane m_factories;     // aba 0 (dword_5657C8: Factories Report)
     LabsPane m_labs;               // aba 1 (dword_568248: Labs)
@@ -196,6 +199,7 @@ private:
                m_vehicles.isOpen();
     }
     static constexpr int kCmdGameOptions = -4;
+    static constexpr int kCmdOptLess = -20, kCmdOptMore = -21, kCmdOptBack = -22;
     static constexpr int kCmdVehicles = -15, kCmdJump = -16;   // &VEHICLES (RCC) / &JUMP da lista
     static constexpr int kCmdMsgJump = -17;                    // &JUMP das mensagens (sub_466A00)
     static constexpr int kCmdDetails = -18;                    // &DETAILS dos relatórios (sub_458CC0)

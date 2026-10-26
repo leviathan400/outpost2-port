@@ -1297,8 +1297,16 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
             paneHit = m_factories.click(infoPaneRect(), nx, ny, e.button.clicks >= 2, dbl);
             if (dbl) clickCommand(kCmdDetails);
         }
-        if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_tab == 5 && m_mission)
-            paneHit = m_objectives.click(infoPaneRect(), nx, ny);
+        if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_tab == 5 && m_mission) {
+            if (m_gameOptions.isOpen()) {                // Game Options no lugar dos objetivos
+                bool changed = false, back = false;
+                paneHit = m_gameOptions.click(infoPaneRect(), nx, ny, changed, back);
+                if (changed) loadSettings();             // reaplica o [Game] alterado
+                if (back) m_gameOptions.close();
+            } else {
+                paneHit = m_objectives.click(infoPaneRect(), nx, ny);
+            }
+        }
         // Botão de comando do quadro (IDLE / ACTIVATE → CommandPacket 0x12 / 0x13).
         if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit) {
             for (const TextButton& b : structureButtons())
@@ -1525,6 +1533,28 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
         return out;
     }
     if (m_tab == 5 && m_mission) {
+        if (m_gameOptions.isOpen()) {
+            // Game Options: L&ESS/&MORE no item com valor, e "Back to &Game
+            // Options" vira o BACK que fecha o painel.
+            const int sel = m_gameOptions.selected();
+            const int top = kPaneBottom - 2 - 25;
+            if (m_gameOptions.valueItem(sel)) {
+                TextButton l{};
+                l.cmd = kCmdOptLess; l.label = "L&ESS"; l.tip = "Turn this option down (L&ess)"; l.hotkey = 'E';
+                l.l = kColX + 9; l.t = top - 27; l.r = l.l + 85; l.b = l.t + 25;
+                out.push_back(l);
+                TextButton m{};
+                m.cmd = kCmdOptMore; m.label = "&MORE"; m.tip = "Turn this option up (&More)"; m.hotkey = 'M';
+                m.l = kColX + 99; m.t = top - 27; m.r = m.l + 85; m.b = m.t + 25;
+                out.push_back(m);
+            }
+            TextButton b{};
+            b.cmd = kCmdOptBack; b.label = "&BACK"; b.tip = "Back to &Objectives"; b.hotkey = 'B';
+            b.wide = true;
+            b.l = kColX + 9; b.t = top; b.r = b.l + 175; b.b = b.t + 25;
+            out.push_back(b);
+            return out;
+        }
         // Aba de objetivos (sub_465830, modo 1): "&GAME OPTIONS" largo.
         TextButton b{};
         b.cmd = kCmdGameOptions; b.label = "&GAME OPTIONS"; b.tip = "Show &Game Options"; b.hotkey = 'G';
@@ -1859,7 +1889,13 @@ void GameState::clickCommand(int cmd) {                  // vt[1] do comando
         }
         return;
     }
-    if (cmd == kCmdGameOptions) { postMessage(-1, -1, "Game Options ainda nao portado", 0); return; }
+    if (cmd == kCmdGameOptions) { m_gameOptions.open(); return; }                  // sub_465830
+    if (cmd == kCmdOptLess || cmd == kCmdOptMore) {                                // "Turn ... down/up"
+        m_gameOptions.step(cmd == kCmdOptMore ? +1 : -1);
+        loadSettings();
+        return;
+    }
+    if (cmd == kCmdOptBack) { m_gameOptions.close(); return; }                     // "Back to ..."
     if (cmd == UC_BUILD) {                                // sub_456250 → painel de produção
         if (m_selected.size() == 1) { closePanes(); m_produce.open(m_selected[0]); }
         m_targetCmd = -1;
@@ -2073,7 +2109,9 @@ void GameState::renderPanel(Renderer& renderer) {
     m_labs.update();
     m_resources.update();
     m_space.update();
-    if (m_tab == 5 && m_mission)
+    if (m_tab == 5 && m_mission && m_gameOptions.isOpen())
+        m_gameOptions.draw(fb, VW, VH, pane, m_mouseNX, m_mouseNY);
+    else if (m_tab == 5 && m_mission)
         m_objectives.draw(fb, VW, VH, pane, m_mouseNX, m_mouseNY);
     else if (m_tab == 2 && m_resources.isOpen())
         m_resources.draw(fb, VW, VH, pane, m_mouseNX, m_mouseNY);
