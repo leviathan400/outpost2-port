@@ -22,6 +22,7 @@
 #include "game_frame.h"
 #include "save_dialog.h"
 #include "game_options_pane.h"
+#include "minimap.h"
 
 namespace op2 {
 
@@ -135,11 +136,15 @@ private:
     int  m_hoverUnit = 0;
     int  m_hoverStartTick = 0;
     int  m_capPressed = -1;        // botão da barra de título apertado (dword_4EA240)
+    MiniMap m_mini;                // escala/zoom/deslocamento do minimapa
+    int  miniButtonCount() const;  // 4 botões (3 nos mapas guardados dobrados)
     int  unitAtView(int vx, int vy) const;   // unidade (qualquer dono) sob o cursor, raio 20
 public:
     void debugGameOptions() { m_gameOptions.open(); }   // só p/ --panetest
     void debugSetHover(int id) { m_hoverUnit = id; m_hoverStartTick = -1000; }  // só p/ --selshot
     void debugArmCommand(int cmd) { m_targetCmd = cmd; }                        // só p/ --placeshot
+    void debugMiniZoom(int n) { for (int k = 0; k < n; ++k) m_mini.zoomIn(); }   // só p/ --minishot
+    int  debugMiniZoomLevel() const { return m_mini.zoom(); }
     void debugAreaDrag(int cmd) {            // só p/ --placeshot: arrasto de 3 tiles
         m_targetCmd = cmd; m_areaDrag = true;
         m_areaSX = m_camX + m_mouseNX - kViewX - 96;

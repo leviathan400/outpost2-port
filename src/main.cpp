@@ -366,6 +366,29 @@ static int runFontTest() {
     return 0;
 }
 
+// --minishot <map> <out.bmp> <zooms>: aplica N vezes o Zoom In do minimapa e
+// grava a tela — confere a escala/rolagem de sub_48E7F0/48E090/48E390.
+static int runMiniShot(const std::string& mapName, const std::string& outPath, int zooms) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 minishot", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    gs.debugMiniZoom(zooms);
+    for (int i = 0; i < 3; ++i) gs.onIdle(renderer, 0.05f);
+    const bool ok = writeBmp32(outPath, renderer.getFramebuffer(),
+                               op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+    std::printf("[MiniShot] mapa %dx%d (interna %d, desl %d) zoom=%d -> %s\n",
+                op2::g_gameMap.width(), op2::g_gameMap.height(), op2::g_gameMap.internalWidth(),
+                op2::g_gameMap.internalXOffset(), gs.debugMiniZoomLevel(), outPath.c_str());
+    renderer.shutdown();
+    SDL_Quit();
+    return ok ? 0 : 1;
+}
+
 // --placeshot <map> <out.bmp> <tipo>: ConVec com o kit do tipo, comando "Build
 // structure kit" armado e o cursor no meio da vista — mostra o tingimento dos
 // tiles do retângulo de posicionamento (sub_41BC50 / sub_451CA0).
@@ -2847,6 +2870,8 @@ int main(int argc, char* argv[]) {
         }
         if (std::strcmp(argv[i], "--scoretest") == 0) return runScoreTest();
         if (std::strcmp(argv[i], "--fonttest") == 0) return runFontTest();
+        if (std::strcmp(argv[i], "--minishot") == 0 && i + 3 < argc)
+            return runMiniShot(argv[i + 1], argv[i + 2], atoi(argv[i + 3]));
         if (std::strcmp(argv[i], "--placeshot") == 0 && i + 3 < argc)
             return runPlaceShot(argv[i + 1], argv[i + 2], (int)std::strtol(argv[i + 3], nullptr, 0),
                                 i + 4 < argc ? atoi(argv[i + 4]) : 0,

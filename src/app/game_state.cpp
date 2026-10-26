@@ -93,6 +93,7 @@ bool GameState::loadMap(const std::string& mapName) {
     m_camX = g_gameMap.clipRect().x1 * 32;
     m_camY = g_gameMap.clipRect().y1 * 32;
     clampCamera();
+    m_mini.configure(kColW, kMiniMapH);          // sub_48E7F0 com a janela 192x128
     return true;
 }
 
@@ -334,6 +335,10 @@ void GameState::finishGameEnd() {
 
 // Arestas do botão aceso sem quadro próprio (sub_40AEE0: duas linhas 0x39CF).
 static constexpr uint32_t kBevelLit = 0xFF707078u;
+
+// Arte crua dos botões do minimapa (dword_4E2E18): Zoom In, Zoom Out,
+// Toggle Tactical View, Toggle Globe View.
+static const int kMiniBtnArt[4] = {0x9D, 0x9C, 0x9E, 0x9A};
 
 // Dialog 262 (OUT2RES.DLL, 186x94 DLU): texto + dois botões (25,57) e (102,58).
 static constexpr int kSdW = 279, kSdH = 153;
@@ -1073,20 +1078,31 @@ void GameState::drawBeam(Renderer& renderer, const WeaponDrawOp& op) {
     }
 }
 
-// sub_48D860, zoom 0: ponto da janela do minimapa → pixel do mundo (tile << 5,
-// o canto do tile). Fora do mapa (ou nos botões do topo, que são janelas filhas)
-// não converte.
+// sub_48D860: ponto da janela do minimapa → pixel do mundo (tile << 5, o canto
+// do tile), invertendo a escala/deslocamento do MiniMap. Fora do mapa (ou nos
+// botões do topo, que são janelas filhas) não converte.
 bool GameState::miniToWorld(int nx, int ny, int& px, int& py) const {
     if (!g_gameMap.ok()) return false;
     const int mx = nx - kColX, my = ny - kMiniMapY;
     if (mx < 0 || mx >= kColW || my < 0 || my >= kMiniMapH) return false;
-    const int n = g_gameMap.internalXOffset() ? 3 : 4;              // botões (sub_458930)
-    if (my < 16 && mx >= kColW / 2 - 0x20 && mx < kColW / 2 - 0x20 + 16 * n) return false;
+    if (my < 16 && mx >= kColW / 2 - 0x20 && mx < kColW / 2 - 0x20 + 16 * miniButtonCount()) return false;
     const int mw = g_gameMap.width(), mh = g_gameMap.height();
-    const int tx = mx * mw / kColW, ty = my * mh / kMiniMapH;
-    px = tx << 5;
+    const int sx = m_mini.scaleX(), sy = m_mini.scaleY();
+    if (sx <= 0 || sy <= 0) return false;
+    // px = ((tile + xoff) * escala >> 16) + desl  →  tile = ((px − desl) << 16) / escala − xoff
+    const int tx = static_cast<int>(((static_cast<long long>(mx - m_mini.offX()) << 16) / sx))
+                 - g_gameMap.internalXOffset();
+    const int ty = static_cast<int>(((static_cast<long long>(my - m_mini.offY()) << 16) / sy))
+                 - m_mini.padY();
+    if (ty < 0 || ty >= mh) return false;
+    px = ((tx % mw + mw) % mw) << 5;
     py = ty << 5;
     return true;
+}
+
+// sub_458930: 4 botões, menos o do globo nos mapas guardados dobrados.
+int GameState::miniButtonCount() const {
+    return g_gameMap.ok() && g_gameMap.internalXOffset() ? 3 : 4;
 }
 
 int GameState::screenXOf(int worldPixelX) const {
@@ -1306,6 +1322,18 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
         bool inView = vx >= 0 && vx < viewportW() && vy >= 0 && vy < viewportH();
         // Painel de produção: lista e setas (sub_4683F0 / sub_4683B0 / sub_430910-60).
         bool paneHit = false;
+        // Botões do minimapa (sub_458930): Zoom In / Zoom Out; a visão tática e
+        // a do globo ainda não têm renderizador.
+        if (e.button.button == SDL_BUTTON_LEFT && !inView) {
+            const int bx0 = kColX + kColW / 2 - 0x20;
+            if (ny >= kMiniMapY && ny < kMiniMapY + 16 && nx >= bx0 &&
+                nx < bx0 + 16 * miniButtonCount()) {
+                const int k = (nx - bx0) / 16;
+                if (k == 0 && m_mini.canZoomIn()) { soundPlay(0x57); m_mini.zoomIn(); }
+                else if (k == 1 && m_mini.canZoomOut()) { soundPlay(0x57); m_mini.zoomOut(); }
+                return;
+            }
+        }
         // Minimapa (sub_4583D0 case 513): ponto válido → arrasto da vista.
         if (e.button.button == SDL_BUTTON_LEFT && !inView) {
             int px, py;
@@ -2050,12 +2078,13 @@ void GameState::renderPanel(Renderer& renderer) {
     const int mmX0 = kColX, mmY0 = kMiniMapY, mmW = kColW, mmH = kMiniMapH;
     int mw = g_gameMap.ok() ? g_gameMap.width() : 64;
     int mh = g_gameMap.ok() ? g_gameMap.height() : 64;
-    // Zoom 0 (sub_48E7F0): escalas independentes [+0]/[+4] = janela / mapa em
-    // 16.16 — o mapa estica p/ ocupar a janela inteira. PROVISÓRIO: os zooms
-    // 1+ (botões +/−) e o ajuste vertical dos mapas largos não foram portados.
-    const int mmX = mmX0, mmY = mmY0;
-    auto mapX = [&](int tx) { return mmX + tx * mmW / mw; };      // tile → pixel do minimapa
-    auto mapY = [&](int ty) { return mmY + ty * mmH / mh; };
+    // Escala e deslocamento do minimapa (MiniMap: sub_48E7F0 / sub_48E090 /
+    // sub_48E390). Zoom 0 = o mapa esticado na janela; 1..5 = px por tile, com
+    // a janela rolando atrás da vista.
+    m_mini.update(m_camX, m_camY, viewportW(), viewportH());
+    const int xoffT = g_gameMap.ok() ? g_gameMap.internalXOffset() : 0;
+    auto mapX = [&](int tx) { return mmX0 + m_mini.pxX(tx + xoffT); };   // tile → pixel do minimapa
+    auto mapY = [&](int ty) { return mmY0 + m_mini.pxY(ty); };
     renderer.fillRect(mmX0, mmY0, mmW, mmH, 0xFF000000);
     const bool shade = g_gameMap.ok() && !TethysGame::daylightEverywhere();
     // Brilho 0..31 da coluna do port (x interna = x + deslocamento).
@@ -2068,18 +2097,29 @@ void GameState::renderPanel(Renderer& renderer) {
         const int m = std::min(b + 8, 33);
         return (c5 * m) >> 5;
     };
+    // Com zoom o mapa é maior que a janela: tudo sai recortado nela.
+    auto mmFill = [&](int x, int y, int w, int h, uint32_t c) {
+        const int x0 = std::max(x, mmX0), y0 = std::max(y, mmY0);
+        const int x1 = std::min(x + w, mmX0 + mmW), y1 = std::min(y + h, mmY0 + mmH);
+        if (x1 > x0 && y1 > y0) renderer.fillRect(x0, y0, x1 - x0, y1 - y0, c);
+    };
     if (g_gameMap.ok()) {
-        for (int ty = 0; ty < mh; ++ty)
+        for (int ty = 0; ty < mh; ++ty) {
+            const int py = mapY(ty), ph = mapY(ty + 1) - py;
+            if (py + ph <= mmY0 || py >= mmY0 + mmH) continue;
             for (int tx = 0; tx < mw; ++tx) {
+                const int px = mapX(tx), pw = mapX(tx + 1) - px;
+                if (px + pw <= mmX0 || px >= mmX0 + mmW) continue;
                 uint16_t c = m_terrain.minimapColor(g_gameMap.getTile(LOCATION{tx, ty}));
                 int r5 = (c >> 10) & 31, g5 = (c >> 5) & 31, b5 = c & 31;
                 if (shade) {
                     const int b = brightness(tx);
                     r5 = shade5(r5, b); g5 = shade5(g5, b); b5 = shade5(b5, b);
                 }
-                renderer.fillRect(mapX(tx), mapY(ty), mapX(tx + 1) - mapX(tx), mapY(ty + 1) - mapY(ty),
-                                  0xFF000000u | (uint32_t(r5 << 3) << 16) | (uint32_t(g5 << 3) << 8) | uint32_t(b5 << 3));
+                mmFill(px, py, pw, ph,
+                       0xFF000000u | (uint32_t(r5 << 3) << 16) | (uint32_t(g5 << 3) << 8) | uint32_t(b5 << 3));
             }
+        }
     }
     static const uint32_t kOC[7] = { 0xFF4060FF,0xFFFF5040,0xFF40D070,0xFFFFD040,
                                      0xFFC060FF,0xFF40E0E0,0xFFFF9030 };
@@ -2096,25 +2136,32 @@ void GameState::renderPanel(Renderer& renderer) {
                 continue;
         }
         const int tx = r.pixelX >> 5, ty = r.pixelY >> 5;
-        renderer.fillRect(mapX(tx), mapY(ty), std::max(1, mapX(tx + 1) - mapX(tx)),
-                          std::max(1, mapY(ty + 1) - mapY(ty)), kOC[ow % 7]);
+        mmFill(mapX(tx), mapY(ty), std::max(1, mapX(tx + 1) - mapX(tx)),
+               std::max(1, mapY(ty + 1) - mapY(ty)), kOC[ow % 7]);
     }
     {
         const int ctx = ((m_camX / 32) % mw + mw) % mw, cty = m_camY / 32;
         const int vx = mapX(ctx), vy = mapY(cty);
-        renderer.drawRect(vx, vy, mapX(ctx + viewportW() / 32) - vx, mapY(cty + viewportH() / 32) - vy, 0xFFFFFFFF);
+        const int vw2 = mapX(ctx + viewportW() / 32) - vx, vh2 = mapY(cty + viewportH() / 32) - vy;
+        mmFill(vx, vy, vw2, 1, 0xFFFFFFFF);
+        mmFill(vx, vy + vh2 - 1, vw2, 1, 0xFFFFFFFF);
+        mmFill(vx, vy, 1, vh2, 0xFFFFFFFF);
+        mmFill(vx + vw2 - 1, vy, 1, vh2, 0xFFFFFFFF);
     }
     // Botões do minimapa (sub_458930, posição [+0x310] = 0: topo, centrados):
     // x = W/2 − 32 e +16 por botão. Arte crua {0x9D Zoom In, 0x9C Zoom Out,
     // 0x9E Toggle Tactical View, 0x9A Toggle Globe View (só sem dword_54EBF0)}.
-    // PROVISÓRIO: só o desenho (frame 0) — zoom/visões ainda não portados.
+    // Quadro 1 com o mouse em cima (flag 0x40 de sub_40AEE0; a arte tem 2
+    // quadros). PROVISÓRIO: as visões tática e do globo ainda não têm
+    // renderizador — os dois botões continuam inertes.
     if (g_art.ok()) {
-        static const int kMiniBtn[4] = {0x9D, 0x9C, 0x9E, 0x9A};
-        const int n = g_gameMap.ok() && g_gameMap.internalXOffset() ? 3 : 4;
-        for (int k = 0; k < n; ++k) {
-            const int anim = kMiniBtn[k] - 0x65;
+        for (int k = 0; k < miniButtonCount(); ++k) {
+            const int anim = kMiniBtnArt[k] - 0x65;
             if (anim >= g_art.numAnimations()) continue;
-            blitArtFrame(fb, VW, VH, anim, 0, mmX0 + mmW / 2 - 0x20 + 16 * k, mmY0, -1,
+            const int bx = mmX0 + mmW / 2 - 0x20 + 16 * k;
+            const bool over = m_mouseNX >= bx && m_mouseNX < bx + 16 &&
+                              m_mouseNY >= mmY0 && m_mouseNY < mmY0 + 16;
+            blitArtFrame(fb, VW, VH, anim, over ? 1 : 0, bx, mmY0, -1,
                          mmX0, mmY0, mmX0 + mmW, mmY0 + mmH);
         }
     }
