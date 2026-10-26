@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <algorithm>
 
 #include "building_sheet.h"
 #include "colony.h"
@@ -981,7 +982,25 @@ void unitOrderAttack(int id, int type, const std::vector<uint32_t>& wps, uint32_
 
 void processAttackPacket(int owner, int type, const std::vector<int>& ids,
                          const std::vector<uint32_t>& wps, uint32_t tgt) {   // sub_40E210 cases 36,37
-    // (mais de 4 unidades: formação sub_410210 — pendente.)
+    // Formação (sub_410210): com mais de 4 unidades, ataca-se na ordem de
+    // DISTÂNCIA ao alvo (distMaxMin = maior + menor/2, com wrap em X), as mortas
+    // por último — assim o escalonamento [+0x3C]=índice/4 põe as próximas na frente.
+    std::vector<int> order(ids);
+    if (order.size() > 4) {
+        int tpx, tpy;
+        const int16_t tLo = static_cast<int16_t>(tgt & 0xFFFF), tHi = static_cast<int16_t>(tgt >> 16);
+        if ((tgt & 0x80000000u) && tHi != 0x7FFF && tLo > 0 && tLo < static_cast<int>(g_units.size())) {
+            tpx = unitOX(g_units[tLo]); tpy = unitOY(g_units[tLo]);
+        } else { tpx = (tLo << 5) + 16; tpy = (tHi << 5) + 16; }
+        auto key = [&](int id) -> int {
+            const UnitRecord& u = g_units[id];
+            if (u.id == -1 || (u.flags & UNIT_DEAD)) return 0x7FFF;   // mortas por último
+            const int dx = wrapAbsW(tpx - unitOX(u)), dy = std::abs(unitOY(u) - tpy);
+            return dx >= dy ? dx + dy / 2 : dy + dx / 2;
+        };
+        std::stable_sort(order.begin(), order.end(), [&](int a, int b) { return key(a) < key(b); });
+    }
+    const std::vector<int>& seq = order;
     bool wallOrBld = false;                                  // var_114 → flag 0x4000000
     if (!(tgt & 0x80000000u)) {
         const int tx = static_cast<int16_t>(tgt & 0xFFFF) & tileMask(), ty = static_cast<int16_t>(tgt >> 16);
@@ -991,7 +1010,7 @@ void processAttackPacket(int owner, int type, const std::vector<int>& ids,
         wallOrBld = (g_units[static_cast<int16_t>(tgt & 0xFFFF)].flags & UNIT_BUILDING) != 0;
     }
     int idx = 0;
-    for (int id : ids) {
+    for (int id : seq) {
         UnitRecord& u = g_units[id];
         const int i = idx++;
         if ((u.owner & 0x0F) != owner) continue;
