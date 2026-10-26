@@ -844,6 +844,23 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         const int s = len < 0 ? -1 : 1;
         for (int k = 0; k <= (len < 0 ? -len : len); ++k) put(x + k * s, y, c);
     };
+    // sub_41F1C0: tinge um tile de 32x32 misturando 50% com o terreno, em 5 bits
+    // por canal (dst = (dst>>1 & 0x3DEF) + (cor>>1 & 0x3DEF)).
+    auto tintTile = [&](int px, int py, unsigned short c) {
+        const int r5 = (c >> 10) & 31, g5 = (c >> 5) & 31, b5 = c & 31;
+        for (int yy = py; yy < py + 32; ++yy) {
+            if (yy < 0 || yy >= vh) continue;
+            for (int xx = px; xx < px + 32; ++xx) {
+                if (xx < 0 || xx >= vw) continue;
+                uint32_t& d = fb[yy * Renderer::NATIVE_WIDTH + xx];
+                const int dr = ((d >> 19) & 31) >> 1, dg = ((d >> 11) & 31) >> 1,
+                          db = ((d >> 3) & 31) >> 1;
+                d = 0xFF000000u | (static_cast<uint32_t>((dr + (r5 >> 1)) << 3) << 16) |
+                    (static_cast<uint32_t>((dg + (g5 >> 1)) << 3) << 8) |
+                    static_cast<uint32_t>((db + (b5 >> 1)) << 3);
+            }
+        }
+    };
     auto vseg = [&](int x, int y, int len, uint32_t c) {
         const int s = len < 0 ? -1 : 1;
         for (int k = 0; k <= (len < 0 ? -len : len); ++k) put(x, y + k * s, c);
@@ -893,29 +910,42 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         }
     }
     // Modo de posicionamento do kit (sub_451AC0 → sub_41B5B0: retângulo do
-    // tamanho da área no cursor). PROVISÓRIO: contorno da área (verde) e do
-    // anel de terraplanagem (cinza); o cursor real do original não foi portado.
+    // tamanho da área no cursor). sub_41BC50 pergunta a cor de cada tile ao
+    // comando (vt+0x14) e TINGE o tile inteiro com ela, misturando 50% com o
+    // terreno (sub_41F1C0: dst = (dst>>1 & 0x3DEF) + (cor>>1 & 0x3DEF)).
     if ((m_targetCmd == UC_BUILD_KIT || m_targetCmd == UC_BUILD_MINE) && !m_selected.empty()) {
         int w = 0, h = 0;
         const int mvx = m_mouseNX - kViewX, mvy = m_mouseNY - kViewY;
-        if (m_targetCmd == UC_BUILD_MINE) mineFootprint(w, h);      // sub_451FC0: off_4E1394
+        const bool mineCmd = m_targetCmd == UC_BUILD_MINE;
+        if (mineCmd) mineFootprint(w, h);                           // sub_451FC0: off_4E1394
         else kitFootprint(m_selected[0], w, h);
         if (w && mvx >= 0 && mvx < viewportW() && mvy >= 0 && mvy < viewportH()) {
             int tx = (m_camX + mvx) / 32, ty = (m_camY + mvy) / 32, l, t, r, b;
             if (g_gameMap.ok()) tx &= (g_gameMap.width() - 1);
             kitPlacementRect(w, h, tx, ty, l, t, r, b);
-            const int sx = screenXOf((l + 1) * 32), sy = (t + 1) * 32 - m_camY;
-            renderer.drawRect(sx - 32, sy - 32, (w + 2) * 32, (h + 2) * 32, 0xFF909090);
-            renderer.drawRect(sx, sy, w * 32, h * 32, 0xFF40FF40);
+            const std::vector<unsigned short> col =
+                placementTileColors(m_selected[0], mineCmd, l, t, w, h);
+            for (int j = 0; j < h + 2; ++j)
+                for (int i = 0; i < w + 2; ++i)
+                    tintTile(screenXOf(((l + i) & (g_gameMap.ok() ? g_gameMap.width() - 1 : 0x7FFFFFFF)) * 32),
+                             (t + j) * 32 - m_camY, col[static_cast<size_t>(j) * (w + 2) + i]);
         }
     }
     // Área em arrasto (muro/tubo: reta de até 8 tiles; terraplanar: retângulo).
-    // PROVISÓRIO: contorno; o cursor/realce do original não foi portado.
+    // sub_41BDC0: cada tile é tingido conforme o vt+0x10 do comando — 0x7FD0 se
+    // aceita, 0x7C00 se não — e a área inteira ganha um contorno 0x3F (azul),
+    // que é o sub_41C080 do fim da rotina.
     if (m_areaDrag && m_targetCmd >= 0) {
         int x1, y1, x2, y2;
         areaRect(m_camX + m_mouseNX - kViewX, m_camY + m_mouseNY - kViewY, x1, y1, x2, y2);
+        const int wm = g_gameMap.ok() ? g_gameMap.width() - 1 : 0x7FFFFFFF;
+        int xe = x2 - 1; if (xe < x1) xe += g_gameMap.ok() ? g_gameMap.width() : 0;
+        for (int x = x1; x <= xe; ++x)
+            for (int y = y1; y <= y2 - 1; ++y)
+                tintTile(screenXOf((x & wm) * 32), y * 32 - m_camY,
+                         uiCommandCellOk(m_targetCmd, m_selected, x & wm, y) ? 0x7FD0 : 0x7C00);
         const int sx = screenXOf(x1 * 32), sy = y1 * 32 - m_camY;
-        renderer.drawRect(sx, sy, (x2 - x1) * 32, (y2 - y1) * 32, 0xFF40FF40);
+        renderer.drawRect(sx, sy, (x2 - x1) * 32, (y2 - y1) * 32, 0xFF0008F8);   // 0x3F
     }
     // Caixa de arrasto (multi-seleção).
     if (m_dragging) {

@@ -31,6 +31,9 @@ bool salvageActionTick(int id);      // true se tratou
 // região e inicia; start/tick rodam a varredura (serpentina do earthwork), a
 // coleta e a ida/descarga ao GORF.
 void sendSalvage(const std::vector<int>& sel, int x1, int y1, int x2, int y2);
+// vt[0x90] da varredura (e o vt+0x10 do comando): a célula tem entulho ou um
+// destroço conhecido pelo dono da unidade.
+bool salvageCellOk(int unitId, int x, int y);
 void salvageRegionStart(int id);     // ação 0x1F, field20
 bool salvageRegionTick(int id);      // ação 0x1F, chegou
 // vt[2] do destroço; true = remover.

@@ -226,6 +226,11 @@ static bool salvageTarget(const UnitRecord& u, int x, int y) {
     return false;
 }
 
+bool salvageCellOk(int unitId, int x, int y) {
+    if (unitId <= 0 || unitId >= static_cast<int>(g_units.size())) return false;
+    return salvageTarget(g_units[unitId], x, y);
+}
+
 // Coleta o entulho/destroço no tile atual (a mesma transformação da ação 0x0F).
 static void salvageCollectHere(int id) {
     UnitRecord& u = g_units[id];

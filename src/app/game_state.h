@@ -139,6 +139,12 @@ private:
 public:
     void debugGameOptions() { m_gameOptions.open(); }   // só p/ --panetest
     void debugSetHover(int id) { m_hoverUnit = id; m_hoverStartTick = -1000; }  // só p/ --selshot
+    void debugArmCommand(int cmd) { m_targetCmd = cmd; }                        // só p/ --placeshot
+    void debugAreaDrag(int cmd) {            // só p/ --placeshot: arrasto de 3 tiles
+        m_targetCmd = cmd; m_areaDrag = true;
+        m_areaSX = m_camX + m_mouseNX - kViewX - 96;
+        m_areaSY = m_camY + m_mouseNY - kViewY - 96;
+    }
 private:
     bool m_dragging = false;       // arrastando caixa de seleção?
     int  m_dragSX = 0, m_dragSY = 0;   // início da caixa (coords nativas)

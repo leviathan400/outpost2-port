@@ -65,6 +65,9 @@ bool uiCommandIsArea(int cmd);
 bool uiCommandIsLine(int cmd);
 // Fim do arrasto: retângulo em tiles com x2/y2 exclusivos. TARGET = recusado (0x58).
 UiClick uiCommandArea(int cmd, const std::vector<int>& sel, int x1, int y1, int x2, int y2);
+// vt+0x10 do comando (o "ponto" que sub_41BDC0 consulta p/ tingir cada tile da
+// área arrastada): a célula aceita o comando?
+bool uiCommandCellOk(int cmd, const std::vector<int>& sel, int x, int y);
 // Texto de ajuda do modo de mira (sub_411BF0 em unk_575570), ex. "Set path to
 // initial patrol point"; vazio se o comando não tem.
 const std::string& uiCommandHint();

@@ -12,6 +12,7 @@
 #include "construction.h"
 #include "mining.h"
 #include "earthwork.h"
+#include "pathfinder.h"
 #include "docking.h"
 #include "command.h"
 #include "game_map.h"
@@ -507,6 +508,15 @@ UiClick uiCommandArea(int cmd, const std::vector<int>& sel, int x1, int y1, int 
                                        : sendBuildWall(sel, x1, y1, x2, y2, wallTypeOf(cmd));   // sub_452660
     if (!ok) { soundPlay(0x58); return UiClick::TARGET; }   // sub_41AAA0: recusado
     return UiClick::DONE;
+}
+
+bool uiCommandCellOk(int cmd, const std::vector<int>& sel, int x, int y) {
+    if (!sel.empty() && sel[0] > 0 && sel[0] < static_cast<int>(g_units.size())) pfSetContext(sel[0]);
+    switch (cmd) {
+        case UC_BULLDOZE: return dozeCellOk(x, y);                     // sub_438E50
+        case UC_SALVAGE:  return salvageCellOk(sel.empty() ? 0 : sel[0], x, y);
+        default:          return wallCellOk(x, y, wallTypeOf(cmd));    // sub_438C60
+    }
 }
 
 static int s_curPX = 0, s_curPY = 0;

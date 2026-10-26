@@ -366,6 +366,47 @@ static int runFontTest() {
     return 0;
 }
 
+// --placeshot <map> <out.bmp> <tipo>: ConVec com o kit do tipo, comando "Build
+// structure kit" armado e o cursor no meio da vista — mostra o tingimento dos
+// tiles do retângulo de posicionamento (sub_41BC50 / sub_451CA0).
+static int runPlaceShot(const std::string& mapName, const std::string& outPath, int type,
+                        int dx, int dy) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 placeshot", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    int cc = -1;
+    for (int i = 1; i < (int)op2::g_units.size(); ++i)
+        if (op2::g_units[i].id != -1 && op2::g_units[i].type == op2::mapCommandCenter) { cc = i; break; }
+    if (cc < 0) { renderer.shutdown(); SDL_Quit(); return 3; }
+    op2::Unit u;
+    const op2::LOCATION l{(op2::g_units[cc].pixelX >> 5) + 4, (op2::g_units[cc].pixelY >> 5) + 4};
+    if (!op2::TethysGame::CreateUnit(u, op2::mapConVec, l, op2::g_units[cc].owner & 0x0F,
+                                     type < 0 ? 0x24 : type))
+        { renderer.shutdown(); SDL_Quit(); return 4; }
+    gs.setSelection({u.id()});
+    gs.setMouse(op2::GameState::kViewX + op2::GameState::kViewW / 2 + dx,
+                op2::GameState::kViewY + op2::GameState::kViewH / 2 + dy);
+    // tipo < 0: em vez do kit, arrasta a área do comando −tipo (muro, terraplanar…)
+    // a partir de 3 tiles acima e à esquerda do cursor.
+    if (type < 0) {
+        gs.debugAreaDrag(-type);
+    } else {
+        gs.debugArmCommand(op2::UC_BUILD_KIT);
+    }
+    for (int i = 0; i < 5; ++i) gs.onIdle(renderer, 0.05f);
+    const bool ok = writeBmp32(outPath, renderer.getFramebuffer(),
+                               op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+    std::printf("[PlaceShot] kit 0x%02X -> %s\n", type, outPath.c_str());
+    renderer.shutdown();
+    SDL_Quit();
+    return ok ? 0 : 1;
+}
+
 // --playshot <map> <out.bmp>: carrega o jogo, roda alguns frames e salva o
 // framebuffer (terreno + unidades + HUD) para inspeção visual.
 static int runPlayShot(const std::string& mapName, const std::string& outPath, bool passOverlay) {
@@ -2802,6 +2843,10 @@ int main(int argc, char* argv[]) {
         }
         if (std::strcmp(argv[i], "--scoretest") == 0) return runScoreTest();
         if (std::strcmp(argv[i], "--fonttest") == 0) return runFontTest();
+        if (std::strcmp(argv[i], "--placeshot") == 0 && i + 3 < argc)
+            return runPlaceShot(argv[i + 1], argv[i + 2], (int)std::strtol(argv[i + 3], nullptr, 0),
+                                i + 4 < argc ? atoi(argv[i + 4]) : 0,
+                                i + 5 < argc ? atoi(argv[i + 5]) : 0);
         if (std::strcmp(argv[i], "--selshot") == 0 && i + 2 < argc)
             return runSelShot(argv[i + 1], argv[i + 2], i + 3 < argc && std::strcmp(argv[i + 3], "hover") == 0);
         if (std::strcmp(argv[i], "--structtest") == 0 && i + 2 < argc)

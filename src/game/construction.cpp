@@ -160,6 +160,54 @@ static bool cellOkRing(int self, int moveClass, int x, int y) {
     return !isDockOfBuilding(x, y);
 }
 
+// sub_451CA0 (kit) / sub_452110 (mina): a cor de cada tile do retângulo de
+// posicionamento. Interior (fora da borda do retângulo): 0x7FD0 se a célula
+// aceita a obra (sub_4389E0), senão 0x7C00; borda (o anel de terraplanagem):
+// 0x210 se aceita (sub_438B80), senão 0x7C00. Nas estruturas com a flag 1 em
+// +0x24C, o tile da doca — na linha de baixo, na coluna w/2 + 1 — sai em
+// 0x6317. Na mina, sem uma jazida do tipo certo dentro do retângulo, tudo
+// vermelho (var_10 = 0 em sub_452110).
+std::vector<unsigned short> placementTileColors(int self, bool mineCmd, int l, int t, int w, int h) {
+    std::vector<unsigned short> out(static_cast<size_t>(w + 2) * (h + 2), 0x7C00);
+    if (!valid(self)) return out;
+    const UnitRecord& u = g_units[self];
+    pfSetContext(self);                                   // sub_438180 / sub_438260
+    const int mc = u.moveClass;
+    const StructSheetDesc* d = mineCmd ? nullptr : structSheet(static_cast<int16_t>(u.cargo));
+    bool site = true;
+    if (mineCmd) {
+        // A jazida tem de estar DENTRO do retângulo: beacon/respiradouro (0x51 /
+        // 0x52) p/ o Robo-Miner (tipo 9) e fumarola (0x53) p/ a GeoCon.
+        site = false;
+        for (size_t k = 1; k < g_units.size() && !site; ++k) {
+            const UnitRecord& s = g_units[k];
+            if (s.id == -1) continue;
+            const bool want = (u.type == 9) ? (s.type == 0x51 || s.type == 0x52) : (s.type == 0x53);
+            if (!want) continue;
+            const int sx = (unitOX(s) >> 5) & wmask(), sy = unitOY(s) >> 5;
+            if (sy <= t || sy >= t + h + 1) continue;     // sem as bordas
+            const int dx = (sx - l) & wmask();
+            site = dx > 0 && dx < w + 1;
+        }
+    }
+    if (!site) return out;
+    for (int j = 0; j < h + 2; ++j)
+        for (int i = 0; i < w + 2; ++i) {
+            const int x = (l + i) & wmask(), y = t + j;
+            unsigned short c;
+            if (i > 0 && i < w + 1 && j > 0 && j < h + 1) {
+                c = cellOkInterior(self, x, y) ? 0x7FD0 : 0x7C00;
+            } else if (!cellOkRing(self, mc, x, y)) {
+                c = 0x7C00;
+            } else {
+                c = 0x210;
+                if (d && (d->flags24C & 1) && j == h + 1 && i == w / 2 + 1) c = 0x6317;
+            }
+            out[static_cast<size_t>(j) * (w + 2) + i] = c;
+        }
+    return out;
+}
+
 // sub_44C410: gira [+0x1C] rumo ao alvo (no máximo Turn Rate por tick); 1 = virado.
 static bool turnTo(UnitRecord& u, uint8_t target) {
     const int8_t delta = static_cast<int8_t>(target - u.rotation);
