@@ -1955,12 +1955,16 @@ static int runSalvageTest(const std::string& mapName) {
     const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
     for (int y = 0; y < H; ++y)
         for (int x = 0; x < W; ++x) op2::g_gameMap.clearUnitOccupancy(x, y);
+    // A área precisa caber TUDO: as docas/veículos da 1ª parte (dx −2..10) e,
+    // na parte da região, o entulho em bx+12..bx+14 e o GORF em bx+18 com a sua
+    // doca — num terreno impassável o caminhão cheio não chega ao GORF e fica
+    // parado (o motor, como o original, apenas para quando não há rota).
     int bx = -1, by = -1;
-    for (int y = 4; y < H - 10 && bx < 0; ++y)
-        for (int x = 4; x < W - 12 && bx < 0; ++x) {
+    for (int y = 4; y < H - 12 && bx < 0; ++y)
+        for (int x = 4; x < W - 24 && bx < 0; ++x) {
             bool ok = true;
-            for (int dy = -1; dy <= 8 && ok; ++dy)
-                for (int dx = -2; dx <= 10 && ok; ++dx)
+            for (int dy = -1; dy <= 9 && ok; ++dy)
+                for (int dx = -2; dx <= 21 && ok; ++dx)
                     if (!op2::g_gameMap.isPassable(op2::LOCATION{x + dx, y + dy})) ok = false;
             if (ok) { bx = x; by = y; }
         }
