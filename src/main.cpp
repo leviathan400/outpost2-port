@@ -9,6 +9,7 @@
 #include <set>
 #include "gfx/renderer.h"
 #include "shell/shell_menu.h"
+#include "shell/scores.h"
 #include "core/config.h"
 #include "res/res_manager.h"
 #include "game/game_map.h"
@@ -263,6 +264,8 @@ static int runScreenshot(int argc, char* argv[], const std::string& outPath) {
         else if (a == "--prefs") shellMenu.showPreferences();
         else if (a == "--colony") shellMenu.showColonyGames();
         else if (a == "--about") shellMenu.showAbout();
+        else if (a == "--scores") shellMenu.showScores();
+        else if (a == "--ename") shellMenu.showEnterName("Colony: Eden Starship");
         else if ((a == "--cmenu" || a == "--cbrief" || a == "--cobj" || a == "--cchap" || a == "--cstory") &&
                  i + 1 < argc) {
             bool eden = true;
@@ -318,6 +321,27 @@ static int runSelShot(const std::string& dll, const std::string& outPath, bool h
     renderer.shutdown();
     SDL_Quit();
     return ok ? 0 : 1;
+}
+
+// --scoretest: grava uma entrada no placar [ColonyGameScores], relê e restaura
+// o Count original (valida o formato do OP2Shell.dll).
+static int runScoreTest() {
+    op2::Config cfg("OUTPOST2.INI");
+    cfg.load();
+    const int before = cfg.getInt("ColonyGameScores", "Count", 0);
+    op2::ScoreEntry e;
+    e.game = "Colony: Eden Starship"; e.difficulty = op2::scoreDifficultyName(8);
+    e.time = 4269; e.name = "COMMANDER"; e.date = op2::scoreToday();
+    op2::scoresAdd(e);
+    const std::vector<op2::ScoreEntry> all = op2::scoresLoad();
+    std::printf("[ScoreTest] Count %d -> %d\n", before, (int)all.size());
+    if (!all.empty()) std::printf("[ScoreTest] linha: %s\n", op2::scoreLine(all.back()).c_str());
+    op2::Config back("OUTPOST2.INI");                 // restaura o Count original
+    back.load();
+    back.setInt("ColonyGameScores", "Count", before);
+    back.save();
+    std::printf("[ScoreTest] restaurado Count=%d\n", before);
+    return 0;
 }
 
 // --playshot <map> <out.bmp>: carrega o jogo, roda alguns frames e salva o
@@ -2750,6 +2774,7 @@ int main(int argc, char* argv[]) {
             bool pass = (i + 3 < argc && std::strcmp(argv[i + 3], "pass") == 0);
             return runPlayShot(argv[i + 1], argv[i + 2], pass);
         }
+        if (std::strcmp(argv[i], "--scoretest") == 0) return runScoreTest();
         if (std::strcmp(argv[i], "--selshot") == 0 && i + 2 < argc)
             return runSelShot(argv[i + 1], argv[i + 2], i + 3 < argc && std::strcmp(argv[i + 3], "hover") == 0);
         if (std::strcmp(argv[i], "--structtest") == 0 && i + 2 < argc)

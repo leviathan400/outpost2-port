@@ -25,6 +25,7 @@ add_executable(outpost2_modern
     src/main.cpp
     src/shell/shell_menu.cpp
     src/shell/rtf_text.cpp
+    src/shell/scores.cpp
     src/gfx/renderer.cpp
     src/gfx/bitmap.cpp
     src/gfx/font.cpp

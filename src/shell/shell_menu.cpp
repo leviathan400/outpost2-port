@@ -1,7 +1,11 @@
 #include "shell_menu.h"
 #include "font.h"
 #include "../res/res_manager.h"
+#include "../game/tethys_game.h"
 #include <iostream>
+#include <filesystem>
+#include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <algorithm>
 #include <vector>
@@ -43,6 +47,19 @@ namespace {
     constexpr int kCgListW = kCgW - 32, kCgListH = 200;
     constexpr int kCgRowH = 22;
     constexpr int kCgBtnY = kCgY + 258;
+
+    // Dialog 224 "ENTER YOUR NAME" (224x100 DLU → x·1,5 / y·1,6), centrado.
+    constexpr int kEnW = 336, kEnH = 160;
+    constexpr int kEnX = (640 - kEnW) / 2, kEnY = (480 - kEnH) / 2;
+    constexpr int kEnEditX = kEnX + 150, kEnEditY = kEnY + 22 + 78;   // Edit 1093 (100,49)
+    constexpr int kEnEditW = 175, kEnEditH = 26;
+    // Dialog 223 "COLONY GAME SCORES" (376x170 DLU), centrado.
+    constexpr int kScW = 564, kScH = 272;
+    constexpr int kScX = (640 - kScW) / 2, kScY = (480 - kScH) / 2;
+    constexpr int kScListX = kScX + 10, kScListY = kScY + 22 + 11;    // ListBox 1092 (7,7)
+    constexpr int kScListW = 543, kScListH = 200;
+    constexpr int kScBtnY = kScY + 22 + 215;                          // botões (149)
+    constexpr int kScRowH = 18;
 }
 
 // Campanha (OP2Shell.dll): MISSION MENU (Dialog 219, 124x126 DLU), STORY TITLE
@@ -96,10 +113,33 @@ bool ShellMenu::init(const std::string& resDllPath) {
                   << " with " << m_mainMenuDlg.controls.size() << " controls." << std::endl;
     }
 
-    m_colonyGameList = {
-        "A New Beginning", "Divided Destiny", "Survival on Tethys",
-        "Evacuation Protocol", "The Blight Approaches", "Resource Rush"
-    };
+    // Jogos de colônia: o shell original varre "c*.dll" e lê o export LevelDesc.
+    m_colonyGameList.clear();
+    m_colonyGameDlls.clear();
+    {
+        std::error_code ec;
+        std::vector<std::string> files;
+        for (const auto& de : std::filesystem::directory_iterator(".", ec)) {
+            if (ec) break;
+            const std::string n = de.path().filename().string();
+            if (n.size() < 5) continue;
+            const char c0 = static_cast<char>(std::tolower(static_cast<unsigned char>(n[0])));
+            std::string ext = n.substr(n.size() - 4);
+            for (char& ch : ext) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+            if (c0 == 'c' && ext == ".dll") files.push_back(n);
+        }
+        std::sort(files.begin(), files.end());
+        for (const std::string& n : files) {
+            PeResourceReader mission;
+            if (!mission.load(n)) continue;
+            const std::string desc = mission.getExportString("LevelDesc");
+            if (desc.empty()) continue;                  // só missões de verdade
+            m_colonyGameList.push_back(desc);
+            m_colonyGameDlls.push_back(n);
+        }
+    }
+    std::cout << "[ShellMenu] " << m_colonyGameList.size()
+              << " jogos de colonia lidos das c*.dll." << std::endl;
 
     // Lista de tutoriais: enumera as missões T##.DLL e lê o export "LevelDesc".
     m_tutorialList.clear();
@@ -176,6 +216,24 @@ void ShellMenu::rebuildControls() {
         addButton(10, "PLAY", kCgX + 30, kCgBtnY, 100, 26, true);
         addButton(11, "SCORES", kCgX + 150, kCgBtnY, 100, 26);
         addButton(12, "BACK", kCgX + 270, kCgBtnY, 100, 26);
+        break;
+    }
+    // Dialog 224 "ENTER YOUR NAME" (224x100 DLU): Edit 1093 (100,49,117,16) e
+    // o botão &OK (60,79,103,14).
+    case MenuState::EnterName: {
+        addButton(1, "OK", kEnX + 90, kEnY + 22 + 79 * kEnH / 100, 154, 24, true);
+        break;
+    }
+    // Dialog 223 "COLONY GAME SCORES" (376x170): ListBox 1092 (7,7,362,133),
+    // OK (207,149,103,14) e CLEAR SCORES (59,149,103,14).
+    case MenuState::Scores: {
+        if (m_clearConfirm) {                              // "Delete All Scores?"
+            addButton(1, "YES", kScX + kScW / 2 - 170, kScBtnY, 154, 24);
+            addButton(2, "NO", kScX + kScW / 2 + 16, kScBtnY, 154, 24, true);
+            break;
+        }
+        addButton(2, "CLEAR SCORES", kScX + 88, kScBtnY, 154, 24);
+        addButton(1, "OK", kScX + 310, kScBtnY, 154, 24, true);
         break;
     }
     case MenuState::NewCampaign: {
@@ -325,8 +383,41 @@ void ShellMenu::dispatchButton(int id) {
         } else if (id == 2) setState(MenuState::MainMenu);
         break;
     case MenuState::ColonyGames:
-        if (id == 12) setState(MenuState::MainMenu);
-        else std::cout << "[Colony] botão " << id << std::endl;
+        if (id == 10) {                                  // PLAY: lança a c*.dll escolhida
+            const int i = m_selectedColonyGame;
+            if (i >= 0 && i < (int)m_colonyGameDlls.size()) {
+                m_lastColonyDesc = m_colonyGameList[i];  // guardado p/ o placar
+                m_launchMap = m_colonyGameDlls[i];
+                m_launchRequested = true;
+                m_launchHasGsi = false;
+                std::cout << "[Colony] PLAY: " << m_launchMap << std::endl;
+            }
+        } else if (id == 11) openScores();               // SCORES (Dialog 223)
+        else if (id == 12) setState(MenuState::MainMenu);
+        break;
+    case MenuState::EnterName:
+        if (id == 1) {                                   // OK: grava a entrada e mostra o placar
+            ScoreEntry e;
+            e.game       = m_lastColonyDesc;
+            e.difficulty = scoreDifficultyName(m_gsi.playerWord[0]);
+            e.time       = m_scoreMarks;
+            e.name       = m_scoreName;
+            e.date       = scoreToday();
+            scoresAdd(e);
+            openScores();
+        }
+        break;
+    case MenuState::Scores:
+        if (m_clearConfirm) {                            // "Delete All Scores?"
+            if (id == 1) { scoresClear(); m_scores.clear(); m_scoreScroll = 0; }
+            m_clearConfirm = false;
+            rebuildControls();
+        } else if (id == 2) {                            // CLEAR SCORES → confirmação
+            m_clearConfirm = true;
+            rebuildControls();
+        } else if (id == 1) {
+            setState(MenuState::MainMenu);
+        }
         break;
     case MenuState::NewCampaign:
         if (id == 1) {   // OK (0x13002fd5): zera a estrutura, campanha, colônia e dificuldade
@@ -466,9 +557,20 @@ void ShellMenu::handleMouseWheel(int delta) {
     }
 }
 
+void ShellMenu::handleTextInput(const char* text) {
+    if (m_state != MenuState::EnterName || !text) return;
+    for (const char* p = text; *p; ++p)
+        if (m_scoreName.size() < 20 && static_cast<unsigned char>(*p) >= 0x20) m_scoreName += *p;
+}
+
 void ShellMenu::handleKeyDown(int keyCode) {
     if (m_state == MenuState::Splash) return;
     SDL_Keymod mod = SDL_GetModState();
+
+    if (m_state == MenuState::EnterName && keyCode == SDLK_BACKSPACE) {
+        if (!m_scoreName.empty()) m_scoreName.pop_back();
+        return;
+    }
 
     switch (keyCode) {
     case SDLK_TAB:
@@ -563,6 +665,8 @@ void ShellMenu::render(Renderer& renderer) {
     case MenuState::MainMenu:    renderMainMenu(renderer); break;
     case MenuState::NewCampaign: renderNewCampaignDialog(renderer); break;
     case MenuState::ColonyGames: renderColonyGamesDialog(renderer); break;
+    case MenuState::EnterName: renderEnterName(renderer); break;
+    case MenuState::Scores: renderScores(renderer); break;
     case MenuState::Tutorials:   renderTutorialsDialog(renderer); break;
     case MenuState::Preferences: renderPreferencesDialog(renderer); break;
     case MenuState::About:       renderAboutDialog(renderer); break;
@@ -755,9 +859,66 @@ void ShellMenu::afterGame(int reason, const GameStartInfo* results) {
         setState(MenuState::MissionMenu);
         return;
     }
-    // (3 fora da campanha → 0x73e ENTER YOUR NAME e 7..9 → estatísticas: telas
-    // ainda não portadas; os demais motivos vão ao menu principal.)
+    // Fora da campanha, vitória (3) num jogo de colônia → 0x73e ENTER YOUR NAME.
+    // (7..9 = estatísticas de multijogador: tela ainda não portada.)
+    if (reason == 3 && !m_lastColonyDesc.empty()) {
+        m_scoreMarks = static_cast<int>(TethysGame::tick()) / 100;   // [0x13015bbf]/100
+        m_scoreName.clear();
+        setState(MenuState::EnterName);
+        return;
+    }
     setState(MenuState::MainMenu);
+}
+
+void ShellMenu::openScores() {
+    m_scores = scoresLoad();
+    m_scoreScroll = 0;
+    m_clearConfirm = false;
+    setState(MenuState::Scores);
+}
+
+int ShellMenu::scoreVisibleLines() const { return (kScListH - 12) / kScRowH; }
+
+// Dialog 224 (0x73e): parabeniza e pede o nome; o Edit 1093 recebe o texto.
+void ShellMenu::renderEnterName(Renderer& renderer) {
+    renderer.fillRect(0, 0, 640, 480, 0x88000000);
+    renderer.drawDialogFrame(kEnX, kEnY, kEnW, kEnH, "ENTER YOUR NAME");
+    uint32_t* fb = renderer.getFramebuffer();
+    const int tx = kEnX + 10, ty = kEnY + 22 + 11;
+    Font::drawText(fb, 640, 480, "Congratulations on completing this", tx, ty, 0xFFCCD6E8);
+    Font::drawText(fb, 640, 480, "colony game! Please enter your", tx, ty + 16, 0xFFCCD6E8);
+    Font::drawText(fb, 640, 480, "name below.", tx, ty + 32, 0xFFCCD6E8);
+    Font::drawText(fb, 640, 480, "Your Name:", tx, kEnEditY + 6, 0xFFCCD6E8);
+    renderer.fillRect(kEnEditX, kEnEditY, kEnEditW, kEnEditH, 0xFF0D121B);
+    renderer.drawBevelRect(kEnEditX, kEnEditY, kEnEditW, kEnEditH, 0xFF05080E, 0xFF35445B);
+    std::string t = m_scoreName + ((SDL_GetTicks() / 400) & 1 ? "_" : "");
+    while (!t.empty() && Font::getTextWidth(t) > kEnEditW - 8) t.erase(0, 1);
+    Font::drawText(fb, 640, 480, t, kEnEditX + 4, kEnEditY + 7, 0xFFFFFFFF);
+}
+
+// Dialog 223: a listbox com uma linha por entrada (scoreLine).
+void ShellMenu::renderScores(Renderer& renderer) {
+    renderer.fillRect(0, 0, 640, 480, 0x88000000);
+    renderer.drawDialogFrame(kScX, kScY, kScW, kScH, "COLONY GAME SCORES");
+    uint32_t* fb = renderer.getFramebuffer();
+    renderer.fillRect(kScListX, kScListY, kScListW, kScListH, 0xFF0D121B);
+    renderer.drawBevelRect(kScListX, kScListY, kScListW, kScListH, 0xFF05080E, 0xFF35445B);
+    const int vis = scoreVisibleLines();
+    for (int k = 0; k < vis; ++k) {
+        const int i = m_scoreScroll + k;
+        if (i < 0 || i >= (int)m_scores.size()) break;
+        std::string line = scoreLine(m_scores[i]);
+        while (!line.empty() && Font::getTextWidth(line) > kScListW - 16) line.pop_back();
+        Font::drawText(fb, 640, 480, line, kScListX + 8, kScListY + 6 + k * kScRowH, 0xFFCCD6E8);
+    }
+    if (m_scores.empty())
+        Font::drawText(fb, 640, 480, "(no scores yet)", kScListX + 8, kScListY + 6, 0xFF708090);
+    if (m_clearConfirm) {                                 // caixa de confirmação
+        const int cw = 420, ch = 96, cx = (640 - cw) / 2, cy = kScY + 60;
+        renderer.drawDialogFrame(cx, cy, cw, ch, "Delete All Scores?");
+        Font::drawText(fb, 640, 480, "Are you sure you want to clear", cx + 12, cy + 34, 0xFFCCD6E8);
+        Font::drawText(fb, 640, 480, "all of the scores?", cx + 12, cy + 50, 0xFFCCD6E8);
+    }
 }
 
 // Dialog 216 com o RICHEDIT: B_%s%02i.rtf (briefing), O_%s%02i_%c.rtf

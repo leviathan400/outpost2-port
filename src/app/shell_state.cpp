@@ -78,6 +78,9 @@ void ShellState::handleEvent(Renderer& renderer, const SDL_Event& e) {
     case SDL_KEYDOWN:
         m_menu.handleKeyDown(e.key.keysym.sym);
         break;
+    case SDL_TEXTINPUT:
+        m_menu.handleTextInput(e.text.text);
+        break;
     default:
         break;
     }

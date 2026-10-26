@@ -9,6 +9,7 @@
 #include "../res/pe_resource.h"
 #include "../game/start_info.h"
 #include "rtf_text.h"
+#include "scores.h"
 
 namespace op2 {
 
@@ -23,7 +24,9 @@ enum class MenuState {
     QuitConfirm,
     MissionMenu,   // Dialog 219 (mensagem 0x73b da janela do shell)
     RtfView,       // Dialog 216 + RICHEDIT: briefing 0x73d, objetivos 0x73c, história 0x737
-    Chapters       // Dialog 215 (0x735): capítulos do ch_title.txt
+    Chapters,      // Dialog 215 (0x735): capítulos do ch_title.txt
+    EnterName,     // Dialog 224 (0x73e): nome do vencedor de um jogo de colônia
+    Scores         // Dialog 223: COLONY GAME SCORES (botão SCORES do Dialog 222)
 };
 
 enum class CtrlKind { Button, Radio, Check, List };
@@ -58,6 +61,7 @@ public:
     void handleMouseDown(int nativeX, int nativeY, uint8_t button);
     void handleMouseUp(int nativeX, int nativeY, uint8_t button);
     void handleKeyDown(int keyCode);
+    void handleTextInput(const char* text);   // Edit 1093 do "ENTER YOUR NAME"
     void handleMouseWheel(int delta);
 
     void update(float dt);
@@ -83,6 +87,8 @@ public:
     void showPreferences() { setState(MenuState::Preferences); }
     void showColonyGames() { setState(MenuState::ColonyGames); }
     void showAbout() { setState(MenuState::About); }
+    void showScores() { openScores(); }
+    void showEnterName(const char* game) { m_lastColonyDesc = game ? game : ""; m_scoreMarks = 1234; m_scoreName = "COMMANDER"; setState(MenuState::EnterName); }
     // Depuração (--screenshot): campanha na missão n (concluídas), tela 0 menu,
     // 1 briefing, 2 objetivos, 3 capítulos, 4 história (capítulo n+1).
     void debugCampaign(bool eden, int difficulty, int missionNumber, int screen);
@@ -129,8 +135,17 @@ private:
     bool m_prefSound = true, m_prefMusic = true, m_prefAnimations = true;
     bool m_prefUnitShadows = false, m_prefStructShadows = false;
 
-    std::vector<std::string> m_colonyGameList;
+    std::vector<std::string> m_colonyGameList;    // LevelDesc das c*.dll
+    std::vector<std::string> m_colonyGameDlls;    // arquivo correspondente
     std::vector<std::string> m_tutorialList;
+
+    // Placar dos jogos de colônia (Dialogs 223/224).
+    std::vector<ScoreEntry> m_scores;
+    int         m_scoreScroll = 0;
+    std::string m_scoreName;                      // Edit 1093 do "ENTER YOUR NAME"
+    bool        m_clearConfirm = false;           // "Delete All Scores?"
+    std::string m_lastColonyDesc;                 // jogo de colônia em andamento
+    int         m_scoreMarks = 0;                 // marcas (tick/100) ao vencer
 
     // --- sistema de controles/foco ---
     void setState(MenuState s);     // troca de tela e reconstrói os controles
@@ -153,6 +168,10 @@ private:
     void renderMissionMenu(Renderer& renderer);
     void renderRtfView(Renderer& renderer);
     void renderChapters(Renderer& renderer);
+    void renderEnterName(Renderer& renderer);
+    void renderScores(Renderer& renderer);
+    void openScores();
+    int  scoreVisibleLines() const;
     void openRtf(int kind);
     void openChapters();
     std::string colonyName() const;
