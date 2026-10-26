@@ -30,6 +30,9 @@ public:
     int  factory() const { return m_factory; }
     uint32_t selected() const { return m_sel; }          // [+0x434]
     bool buildEnabled() const { return m_buildOk; }     // botão BUILD IT habilitado
+    // Texto que a lista manda ao objeto de ajuda (unk_575570) — o custo do item
+    // sob o cursor; vazio quando o cursor não está sobre nenhum.
+    const std::string& helpText() const { return m_help; }
 
     void open(int factoryId);                            // vt1 sub_468090
     void close() { m_open = false; }
@@ -54,6 +57,7 @@ private:
     int  m_top = 0;                                      // 1º item visível
     bool m_buildOk = false;
     int  m_lastTick = -1;
+    mutable std::string m_help;                          // preenchido no desenho
 };
 
 } // namespace op2

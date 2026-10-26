@@ -156,15 +156,10 @@ void ProducePane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, int
     }
     const bool canUp = m_top > 0, canDown = m_top + L.rows < static_cast<int>(m_items.size());
     drawListBoxArrows(fb, fbW, fbH, ListBoxLayout{L.list, L.up, L.down, L.lineH, L.rows}, pane, canUp, canDown, mx, my);
-    // Dica com o custo (provedor vt6 sub_4686E0). PROVISÓRIO: caixa junto ao cursor.
-    if (hoverItem) {
-        const std::string t = produceItemCost(*hoverItem, TethysGame::localPlayer());
-        const int w = UiFont::width(t) + 8, h = 14;
-        const int tx = std::max(2, std::min(mx + 4, fbW - w - 2)), ty = my - h - 4;
-        fill(tx, ty, w, h, 0xFF101810u);
-        frame(tx, ty, w, h, 0xFF40C040u);
-        UiFont::draw(fb, fbW, fbH, t, tx + 4, ty + 2, 0xFFE0FFE0u, false);
-    }
+    // Custo do item sob o cursor (provedor vt6 sub_4686E0): a lista (sub_430550)
+    // pede o texto ao provedor e o entrega ao objeto de texto unk_575570 — ele
+    // sai na linha de estado, não numa caixa junto ao cursor.
+    m_help = hoverItem ? produceItemCost(*hoverItem, TethysGame::localPlayer()) : std::string();
 }
 
 bool ProducePane::click(const PaneRect& pane, int x, int y, bool dbl, bool& buildNow) {

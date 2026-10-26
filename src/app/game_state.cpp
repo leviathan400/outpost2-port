@@ -2104,6 +2104,9 @@ void GameState::renderPanel(Renderer& renderer) {
         }
     }
 
+    // Texto do objeto de ajuda (unk_575570): a descrição do controle sob o
+    // cursor ou, sobre o mapa, as coordenadas do tile (sub_436E50 monta "x,y").
+    std::string help;
     // --- Quadro de informação da seleção (classe de painel @off_4D5220) ---
     m_produce.update(m_selected);
     m_storage.update(m_selected);
@@ -2148,9 +2151,7 @@ void GameState::renderPanel(Renderer& renderer) {
     }
     else if (!m_selected.empty())
         drawUnitInfoPane(fb, VW, VH, pane, m_selected[0], static_cast<int>(m_selected.size()), me);
-    // Texto do objeto de ajuda (unk_575570): a descrição do controle sob o
-    // cursor ou, sobre o mapa, as coordenadas do tile (sub_436E50 monta "x,y").
-    std::string help;
+    if (m_produce.isOpen()) help = m_produce.helpText();
     // Botoeira do veículo (sub_46D540): ícones verdes do op2_art (anim crua − 0x65).
     {
         const std::vector<CmdButton> btns = commandButtons();
