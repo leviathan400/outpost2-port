@@ -134,6 +134,7 @@ private:
     // ticks ganha o colchete (cinza) + barra. +0x14 = unidade, +0x18 = tick base.
     int  m_hoverUnit = 0;
     int  m_hoverStartTick = 0;
+    int  m_capPressed = -1;        // botão da barra de título apertado (dword_4EA240)
     int  unitAtView(int vx, int vy) const;   // unidade (qualquer dono) sob o cursor, raio 20
 public:
     void debugGameOptions() { m_gameOptions.open(); }   // só p/ --panetest

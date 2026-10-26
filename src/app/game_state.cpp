@@ -1241,6 +1241,33 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
                        ? unitAtView(hvx, hvy) : 0;
         if (hv != m_hoverUnit) { m_hoverUnit = hv; m_hoverStartTick = static_cast<int>(TethysGame::tick()); }
     }
+    // Botões da barra de título (dword_4EA240): apertam com o botão em baixo e
+    // só agem ao soltar em cima deles, postando o comando de sistema
+    // (SC_MINIMIZE / SC_MAXIMIZE / SC_CLOSE).
+    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+        int nx, ny; renderer.screenToNative(e.button.x, e.button.y, nx, ny);
+        const int c = m_frame.captionButtonAt(nx, ny, Renderer::NATIVE_WIDTH);
+        if (c >= 0) { m_capPressed = c; return; }
+    }
+    if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT && m_capPressed >= 0) {
+        int nx, ny; renderer.screenToNative(e.button.x, e.button.y, nx, ny);
+        const int c = m_frame.captionButtonAt(nx, ny, Renderer::NATIVE_WIDTH);
+        const int was = m_capPressed;
+        m_capPressed = -1;
+        if (c == was) {
+            if (c == 0) SDL_MinimizeWindow(renderer.getWindow());
+            else if (c == 1) {
+                const bool max = (SDL_GetWindowFlags(renderer.getWindow()) & SDL_WINDOW_MAXIMIZED) != 0;
+                if (max) SDL_RestoreWindow(renderer.getWindow());
+                else SDL_MaximizeWindow(renderer.getWindow());
+            } else {
+                SDL_Event q{};
+                q.type = SDL_QUIT;
+                SDL_PushEvent(&q);
+            }
+        }
+        return;
+    }
     if (e.type == SDL_MOUSEBUTTONDOWN) {
         int nx, ny; renderer.screenToNative(e.button.x, e.button.y, nx, ny);
         m_mouseNX = nx; m_mouseNY = ny;
@@ -1983,7 +2010,7 @@ void GameState::renderPanel(Renderer& renderer) {
     renderer.fillRect(kClientX, kStatusY, VW - kClientX, VH - kStatusY, 0xFF000000);
     renderer.fillRect(0, 0, VW, kClientY, 0xFF000000);
     renderer.fillRect(0, 0, kClientX, VH, 0xFF000000);
-    m_frame.drawNonClient(fb, VW, VH, VW, VH, true);
+    m_frame.drawNonClient(fb, VW, VH, VW, VH, true, m_capPressed);
     m_frame.drawClient(fb, VW, VH, kClientX, kClientY, kClientW, kClientH, kViewW, kViewH);
 
     // --- Minimapa (janela 192x128 em vista+8, 0) ---

@@ -22,8 +22,13 @@ class GameFrame {
 public:
     bool load();                 // sub_499820 (OUT2RES.DLL na raiz)
     bool ok() const { return m_ok; }
-    // sub_499E80(active): janela de wW x wH a partir de (0,0).
-    void drawNonClient(uint32_t* fb, int fbW, int fbH, int wW, int wH, bool active) const;
+    // sub_499E80(active): janela de wW x wH a partir de (0,0). `pressed` é o
+    // botão da barra desenhado com o bitmap de apertado (−1 = nenhum).
+    void drawNonClient(uint32_t* fb, int fbW, int fbH, int wW, int wH, bool active,
+                       int pressed = -1) const;
+    // Botão da barra de título sob (x, y) numa janela de wW de largura:
+    // 0 minimizar, 1 maximizar/restaurar, 2 fechar; −1 se nenhum (dword_4EA240).
+    int captionButtonAt(int x, int y, int wW) const;
     // sub_499BC0: área cliente em (cx, cy) com cW x cH. As janelas filhas
     // recortam a pintura da mãe: a vista (viewW x viewH no canto da área
     // cliente) não é tocada.

@@ -75,7 +75,8 @@ void GameFrame::drawPiece(uint32_t* fb, int fbW, int fbH, int idx, int x, int y)
     blit(fb, fbW, fbH, idx, x, y, 0, 0, width(idx), height(idx));
 }
 
-void GameFrame::drawNonClient(uint32_t* fb, int fbW, int fbH, int wW, int wH, bool active) const {   // sub_499E80
+void GameFrame::drawNonClient(uint32_t* fb, int fbW, int fbH, int wW, int wH, bool active,
+                              int pressed) const {   // sub_499E80
     if (!m_ok) return;
     // Largura/altura "encaixadas" (vista em múltiplos de 32): o resto fica preto.
     const int W = ((wW - 0xE0) & ~31) + 0xE0;
@@ -129,8 +130,19 @@ void GameFrame::drawNonClient(uint32_t* fb, int fbW, int fbH, int wW, int wH, bo
     // PROVISÓRIO: o port roda sempre em janela não maximizada.
     for (int k : {0, 1, 2}) {
         const CaptionButton& c = kCaption[k];
-        blit(fb, fbW, fbH, c.normal, W - c.fromRight, 1, 0, 0, width(c.normal), height(c.normal));
+        const int b = (k == pressed) ? c.pressed : c.normal;
+        blit(fb, fbW, fbH, b, W - c.fromRight, 1, 0, 0, width(b), height(b));
     }
+}
+
+int GameFrame::captionButtonAt(int x, int y, int wW) const {
+    if (!m_ok) return -1;
+    for (int k : {0, 1, 2}) {
+        const CaptionButton& c = kCaption[k];
+        const int bx = wW - c.fromRight;
+        if (x >= bx && x < bx + width(c.normal) && y >= 1 && y < 1 + height(c.normal)) return k;
+    }
+    return -1;
 }
 
 void GameFrame::drawClient(uint32_t* fb, int fbW, int fbH, int cx, int cy, int cW, int cH,
