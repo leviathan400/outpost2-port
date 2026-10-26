@@ -46,7 +46,9 @@ private:
     int m_winW = 0, m_winH = 0;
     int m_fitX = 0, m_fitY = 0;            // [+8] / [+0xC]
     int m_scale = 0;                       // [+0x10] = [+0x14]
-    int m_zoom = 0, m_minZoom = 0;         // [+0x1054] / [+0x1050]
+    // [+0x1054] vem do "Zoom" do [Game] (sub_49ACA0, padrão 1 — e o clamp de lá
+    // sempre acaba em 1); [+0x1050] é o mínimo calculado por sub_48E7F0.
+    int m_zoom = 1, m_minZoom = 0;
     int m_offX = 0, m_offY = 0;            // [+0x105C] / [+0x1058]
 };
 
