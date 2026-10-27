@@ -145,6 +145,7 @@ public:
     void debugArmCommand(int cmd) { m_targetCmd = cmd; }                        // só p/ --placeshot
     void debugMiniZoom(int n) { for (int k = 0; k < n; ++k) m_mini.zoomIn(); }   // só p/ --minishot
     int  debugMiniZoomLevel() const { return m_mini.zoom(); }
+    void debugMiniTactical() { m_mini.toggleTactical(); }   // so p/ --minishot
     void debugAreaDrag(int cmd) {            // só p/ --placeshot: arrasto de 3 tiles
         m_targetCmd = cmd; m_areaDrag = true;
         m_areaSX = m_camX + m_mouseNX - kViewX - 96;

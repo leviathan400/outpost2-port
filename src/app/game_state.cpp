@@ -13,6 +13,7 @@
 #include "../game/construction.h"
 #include "../game/mining.h"
 #include "../game/earthwork.h"
+#include "../game/terrain_cost.h"
 #include "../gfx/renderer.h"
 #include "../gfx/font.h"
 #include "../gfx/ui_font.h"
@@ -1331,6 +1332,7 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
                 const int k = (nx - bx0) / 16;
                 if (k == 0 && m_mini.canZoomIn()) { soundPlay(0x57); m_mini.zoomIn(); }
                 else if (k == 1 && m_mini.canZoomOut()) { soundPlay(0x57); m_mini.zoomOut(); }
+                else if (k == 2) { soundPlay(0x57); m_mini.toggleTactical(); }   // sub_48E960
                 return;
             }
         }
@@ -2110,7 +2112,15 @@ void GameState::renderPanel(Renderer& renderer) {
             for (int tx = 0; tx < mw; ++tx) {
                 const int px = mapX(tx), pw = mapX(tx + 1) - px;
                 if (px + pw <= mmX0 || px >= mmX0 + mmW) continue;
-                uint16_t c = m_terrain.minimapColor(g_gameMap.getTile(LOCATION{tx, ty}));
+                // Vista tatica (sub_437250 com a flag de [+0x104C]): a cor do
+                // TIPO de terreno no lugar da cor media do tile, menos nas
+                // celulas com bloqueio duro (bit 27), que ficam normais.
+                const uint32_t cell = g_gameMap.rawCell(tx, ty);
+                uint16_t c;
+                if (m_mini.tactical() && !(cell & 0x08000000u))
+                    c = terrainTacticalColor(static_cast<int>(cell & 0x1F));
+                else
+                    c = m_terrain.minimapColor(g_gameMap.getTile(LOCATION{tx, ty}));
                 int r5 = (c >> 10) & 31, g5 = (c >> 5) & 31, b5 = c & 31;
                 if (shade) {
                     const int b = brightness(tx);
@@ -2151,17 +2161,18 @@ void GameState::renderPanel(Renderer& renderer) {
     // Botões do minimapa (sub_458930, posição [+0x310] = 0: topo, centrados):
     // x = W/2 − 32 e +16 por botão. Arte crua {0x9D Zoom In, 0x9C Zoom Out,
     // 0x9E Toggle Tactical View, 0x9A Toggle Globe View (só sem dword_54EBF0)}.
-    // Quadro 1 com o mouse em cima (flag 0x40 de sub_40AEE0; a arte tem 2
-    // quadros). PROVISÓRIO: as visões tática e do globo ainda não têm
-    // renderizador — os dois botões continuam inertes.
+    // A vista tática (botão 2) está portada; PROVISÓRIO: a visão do globo
+    // (botão 3) ainda não tem renderizador e segue inerte.
     if (g_art.ok()) {
         for (int k = 0; k < miniButtonCount(); ++k) {
             const int anim = kMiniBtnArt[k] - 0x65;
             if (anim >= g_art.numAnimations()) continue;
             const int bx = mmX0 + mmW / 2 - 0x20 + 16 * k;
-            const bool over = m_mouseNX >= bx && m_mouseNX < bx + 16 &&
-                              m_mouseNY >= mmY0 && m_mouseNY < mmY0 + 16;
-            blitArtFrame(fb, VW, VH, anim, over ? 1 : 0, bx, mmY0, -1,
+            // Estilo dos botoes (dword_4E2E08) = {0, 0, 0x80, 0x80}: so os dois
+            // ultimos sao de ALTERNANCIA, e o quadro 1 marca o estado ligado
+            // (flag 0x40 de sub_40AEE0); os de zoom nunca acendem.
+            const bool on = (k == 2 && m_mini.tactical());
+            blitArtFrame(fb, VW, VH, anim, on ? 1 : 0, bx, mmY0, -1,
                          mmX0, mmY0, mmX0 + mmW, mmY0 + mmH);
         }
     }

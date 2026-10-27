@@ -22,6 +22,11 @@ public:
     void zoomOut();                        // sub_48E720: zoom − 1, no mínimo [+0x1050]
     int  zoom() const { return m_zoom; }
     int  minZoom() const { return m_minZoom; }
+    // Vista tatica (sub_48E960): alterna [+0x104C] e refaz a superficie do
+    // minimapa com as cores do TIPO de terreno (sub_437250 com a flag).
+    void toggleTactical() { m_tactical = !m_tactical; }
+    bool tactical() const { return m_tactical; }
+
     bool canZoomIn() const { return m_zoom < 5; }
     bool canZoomOut() const { return m_zoom > m_minZoom; }
 
@@ -50,6 +55,7 @@ private:
     // sempre acaba em 1); [+0x1050] é o mínimo calculado por sub_48E7F0.
     int m_zoom = 1, m_minZoom = 0;
     int m_offX = 0, m_offY = 0;            // [+0x105C] / [+0x1058]
+    bool m_tactical = false;               // [+0x104C]
 };
 
 } // namespace op2

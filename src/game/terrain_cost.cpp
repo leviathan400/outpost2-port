@@ -46,4 +46,18 @@ int terrainMoveCost(int cellType, int moveClass) {
     return kTerrainMoveCost[cellType][moveClass];
 }
 
+// Cores da vista tatica (field[8] de cada registro, +0x20), extraidas dos
+// `mov word_4DExxx, ...` de sub_40B500. RGB555. NAO EDITAR a mao.
+static const unsigned short kTerrainTactical[kNumCellTypes] = {
+    0x1666, 0x3D86, 0x0000, 0x4A46, 0x7BC5, 0x56B5, 0x2D6B, 0x3B6A,   // 0..7
+    0x7640, 0x7640, 0x7640, 0x1B19, 0x6000, 0x4000, 0x0200, 0x4210,   // 8..15
+    0x6000, 0x6000, 0x6000, 0x6000, 0x6000, 0x7FE0, 0x4200, 0x6000,   // 16..23
+    0x6000, 0x6000, 0x0210, 0x0210, 0x0210, 0x0210, 0x0210, 0x0210,   // 24..31
+};
+
+unsigned short terrainTacticalColor(int cellType) {
+    if (cellType < 0 || cellType >= kNumCellTypes) return 0;
+    return kTerrainTactical[cellType];
+}
+
 } // namespace op2

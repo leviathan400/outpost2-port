@@ -25,6 +25,12 @@ constexpr int kNumCellTypes   = 32;
 // se os índices saírem da faixa.
 int terrainMoveCost(int cellType, int moveClass);
 
+// Cor do tipo de terreno na VISTA TATICA do minimapa (o field[8] do
+// registro, +0x20, que sub_40B500 preenche): sub_437250 pinta cada tile
+// com ela em vez da cor media do tile, menos as celulas com o bit 27
+// (0x08000000, bloqueio duro), que ficam com a cor normal. RGB555.
+unsigned short terrainTacticalColor(int cellType);
+
 // Conveniência: o terreno é transponível para a classe se o custo != 0.
 inline bool terrainPassable(int cellType, int moveClass = 0) {
     return terrainMoveCost(cellType, moveClass) != 0;
