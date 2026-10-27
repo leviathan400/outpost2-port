@@ -17,7 +17,11 @@ int      TethysGame::s_cheat[16] = {};
 
 void TethysGame::serialize(SaveStream& s) {
     s.io(s_tick);
-    s.io(s_daylightPhase); s.io(s_daylightPos); s.io(s_daylightMoves); s.io(s_daylightEverywhere);
+    // A FASE e a coluna do dia nao moram aqui: sao os campos [+0x48] e [+0x44]
+    // do objeto do globo, e vao no bloco de sub_420580 (minimapaStateSave).
+    // Aqui ficam so as duas opcoes, que sao do objeto do jogo (dword_56DEA0 /
+    // dword_56DEA4).
+    s.io(s_daylightMoves); s.io(s_daylightEverywhere);
     s.io(s_numPlayers); s.io(s_localPlayer);
     uint32_t a = s_rng.s0(), b = s_rng.s1();
     s.io(a); s.io(b);

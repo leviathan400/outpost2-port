@@ -1752,6 +1752,10 @@ static uint64_t simHash() {
     auto mix = [&](int64_t v) { h = (h ^ static_cast<uint64_t>(v)) * 1099511628211ull; };
     mix(op2::TethysGame::tick());
     mix(op2::TethysGame::getRandState());
+    // O ciclo dia/noite e estado de simulacao (escuridao por coluna): entra no
+    // hash para o --savetest cobrir o bloco de sub_420580.
+    mix(op2::TethysGame::daylightPhase());
+    mix(op2::TethysGame::daylightPos());
     for (size_t i = 1; i < op2::g_units.size(); ++i) {
         const op2::UnitRecord& r = op2::g_units[i];
         if (r.id == -1) continue;
@@ -1783,6 +1787,9 @@ static int runSaveTest(const std::string& dll, int t1, int t2) {
         gs.onActivate();
         while (static_cast<int>(op2::TethysGame::tick()) < t1 && !gs.gameEnded()) gs.onIdle(renderer, 0.02f);
         if (gs.gameEnded()) { std::printf("[SaveTest] partida encerrada antes do tick %d\n", t1); return 6; }
+        // Marca o estado do minimapa (bloco de sub_420580) para conferir depois.
+        gs.debugMiniTactical();
+        gs.debugGlobeSpin(0x1234);
         if (!gs.saveToFile(path, "savetest")) { std::printf("[SaveTest] falhou ao gravar\n"); return 3; }
         hSaved = simHash();
         const int stop = static_cast<int>(op2::TethysGame::tick()) + t2;
@@ -1795,8 +1802,12 @@ static int runSaveTest(const std::string& dll, int t1, int t2) {
         if (!gs.loadSavedGame(path)) { std::printf("[SaveTest] falhou ao carregar\n"); return 4; }
         gs.onActivate();
         const uint64_t hLoaded = simHash();
-        std::printf("[SaveTest] hash ao gravar %016llx, ao carregar %016llx (%s)\n", (unsigned long long)hSaved,
-                    (unsigned long long)hLoaded, hSaved == hLoaded ? "igual" : "DIFERENTE");
+        std::printf("[SaveTest] hash ao gravar %016llx, ao carregar %016llx (%s); fase do dia %d, coluna %d\n",
+                    (unsigned long long)hSaved, (unsigned long long)hLoaded,
+                    hSaved == hLoaded ? "igual" : "DIFERENTE",
+                    op2::TethysGame::daylightPhase(), op2::TethysGame::daylightPos());
+        std::printf("[SaveTest] minimapa: tatica %d (esperado 1), globo %d, giro 0x%X (esperado 0x1234)\n",
+                    gs.debugMiniTacticalOn() ? 1 : 0, gs.debugMiniGlobeOn() ? 1 : 0, gs.debugGlobeRotation());
         const int stop = static_cast<int>(op2::TethysGame::tick()) + t2;
         while (static_cast<int>(op2::TethysGame::tick()) < stop && !gs.gameEnded()) gs.onIdle(renderer, 0.02f);
         hB = simHash();

@@ -37,11 +37,13 @@ void messagesSerialize(SaveStream& s);     // messages.cpp
 void disasterSerialize(SaveStream& s);     // disaster.cpp (lava, micróbio)
 void dllPlayersSerialize(SaveStream& s);   // op2_api.cpp (_Player da DLL)
 
-// Grava a partida em andamento (sub_48A120). `extra` = estado da interface.
+// Grava a partida em andamento (sub_48A120). `minimap` = estado do minimapa e
+// do globo (sub_420580, logo depois da pesquisa); `extra` = o da interface.
 bool saveGameWrite(const std::string& path, const std::string& description,
-                   const std::vector<uint8_t>& extra);
+                   const std::vector<uint8_t>& minimap, const std::vector<uint8_t>& extra);
 // Lê a partida depois que a DLL e o mapa da missão foram recarregados (sem
-// InitProc). Devolve `extra`.
-bool saveGameRead(const std::string& path, std::vector<uint8_t>& extra);
+// InitProc). Devolve os dois blocos.
+bool saveGameRead(const std::string& path, std::vector<uint8_t>& minimap,
+                  std::vector<uint8_t>& extra);
 
 } // namespace op2

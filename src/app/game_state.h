@@ -103,6 +103,8 @@ private:
     std::string m_pendingLoad;
     SaveSlotsDialog m_saveDlg;         // Ctrl+S / Ctrl+L (comandos 40017 / 40018)
     bool m_endAfterSave = false;       // "Save Game" da caixa Success
+    std::vector<uint8_t> minimapStateSave();   // sub_420580
+    bool minimapStateLoad(const std::vector<uint8_t>& blob);   // sub_420640
     std::vector<uint8_t> uiStateSave();
     bool uiStateLoad(const std::vector<uint8_t>& blob);
     int m_endPhase = 0;
@@ -157,6 +159,9 @@ public:
     int  debugMiniZoomLevel() const { return m_mini.zoom(); }
     void debugMiniTactical() { m_mini.toggleTactical(); }   // so p/ --minishot
     void debugMiniGlobe() { m_mini.toggleGlobe(); }         // so p/ --globeshot
+    bool debugMiniTacticalOn() const { return m_mini.tactical(); }
+    bool debugMiniGlobeOn() const { return m_mini.globe(); }
+    int  debugGlobeRotation() const { return m_globe.rotation(); }
     void debugGlobeSpin(int d) { m_globe.rotateBy(d); }     // so p/ --globeshot
     // so p/ --globeshot: mundo -> tela -> mundo (sub_4208B0 / sub_420750)
     bool debugGlobeRoundTrip(int wx, int wy, int& sx, int& sy, int& bx, int& by) const {

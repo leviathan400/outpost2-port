@@ -91,7 +91,8 @@ bool saveReadHeader(const std::string& path, SaveHeader& out) {
     return s.ok();
 }
 
-bool saveGameWrite(const std::string& path, const std::string& description, const std::vector<uint8_t>& extra) {
+bool saveGameWrite(const std::string& path, const std::string& description,
+                   const std::vector<uint8_t>& minimap, const std::vector<uint8_t>& extra) {
     SaveStream s(false);
     char sig[0x19];
     std::memcpy(sig, kSignature, sizeof(sig));
@@ -110,7 +111,9 @@ bool saveGameWrite(const std::string& path, const std::string& description, cons
     scriptIo(s);                                     // sub_402B50
     s.magic(0x52594C50u); playersSerialize(s); dllPlayersSerialize(s); colonySerialize(s);   // sub_490220 ×7
     s.magic(0x48434552u); researchSerialize(s);      // sub_4734C0
-    s.magic(0x4753534Du); messagesSerialize(s);      // sub_420580
+    std::vector<uint8_t> mm = minimap;
+    s.ioVec(mm);                                     // sub_420580 (minimapa/globo)
+    s.magic(0x4753534Du); messagesSerialize(s);      // mensagens (so do port)
     s.magic(0x42555453u); triggersSerialize(s);      // sub_47B6C0
     s.magic(0x41525458u);                            // sub_4083B0 (interface)
     std::vector<uint8_t> ui = extra;
@@ -124,7 +127,8 @@ bool saveGameWrite(const std::string& path, const std::string& description, cons
     return static_cast<bool>(f);
 }
 
-bool saveGameRead(const std::string& path, std::vector<uint8_t>& extra) {
+bool saveGameRead(const std::string& path, std::vector<uint8_t>& minimap,
+                  std::vector<uint8_t>& extra) {
     SaveStream s(true);
     std::vector<uint8_t> data;
     if (!readFile(path, data)) return false;
@@ -144,6 +148,7 @@ bool saveGameRead(const std::string& path, std::vector<uint8_t>& extra) {
     s.magic(0x52594C50u); playersSerialize(s); dllPlayersSerialize(s); colonySerialize(s);
     if (!step("jogadores")) return false;
     s.magic(0x48434552u); researchSerialize(s);      if (!step("pesquisa")) return false;
+    s.ioVec(minimap);                                if (!step("minimapa")) return false;
     s.magic(0x4753534Du); messagesSerialize(s);      if (!step("mensagens")) return false;
     s.magic(0x42555453u); triggersSerialize(s);      if (!step("stubs")) return false;
     s.magic(0x41525458u); s.ioVec(extra);            if (!step("interface")) return false;

@@ -103,6 +103,38 @@ bool GameState::loadMap(const std::string& mapName) {
 
 // Estado da interface no jogo salvo (o lugar de sub_4083B0): câmera e a
 // GameStartInfo (TethysGame+0xA4 no original).
+// sub_420580 / sub_420640: o bloco que o original grava logo depois da
+// pesquisa, na sequencia de sub_48A120. Seis dwords, nesta ordem: globo ligado
+// (dword_5748A0), sol (a fase do dia, [+0x48] = dword_5472A0), rotacao
+// ([+0x4C]), sombreamento ([+0x04]), um campo que e gravado e lido mas nunca
+// usado (dword_57486C) e a vista tatica (dword_574864).
+std::vector<uint8_t> GameState::minimapStateSave() {
+    SaveStream s(false);
+    int glb = m_mini.globe() ? 1 : 0;
+    int sun = TethysGame::daylightPhase();
+    int rot = m_globe.rotation();
+    int shaded = TethysGame::daylightEverywhere() ? 0 : 1;
+    int unused = 0;
+    int tac = m_mini.tactical() ? 1 : 0;
+    s.io(glb); s.io(sun); s.io(rot); s.io(shaded); s.io(unused); s.io(tac);
+    return s.buffer();
+}
+
+bool GameState::minimapStateLoad(const std::vector<uint8_t>& blob) {
+    SaveStream s(true);
+    s.setBuffer(blob);
+    int glb = 0, sun = 0, rot = 0, shaded = 1, unused = 0, tac = 0;
+    s.io(glb); s.io(sun); s.io(rot); s.io(shaded); s.io(unused); s.io(tac);
+    if (!s.ok()) return false;
+    m_mini.setGlobe(glb != 0);
+    // O original escreve direto em [+0x48] e deixa [+0x44] (a coluna da luz)
+    // desatualizado ate o turno seguinte; aqui as duas andam juntas.
+    TethysGame::setDaylightPhase(sun, g_gameMap.ok() ? g_gameMap.internalWidth() : 1);
+    m_globe.setRotation(rot);
+    m_mini.setTactical(tac != 0);
+    return true;
+}
+
 std::vector<uint8_t> GameState::uiStateSave() {
     SaveStream s(false);
     s.io(m_camX); s.io(m_camY);
@@ -111,10 +143,6 @@ std::vector<uint8_t> GameState::uiStateSave() {
     s.io(g.food); s.io(g.ore); s.io(g.rareOre); s.io(g.workers); s.io(g.scientists); s.io(g.kids);
     s.io(g.spaceWord); s.io(g.localPlayer); s.io(g.endTick); s.io(g.playerBlock);
     s.io(g.techCount); s.io(g.techLevel); s.ioVec(g.techIdx); s.ioVec(g.techMask);
-    // Estado do minimapa: sub_420580 grava o do globo (dword_5748A0, a rotacao
-    // e a tatica dword_574864) na sequencia de sub_48A120.
-    int tac = m_mini.tactical() ? 1 : 0, glb = m_mini.globe() ? 1 : 0, rot = m_globe.rotation();
-    s.io(tac); s.io(glb); s.io(rot);
     return s.buffer();
 }
 bool GameState::uiStateLoad(const std::vector<uint8_t>& blob) {
@@ -126,16 +154,13 @@ bool GameState::uiStateLoad(const std::vector<uint8_t>& blob) {
     s.io(g.food); s.io(g.ore); s.io(g.rareOre); s.io(g.workers); s.io(g.scientists); s.io(g.kids);
     s.io(g.spaceWord); s.io(g.localPlayer); s.io(g.endTick); s.io(g.playerBlock);
     s.io(g.techCount); s.io(g.techLevel); s.ioVec(g.techIdx); s.ioVec(g.techMask);
-    int tac = 0, glb = 0, rot = 0;
-    s.io(tac); s.io(glb); s.io(rot);
-    m_mini.setTactical(tac != 0); m_mini.setGlobe(glb != 0); m_globe.setRotation(rot);
     clampCamera();
     return s.ok();
 }
 
 bool GameState::saveToFile(const std::string& path, const std::string& description) {
     if (!m_mission) return false;
-    return saveGameWrite(path, description, uiStateSave());          // sub_48A120
+    return saveGameWrite(path, description, minimapStateSave(), uiStateSave());   // sub_48A120
 }
 
 bool GameState::loadSavedGame(const std::string& path) {
@@ -197,8 +222,8 @@ bool GameState::loadMission(const std::string& dllName, const GameStartInfo* gsi
     TethysGame::SetDaylightEverywhere(0);
     // Jogo salvo (sub_402CB0 & cia.): no lugar do InitProc, o estado do arquivo.
     if (savePath) {
-        std::vector<uint8_t> extra;
-        if (!saveGameRead(*savePath, extra) || !uiStateLoad(extra)) {
+        std::vector<uint8_t> extra, mm;
+        if (!saveGameRead(*savePath, mm, extra) || !minimapStateLoad(mm) || !uiStateLoad(extra)) {
             std::cerr << "[Load] falhou: " << *savePath << std::endl;
             setCurrentMission(nullptr);
             m_mission.reset();
