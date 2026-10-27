@@ -32,6 +32,10 @@ public:
     void setTarget(int w, int h);
     void setRadius(int r);                     // sub_41F970(r, 1): 50 + zoom*10
     void setSun(int sun16);                    // sub_41F9A0 ([+0x48], GameMap::SetInitialLightLevel)
+    // sub_41F910 ([+0x04]): SetDaylightEverywhere (pacote 0x2B sub-id 19)
+    // desliga o sombreamento — sem noite a esfera nao tem terminador.
+    // sub_41FEE0 tambem sai cedo com dword_56DEA4 ligado.
+    void setShaded(bool v);
     void setSpinTarget(int rot16);             // dword_547290 (sub_408120: centrar a vista)
 
     int  radius() const { return m_r; }

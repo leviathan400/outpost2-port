@@ -1120,6 +1120,7 @@ void GameState::drawGlobe(uint32_t* fb) {
     m_globe.setSource(m_globeTex.data(), w, h + 2 * pad);
     m_globe.setRadius(50 + m_mini.zoom() * 10);     // sub_41F970(zoom*10 + 50, 1)
     m_globe.setSun(TethysGame::daylightPhase());    // [+0x48] = dword_5472A0
+    m_globe.setShaded(!TethysGame::daylightEverywhere());   // sub_41F910 (dword_56DEA4)
     // dword_547290 (sub_407A10 / sub_408120): o alvo do giro e a coluna da
     // BORDA ESQUERDA da vista, em 16 bits, menos um quarto de volta.
     m_globe.setSpinTarget(static_cast<int>((static_cast<long long>(m_camX) << 16) / (w * 32)) - 0x4000);

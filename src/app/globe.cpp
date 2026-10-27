@@ -59,6 +59,12 @@ void Globe::setSun(int sun16) {                 // sub_41F9A0
 
 void Globe::setSpinTarget(int rot16) { m_target = rot16 & 0xFFFF; }
 
+void Globe::setShaded(bool v) {                 // sub_41F910
+    if (m_shaded == v) return;
+    m_shaded = v;
+    updateShade();
+}
+
 // sub_41FBE0: as tabelas da esfera. A superficie de destino define quais linhas
 // de tela o circulo ocupa; de cada uma saem a meia-largura, o x inicial, a
 // contagem e, por pixel, a longitude (16 bits) e a coluna na textura.
