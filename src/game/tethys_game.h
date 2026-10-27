@@ -69,6 +69,7 @@ public:
     // terminador da esfera acompanha o dia porque e a MESMA variavel.
     static int  daylightPhase()      { return s_daylightPhase; }
     static int  daylightEverywhere() { return s_daylightEverywhere; }
+    static int  daylightMoves()      { return s_daylightMoves; }
 
     static void setSeed(uint32_t seed) { s_rng.setSeed(seed); }
     static int  getRand(int n)         { return s_rng.getRand(n); }

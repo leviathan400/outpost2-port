@@ -1806,6 +1806,10 @@ static int runSaveTest(const std::string& dll, int t1, int t2) {
                     (unsigned long long)hSaved, (unsigned long long)hLoaded,
                     hSaved == hLoaded ? "igual" : "DIFERENTE",
                     op2::TethysGame::daylightPhase(), op2::TethysGame::daylightPos());
+        std::printf("[SaveTest] luz: anda %d, em toda parte %d, escuridao da coluna 40 = %d\n",
+                    op2::TethysGame::daylightMoves(), op2::TethysGame::daylightEverywhere(),
+                    op2::g_gameMap.lightDarkness(40 + op2::g_gameMap.internalXOffset()
+                                                 - op2::TethysGame::daylightPos()));
         std::printf("[SaveTest] minimapa: tatica %d (esperado 1), globo %d, giro 0x%X (esperado 0x1234)\n",
                     gs.debugMiniTacticalOn() ? 1 : 0, gs.debugMiniGlobeOn() ? 1 : 0, gs.debugGlobeRotation());
         const int stop = static_cast<int>(op2::TethysGame::tick()) + t2;
@@ -2032,6 +2036,10 @@ static int runSalvageTest(const std::string& mapName) {
     gs.onActivate();
     op2::loadTechTree("MULTITEK.TXT", 12);
     op2::resetUnits();
+    // eden04 esta em noite plena (a missao nao chama SetInitialLightLevel) e o
+    // teste mede a VARREDURA, nao o ciclo dia/noite: sem isto o caminhao sem
+    // farois anda ~2x mais devagar (termo de escuridao de sub_44B650).
+    op2::TethysGame::SetDaylightEverywhere(1);
     const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
     for (int y = 0; y < H; ++y)
         for (int x = 0; x < W; ++x) op2::g_gameMap.clearUnitOccupancy(x, y);

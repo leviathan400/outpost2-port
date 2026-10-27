@@ -7,6 +7,7 @@
 
 #include "unit.h"
 #include "game_map.h"
+#include "tethys_game.h"
 #include "pathfinder.h"
 #include "command.h"
 #include "terrain_cost.h"
@@ -96,10 +97,18 @@ static bool setupStep(int id, int dir) {
         ms = (t + ((t >> 31) & 0x1FF)) >> 9;
     }
     int ticks = (ms * (terrainMoveCost(srcCT, u.moveClass) + dstCost)) >> 10;
-    // + escuridão: (byte_54EC14[coluna - dword_54729C] * ticks) >> 5 — o mapa de
-    //   luz (dia/noite) ainda não foi portado; à luz do dia o termo não pesa.
+    // + escuridão (sub_44B650): sem faróis ([+0x44] bit 0) e sem "luz em toda
+    //   parte" (dword_56DEA4), o passo custa mais na proporção da escuridão da
+    //   COLUNA da unidade — byte_54EC14[(pixelX>>5) - dword_54729C & máscara],
+    //   0..31, ou seja até ~2x mais lento no meio da noite.
+    if (!(u.flags & 1) && !TethysGame::daylightEverywhere()) {
+        const int dark = g_gameMap.lightDarkness((u.pixelX >> 5) + g_gameMap.internalXOffset()
+                                                 - TethysGame::daylightPos());
+        ticks += (dark * ticks) >> 5;
+    }
     // + dano: ticks += dano*ticks / HPmáx.
     if (vs && vs->hitPoints > 0) ticks += (u.damage * ticks) / vs->hitPoints;
+    if (TethysGame::cheatFlag(4)) ticks = 2;        // dword_56DE68 (unidades rápidas)
     if (ticks < 2) ticks = 2;
     u.stepTicks = ticks;
 
