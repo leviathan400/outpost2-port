@@ -58,6 +58,7 @@ public:
 
 private:
     int srcLineOf(int row) const;              // linha da textura de uma linha de tela
+    int padLines() const;                      // margem preta da textura (altura/8)
 
     const uint16_t* m_src = nullptr;
     int m_srcW = 0, m_srcH = 0;

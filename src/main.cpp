@@ -415,6 +415,14 @@ static int runGlobeShot(const std::string& mapName, const std::string& outPath, 
     for (int i = 0; i < (spin > 0 ? spin : 3); ++i) gs.onIdle(renderer, 0.05f);
     const bool ok = writeBmp32(outPath, renderer.getFramebuffer(),
                                op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+    // O topo e a base do MAPA projetados: tem de cair onde a textura deixa de
+    // ser a margem preta (o alinhamento que o original erra).
+    {
+        int sx = 0, sy0 = 0, sy1 = 0, bx = 0, by = 0;
+        gs.debugGlobeRoundTrip(0, 0, sx, sy0, bx, by);
+        gs.debugGlobeRoundTrip(0, op2::g_gameMap.height() * 32 - 1, sx, sy1, bx, by);
+        std::printf("[GlobeShot] topo do mapa -> y=%d; base -> y=%d%c", sy0, sy1, 10);
+    }
     // Ida e volta: o clique no globo (sub_420750) tem de desfazer a projecao.
     for (int k = 0; k < 3; ++k) {
         const int wx = gs.camX() + (k - 1) * 64 * 32, wy = gs.camY() + 10 * 32;

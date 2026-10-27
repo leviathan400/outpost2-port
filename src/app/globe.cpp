@@ -96,12 +96,13 @@ void Globe::rebuild() {
     m_lon.assign(static_cast<size_t>(m_rows) * m_lineW, 0);
 
     for (int row = 0; row < m_rows; ++row, --dz) {
-        // O original varre as linhas ate o fim da superficie, mesmo passando do
-        // circulo: la a raiz de um negativo vira NaN e o __ftol devolve 0 (a
-        // parte baixa do "inteiro indefinido" de 64 bits), ou seja meia-largura
-        // zero — uma coluna de 1 px saindo do polo. Reproduzido como esta.
+        // CORRIGIDO: o original varre as linhas ate o fim da superficie, mesmo
+        // passando do circulo; la a raiz de um negativo vira NaN e o __ftol
+        // devolve 0 (a parte baixa do "inteiro indefinido" de 64 bits), o que
+        // desenha uma coluna de 1 px saindo do polo. Aqui a linha fica vazia.
         const long long v = 4LL * (static_cast<long long>(R) * R - static_cast<long long>(dz) * dz);
-        const int hw = v < 0 ? 0 : static_cast<int>(std::sqrt(static_cast<double>(v))) >> 1;
+        if (v < 0) continue;
+        const int hw = static_cast<int>(std::sqrt(static_cast<double>(v))) >> 1;
         m_halfW[row] = hw;
 
         int x0 = cx - hw; if (x0 <= 0) x0 = 0;
@@ -153,6 +154,10 @@ void Globe::updateShade() {
 
 int Globe::srcLineOf(int row) const { return mul16(m_yStep, row) + m_line; }
 
+// Margem preta da textura (altura/8 em cima e embaixo): a linha onde o mapa
+// real comeca.
+int Globe::padLines() const { return (m_srcH - mapH()) / 2; }
+
 // sub_41F9E0 (caminho sem o mouse): acelera ate o alvo e para perto dele.
 void Globe::tick() {
     const int delta = static_cast<int16_t>(m_target - m_rot);
@@ -195,7 +200,7 @@ void Globe::draw(uint32_t* dst, int dstStride, int ox, int oy,
     // Rolagem vertical: a textura desliza para que o retangulo da vista caiba
     // no globo (o trecho com sub_48EBD0 / sub_48EC00). Ali as bordas vem COM a
     // margem somada, que e justamente o que conta em linhas da textura.
-    const int pad = (m_srcH - mapH()) / 2;
+    const int pad = padLines();
     const int topPad = viewTop + pad, botPad = viewBottom + pad;
     m_line = mul16(m_yStep, m_skip);
     bool adjust = false;
@@ -252,9 +257,16 @@ void Globe::draw(uint32_t* dst, int dstStride, int ox, int oy,
 // sub_4208B0: posicao do mundo (1/32 de tile) -> pixel do globo.
 bool Globe::project(int wx, int wy, int& sx, int& sy) const {
     if (!ready()) return false;
-    // Em Y o mapa ocupa 75% do diametro, a partir de 12,5%.
-    const int f = static_cast<int>((static_cast<long long>(wy) * 49152) / (mapH() * 32)) + 0x2000;
-    const int py = static_cast<int>((static_cast<long long>(f) * m_r * 2) >> 16) - m_skip + m_top;
+    // CORRIGIDO: o original poe o mapa em 75% do diametro a partir de 12,5%
+    // (0x2000 + wy*49152/altura), numeros que NAO batem com a textura que ele
+    // mesmo desenha — ela tem uma margem de altura/8 em cima e embaixo, ou seja
+    // o mapa ocupa 80% a partir de 10%. O retangulo da vista saia ate 3 px fora
+    // do terreno (R = 60). Aqui a conta e a inversa exata do desenho:
+    // linha da textura = (py - top) * srcH / (2R) + m_line, e o mapa real
+    // comeca na linha `pad`.
+    const int py = m_top + static_cast<int>(
+        ((static_cast<long long>(padLines()) * 32 + wy - static_cast<long long>(m_line) * 32)
+         * 2 * m_r) / (static_cast<long long>(m_srcH) * 32));
     sy = py;
 
     const int dz = m_cy - py;
@@ -281,12 +293,14 @@ bool Globe::unproject(int sx, int sy, int& wx, int& wy) const {
     const int centre = mul16((m_rot + 0x4000) & 0xFFFF, xMask() + 1);
     wx = (static_cast<int>(std::asin(t) * k2OverPi * (mapW() * 8)) + centre) & xMask();
 
+    // A inversa do mesmo mapeamento (ver project).
+    long long w = (static_cast<long long>(sy - m_top) * m_srcH * 32) / (2 * m_r)
+                  + static_cast<long long>(m_line) * 32 - static_cast<long long>(padLines()) * 32;
     bool ok = true;
-    double f = (static_cast<double>(m_skip - m_top + sy) / (2.0 * m_r) - 0.125)
-               * 1.333333333333333;
-    if (f < 0.0) { f = 0.0; ok = false; }
-    if (f > 1.0) { f = 1.0; ok = false; }
-    wy = static_cast<int>(f * (mapH() * 32));
+    const long long hmax = static_cast<long long>(mapH()) * 32;
+    if (w < 0) { w = 0; ok = false; }
+    if (w > hmax) { w = hmax; ok = false; }
+    wy = static_cast<int>(w);
     return ok;
 }
 
