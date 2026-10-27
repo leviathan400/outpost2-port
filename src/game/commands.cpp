@@ -1,3 +1,4 @@
+#include "../net/net_game.h"
 #include "salvage.h"
 #include "commands.h"
 #include "repair.h"
@@ -618,7 +619,7 @@ UiClick uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int til
         pkt.patrolStart = s_patrol.start;
         for (int id : sel)
             if ((g_units[id].owner & 0x0F) == me && (g_units[id].flags & UNIT_VEHICLE)) pkt.unitIds.push_back(id);
-        if (!pkt.unitIds.empty()) processCommandPacket(me, pkt);
+        if (!pkt.unitIds.empty()) commandSubmit(me, pkt);
         s_patrol = {};
         soundPlay(0x56);
         return UiClick::DONE;
@@ -630,7 +631,7 @@ UiClick uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int til
         pkt.waypoints.push_back(packLocation(tileX, tileY));
         for (int id : sel)
             if ((g_units[id].owner & 0x0F) == me && (g_units[id].flags & UNIT_ARMED)) pkt.unitIds.push_back(id);
-        if (!pkt.unitIds.empty()) processCommandPacket(me, pkt);
+        if (!pkt.unitIds.empty()) commandSubmit(me, pkt);
         soundPlay(0x56);
         return UiClick::DONE;
     }
@@ -677,7 +678,7 @@ UiClick uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int til
     pkt.waypoints.push_back(packLocation(tileX, tileY));
     for (int id : sel)
         if ((g_units[id].owner & 0x0F) == me && (g_units[id].flags & UNIT_VEHICLE)) pkt.unitIds.push_back(id);
-    if (!pkt.unitIds.empty()) processCommandPacket(me, pkt);
+    if (!pkt.unitIds.empty()) commandSubmit(me, pkt);
     soundPlay(0x56);
     return UiClick::DONE;
 }

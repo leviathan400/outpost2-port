@@ -1,5 +1,7 @@
 #include "game_state.h"
 
+#include "../net/net_game.h"
+
 #include <algorithm>
 #include <iostream>
 
@@ -438,7 +440,11 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     m_tickAccum += dt;
     if (m_endPhase || m_saveDlg.active()) m_tickAccum = 0.0f;   // encerrada / diálogo modal: sem turnos
     while (m_tickAccum >= kTickPeriod) {
+        // Lockstep: em rede o tique so avanca quando o turno de todos chegou
+        // (o anel de 16 turnos do original, pacote 0x33).
+        if (!netReadyForTick(static_cast<int>(TethysGame::tick()) + 1)) break;
         TethysGame::advanceTick();
+        netApplyTurn(static_cast<int>(TethysGame::tick()));
         TethysGame::advanceDaylight(g_gameMap.internalWidth());   // início do turno (sub_489DD0)
         lavaTick();                              // sub_49DC20 da lava (micróbio: pendente)
         m_lastRand = TethysGame::getRand(100);  // 1 consumo determinístico por tick
@@ -1587,7 +1593,7 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
                 Unit u(id);
                 if (u.IsLive() && u.OwnerID() == me && u.IsVehicle()) pkt.unitIds.push_back(id);
             }
-            if (!pkt.unitIds.empty()) { processCommandPacket(me, pkt); soundPlay(0x56); }
+            if (!pkt.unitIds.empty()) { commandSubmit(me, pkt); soundPlay(0x56); }
         }
     }
     if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT && m_miniDrag) {

@@ -1,3 +1,4 @@
+#include "../net/net_game.h"
 #include "mining.h"
 #include "salvage.h"
 #include "../audio/sound.h"
@@ -580,7 +581,7 @@ void sendOreRoute(const std::vector<int>& sel, const std::vector<uint32_t>& pts,
     const int me = TethysGame::localPlayer();
     for (int id : sel)
         if (valid(id) && ownerOf(g_units[id]) == me && (g_units[id].flags & UNIT_VEHICLE)) pkt.unitIds.push_back(id);
-    if (!pkt.unitIds.empty()) processCommandPacket(me, pkt);
+    if (!pkt.unitIds.empty()) commandSubmit(me, pkt);
 }
 
 // Volta a andar (loc_43D6E5: sub_44C2F0, [+0x23] = [+0x22], [+0x22] = 1).

@@ -75,6 +75,7 @@ add_executable(outpost2_modern
     src/app/game_options_pane.cpp
     src/app/minimap.cpp
     src/app/globe.cpp
+    src/net/net_game.cpp
     src/app/storage_pane.cpp
     src/app/research_pane.cpp
     src/gfx/ui_font.cpp

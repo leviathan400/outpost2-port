@@ -55,6 +55,7 @@
 #include "gfx/artfile.h"
 #include "app/tapp.h"
 #include "app/game_state.h"
+#include "net/net_game.h"
 
 // --unittest: exercita o pool de unidades + o wrapper Unit.
 static int runUnitTest() {
@@ -485,6 +486,70 @@ static int runPlaceShot(const std::string& mapName, const std::string& outPath, 
 }
 
 static uint64_t simHash();
+
+// --mpnet <host|join> <DLL> <ticks> [porta] [peer]: partida em REDE. Os dois
+// lados carregam a mesma missao, trocam os turnos (pacote 0x33) e o tique so
+// anda quando o turno de todos chegou. No fim imprime o hash da simulacao: se
+// os dois lados derem o mesmo hash, ficaram em passo.
+static int runMpNet(const std::string& mode, const std::string& dll, int ticks,
+                    int port, const std::string& peer) {
+    const bool host = (mode == "host");
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init(host ? "OP2 mpnet host" : "OP2 mpnet join", 1280, 960, false)) { SDL_Quit(); return 1; }
+
+    op2::NetConfig cfg;
+    cfg.host = host;
+    cfg.port = port;
+    cfg.peerHost = peer;
+    cfg.localPlayer = host ? 0 : 1;
+    std::string err;
+    if (!op2::netStart(cfg, err)) {
+        std::printf("[MpNet] rede falhou: %s%c", err.c_str(), 10);
+        renderer.shutdown(); SDL_Quit(); return 2;
+    }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { op2::netStop(); renderer.shutdown(); SDL_Quit(); return 3; }
+    op2::TethysGame::setLocalPlayer(cfg.localPlayer);
+    gs.onActivate();
+
+    // No tique 12 cada lado manda UM veiculo seu andar 6 tiles. Se os comandos
+    // atravessarem, os dois lados veem os DOIS movimentos e o hash bate; se um
+    // comando ficar so na maquina de origem, os hashes divergem na hora.
+    const int alvo = ticks;
+    int giros = 0;
+    bool mandou = false;
+    while (static_cast<int>(op2::TethysGame::tick()) < alvo && giros < alvo * 200) {
+        if (!mandou && op2::TethysGame::tick() >= 12) {
+            mandou = true;
+            for (size_t i = 1; i < op2::g_units.size(); ++i) {
+                const op2::UnitRecord& r = op2::g_units[i];
+                if (r.id == -1 || (r.flags & op2::UNIT_DEAD)) continue;
+                if ((r.owner & 0x0F) != cfg.localPlayer || !(r.flags & op2::UNIT_VEHICLE)) continue;
+                op2::CommandPacket pkt;
+                pkt.type = op2::CMD_MOVE;
+                pkt.unitIds.push_back(static_cast<int>(i));
+                pkt.waypoints.push_back(op2::packLocation((r.pixelX >> 5) + 6, r.pixelY >> 5));
+                op2::commandSubmit(cfg.localPlayer, pkt);
+                std::printf("[MpNet] %s mandou a unidade %d andar%c", host ? "host" : "join",
+                            static_cast<int>(i), 10);
+                break;
+            }
+        }
+        gs.onIdle(renderer, 0.2501f / 4.0f);
+        ++giros;
+    }
+    std::printf("[MpNet] %s jogador=%d t=%d esperas=%d hash=%016llx%c",
+                host ? "host" : "join", cfg.localPlayer,
+                static_cast<int>(op2::TethysGame::tick()), op2::netWaitCount(),
+                (unsigned long long)simHash(), 10);
+    op2::netStop();
+    renderer.shutdown();
+    SDL_Quit();
+    return 0;
+}
 
 // --mptest <DLL> [ticks]: roda uma missao MULTIJOGADOR e reporta, por jogador,
 // se e humano, quantas unidades/predios tem e se o Command Center esta
@@ -3001,6 +3066,10 @@ int main(int argc, char* argv[]) {
             return runPlayerTest();
         if (std::strcmp(argv[i], "--unittest") == 0)
             return runUnitTest();
+        if (std::strcmp(argv[i], "--mpnet") == 0 && i + 3 < argc)
+            return runMpNet(argv[i + 1], argv[i + 2], atoi(argv[i + 3]),
+                            i + 4 < argc ? atoi(argv[i + 4]) : 47800,
+                            i + 5 < argc ? argv[i + 5] : "127.0.0.1");
         if (std::strcmp(argv[i], "--mptest") == 0 && i + 1 < argc)
             return runMpTest(argv[i + 1], i + 2 < argc ? atoi(argv[i + 2]) : 200);
         if (std::strcmp(argv[i], "--playshot") == 0 && i + 2 < argc) {

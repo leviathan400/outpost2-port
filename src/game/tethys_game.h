@@ -22,6 +22,9 @@ public:
     static int time()        { return static_cast<int>(s_tick >> 2); }
     static int noPlayers()   { return s_numPlayers; }
     static int localPlayer() { return s_localPlayer; }
+    // dword_56DEE8: em rede quem define e o lobby (sub_4893A0 acha o indice
+    // comparando os ids dos jogadores com o da conexao local).
+    static void setLocalPlayer(int p) { s_localPlayer = p; }
 
     // Avança um tick de simulação (o jogo incrementa dword_56DEDC por passo).
     static void advanceTick() { ++s_tick; }
