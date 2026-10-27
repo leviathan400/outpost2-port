@@ -65,6 +65,9 @@ public:
     static uint32_t startFlags()            { return s_startFlags; }
     static void     setStartFlags(uint32_t f) { s_startFlags = f; }
     static int  daylightPos()        { return s_daylightPos; }
+    // A fase e o campo [+0x48] do objeto do globo (dword_5472A0): o
+    // terminador da esfera acompanha o dia porque e a MESMA variavel.
+    static int  daylightPhase()      { return s_daylightPhase; }
     static int  daylightEverywhere() { return s_daylightEverywhere; }
 
     static void setSeed(uint32_t seed) { s_rng.setSeed(seed); }

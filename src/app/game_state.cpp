@@ -95,6 +95,9 @@ bool GameState::loadMap(const std::string& mapName) {
     m_camY = g_gameMap.clipRect().y1 * 32;
     clampCamera();
     m_mini.configure(kColW, kMiniMapH);          // sub_48E7F0 com a janela 192x128
+    // Sem o 4o botao nao ha globo: sub_458930 zera dword_5748A0 nesse caso.
+    if (g_gameMap.internalXOffset()) m_mini.setGlobe(false);
+    m_globeTex.clear();
     return true;
 }
 
@@ -108,6 +111,10 @@ std::vector<uint8_t> GameState::uiStateSave() {
     s.io(g.food); s.io(g.ore); s.io(g.rareOre); s.io(g.workers); s.io(g.scientists); s.io(g.kids);
     s.io(g.spaceWord); s.io(g.localPlayer); s.io(g.endTick); s.io(g.playerBlock);
     s.io(g.techCount); s.io(g.techLevel); s.ioVec(g.techIdx); s.ioVec(g.techMask);
+    // Estado do minimapa: sub_420580 grava o do globo (dword_5748A0, a rotacao
+    // e a tatica dword_574864) na sequencia de sub_48A120.
+    int tac = m_mini.tactical() ? 1 : 0, glb = m_mini.globe() ? 1 : 0, rot = m_globe.rotation();
+    s.io(tac); s.io(glb); s.io(rot);
     return s.buffer();
 }
 bool GameState::uiStateLoad(const std::vector<uint8_t>& blob) {
@@ -119,6 +126,9 @@ bool GameState::uiStateLoad(const std::vector<uint8_t>& blob) {
     s.io(g.food); s.io(g.ore); s.io(g.rareOre); s.io(g.workers); s.io(g.scientists); s.io(g.kids);
     s.io(g.spaceWord); s.io(g.localPlayer); s.io(g.endTick); s.io(g.playerBlock);
     s.io(g.techCount); s.io(g.techLevel); s.ioVec(g.techIdx); s.ioVec(g.techMask);
+    int tac = 0, glb = 0, rot = 0;
+    s.io(tac); s.io(glb); s.io(rot);
+    m_mini.setTactical(tac != 0); m_mini.setGlobe(glb != 0); m_globe.setRotation(rot);
     clampCamera();
     return s.ok();
 }
@@ -1079,6 +1089,73 @@ void GameState::drawBeam(Renderer& renderer, const WeaponDrawOp& op) {
     }
 }
 
+// sub_437250 na superficie do globo ([+0x10A4]): a largura INTERNA do mapa por
+// altura + 2 margens de altura/8, em RGB555. E a textura que a esfera le.
+void GameState::buildGlobeTerrain() {
+    if (!g_gameMap.ok()) return;
+    const int w = g_gameMap.internalWidth(), h = g_gameMap.height();
+    const int pad = m_mini.padY();
+    m_globeTex.assign(static_cast<size_t>(w) * (h + 2 * pad), 0);
+    for (int ty = 0; ty < h; ++ty) {
+        uint16_t* line = &m_globeTex[static_cast<size_t>(ty + pad) * w];
+        for (int tx = 0; tx < w; ++tx) {
+            const uint32_t cell = g_gameMap.rawCell(tx, ty);
+            line[tx] = (m_mini.tactical() && !(cell & 0x08000000u))
+                     ? terrainTacticalColor(static_cast<int>(cell & 0x1F))
+                     : m_terrain.minimapColor(g_gameMap.getTile(LOCATION{tx, ty}));
+        }
+    }
+}
+
+// Visao do globo (sub_48DB20 -> sub_420000). As unidades vao PARA A TEXTURA,
+// como em sub_48CCD0, e saem de la depois (sub_48D2B0).
+void GameState::drawGlobe(uint32_t* fb) {
+    if (!g_gameMap.ok()) return;
+    // Refeita a cada quadro, como sub_48CBB0 faz com a superficie do minimapa:
+    // o terreno muda (terraplenagem, entulho, muros) e custa o mesmo laco que o
+    // minimapa comum ja percorre.
+    buildGlobeTerrain();
+    const int w = g_gameMap.internalWidth(), h = g_gameMap.height(), pad = m_mini.padY();
+    m_globe.setTarget(kColW, kMiniMapH);
+    m_globe.setSource(m_globeTex.data(), w, h + 2 * pad);
+    m_globe.setRadius(50 + m_mini.zoom() * 10);     // sub_41F970(zoom*10 + 50, 1)
+    m_globe.setSun(TethysGame::daylightPhase());    // [+0x48] = dword_5472A0
+    // dword_547290 (sub_407A10 / sub_408120): o alvo do giro e a coluna da
+    // BORDA ESQUERDA da vista, em 16 bits, menos um quarto de volta.
+    m_globe.setSpinTarget(static_cast<int>((static_cast<long long>(m_camX) << 16) / (w * 32)) - 0x4000);
+    m_globe.tick();                                 // sub_41F9E0
+
+    const int me = TethysGame::localPlayer();
+    const bool shade = !TethysGame::daylightEverywhere();
+    // As mesmas cores de dono do minimapa, em RGB555 (a textura e de 16 bits).
+    static const uint16_t kOC5[7] = { 0x219F, 0x7D48, 0x234E, 0x7F48, 0x619F, 0x239C, 0x7E46 };
+    m_globeDirty.clear();
+    for (int i = 1; i < static_cast<int>(g_units.size()); ++i) {
+        const UnitRecord& r = g_units[i];
+        if (r.id == -1 || (r.flags & UNIT_DEAD) || !(r.flags & (UNIT_VEHICLE | UNIT_BUILDING))) continue;
+        const int ow = r.owner & 0x0F;
+        if ((r.flags & UNIT_VEHICLE) && ow != me && shade) {
+            const bool ally = (g_playerData[me].allyMask >> ow) & 1;
+            if (!ally && !(r.flags & 1) &&
+                g_gameMap.lightDarkness((r.pixelX >> 5) + g_gameMap.internalXOffset()
+                                        - TethysGame::daylightPos()) >= 16)
+                continue;
+        }
+        const int tx = (r.pixelX >> 5) & (w - 1), ty = r.pixelY >> 5;
+        if (ty < 0 || ty >= h) continue;
+        const size_t idx = static_cast<size_t>(ty + pad) * w + tx;
+        m_globeDirty.emplace_back(static_cast<int>(idx), m_globeTex[idx]);
+        m_globeTex[idx] = kOC5[ow % 7];
+    }
+
+    m_globe.draw(fb, Renderer::NATIVE_WIDTH, kColX, kMiniMapY,
+                 m_camX >> 5, m_camY >> 5,
+                 (m_camX + viewportW()) >> 5, (m_camY + viewportH()) >> 5,
+                 m_miniDrag);
+
+    for (const auto& d : m_globeDirty) m_globeTex[d.first] = d.second;
+}
+
 // sub_48D860: ponto da janela do minimapa → pixel do mundo (tile << 5, o canto
 // do tile), invertendo a escala/deslocamento do MiniMap. Fora do mapa (ou nos
 // botões do topo, que são janelas filhas) não converte.
@@ -1087,6 +1164,8 @@ bool GameState::miniToWorld(int nx, int ny, int& px, int& py) const {
     const int mx = nx - kColX, my = ny - kMiniMapY;
     if (mx < 0 || mx >= kColW || my < 0 || my >= kMiniMapH) return false;
     if (my < 16 && mx >= kColW / 2 - 0x20 && mx < kColW / 2 - 0x20 + 16 * miniButtonCount()) return false;
+    // Com o globo ligado sub_48D860 delega a conversao a sub_420750.
+    if (m_mini.globe()) return m_globe.unproject(mx, my, px, py);
     const int mw = g_gameMap.width(), mh = g_gameMap.height();
     const int sx = m_mini.scaleX(), sy = m_mini.scaleY();
     if (sx <= 0 || sy <= 0) return false;
@@ -1323,8 +1402,7 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
         bool inView = vx >= 0 && vx < viewportW() && vy >= 0 && vy < viewportH();
         // Painel de produção: lista e setas (sub_4683F0 / sub_4683B0 / sub_430910-60).
         bool paneHit = false;
-        // Botões do minimapa (sub_458930): Zoom In / Zoom Out; a visão tática e
-        // a do globo ainda não têm renderizador.
+        // Botões do minimapa (sub_458930): Zoom In / Zoom Out / Tática / Globo.
         if (e.button.button == SDL_BUTTON_LEFT && !inView) {
             const int bx0 = kColX + kColW / 2 - 0x20;
             if (ny >= kMiniMapY && ny < kMiniMapY + 16 && nx >= bx0 &&
@@ -1333,6 +1411,7 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
                 if (k == 0 && m_mini.canZoomIn()) { soundPlay(0x57); m_mini.zoomIn(); }
                 else if (k == 1 && m_mini.canZoomOut()) { soundPlay(0x57); m_mini.zoomOut(); }
                 else if (k == 2) { soundPlay(0x57); m_mini.toggleTactical(); }   // sub_48E960
+                else if (k == 3) { soundPlay(0x57); m_mini.toggleGlobe(); }       // sub_48E9E0
                 return;
             }
         }
@@ -2088,6 +2167,7 @@ void GameState::renderPanel(Renderer& renderer) {
     auto mapX = [&](int tx) { return mmX0 + m_mini.pxX(tx + xoffT); };   // tile → pixel do minimapa
     auto mapY = [&](int ty) { return mmY0 + m_mini.pxY(ty); };
     renderer.fillRect(mmX0, mmY0, mmW, mmH, 0xFF000000);
+    if (m_mini.globe()) { drawGlobe(fb); } else {
     const bool shade = g_gameMap.ok() && !TethysGame::daylightEverywhere();
     // Brilho 0..31 da coluna do port (x interna = x + deslocamento).
     auto brightness = [&](int tx) {
@@ -2158,11 +2238,10 @@ void GameState::renderPanel(Renderer& renderer) {
         mmFill(vx, vy, 1, vh2, 0xFFFFFFFF);
         mmFill(vx + vw2 - 1, vy, 1, vh2, 0xFFFFFFFF);
     }
+    }
     // Botões do minimapa (sub_458930, posição [+0x310] = 0: topo, centrados):
     // x = W/2 − 32 e +16 por botão. Arte crua {0x9D Zoom In, 0x9C Zoom Out,
     // 0x9E Toggle Tactical View, 0x9A Toggle Globe View (só sem dword_54EBF0)}.
-    // A vista tática (botão 2) está portada; PROVISÓRIO: a visão do globo
-    // (botão 3) ainda não tem renderizador e segue inerte.
     if (g_art.ok()) {
         for (int k = 0; k < miniButtonCount(); ++k) {
             const int anim = kMiniBtnArt[k] - 0x65;
@@ -2171,7 +2250,7 @@ void GameState::renderPanel(Renderer& renderer) {
             // Estilo dos botoes (dword_4E2E08) = {0, 0, 0x80, 0x80}: so os dois
             // ultimos sao de ALTERNANCIA, e o quadro 1 marca o estado ligado
             // (flag 0x40 de sub_40AEE0); os de zoom nunca acendem.
-            const bool on = (k == 2 && m_mini.tactical());
+            const bool on = (k == 2 && m_mini.tactical()) || (k == 3 && m_mini.globe());
             blitArtFrame(fb, VW, VH, anim, on ? 1 : 0, bx, mmY0, -1,
                          mmX0, mmY0, mmX0 + mmW, mmY0 + mmH);
         }

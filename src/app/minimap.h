@@ -26,6 +26,15 @@ public:
     // minimapa com as cores do TIPO de terreno (sub_437250 com a flag).
     void toggleTactical() { m_tactical = !m_tactical; }
     bool tactical() const { return m_tactical; }
+    // Visao do globo (sub_48E9E0): alterna [+0x1088] e esquece o retangulo da
+    // vista guardado em [+0x103C..0x1048] (no port nada e guardado: o minimapa
+    // e redesenhado inteiro por quadro). So existe nos mapas "redondos", os de
+    // deslocamento interno 0 — sub_458930 so cria o 4o botao com dword_54EBF0
+    // zerado.
+    void toggleGlobe() { m_globe = !m_globe; }
+    void setTactical(bool v) { m_tactical = v; }
+    void setGlobe(bool v) { m_globe = v; }
+    bool globe() const { return m_globe; }
 
     bool canZoomIn() const { return m_zoom < 5; }
     bool canZoomOut() const { return m_zoom > m_minZoom; }
@@ -56,6 +65,7 @@ private:
     int m_zoom = 1, m_minZoom = 0;
     int m_offX = 0, m_offY = 0;            // [+0x105C] / [+0x1058]
     bool m_tactical = false;               // [+0x104C]
+    bool m_globe = false;                  // [+0x1088]
 };
 
 } // namespace op2

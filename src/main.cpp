@@ -392,6 +392,48 @@ static int runMiniShot(const std::string& mapName, const std::string& outPath, i
     return ok ? 0 : 1;
 }
 
+// --globeshot <map> <out.bmp> <zooms> [quadros] [tac]: liga a visao do globo (o
+// 4o botao do minimapa, so nos mapas de largura 512) e grava a tela.
+static int runGlobeShot(const std::string& mapName, const std::string& outPath, int zooms,
+                        int spin, bool tactical, int sun) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 globeshot", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    gs.debugMiniZoom(zooms);
+    if (tactical) gs.debugMiniTactical();
+    gs.debugMiniGlobe();
+    // Posicao do sol: o campo [+0x48] do globo e a fase do dia (dword_5472A0).
+    if (sun) op2::TethysGame::setDaylightPhase(sun, op2::g_gameMap.internalWidth());
+    // O globo gira ate o alvo (a coluna da camera) com aceleracao, entao sao
+    // precisos varios quadros ate ele se assentar.
+    for (int i = 0; i < (spin > 0 ? spin : 3); ++i) gs.onIdle(renderer, 0.05f);
+    const bool ok = writeBmp32(outPath, renderer.getFramebuffer(),
+                               op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+    // Ida e volta: o clique no globo (sub_420750) tem de desfazer a projecao.
+    for (int k = 0; k < 3; ++k) {
+        const int wx = gs.camX() + (k - 1) * 64 * 32, wy = gs.camY() + 10 * 32;
+        int sx = 0, sy = 0, bx = 0, by = 0;
+        if (gs.debugGlobeRoundTrip(wx & (op2::g_gameMap.internalWidth() * 32 - 1), wy,
+                                   sx, sy, bx, by))
+            std::printf("[GlobeShot] mundo %d,%d -> tela %d,%d -> mundo %d,%d (erro %d,%d)",
+                        wx, wy, sx, sy, bx, by, bx - (wx & (op2::g_gameMap.internalWidth() * 32 - 1)),
+                        by - wy), std::printf("%c", 10);
+    }
+    std::printf("[GlobeShot] mapa %dx%d (interna %d, desl %d) zoom=%d raio=%d quadros=%d%s -> %s\n",
+                op2::g_gameMap.width(), op2::g_gameMap.height(), op2::g_gameMap.internalWidth(),
+                op2::g_gameMap.internalXOffset(), gs.debugMiniZoomLevel(),
+                50 + gs.debugMiniZoomLevel() * 10, spin, tactical ? " tatica" : "",
+                outPath.c_str());
+    renderer.shutdown();
+    SDL_Quit();
+    return ok ? 0 : 1;
+}
+
 // --placeshot <map> <out.bmp> <tipo>: ConVec com o kit do tipo, comando "Build
 // structure kit" armado e o cursor no meio da vista — mostra o tingimento dos
 // tiles do retângulo de posicionamento (sub_41BC50 / sub_451CA0).
@@ -2876,6 +2918,11 @@ int main(int argc, char* argv[]) {
         if (std::strcmp(argv[i], "--minishot") == 0 && i + 3 < argc)
             return runMiniShot(argv[i + 1], argv[i + 2], atoi(argv[i + 3]),
                                i + 4 < argc && std::strcmp(argv[i + 4], "tac") == 0);
+        if (std::strcmp(argv[i], "--globeshot") == 0 && i + 3 < argc)
+            return runGlobeShot(argv[i + 1], argv[i + 2], atoi(argv[i + 3]),
+                                i + 4 < argc ? (int)std::strtol(argv[i + 4], nullptr, 0) : 0,
+                                i + 5 < argc && std::strcmp(argv[i + 5], "tac") == 0,
+                                i + 6 < argc ? (int)std::strtol(argv[i + 6], nullptr, 0) : 0);
         if (std::strcmp(argv[i], "--placeshot") == 0 && i + 3 < argc)
             return runPlaceShot(argv[i + 1], argv[i + 2], (int)std::strtol(argv[i + 3], nullptr, 0),
                                 i + 4 < argc ? atoi(argv[i + 4]) : 0,

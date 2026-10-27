@@ -23,6 +23,7 @@
 #include "save_dialog.h"
 #include "game_options_pane.h"
 #include "minimap.h"
+#include "globe.h"
 
 namespace op2 {
 
@@ -138,6 +139,15 @@ private:
     int  m_capPressed = -1;        // botão da barra de título apertado (dword_4EA240)
     MiniMap m_mini;                // escala/zoom/deslocamento do minimapa
     int  miniButtonCount() const;  // 4 botões (3 nos mapas guardados dobrados)
+    // Visão do globo: a esfera (unk_547258) e a superfície do minimapa que ela
+    // usa de textura ([+0x10A4], largura do mapa × altura + 2 margens, RGB555).
+    // O original pinta as unidades NESSA superfície (sub_48CCD0) e depois as
+    // apaga (sub_48D2B0) — aqui a lista m_globeDirty faz o mesmo papel.
+    Globe m_globe;
+    std::vector<uint16_t> m_globeTex;
+    std::vector<std::pair<int, uint16_t>> m_globeDirty;
+    void buildGlobeTerrain();      // sub_437250 na superfície do globo
+    void drawGlobe(uint32_t* fb);
     int  unitAtView(int vx, int vy) const;   // unidade (qualquer dono) sob o cursor, raio 20
 public:
     void debugGameOptions() { m_gameOptions.open(); }   // só p/ --panetest
@@ -146,6 +156,12 @@ public:
     void debugMiniZoom(int n) { for (int k = 0; k < n; ++k) m_mini.zoomIn(); }   // só p/ --minishot
     int  debugMiniZoomLevel() const { return m_mini.zoom(); }
     void debugMiniTactical() { m_mini.toggleTactical(); }   // so p/ --minishot
+    void debugMiniGlobe() { m_mini.toggleGlobe(); }         // so p/ --globeshot
+    void debugGlobeSpin(int d) { m_globe.rotateBy(d); }     // so p/ --globeshot
+    // so p/ --globeshot: mundo -> tela -> mundo (sub_4208B0 / sub_420750)
+    bool debugGlobeRoundTrip(int wx, int wy, int& sx, int& sy, int& bx, int& by) const {
+        return m_globe.project(wx, wy, sx, sy) && m_globe.unproject(sx, sy, bx, by);
+    }
     void debugAreaDrag(int cmd) {            // só p/ --placeshot: arrasto de 3 tiles
         m_targetCmd = cmd; m_areaDrag = true;
         m_areaSX = m_camX + m_mouseNX - kViewX - 96;
