@@ -22,6 +22,14 @@ int mul16(int a, int scale) { return static_cast<int>((static_cast<long long>(a)
 
 int MiniMap::padY() const { return xOff() ? 0 : (mapHeight() >> 3); }   // dword_54EBD0 >> 3
 
+// sub_48E5C0: com zoom, a largura do mapa em px (nunca menor que a janela);
+// no encaixe, o dobro da janela. So os mapas de deslocamento 0 repetem.
+int MiniMap::wrapStep() const {
+    if (xOff()) return 0;
+    if (!m_zoom) return m_winW * 2;
+    return std::max(mul16(internalW(), scaleX()), m_winW);
+}
+
 void MiniMap::computeScales() {
     const int h = mapHeight();
     const int hAdj = xOff() ? h : h + ((h & ~4) >> 2);     // and 0FFFFFFFBh / sar 2

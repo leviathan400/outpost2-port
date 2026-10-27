@@ -2180,10 +2180,17 @@ void GameState::renderPanel(Renderer& renderer) {
         return (c5 * m) >> 5;
     };
     // Com zoom o mapa é maior que a janela: tudo sai recortado nela.
+    // Mapa redondo: sub_48DB20 chama sub_48EC70 duas vezes, a segunda deslocada
+    // de sub_48E5C0, senao a rolagem cilindrica deixa a janela meio preta.
+    const int wrapStep = m_mini.wrapStep();
     auto mmFill = [&](int x, int y, int w, int h, uint32_t c) {
-        const int x0 = std::max(x, mmX0), y0 = std::max(y, mmY0);
-        const int x1 = std::min(x + w, mmX0 + mmW), y1 = std::min(y + h, mmY0 + mmH);
-        if (x1 > x0 && y1 > y0) renderer.fillRect(x0, y0, x1 - x0, y1 - y0, c);
+        auto one = [&](int px) {
+            const int x0 = std::max(px, mmX0), y0 = std::max(y, mmY0);
+            const int x1 = std::min(px + w, mmX0 + mmW), y1 = std::min(y + h, mmY0 + mmH);
+            if (x1 > x0 && y1 > y0) renderer.fillRect(x0, y0, x1 - x0, y1 - y0, c);
+        };
+        one(x);
+        if (wrapStep) one(x + wrapStep);
     };
     if (g_gameMap.ok()) {
         for (int ty = 0; ty < mh; ++ty) {
@@ -2191,7 +2198,11 @@ void GameState::renderPanel(Renderer& renderer) {
             if (py + ph <= mmY0 || py >= mmY0 + mmH) continue;
             for (int tx = 0; tx < mw; ++tx) {
                 const int px = mapX(tx), pw = mapX(tx + 1) - px;
-                if (px + pw <= mmX0 || px >= mmX0 + mmW) continue;
+                // Com a repeticao, um tile fora da janela aqui pode estar
+                // dentro dela no segundo desenho.
+                if ((px + pw <= mmX0 || px >= mmX0 + mmW) &&
+                    (!wrapStep || px + wrapStep + pw <= mmX0 || px + wrapStep >= mmX0 + mmW))
+                    continue;
                 // Vista tatica (sub_437250 com a flag de [+0x104C]): a cor do
                 // TIPO de terreno no lugar da cor media do tile, menos nas
                 // celulas com bloqueio duro (bit 27), que ficam normais.

@@ -46,6 +46,10 @@ public:
     int scaleX() const { return m_zoom ? m_scale : m_fitX; }   // 16.16, px por tile
     int scaleY() const { return m_zoom ? m_scale : m_fitY; }
     int padY() const;                      // margem vertical em tiles (mapa redondo)
+    // sub_48E5C0: nos mapas redondos sub_48DB20 desenha o minimapa DUAS
+    // vezes, a segunda deslocada deste tanto, para a rolagem cilindrica
+    // nao deixar buraco. 0 = nao repete.
+    int wrapStep() const;
     int offX() const { return m_offX; }
     int offY() const { return m_offY; }
     // Tile → pixel na janela do minimapa (X em coordenada INTERNA).

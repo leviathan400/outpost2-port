@@ -369,7 +369,7 @@ static int runFontTest() {
 // --minishot <map> <out.bmp> <zooms>: aplica N vezes o Zoom In do minimapa e
 // grava a tela — confere a escala/rolagem de sub_48E7F0/48E090/48E390.
 static int runMiniShot(const std::string& mapName, const std::string& outPath, int zooms,
-                       bool tactical) {
+                       bool tactical, int camTileX) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
     op2::g_ResManager.init(".");
     op2::g_art.load();
@@ -380,6 +380,7 @@ static int runMiniShot(const std::string& mapName, const std::string& outPath, i
     gs.onActivate();
     gs.debugMiniZoom(zooms);
     if (tactical) gs.debugMiniTactical();
+    if (camTileX) gs.setCamera(camTileX * 32, gs.camY());
     for (int i = 0; i < 3; ++i) gs.onIdle(renderer, 0.05f);
     const bool ok = writeBmp32(outPath, renderer.getFramebuffer(),
                                op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
@@ -2917,7 +2918,8 @@ int main(int argc, char* argv[]) {
         if (std::strcmp(argv[i], "--fonttest") == 0) return runFontTest();
         if (std::strcmp(argv[i], "--minishot") == 0 && i + 3 < argc)
             return runMiniShot(argv[i + 1], argv[i + 2], atoi(argv[i + 3]),
-                               i + 4 < argc && std::strcmp(argv[i + 4], "tac") == 0);
+                               i + 4 < argc && std::strcmp(argv[i + 4], "tac") == 0,
+                               i + 5 < argc ? atoi(argv[i + 5]) : 0);
         if (std::strcmp(argv[i], "--globeshot") == 0 && i + 3 < argc)
             return runGlobeShot(argv[i + 1], argv[i + 2], atoi(argv[i + 3]),
                                 i + 4 < argc ? (int)std::strtol(argv[i + 4], nullptr, 0) : 0,
