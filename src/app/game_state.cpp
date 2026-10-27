@@ -203,10 +203,17 @@ bool GameState::loadMission(const std::string& dllName, const GameStartInfo* gsi
     TethysGame::reset(/*seed*/ 0x12345678u, d->numPlayers, /*localPlayer*/ 0);
     m_tickAccum = 0.0f;
     resetPlayers(d->numPlayers);
-    // GameStartInfo do shell p/ jogo single player: o jogador 0 é o humano, os
-    // demais computador ([+0x28] isHuman).
+    // sub_4893A0: em MULTIJOGADOR todos os jogadores sao humanos — loc_489648
+    // chama GoHuman (sub_4905E0) para cada um; em um jogador so o 0
+    // (loc_4896D5). O shell decide pelo bit 0x10 do GameStartInfo; sem ele
+    // (testes por linha de comando) vale o tipo da missao, que so e M* em
+    // multijogador. Sem isto o CreateOnePlayerLeftTrigger das M* ve um unico
+    // humano vivo e declara vitoria no primeiro tique.
+    const bool multiGame = gsi ? ((gsi->flags & 0x10) != 0)
+                               : (d->missionType <= -4 && d->missionType >= -8);
     // (o registro vem pronto do GameStartInfo: só o campo, sem GoAI/GoHuman).
-    for (int p = 0; p < d->numPlayers; ++p) g_playerData[p].isHuman = (p == 0) ? 1 : 0;
+    for (int p = 0; p < d->numPlayers; ++p)
+        g_playerData[p].isHuman = (multiGame || p == 0) ? 1 : 0;
     // sub_4893A0: a estrutura vai para TethysGame+0xA4; dificuldade de cada
     // jogador = bits 3-4 da palavra dele (+0x30).
     m_gsi = gsi ? *gsi : GameStartInfo{};

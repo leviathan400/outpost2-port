@@ -484,6 +484,55 @@ static int runPlaceShot(const std::string& mapName, const std::string& outPath, 
     return ok ? 0 : 1;
 }
 
+static uint64_t simHash();
+
+// --mptest <DLL> [ticks]: roda uma missao MULTIJOGADOR e reporta, por jogador,
+// se e humano, quantas unidades/predios tem e se o Command Center esta
+// operante — que e o que o CreateOnePlayerLeftTrigger (sub_492970) olha.
+// Serve para ver se a partida se sustenta em vez de acabar no primeiro tique.
+static int runMpTest(const std::string& dll, int ticks) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 mptest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    const int n = op2::TethysGame::noPlayers();
+    auto report = [&](const char* when) {
+        std::printf("[MpTest] %s t=%d jogadores=%d", when,
+                    static_cast<int>(op2::TethysGame::tick()), n);
+        for (int p = 0; p < n; ++p) {
+            int veh = 0, bld = 0;
+            for (size_t i = 1; i < op2::g_units.size(); ++i) {
+                const op2::UnitRecord& r = op2::g_units[i];
+                if (r.id == -1 || (r.flags & op2::UNIT_DEAD)) continue;
+                if ((r.owner & 0x0F) != p) continue;
+                if (r.flags & op2::UNIT_VEHICLE) ++veh;
+                else if (r.flags & op2::UNIT_BUILDING) ++bld;
+            }
+            std::printf(" | p%d %s v=%d e=%d cc=%d", p,
+                        op2::g_playerData[p].isHuman ? "humano" : "IA", veh, bld,
+                        op2::g_colony[p].stat(op2::ST_CC_OP));
+        }
+        std::printf("%c", 10);
+    };
+    if (const op2::MissionScript* ms = op2::currentMission())
+        std::printf("[MpTest] desc: tipo=%d jogadores=%d tech=%d unitMission=%d%c",
+                    ms->desc->missionType, ms->desc->numPlayers,
+                    ms->desc->maxTechLevel, ms->desc->boolUnitMission, 10);
+    report("inicio");
+    for (int k = 0; k < ticks && !gs.gameEnded(); ++k) {
+        gs.onIdle(renderer, 0.2501f / 4.0f);
+    }
+    report(gs.gameEnded() ? "FIM  " : "fim  ");
+    if (gs.gameEnded()) std::printf("[MpTest] a partida terminou antes do tempo%c", 10);
+    renderer.shutdown();
+    SDL_Quit();
+    return 0;
+}
+
 // --playshot <map> <out.bmp> [pass] [colunaDaCamera]: carrega o jogo, roda alguns
 // frames e salva o framebuffer (terreno + unidades + HUD) para inspeção visual.
 // A coluna da câmera serve para alcançar o dia ou a noite num mapa largo.
@@ -2952,6 +3001,8 @@ int main(int argc, char* argv[]) {
             return runPlayerTest();
         if (std::strcmp(argv[i], "--unittest") == 0)
             return runUnitTest();
+        if (std::strcmp(argv[i], "--mptest") == 0 && i + 1 < argc)
+            return runMpTest(argv[i + 1], i + 2 < argc ? atoi(argv[i + 2]) : 200);
         if (std::strcmp(argv[i], "--playshot") == 0 && i + 2 < argc) {
             bool pass = (i + 3 < argc && std::strcmp(argv[i + 3], "pass") == 0);
             return runPlayShot(argv[i + 1], argv[i + 2], pass,
