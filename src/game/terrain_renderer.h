@@ -2,7 +2,6 @@
 
 #include <cstdint>
 #include <memory>
-#include <unordered_map>
 #include <vector>
 
 #include "../gfx/pbmp.h"
@@ -28,7 +27,11 @@ public:
     // Desenha a região visível no buffer ARGB `dst` (dstW x dstH, stride=dstW).
     // (camX,camY) = pixel do canto superior-esquerdo da câmera no espaço do mapa.
     // Faz wrap horizontal (como o engine). Células sem tile no pool ficam pretas.
-    void render(uint32_t* dst, int dstW, int dstH, int camX, int camY) const;
+    // Cada tile sai pela paleta da escuridão da SUA coluna (sub_4A8BD0 escolhe
+    // `paletaBase + (escuridão << 9)`); `darkOf` devolve 0..31 por coluna de
+    // tile, ou nullptr para desenhar tudo de dia.
+    void render(uint32_t* dst, int dstW, int dstH, int camX, int camY,
+                int (*darkOf)(int tileX) = nullptr) const;
 
     // Cor do minimapa de um tile (RGB555): média dos 1024 pixels do tile do
     // mapeamento, em 5 bits por canal — sub_48B320 (tabela [obj+0x46C]->[+8]).
@@ -40,11 +43,9 @@ private:
     const GameMap* m_map = nullptr;
     std::vector<std::unique_ptr<Pbmp>> m_tilesets;
     std::vector<PoolEntry> m_pool;                 // globalIndex -> (tileset, local)
-    mutable std::unordered_map<int, std::vector<uint32_t>> m_cache; // tile 32x32 ARGB
     std::vector<uint16_t> m_minimapColors;         // por mapeamento (sub_48B2E0)
     bool m_ok = false;
 
-    const std::vector<uint32_t>* tilePixels(int globalIndex) const;
 };
 
 } // namespace op2

@@ -158,6 +158,8 @@ public:
     void debugMiniZoom(int n) { for (int k = 0; k < n; ++k) m_mini.zoomIn(); }   // só p/ --minishot
     int  debugMiniZoomLevel() const { return m_mini.zoom(); }
     void debugMiniTactical() { m_mini.toggleTactical(); }   // so p/ --minishot
+    // Escuridão da coluna (byte_54EC14) — usada pelo render e pelo --playshot.
+    static int tileDarkness(int tileX);
     void debugMiniGlobe() { m_mini.toggleGlobe(); }         // so p/ --globeshot
     bool debugMiniTacticalOn() const { return m_mini.tactical(); }
     bool debugMiniGlobeOn() const { return m_mini.globe(); }

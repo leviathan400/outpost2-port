@@ -13,7 +13,6 @@ bool TerrainRenderer::init(const GameMap& map, ResManager& res) {
     m_map = &map;
     m_tilesets.clear();
     m_pool.clear();
-    m_cache.clear();
     m_ok = false;
 
     for (const auto& ts : map.tilesets()) {
@@ -44,18 +43,9 @@ bool TerrainRenderer::init(const GameMap& map, ResManager& res) {
 int TerrainRenderer::mapPixelWidth()  const { return m_map ? m_map->width()  * 32 : 0; }
 int TerrainRenderer::mapPixelHeight() const { return m_map ? m_map->height() * 32 : 0; }
 
-const std::vector<uint32_t>* TerrainRenderer::tilePixels(int g) const {
-    if (g < 0 || g >= static_cast<int>(m_pool.size())) return nullptr;
-    auto it = m_cache.find(g);
-    if (it != m_cache.end()) return &it->second;
-    const PoolEntry& pe = m_pool[g];
-    std::vector<uint32_t> buf(32 * 32, 0xFF000000u);
-    if (!m_tilesets[pe.tileset]->blitTile(pe.local, buf.data(), 32)) return nullptr;
-    auto res = m_cache.emplace(g, std::move(buf));
-    return &res.first->second;
-}
 
-void TerrainRenderer::render(uint32_t* dst, int dstW, int dstH, int camX, int camY) const {
+void TerrainRenderer::render(uint32_t* dst, int dstW, int dstH, int camX, int camY,
+                             int (*darkOf)(int)) const {
     if (!m_ok || !m_map) return;
 
     // Faixa de tiles que toca a viewport (usa tx/ty reais; getTile faz wrap em X).
@@ -70,8 +60,14 @@ void TerrainRenderer::render(uint32_t* dst, int dstW, int dstH, int camX, int ca
         if (ty < 0 || ty >= h) continue;   // sem wrap vertical
         for (int tx = firstTx; tx <= lastTx; ++tx) {
             int g = m_map->getTile(LOCATION{tx, ty});
-            const std::vector<uint32_t>* tile = tilePixels(g);
-            if (!tile) continue;
+            if (g < 0 || g >= static_cast<int>(m_pool.size())) continue;
+            const PoolEntry& pe = m_pool[g];
+            const Pbmp* ts = m_tilesets[pe.tileset].get();
+            const uint8_t* idx = ts ? ts->tileIndices(pe.local) : nullptr;
+            if (!idx) continue;
+            // A escuridao e por COLUNA DE TILE, uma paleta por blit.
+            const uint32_t* pal = ts->palette(darkOf ? darkOf(tx) : 0);
+            const int idxStride = ts->indexStride();
 
             int screenX = tx * 32 - camX;   // canto do tile na tela
             int screenY = ty * 32 - camY;
@@ -84,9 +80,9 @@ void TerrainRenderer::render(uint32_t* dst, int dstW, int dstH, int camX, int ca
             if (sx0 >= sx1 || sy0 >= sy1) continue;
 
             for (int sy = sy0; sy < sy1; ++sy) {
-                const uint32_t* srcRow = tile->data() + sy * 32;
+                const uint8_t* srcRow = idx + static_cast<size_t>(sy) * idxStride;
                 uint32_t* dstRow = dst + static_cast<size_t>(screenY + sy) * dstW + (screenX + sx0);
-                std::copy(srcRow + sx0, srcRow + sx1, dstRow);
+                for (int sx = sx0; sx < sx1; ++sx) *dstRow++ = pal[srcRow[sx]];
             }
         }
     }

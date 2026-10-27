@@ -1,5 +1,7 @@
 #include "pbmp.h"
 
+#include <algorithm>
+
 #include <cstring>
 
 namespace op2 {
@@ -68,8 +70,39 @@ bool Pbmp::load(const uint8_t* d, size_t size) {
     if (dl < need) return false;
     m_pixels.assign(d + pxo, d + pxo + need);
 
+    // sub_4A9BF0(paleta, N = 32): para o nível L = N..1 (ou seja escuridão
+    // d = N − L), cada canal vira canal * min(L + 4, N) / N e e truncado a 5
+    // bits (a superfície do jogo e RGB555). Com d <= 4 o multiplicador satura
+    // em N e a cor fica intacta.
+    m_shaded.assign(static_cast<size_t>(kShadeLevels) * 256, 0xFF000000u);
+    for (int d = 0; d < kShadeLevels; ++d) {
+        const int mult = std::min(kShadeLevels - d + 4, kShadeLevels);
+        for (int i = 0; i < 256; ++i) {
+            const uint32_t c = m_palette[i];
+            const int r = (static_cast<int>((c >> 16) & 0xFF) * mult) / kShadeLevels;
+            const int g = (static_cast<int>((c >> 8) & 0xFF) * mult) / kShadeLevels;
+            const int b = (static_cast<int>(c & 0xFF) * mult) / kShadeLevels;
+            m_shaded[static_cast<size_t>(d) * 256 + i] =
+                0xFF000000u | (static_cast<uint32_t>(r & 0xF8) << 16)
+                            | (static_cast<uint32_t>(g & 0xF8) << 8)
+                            | static_cast<uint32_t>(b & 0xF8);
+        }
+    }
+
     m_ok = true;
     return true;
+}
+
+const uint8_t* Pbmp::tileIndices(int index) const {
+    if (!m_ok || index < 0 || index >= numTiles()) return nullptr;
+    return &m_pixels[static_cast<size_t>(index) * 32 * m_width];
+}
+
+const uint32_t* Pbmp::palette(int darkness) const {
+    if (m_shaded.empty()) return m_palette.data();
+    if (darkness < 0) darkness = 0;
+    if (darkness >= kShadeLevels) darkness = kShadeLevels - 1;
+    return &m_shaded[static_cast<size_t>(darkness) * 256];
 }
 
 bool Pbmp::blitTile(int index, uint32_t* dst, int dstStride) const {

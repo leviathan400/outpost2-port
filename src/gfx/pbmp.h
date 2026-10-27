@@ -23,12 +23,25 @@ public:
     // stride em px = dstStride). Retorna false se índice inválido.
     bool blitTile(int index, uint32_t* dst, int dstStride) const;
 
+    // Índices de paleta do tile (32 linhas; a linha seguinte fica a
+    // indexStride() bytes). nullptr se o índice for inválido.
+    const uint8_t* tileIndices(int index) const;
+    int indexStride() const { return m_width; }
+
+    // As 32 paletas do ciclo dia/noite (sub_4A9BF0 com N = 32, os níveis que
+    // sub_4A8BD0 escolhe com `base + (escuridão << 9)`): a paleta `d` tem cada
+    // canal multiplicado por min(36 − d, 32)/32 e truncado a 5 bits, ou seja o
+    // dia (d ≤ 4) fica intacto e a noite plena cai a ~15%.
+    static constexpr int kShadeLevels = 32;
+    const uint32_t* palette(int darkness) const;
+
 private:
     int m_width = 0;
     int m_height = 0;
     int m_bpp = 0;
     bool m_ok = false;
     std::vector<uint32_t> m_palette;   // 256 cores ARGB
+    std::vector<uint32_t> m_shaded;    // kShadeLevels * 256 (sub_4A9BF0)
     std::vector<uint8_t> m_pixels;     // width*height, top-down, 8-bit
 };
 

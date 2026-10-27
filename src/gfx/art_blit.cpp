@@ -9,9 +9,33 @@ namespace op2 {
 static bool s_shadows = true;   // dword_575630
 void setArtShadows(bool on) { s_shadows = on; }
 
+// Rampa do ciclo dia/noite (sub_4A9BF0 com N = 32), por canal de 8 bits.
+static uint8_t s_shadeLut[32][256];
+static bool s_shadeLutReady = false;
+
+static void buildShadeLut() {
+    for (int d = 0; d < 32; ++d) {
+        const int mult = (32 - d + 4) < 32 ? (32 - d + 4) : 32;
+        for (int v = 0; v < 256; ++v)
+            s_shadeLut[d][v] = static_cast<uint8_t>(((v * mult) / 32) & 0xF8);
+    }
+    s_shadeLutReady = true;
+}
+
+uint32_t shadeArgb(uint32_t argb, int darkness) {
+    if (darkness <= 0) return argb;
+    if (darkness > 31) darkness = 31;
+    if (!s_shadeLutReady) buildShadeLut();
+    const uint8_t* t = s_shadeLut[darkness];
+    return (argb & 0xFF000000u) | (static_cast<uint32_t>(t[(argb >> 16) & 0xFF]) << 16)
+                                | (static_cast<uint32_t>(t[(argb >> 8) & 0xFF]) << 8)
+                                | static_cast<uint32_t>(t[argb & 0xFF]);
+}
+
 bool blitArtFrame(uint32_t* fb, int fbW, int fbH, int animIdx, int frameIdx,
                   int cx, int cy, int playerColor,
-                  int clipX0, int clipY0, int clipX1, int clipY1) {
+                  int clipX0, int clipY0, int clipX1, int clipY1,
+                  int darkness) {
     if (!g_art.ok() || animIdx < 0 || animIdx >= g_art.numAnimations()) return false;
     const ArtAnimation& an = g_art.animation(animIdx);
     if (an.frames.empty()) return false;
@@ -46,7 +70,7 @@ bool blitArtFrame(uint32_t* fb, int fbW, int fbH, int animIdx, int frameIdx,
                     const uint32_t rr = ((d >> 16) & 0xFF) / 2, gg = ((d >> 8) & 0xFF) / 2, bb = (d & 0xFF) / 2;
                     d = 0xFF000000u | (rr << 16) | (gg << 8) | bb;
                 } else {
-                    d = c | 0xFF000000u;
+                    d = shadeArgb(c | 0xFF000000u, darkness);
                 }
             }
         }

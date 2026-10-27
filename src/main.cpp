@@ -476,9 +476,22 @@ static int runPlaceShot(const std::string& mapName, const std::string& outPath, 
     return ok ? 0 : 1;
 }
 
-// --playshot <map> <out.bmp>: carrega o jogo, roda alguns frames e salva o
-// framebuffer (terreno + unidades + HUD) para inspeção visual.
-static int runPlayShot(const std::string& mapName, const std::string& outPath, bool passOverlay) {
+// --playshot <map> <out.bmp> [pass] [colunaDaCamera]: carrega o jogo, roda alguns
+// frames e salva o framebuffer (terreno + unidades + HUD) para inspeção visual.
+// A coluna da câmera serve para alcançar o dia ou a noite num mapa largo.
+// Ciclo dia/noite da cena capturada: a escuridao (0..31) das colunas visiveis e
+// a paleta que cada uma usa (sub_4A8BD0: base + escuridao << 9).
+static void dumpDark(const op2::GameState& gs) {
+    std::printf("[PlayShot] luz: anda %d, toda parte %d, fase %d, coluna %d; escuridao",
+                op2::TethysGame::daylightMoves(), op2::TethysGame::daylightEverywhere(),
+                op2::TethysGame::daylightPhase(), op2::TethysGame::daylightPos());
+    for (int tx = 0; tx < 14; ++tx)
+        std::printf(" %d", op2::GameState::tileDarkness(gs.camX() / 32 + tx));
+    std::printf("%c", 10);
+}
+
+static int runPlayShot(const std::string& mapName, const std::string& outPath, bool passOverlay,
+                       int camTileX) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) { std::cerr << "SDL_Init: " << SDL_GetError() << std::endl; return 1; }
     op2::g_ResManager.init(".");
     op2::g_art.load();   // sprites (como TApp::init)
@@ -488,9 +501,11 @@ static int runPlayShot(const std::string& mapName, const std::string& outPath, b
     if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
     gs.onActivate();
     gs.setShowPassability(passOverlay);
+    if (camTileX >= 0) gs.setCamera(camTileX * 32, gs.camY());
     for (int i = 0; i < 5; ++i) gs.onIdle(renderer, 0.1f);   // avança alguns ticks
     bool ok = writeBmp32(outPath, renderer.getFramebuffer(),
                          op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+    dumpDark(gs);
     std::cout << "[PlayShot] " << (ok ? "salvo em " : "falha ") << outPath << std::endl;
     renderer.shutdown();
     SDL_Quit();
@@ -2931,7 +2946,8 @@ int main(int argc, char* argv[]) {
             return runUnitTest();
         if (std::strcmp(argv[i], "--playshot") == 0 && i + 2 < argc) {
             bool pass = (i + 3 < argc && std::strcmp(argv[i + 3], "pass") == 0);
-            return runPlayShot(argv[i + 1], argv[i + 2], pass);
+            return runPlayShot(argv[i + 1], argv[i + 2], pass,
+                               i + 4 < argc ? atoi(argv[i + 4]) : -1);
         }
         if (std::strcmp(argv[i], "--scoretest") == 0) return runScoreTest();
         if (std::strcmp(argv[i], "--fonttest") == 0) return runFontTest();

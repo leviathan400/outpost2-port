@@ -472,8 +472,12 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     }), m_selected.end());
 
     renderer.clear(0xFF000000);
+    // Ciclo dia/noite no terreno: cada coluna de tile sai pela paleta da sua
+    // escuridao (sub_4A8BD0). Com SetDaylightEverywhere nao se escurece nada,
+    // exatamente como o teste de dword_56DEA4 la dentro.
     m_terrain.render(renderer.getFramebuffer(), Renderer::NATIVE_WIDTH,
-                     Renderer::NATIVE_HEIGHT, m_camX, m_camY);
+                     Renderer::NATIVE_HEIGHT, m_camX, m_camY,
+                     TethysGame::daylightEverywhere() ? nullptr : &GameState::tileDarkness);
 
     // Overlay de passabilidade (debug, tecla G): tinge de vermelho as células
     // impassáveis visíveis. Base visual para waypoints/pathfinding.
@@ -555,10 +559,14 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     // na tela. As pictures são posicionadas por (x,y) menos o HOTSPOT da animação
     // (header[5],header[6] = centro do bbox header[1..4]) — como o original faz
     // (`sub eax, dword_50B368[...]` em sub_403E00). Índice 0 = transparente.
+    // A escuridao do sprite e a da COLUNA onde ele esta (sub_470810 recebe o
+    // indice ja calculado), igual ao terreno.
+    const bool worldLit = TethysGame::daylightEverywhere();
     auto drawSprite = [&](int animIdx, int frameIdx, int cx, int cy, int playerColor) {
+        const int dark = worldLit ? 0 : tileDarkness((m_camX + cx) >> 5);
         return blitArtFrame(renderer.getFramebuffer(), Renderer::NATIVE_WIDTH, Renderer::NATIVE_HEIGHT,
                             animIdx, frameIdx, cx, cy, playerColor,
-                            0, 0, viewportW(), viewportH());
+                            0, 0, viewportW(), viewportH(), dark);
     };
 
     // Colchete de seleção (sub_43E950): guardo o frame do corpo de cada unidade
@@ -1185,6 +1193,13 @@ void GameState::drawGlobe(uint32_t* fb) {
 // sub_48D860: ponto da janela do minimapa → pixel do mundo (tile << 5, o canto
 // do tile), invertendo a escala/deslocamento do MiniMap. Fora do mapa (ou nos
 // botões do topo, que são janelas filhas) não converte.
+// Escuridao de uma coluna de TILE: byte_54EC14[(tx - dword_54729C) & mascara],
+// com o tx em coordenadas internas.
+int GameState::tileDarkness(int tx) {
+    if (!g_gameMap.ok()) return 0;
+    return g_gameMap.lightDarkness(tx + g_gameMap.internalXOffset() - TethysGame::daylightPos());
+}
+
 bool GameState::miniToWorld(int nx, int ny, int& px, int& py) const {
     if (!g_gameMap.ok()) return false;
     const int mx = nx - kColX, my = ny - kMiniMapY;

@@ -15,9 +15,16 @@ namespace op2 {
 // prédios, MobileShadows (dword_575638) p/ veículos e efeitos (sub_405160).
 void setArtShadows(bool on);
 
+// `darkness` 0..31 é o nível do ciclo dia/noite (sub_470810 recebe o índice já
+// calculado da coluna do sprite e escolhe a paleta escurecida). 0 = dia pleno.
 bool blitArtFrame(uint32_t* fb, int fbW, int fbH, int animIdx, int frameIdx,
                   int cx, int cy, int playerColor,
-                  int clipX0, int clipY0, int clipX1, int clipY1);
+                  int clipX0, int clipY0, int clipX1, int clipY1,
+                  int darkness = 0);
+
+// A mesma rampa das paletas de sub_4A9BF0 aplicada a um ARGB: cada canal vira
+// canal * min(36 − d, 32) / 32, truncado a 5 bits.
+uint32_t shadeArgb(uint32_t argb, int darkness);
 
 // Retângulo que o frame ocupa RELATIVO ao ponto (cx,cy) passado ao blit (i.e.,
 // já descontado o hotspot). Exclui as pictures de sombra (type&4). Equivale ao
