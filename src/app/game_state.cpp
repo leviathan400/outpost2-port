@@ -572,14 +572,15 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     // na tela. As pictures são posicionadas por (x,y) menos o HOTSPOT da animação
     // (header[5],header[6] = centro do bbox header[1..4]) — como o original faz
     // (`sub eax, dword_50B368[...]` em sub_403E00). Índice 0 = transparente.
-    // A escuridao do sprite e a da COLUNA onde ele esta (sub_470810 recebe o
-    // indice ja calculado), igual ao terreno.
-    const bool worldLit = TethysGame::daylightEverywhere();
+    // Sprites NAO escurecem com a noite: sub_405160 (o desenho da unidade)
+    // passa -1 como coluna de luz, que e o sentinela de sub_403E00 para usar a
+    // paleta base. Dos 84 pontos que chamam sub_403E00 so dois passam a coluna
+    // de verdade (sub_4056E0 / sub_405840, a animacao fixa 0x2A2): no original
+    // so o TERRENO escurece, e as unidades seguem legiveis no escuro.
     auto drawSprite = [&](int animIdx, int frameIdx, int cx, int cy, int playerColor) {
-        const int dark = worldLit ? 0 : tileDarkness((m_camX + cx) >> 5);
         return blitArtFrame(renderer.getFramebuffer(), Renderer::NATIVE_WIDTH, Renderer::NATIVE_HEIGHT,
                             animIdx, frameIdx, cx, cy, playerColor,
-                            0, 0, viewportW(), viewportH(), dark);
+                            0, 0, viewportW(), viewportH());
     };
 
     // Colchete de seleção (sub_43E950): guardo o frame do corpo de cada unidade
