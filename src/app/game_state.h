@@ -148,6 +148,11 @@ private:
     Globe m_globe;
     std::vector<uint16_t> m_globeTex;
     std::vector<std::pair<int, uint16_t>> m_globeDirty;
+    // dword_547290 só é reescrito quando a VISTA se move (sub_407A10 /
+    // sub_408120); a câmera que vem de um jogo salvo não conta, senão o
+    // `[+0x38] = [+0x4C]` do fim de sub_420640 não teria efeito.
+    int  m_globeCamX = 0;
+    int  globeSpinTargetOf(int camX) const;
     void buildGlobeTerrain();      // sub_437250 na superfície do globo
     void drawGlobe(uint32_t* fb);
     int  unitAtView(int vx, int vy) const;   // unidade (qualquer dono) sob o cursor, raio 20

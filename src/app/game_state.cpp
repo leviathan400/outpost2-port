@@ -98,6 +98,8 @@ bool GameState::loadMap(const std::string& mapName) {
     // Sem o 4o botao nao ha globo: sub_458930 zera dword_5748A0 nesse caso.
     if (g_gameMap.internalXOffset()) m_mini.setGlobe(false);
     m_globeTex.clear();
+    m_globeCamX = m_camX;
+    m_globe.setSpinTarget(globeSpinTargetOf(m_camX));
     return true;
 }
 
@@ -131,6 +133,9 @@ bool GameState::minimapStateLoad(const std::vector<uint8_t>& blob) {
     // desatualizado ate o turno seguinte; aqui as duas andam juntas.
     TethysGame::setDaylightPhase(sun, g_gameMap.ok() ? g_gameMap.internalWidth() : 1);
     m_globe.setRotation(rot);
+    // loc_420711: o alvo passa a ser a rotacao gravada, entao o globo nao sai
+    // girando ao abrir o jogo salvo.
+    m_globe.setSpinTarget(rot);
     m_mini.setTactical(tac != 0);
     return true;
 }
@@ -155,6 +160,7 @@ bool GameState::uiStateLoad(const std::vector<uint8_t>& blob) {
     s.io(g.spaceWord); s.io(g.localPlayer); s.io(g.endTick); s.io(g.playerBlock);
     s.io(g.techCount); s.io(g.techLevel); s.ioVec(g.techIdx); s.ioVec(g.techMask);
     clampCamera();
+    m_globeCamX = m_camX;         // a camera do arquivo nao e um movimento
     return s.ok();
 }
 
@@ -1140,6 +1146,11 @@ void GameState::buildGlobeTerrain() {
     }
 }
 
+int GameState::globeSpinTargetOf(int camX) const {
+    const int w = g_gameMap.ok() ? g_gameMap.internalWidth() : 1;
+    return static_cast<int>((static_cast<long long>(camX) << 16) / (w * 32)) - 0x4000;
+}
+
 // Visao do globo (sub_48DB20 -> sub_420000). As unidades vao PARA A TEXTURA,
 // como em sub_48CCD0, e saem de la depois (sub_48D2B0).
 void GameState::drawGlobe(uint32_t* fb) {
@@ -1155,8 +1166,11 @@ void GameState::drawGlobe(uint32_t* fb) {
     m_globe.setSun(TethysGame::daylightPhase());    // [+0x48] = dword_5472A0
     m_globe.setShaded(!TethysGame::daylightEverywhere());   // sub_41F910 (dword_56DEA4)
     // dword_547290 (sub_407A10 / sub_408120): o alvo do giro e a coluna da
-    // BORDA ESQUERDA da vista, em 16 bits, menos um quarto de volta.
-    m_globe.setSpinTarget(static_cast<int>((static_cast<long long>(m_camX) << 16) / (w * 32)) - 0x4000);
+    // BORDA ESQUERDA da vista, reescrito SO quando a vista se move.
+    if (m_camX != m_globeCamX) {
+        m_globeCamX = m_camX;
+        m_globe.setSpinTarget(globeSpinTargetOf(m_camX));
+    }
     m_globe.tick();                                 // sub_41F9E0
 
     const int me = TethysGame::localPlayer();
