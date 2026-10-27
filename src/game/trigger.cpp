@@ -371,9 +371,17 @@ int createOnePlayerLeftTrigger(int bEnabled, int bOneShot, const char* func) {
 }
 
 // sub_490C80: o jogador p e todo j que tem p na sua máscara de aliança.
-static uint32_t alliesOf(int p) {
+// NOINLINE DE PROPOSITO. Inlinada dentro de hasFired, o MSVC 19.51 /O2 (x86)
+// gera codigo errado para este laco: `m` sai com lixo que MUDA A CADA EXECUCAO
+// (ja foi 0x56EB90, 0xB45390C5...) quando so poderia valer 1, 2 ou 3, e o
+// CreateOnePlayerLeftTrigger das missoes M* declarava vitoria em ~metade das
+// partidas. Fora de hasFired a mesma funcao devolve o valor certo, e o codigo
+// gerado da versao out-of-line, conferido no dumpbin, esta correto
+// (`shl eax,cl` / `bts edi,esi`). Ver [[op2-multiplayer]].
+static __declspec(noinline) uint32_t alliesOf(int p) {
     uint32_t m = 1u << p;
-    for (int j = 0; j < TethysGame::noPlayers(); ++j)
+    const int n = TethysGame::noPlayers();
+    for (int j = 0; j < n; ++j)
         if (g_playerData[j].allyMask & (1u << p)) m |= 1u << j;
     return m;
 }
