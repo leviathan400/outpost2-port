@@ -36,6 +36,13 @@ constexpr int kTurnLead = 2;        // turnos de antecedência do anúncio
 
 // Abre o socket e faz o aperto de mão (quem hospeda espera). false = falhou.
 bool netStart(const NetConfig& cfg, std::string& error);
+
+// Comeca a partida com o socket e o endereco que o LOBBY ja negociou
+// (lobbyTakeGameSocket / lobbyPeer): nao ha aperto de mao a refazer, porque o
+// do lobby — pedido 0x32, aceitacao 0x26, confirmacao 0x14 — ja colocou os
+// dois lados de acordo sobre quem e quem. `players` conta a mesa inteira.
+bool netStartJoined(uintptr_t sock, uint32_t peerAddr, uint16_t peerPort,
+                    int localPlayer, int players, std::string& error);
 void netStop();
 bool netActive();
 int  netLocalPlayer();

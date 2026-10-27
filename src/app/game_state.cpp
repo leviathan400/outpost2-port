@@ -442,7 +442,14 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     while (m_tickAccum >= kTickPeriod) {
         // Lockstep: em rede o tique so avanca quando o turno de todos chegou
         // (o anel de 16 turnos do original, pacote 0x33).
-        if (!netReadyForTick(static_cast<int>(TethysGame::tick()) + 1)) break;
+        if (!netReadyForTick(static_cast<int>(TethysGame::tick()) + 1)) {
+            // O tempo passado esperando o turno do outro nao vira credito: sem
+            // este grampo o acumulador cresce durante a espera e o jogo dispara
+            // em camera rapida assim que a rede destrava, avancando varios
+            // tiques numa chamada so.
+            if (m_tickAccum > kTickPeriod) m_tickAccum = kTickPeriod;
+            break;
+        }
         TethysGame::advanceTick();
         netApplyTurn(static_cast<int>(TethysGame::tick()));
         TethysGame::advanceDaylight(g_gameMap.internalWidth());   // início do turno (sub_489DD0)

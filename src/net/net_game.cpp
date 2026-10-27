@@ -192,6 +192,28 @@ bool netStart(const NetConfig& cfg, std::string& error) {
     return true;
 }
 
+bool netStartJoined(uintptr_t sock, uint32_t peerAddr, uint16_t peerPort,
+                    int localPlayer, int players, std::string& error) {
+    if (sock == uintptr_t(INVALID_SOCKET)) { error = "socket invalido"; return false; }
+    s_sock = SOCKET(sock);
+    u_long nb = 1;
+    ioctlsocket(s_sock, FIONBIO, &nb);
+
+    s_peer = sockaddr_in{};
+    s_peer.sin_family = AF_INET;
+    s_peer.sin_addr.s_addr = peerAddr;
+    s_peer.sin_port = htons(peerPort);
+
+    s_localPlayer = localPlayer;
+    s_players = players;
+    s_active = true;
+    s_pending.clear(); s_turns.clear(); s_sentTurns.clear();
+    s_lastAnnounced = -1;
+    s_waits = 0;
+    (void)error;
+    return true;
+}
+
 void netStop() {
     if (s_sock != INVALID_SOCKET) { closesocket(s_sock); s_sock = INVALID_SOCKET; }
     if (s_active) WSACleanup();

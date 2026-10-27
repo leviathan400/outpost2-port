@@ -56,6 +56,7 @@
 #include "app/tapp.h"
 #include "app/game_state.h"
 #include "net/net_game.h"
+#include "net/net_lobby.h"
 
 // --unittest: exercita o pool de unidades + o wrapper Unit.
 static int runUnitTest() {
@@ -487,6 +488,113 @@ static int runPlaceShot(const std::string& mapName, const std::string& outPath, 
 
 static uint64_t simHash();
 
+// --mplobby host <nome> <maxjog> <segundos> : abre o lobby e anuncia a partida
+// --mplobby find                            : procura partidas na rede local
+// --mplobby join                            : procura e entra na primeira
+// Exercita o protocolo de descoberta e entrada do original (consulta 0x1000 de
+// 0x2A bytes, resposta 0x1001 de 0x51, pedido de entrada de 0x32, aceitacao de
+// 0x26 e confirmacao de 0x14).
+static int runMpLobby(int argc, char** argv, int i) {
+    const std::string mode = argv[i + 1];
+    std::string err;
+
+    if (mode == "host") {
+        const std::string nome = i + 2 < argc ? argv[i + 2] : "PORT TEST";
+        const int maxjog = i + 3 < argc ? atoi(argv[i + 3]) : 2;
+        const int segs   = i + 4 < argc ? atoi(argv[i + 4]) : 10;
+        if (!op2::lobbyHostStart(nome, maxjog, "", err)) {
+            std::printf("[Lobby] host falhou: %s%c", err.c_str(), 10);
+            return 2;
+        }
+        std::printf("[Lobby] anunciando %s para %d jogadores%c", nome.c_str(), maxjog, 10);
+        std::fflush(stdout);
+        const uint32_t fim = SDL_GetTicks() + uint32_t(segs) * 1000;
+        int ultimo = op2::lobbyHostActiveCount();
+        while (SDL_GetTicks() < fim) {
+            op2::lobbyHostPump();
+            const int agora = op2::lobbyHostActiveCount();
+            if (agora != ultimo) {
+                std::printf("[Lobby] lugares ocupados: %d de %d%c", agora, maxjog, 10);
+                std::fflush(stdout);
+                ultimo = agora;
+            }
+            SDL_Delay(5);
+        }
+        int ativos = 0;
+        for (int n = 0; n < 8; ++n) {
+            const op2::LobbyPlayer* pl = op2::lobbyHostPlayer(n);
+            if (!pl || pl->state != 2) continue;
+            ++ativos;
+            std::printf("[Lobby] jogador %d id=%08x porta=%u%c",
+                        n, pl->id, unsigned(pl->port), 10);
+        }
+        std::printf("[Lobby] host encerrou com %d jogador(es)%c", ativos, 10);
+        op2::lobbyHostStop();
+        return ativos >= 2 ? 0 : 1;
+    }
+
+    std::vector<op2::LobbySession> ses;
+    if (!op2::lobbyFind("", 8, ses, err)) {
+        std::printf("[Lobby] busca falhou: %s%c", err.c_str(), 10);
+        return 2;
+    }
+    std::printf("[Lobby] %d sessao(oes) encontrada(s)%c", int(ses.size()), 10);
+    for (const op2::LobbySession& x : ses) {
+        unsigned char ip[4];
+        std::memcpy(ip, &x.addr, 4);
+        std::printf("[Lobby]   %s  %u.%u.%u.%u  max=%d respostas=%d ida-volta=%dms%c",
+                    x.name.c_str(), ip[0], ip[1], ip[2], ip[3],
+                    x.maxPlayers, x.replies, x.replies ? x.pingMs / x.replies : 0, 10);
+    }
+    if (mode == "find") return ses.empty() ? 1 : 0;
+
+    if (ses.empty()) { std::printf("[Lobby] nada para entrar%c", 10); return 1; }
+    int jogador = -1;
+    uint16_t portaHost = 0;
+    if (!op2::lobbyJoin(ses[0], "", jogador, portaHost, err)) {
+        std::printf("[Lobby] entrada recusada: %s%c", err.c_str(), 10);
+        return 2;
+    }
+    std::printf("[Lobby] entrou como jogador %d (host em %u, nos em %u)%c",
+                jogador, unsigned(portaHost), unsigned(op2::lobbyLocalGamePort()), 10);
+    return 0;
+}
+
+// O miolo de uma partida em rede, comum a --mpnet e --mplan: roda ate o tique
+// pedido e, no tique 12, manda UM veiculo do jogador local andar 6 tiles. Se
+// os comandos atravessarem, os dois lados veem os DOIS movimentos e o hash
+// bate; se um comando ficar so na maquina de origem, os hashes divergem.
+static void netMatchLoop(const char* teste, const char* lado, op2::GameState& gs,
+                         op2::Renderer& renderer, int ticks, int localPlayer) {
+    int giros = 0;
+    bool mandou = false;
+    while (static_cast<int>(op2::TethysGame::tick()) < ticks && giros < ticks * 200) {
+        if (!mandou && op2::TethysGame::tick() >= 12) {
+            mandou = true;
+            for (size_t i = 1; i < op2::g_units.size(); ++i) {
+                const op2::UnitRecord& r = op2::g_units[i];
+                if (r.id == -1 || (r.flags & op2::UNIT_DEAD)) continue;
+                if ((r.owner & 0x0F) != localPlayer || !(r.flags & op2::UNIT_VEHICLE)) continue;
+                op2::CommandPacket pkt;
+                pkt.type = op2::CMD_MOVE;
+                pkt.unitIds.push_back(static_cast<int>(i));
+                pkt.waypoints.push_back(op2::packLocation((r.pixelX >> 5) + 6, r.pixelY >> 5));
+                op2::commandSubmit(localPlayer, pkt);
+                std::printf("[%s] %s mandou a unidade %d andar%c", teste, lado,
+                            static_cast<int>(i), 10);
+                break;
+            }
+        }
+        gs.onIdle(renderer, 0.2501f / 4.0f);
+        ++giros;
+    }
+    std::printf("[%s] %s jogador=%d t=%d esperas=%d hash=%016llx%c",
+                teste, lado, localPlayer,
+                static_cast<int>(op2::TethysGame::tick()), op2::netWaitCount(),
+                (unsigned long long)simHash(), 10);
+    std::fflush(stdout);
+}
+
 // --mpnet <host|join> <DLL> <ticks> [porta] [peer]: partida em REDE. Os dois
 // lados carregam a mesma missao, trocam os turnos (pacote 0x33) e o tique so
 // anda quando o turno de todos chegou. No fim imprime o hash da simulacao: se
@@ -515,36 +623,85 @@ static int runMpNet(const std::string& mode, const std::string& dll, int ticks,
     op2::TethysGame::setLocalPlayer(cfg.localPlayer);
     gs.onActivate();
 
-    // No tique 12 cada lado manda UM veiculo seu andar 6 tiles. Se os comandos
-    // atravessarem, os dois lados veem os DOIS movimentos e o hash bate; se um
-    // comando ficar so na maquina de origem, os hashes divergem na hora.
-    const int alvo = ticks;
-    int giros = 0;
-    bool mandou = false;
-    while (static_cast<int>(op2::TethysGame::tick()) < alvo && giros < alvo * 200) {
-        if (!mandou && op2::TethysGame::tick() >= 12) {
-            mandou = true;
-            for (size_t i = 1; i < op2::g_units.size(); ++i) {
-                const op2::UnitRecord& r = op2::g_units[i];
-                if (r.id == -1 || (r.flags & op2::UNIT_DEAD)) continue;
-                if ((r.owner & 0x0F) != cfg.localPlayer || !(r.flags & op2::UNIT_VEHICLE)) continue;
-                op2::CommandPacket pkt;
-                pkt.type = op2::CMD_MOVE;
-                pkt.unitIds.push_back(static_cast<int>(i));
-                pkt.waypoints.push_back(op2::packLocation((r.pixelX >> 5) + 6, r.pixelY >> 5));
-                op2::commandSubmit(cfg.localPlayer, pkt);
-                std::printf("[MpNet] %s mandou a unidade %d andar%c", host ? "host" : "join",
-                            static_cast<int>(i), 10);
-                break;
-            }
+    netMatchLoop("MpNet", host ? "host" : "join", gs, renderer, ticks, cfg.localPlayer);
+    op2::netStop();
+    renderer.shutdown();
+    SDL_Quit();
+    return 0;
+}
+
+// --mplan <host|join> <DLL> <ticks>: a mesma partida de --mpnet, mas com os
+// dois lados se achando pelo LOBBY — o host anuncia e espera, o cliente
+// descobre por broadcast e pede entrada. Nao ha endereco na linha de comando.
+static int runMpLan(const std::string& mode, const std::string& dll, int ticks) {
+    const bool host = (mode == "host");
+    std::string err;
+    int jogador = 0;
+    uint32_t peerAddr = 0;
+    uint16_t peerPort = 0;
+
+    if (host) {
+        if (!op2::lobbyHostStart("OP2 LAN", 2, "", err)) {
+            std::printf("[MpLan] lobby falhou: %s%c", err.c_str(), 10);
+            return 2;
         }
-        gs.onIdle(renderer, 0.2501f / 4.0f);
-        ++giros;
+        std::printf("[MpLan] host no ar, esperando o outro lado%c", 10);
+        std::fflush(stdout);
+        const uint32_t fim = SDL_GetTicks() + 30000;
+        while (SDL_GetTicks() < fim && !op2::lobbyPeer(peerAddr, peerPort)) {
+            op2::lobbyHostPump();
+            SDL_Delay(5);
+        }
+        if (!op2::lobbyPeer(peerAddr, peerPort)) {
+            std::printf("[MpLan] ninguem entrou%c", 10);
+            op2::lobbyHostStop();
+            return 2;
+        }
+        jogador = 0;
+    } else {
+        std::vector<op2::LobbySession> ses;
+        if (!op2::lobbyFind("", 8, ses, err) || ses.empty()) {
+            std::printf("[MpLan] nenhuma partida encontrada%c", 10);
+            return 2;
+        }
+        uint16_t portaHost = 0;
+        if (!op2::lobbyJoin(ses[0], "", jogador, portaHost, err)) {
+            std::printf("[MpLan] entrada recusada: %s%c", err.c_str(), 10);
+            return 2;
+        }
+        if (!op2::lobbyPeer(peerAddr, peerPort)) {
+            std::printf("[MpLan] o lobby nao disse onde esta o host%c", 10);
+            return 2;
+        }
     }
-    std::printf("[MpNet] %s jogador=%d t=%d esperas=%d hash=%016llx%c",
-                host ? "host" : "join", cfg.localPlayer,
-                static_cast<int>(op2::TethysGame::tick()), op2::netWaitCount(),
-                (unsigned long long)simHash(), 10);
+
+    unsigned char ip[4];
+    std::memcpy(ip, &peerAddr, 4);
+    std::printf("[MpLan] %s e o jogador %d; o outro lado esta em %u.%u.%u.%u:%u%c",
+                host ? "host" : "join", jogador, ip[0], ip[1], ip[2], ip[3],
+                unsigned(peerPort), 10);
+    std::fflush(stdout);
+
+    const uintptr_t sock = op2::lobbyTakeGameSocket();
+    if (host) op2::lobbyHostStop();
+    if (!op2::netStartJoined(sock, peerAddr, peerPort, jogador, 2, err)) {
+        std::printf("[MpLan] rede falhou: %s%c", err.c_str(), 10);
+        return 2;
+    }
+
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init(host ? "OP2 mplan host" : "OP2 mplan join", 1280, 960, false)) {
+        SDL_Quit(); return 1;
+    }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { op2::netStop(); renderer.shutdown(); SDL_Quit(); return 3; }
+    op2::TethysGame::setLocalPlayer(jogador);
+    gs.onActivate();
+
+    netMatchLoop("MpLan", host ? "host" : "join", gs, renderer, ticks, jogador);
     op2::netStop();
     renderer.shutdown();
     SDL_Quit();
@@ -3066,6 +3223,10 @@ int main(int argc, char* argv[]) {
             return runPlayerTest();
         if (std::strcmp(argv[i], "--unittest") == 0)
             return runUnitTest();
+        if (std::strcmp(argv[i], "--mplan") == 0 && i + 3 < argc)
+            return runMpLan(argv[i + 1], argv[i + 2], atoi(argv[i + 3]));
+        if (std::strcmp(argv[i], "--mplobby") == 0 && i + 1 < argc)
+            return runMpLobby(argc, argv, i);
         if (std::strcmp(argv[i], "--mpnet") == 0 && i + 3 < argc)
             return runMpNet(argv[i + 1], argv[i + 2], atoi(argv[i + 3]),
                             i + 4 < argc ? atoi(argv[i + 4]) : 47800,
