@@ -443,6 +443,10 @@ void ShellMenu::activateControl(int index) {
         break;
     case CtrlKind::Edit:   break;   // recebe texto por handleTextInput
     }
+    // No lobby, mexer num controle avisa o outro lado.
+    if (m_state == MenuState::MpGameSettings &&
+        (c.kind == CtrlKind::Combo || c.kind == CtrlKind::Check))
+        mpControlChanged(c.id);
 }
 
 // Lê o export MapName da DLL de uma missão (o .map que ela usa). "" se falhar.
@@ -623,11 +627,8 @@ void ShellMenu::dispatchButton(int id) {
         break;
     case MenuState::MpFindSession:
         if (id == 1) {
-            // O radio 1007 do original procura num endereco; a nossa descoberta
-            // e por broadcast (sub_491710), e o modo dirigido (sub_491860)
-            // ainda nao esta portado.
-            if (m_mpFindMode == 1) {
-                m_mpStatus = "A busca por endereco ainda nao esta portada";
+            if (m_mpFindMode == 1 && m_mpFindAddr.empty()) {
+                m_mpStatus = "Digite o endereco do host";
                 break;
             }
             mpFindSessions();
@@ -660,6 +661,13 @@ void ShellMenu::dispatchButton(int id) {
                 m_mpStatus = "Escolha um cenario";
                 break;
             }
+            if (m_mpPlayerCount < 2) {
+                m_mpStatus = "Ninguem mais na mesa";
+                break;
+            }
+            // Avisa os outros antes de sair da tela, com repeticao porque o
+            // aviso e UDP e nao tem confirmacao.
+            for (int k = 0; k < 5; ++k) lobbyMsgSend(kLobbyMsgStart, nullptr, 0);
             mpSyncGsi();
             m_launchGsi = m_mpGsi;        // o que launchStartInfo entrega
             m_launchHasGsi = true;
@@ -671,9 +679,14 @@ void ShellMenu::dispatchButton(int id) {
             setState(MenuState::MainMenu);
         } else if (id >= 1046 && id <= 1051) {  // EJECT
             const int slot = id - 1046;
-            m_mpChat.push_back("Jogador " + std::to_string(slot) + " removido");
+            if (!m_mpIsHost || slot == 0) break;
+            for (int k = 0; k < 5; ++k) lobbyMsgSend(kLobbyMsgEject, nullptr, 0);
+            lobbyHostEject(slot);
             m_mpNames[slot].clear();
-            m_mpStatus = "EJECT ainda nao avisa o jogador removido";
+            m_mpReady[slot] = false;
+            m_mpPlayerCount = lobbyHostActiveCount();
+            mpSendChat("Jogador " + std::to_string(slot + 1) + " removido");
+            rebuildControls();
         }
         break;
     default: break;
@@ -798,10 +811,8 @@ void ShellMenu::handleKeyDown(int keyCode) {
         if (!m_mpChatInput.empty()) {
             const int me = netActive() ? netLocalPlayer() : (m_mpIsHost ? 0 : 1);
             const std::string who = m_mpNames[me].empty() ? "EU" : m_mpNames[me];
-            m_mpChat.push_back(who + ": " + m_mpChatInput);
+            mpSendChat(who + ": " + m_mpChatInput);
             m_mpChatInput.clear();
-            // O chat ainda nao atravessa a rede: no original ele vai num
-            // CommandPacket de lobby (o mesmo caminho do loc_460FAC).
         }
         return;
     }
@@ -878,6 +889,12 @@ void ShellMenu::update(float dt) {
         const int before = m_mpPlayerCount;
         mpPump();
         if (m_mpPlayerCount != before) rebuildControls();
+        if (m_mpEjected) {               // o host nos tirou da mesa
+            m_mpEjected = false;
+            lobbyHostStop();
+            m_mpPlayerCount = 1;
+            setState(MenuState::MainMenu);
+        }
     }
     if (m_state == MenuState::Splash) {
         m_splashTimer += dt;

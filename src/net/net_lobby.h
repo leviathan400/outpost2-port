@@ -87,12 +87,20 @@ int lobbyHostActiveCount();
 int lobbyHostMaxPlayers();
 const LobbyPlayer* lobbyHostPlayer(int n);
 
+// Libera um lugar da mesa — o sub_496200 do original, que sub_48C560 chama
+// quando o jogador nao confirma. Aqui serve ao botao EJECT (1046+i).
+void lobbyHostEject(int n);
+
 // ---- cliente ---------------------------------------------------------------
 
 // Manda a consulta em broadcast `attempts` vezes (o original manda 8, com
 // 250 ms entre elas) e devolve as sessoes que responderam.
+// `host` vazio = broadcast para 255.255.255.255 (sub_491710); com endereco, a
+// consulta vai so para ele, que e o modo dirigido de sub_491860 (o radio 1007
+// do Dialog 2010), usado para achar uma partida fora da rede local.
 bool lobbyFind(const std::string& password, int attempts,
-               std::vector<LobbySession>& out, std::string& error);
+               std::vector<LobbySession>& out, std::string& error,
+               const std::string& host = std::string());
 
 // Pede entrada na sessao. Em caso de aceitacao devolve o numero do jogador
 // (os 3 bits baixos do id, como no original) e a porta de jogo do host.
@@ -117,6 +125,54 @@ uintptr_t lobbyTakeGameSocket();
 // Onde fica o outro lado, para quem so tem dois na mesa: o cliente ve o host,
 // o host ve o primeiro lugar ocupado. false = ninguem ainda.
 bool lobbyPeer(uint32_t& addr, uint16_t& port);
+
+// ---- mensagens do lobby ----------------------------------------------------
+//
+// Depois do aperto de mao o original continua falando pelo MESMO canal da
+// partida (o objeto dword_56DC78 serve aos dois), separando os pacotes pelo
+// byte de TIPO em +9 do cabecalho de 0x0E. E o que se faz aqui: as mensagens
+// abaixo viajam pelo socket de jogo, ao lado dos pacotes de turno 0x33.
+//
+// A autoridade e do HOST, como em sub_45EF90: quem nao hospeda manda ao host a
+// mudanca dos SEUS controles (loc_460FAC monta um pacote com o indice do
+// controle e o valor) e o host devolve o estado inteiro da mesa.
+enum LobbyMsgType {
+    kLobbyMsgState  = 0x20,   // host -> todos: a mesa inteira
+    kLobbyMsgChange = 0x21,   // cliente -> host: mudei um controle meu
+    kLobbyMsgChat   = 0x22,   // os dois sentidos: uma linha de conversa
+    kLobbyMsgEject  = 0x23,   // host -> um: voce saiu da mesa
+    kLobbyMsgStart  = 0x24,   // host -> todos: comecando
+};
+
+// Um lugar na mesa, como o GAME SETTINGS o mostra.
+struct LobbySlot {
+    std::string name;
+    uint8_t color = 0;        // playerWord bits 5-7
+    uint8_t eden = 0;         // playerWord bit 2
+    uint8_t resources = 1;    // playerWord bits 3-4 (0 High, 1 Med, 2 Low)
+    uint8_t ready = 0;
+    uint8_t occupied = 0;
+};
+
+// O estado que o host difunde.
+struct LobbyTable {
+    uint32_t flags = 0;       // os flags do GameStartInfo
+    int32_t  scenario = 0;    // o indice no combo de cenario
+    LobbySlot slots[6];
+};
+
+// Manda uma mensagem ao outro lado pelo socket de jogo. `body` pode ser vazio.
+void lobbyMsgSend(int type, const uint8_t* body, size_t len);
+void lobbyMsgSendTable(const LobbyTable& t);
+void lobbyMsgSendChat(const std::string& line);
+void lobbyMsgSendChange(int player, int control, int value);
+
+// Le a proxima mensagem de lobby que chegou. false = nao ha nenhuma. Os
+// pacotes de turno (0x33) sao deixados na fila para o net_game.
+bool lobbyMsgPoll(int& type, std::vector<uint8_t>& body);
+
+// Decodifica o corpo de kLobbyMsgState.
+bool lobbyDecodeTable(const std::vector<uint8_t>& body, LobbyTable& out);
 
 // ---- somas de verificacao (expostas para teste) ----------------------------
 

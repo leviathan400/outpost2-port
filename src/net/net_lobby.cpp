@@ -4,6 +4,7 @@
 #include <ws2tcpip.h>
 #include <objbase.h>
 
+#include <algorithm>
 #include <cstring>
 
 #pragma comment(lib, "ws2_32.lib")
@@ -113,6 +114,134 @@ void closeSock(SOCKET& s) {
 
 } // namespace
 
+// ---- mensagens do lobby ----------------------------------------------------
+//
+// Mesmo cabecalho de 0x0E bytes dos outros pacotes do jogo (o que sub_490E40
+// soma): +0 remetente, +4 destinatario, +8 o tamanho do corpo, +9 o tipo,
+// +0x0A a soma, +0x0E o corpo. O tipo e o que separa estas mensagens dos
+// pacotes de turno 0x33 no mesmo canal.
+
+namespace {
+
+void msgSendTo(const sockaddr_in& to, int type, const uint8_t* body, size_t len) {
+    if (s_gameSock == INVALID_SOCKET || len > 240) return;
+    uint8_t pkt[256];
+    std::memset(pkt, 0, 0x0E);
+    putU32(pkt, s_sessionId);
+    putU32(pkt + 4, 0);                       // 0 = para todos
+    pkt[8] = uint8_t(len);
+    pkt[9] = uint8_t(type);
+    if (len) std::memcpy(pkt + 0x0E, body, len);
+    putU32(pkt + 0x0A, lobbyPacketSum(pkt));
+    sendto(s_gameSock, reinterpret_cast<const char*>(pkt), int(0x0E + len), 0,
+           reinterpret_cast<const sockaddr*>(&to), sizeof(to));
+}
+
+} // namespace
+
+void lobbyMsgSend(int type, const uint8_t* body, size_t len) {
+    uint32_t addr = 0;
+    uint16_t port = 0;
+    if (!lobbyPeer(addr, port)) return;
+    sockaddr_in to{};
+    to.sin_family = AF_INET;
+    to.sin_addr.s_addr = addr;
+    to.sin_port = htons(port);
+    // O host fala com cada lugar ocupado; quem nao hospeda so fala com o host.
+    if (s_hostActive) {
+        for (int n = 1; n < 8; ++n) {
+            if (s_slots[n].state != 2) continue;
+            to.sin_addr.s_addr = s_slots[n].addr;
+            to.sin_port = htons(s_slots[n].port);
+            msgSendTo(to, type, body, len);
+        }
+        return;
+    }
+    msgSendTo(to, type, body, len);
+}
+
+void lobbyMsgSendTable(const LobbyTable& t) {
+    uint8_t body[8 + 6 * 21];
+    size_t o = 0;
+    putU32(body + o, t.flags); o += 4;
+    putU32(body + o, uint32_t(t.scenario)); o += 4;
+    for (int i = 0; i < 6; ++i) {
+        const LobbySlot& sl = t.slots[i];
+        std::memset(body + o, 0, 16);
+        std::memcpy(body + o, sl.name.c_str(), std::min<size_t>(15, sl.name.size()));
+        o += 16;
+        body[o++] = sl.color;
+        body[o++] = sl.eden;
+        body[o++] = sl.resources;
+        body[o++] = sl.ready;
+        body[o++] = sl.occupied;
+    }
+    lobbyMsgSend(kLobbyMsgState, body, o);
+}
+
+bool lobbyDecodeTable(const std::vector<uint8_t>& body, LobbyTable& out) {
+    if (body.size() < 8 + 6 * 21) return false;
+    size_t o = 0;
+    out.flags = getU32(body.data() + o); o += 4;
+    out.scenario = int32_t(getU32(body.data() + o)); o += 4;
+    for (int i = 0; i < 6; ++i) {
+        char nm[16];
+        std::memcpy(nm, body.data() + o, 16);
+        nm[15] = 0;
+        out.slots[i].name = nm;
+        o += 16;
+        out.slots[i].color     = body[o++];
+        out.slots[i].eden      = body[o++];
+        out.slots[i].resources = body[o++];
+        out.slots[i].ready     = body[o++];
+        out.slots[i].occupied  = body[o++];
+    }
+    return true;
+}
+
+void lobbyMsgSendChat(const std::string& line) {
+    const size_t n = std::min<size_t>(200, line.size());
+    lobbyMsgSend(kLobbyMsgChat, reinterpret_cast<const uint8_t*>(line.c_str()), n);
+}
+
+// loc_460FAC: quem nao hospeda manda o indice do controle e o valor novo. O
+// numero do jogador vai junto porque o nosso canal nao carrega o remetente no
+// corpo como o id de sessao do original.
+void lobbyMsgSendChange(int player, int control, int value) {
+    uint8_t body[12];
+    putU32(body, uint32_t(player));
+    putU32(body + 4, uint32_t(control));
+    putU32(body + 8, uint32_t(value));
+    lobbyMsgSend(kLobbyMsgChange, body, sizeof(body));
+}
+
+bool lobbyMsgPoll(int& type, std::vector<uint8_t>& body) {
+    if (s_gameSock == INVALID_SOCKET) return false;
+    uint8_t buf[512];
+    for (;;) {
+        sockaddr_in from{};
+        int flen = sizeof(from);
+        const int n = recvfrom(s_gameSock, reinterpret_cast<char*>(buf), sizeof(buf),
+                               MSG_PEEK, reinterpret_cast<sockaddr*>(&from), &flen);
+        if (n < 0x0E) return false;
+        const int t = buf[9];
+        if (t < kLobbyMsgState || t > kLobbyMsgStart) return false;  // da partida
+        // Consome de verdade o que e nosso.
+        flen = sizeof(from);
+        const int got = recvfrom(s_gameSock, reinterpret_cast<char*>(buf), sizeof(buf), 0,
+                                 reinterpret_cast<sockaddr*>(&from), &flen);
+        if (got < 0x0E) return false;
+        if (lobbyPacketSum(buf) != getU32(buf + 0x0A)) continue;
+        const size_t len = buf[8];
+        if (int(0x0E + len) > got) continue;
+        type = t;
+        body.assign(buf + 0x0E, buf + 0x0E + len);
+        // Quem hospeda repassa a conversa aos outros, para todos a verem.
+        if (s_hostActive && t == kLobbyMsgChat) lobbyMsgSend(kLobbyMsgChat, buf + 0x0E, len);
+        return true;
+    }
+}
+
 // ---- somas de verificacao --------------------------------------------------
 
 // sub_490DE0.
@@ -189,10 +318,11 @@ bool lobbyHostStart(const std::string& name, int maxPlayers,
     s_gameSockTaken = false;
     sockaddr_in gameAddr{};
     gameAddr.sin_family = AF_INET;
-    // Esta, ao contrario das de descoberta, vai presa ao IP da interface, como
-    // no original: so assim a porta fica de fato tomada e o cliente da mesma
-    // maquina e empurrado para a 0xBAB9 em diante.
-    gameAddr.sin_addr.s_addr = me;
+    // Em qualquer interface, como todas as outras: presa ao IP da placa, esta
+    // porta nao fala com um cliente que chegou por outro caminho (o loopback,
+    // uma VPN). Isso tambem continua tomando a 0xBAB8 para valer, entao um
+    // cliente na mesma maquina e empurrado para a 0xBAB9 em diante.
+    gameAddr.sin_addr.s_addr = INADDR_ANY;
     gameAddr.sin_port = htons(kLobbyClientPortLo);
     if (s_gameSock == INVALID_SOCKET ||
         bind(s_gameSock, reinterpret_cast<sockaddr*>(&gameAddr), sizeof(gameAddr)) != 0) {
@@ -240,8 +370,23 @@ void lobbyHostStop() {
 }
 
 bool lobbyHostActive() { return s_hostActive; }
-int  lobbyHostActiveCount() { return s_activeCount; }
+// Os lugares de fato na mesa: o estado 2 e o que sub_496250 poe depois da
+// confirmacao. s_activeCount conta tambem os que ainda estao no aperto de mao,
+// porque e esse o numero que sub_496170 compara com o maximo.
+int  lobbyHostActiveCount() {
+    int n = 0;
+    for (int i = 0; i < 8; ++i)
+        if (s_slots[i].state == 2) ++n;
+    return n;
+}
 int  lobbyHostMaxPlayers() { return s_maxPlayers; }
+
+void lobbyHostEject(int n) {
+    if (n <= 0 || n >= 8 || s_slots[n].id == 0) return;
+    closeSock(s_acceptSock[n]);
+    s_slots[n] = LobbyPlayer{};
+    if (s_activeCount > 1) --s_activeCount;
+}
 
 const LobbyPlayer* lobbyHostPlayer(int n) {
     if (n < 0 || n >= 8) return nullptr;
@@ -360,7 +505,9 @@ void hostAcceptJoins() {
         SOCKET s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
         sockaddr_in me{};
         me.sin_family = AF_INET;
-        me.sin_addr.s_addr = s_slots[0].addr;
+        // Em qualquer interface, pelo mesmo motivo de bindClientPort: a
+        // aceitacao precisa sair pela interface de onde veio o pedido.
+        me.sin_addr.s_addr = INADDR_ANY;
         me.sin_port = htons(uint16_t(kLobbyAcceptPortLo + slot - 1));
         if (s == INVALID_SOCKET ||
             bind(s, reinterpret_cast<sockaddr*>(&me), sizeof(me)) != 0) {
@@ -457,6 +604,11 @@ namespace {
 
 // Liga um socket na primeira porta livre de 0xBAB8..0xBABF, como sub_491410 e
 // sub_496370. Devolve a porta, ou 0.
+//
+// CORRIGIDO: o original liga ao IP da interface, o que so funciona quando o
+// host esta na mesma rede local — a resposta que chega por outra interface
+// (o loopback, uma VPN, uma segunda placa) nunca e entregue. Quem chama passa
+// INADDR_ANY, e o endereco de origem passa a ser o que o roteamento escolher.
 uint16_t bindClientPort(SOCKET s, uint32_t addr) {
     for (uint16_t p = kLobbyClientPortLo; p <= kLobbyClientPortHi; ++p) {
         sockaddr_in a{};
@@ -471,7 +623,8 @@ uint16_t bindClientPort(SOCKET s, uint32_t addr) {
 } // namespace
 
 bool lobbyFind(const std::string& password, int attempts,
-               std::vector<LobbySession>& out, std::string& error) {
+               std::vector<LobbySession>& out, std::string& error,
+               const std::string& host) {
     out.clear();
     if (!wsaUp(error)) return false;
 
@@ -481,7 +634,7 @@ bool lobbyFind(const std::string& password, int attempts,
     if (rx == INVALID_SOCKET || tx == INVALID_SOCKET) {
         error = "socket falhou"; closeSock(rx); closeSock(tx); wsaDown(); return false;
     }
-    const uint16_t myPort = bindClientPort(rx, me);
+    const uint16_t myPort = bindClientPort(rx, INADDR_ANY);
     if (myPort == 0) {
         error = "nenhuma porta de 47800 a 47807 esta livre";
         closeSock(rx); closeSock(tx); wsaDown(); return false;
@@ -501,6 +654,18 @@ bool lobbyFind(const std::string& password, int attempts,
     to.sin_family = AF_INET;
     to.sin_addr.s_addr = INADDR_BROADCAST;
     to.sin_port = htons(kLobbyDiscoveryPort);
+    if (!host.empty()) {
+        // Modo dirigido (sub_491860): a mesma consulta, so que a um endereco.
+        // Aceita tanto o IP quanto um nome, como o gethostbyname do original.
+        if (inet_pton(AF_INET, host.c_str(), &to.sin_addr) != 1) {
+            const hostent* h = gethostbyname(host.c_str());
+            if (!h || !h->h_addr_list || !h->h_addr_list[0]) {
+                error = "endereco invalido: " + host;
+                closeSock(rx); closeSock(tx); wsaDown(); return false;
+            }
+            std::memcpy(&to.sin_addr, h->h_addr_list[0], 4);
+        }
+    }
 
     for (int t = 0; t < attempts; ++t) {
         const uint32_t now = GetTickCount();
@@ -566,7 +731,7 @@ bool lobbyJoin(const LobbySession& s, const std::string& password,
     const uint32_t me = localAddr();
     SOCKET sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock == INVALID_SOCKET) { error = "socket falhou"; wsaDown(); return false; }
-    const uint16_t myPort = bindClientPort(sock, me);
+    const uint16_t myPort = bindClientPort(sock, INADDR_ANY);
     if (myPort == 0) {
         error = "nenhuma porta de 47800 a 47807 esta livre";
         closeSock(sock); wsaDown(); return false;

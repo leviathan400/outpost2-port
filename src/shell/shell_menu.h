@@ -252,11 +252,20 @@ private:
     bool m_mpDisasters = false, m_mpDayNight = false, m_mpMoraleSteady = false;
     int  m_mpInitialVehicles = 0;           // combo 1018
     int  m_mpPlayerCount = 1;               // quantos lugares ocupados
+    bool m_mpEjected = false;               // o host nos tirou da mesa
+public:
+    bool m_mpEjectTest = false;             // --mpui eject: testa o 1046+i
+private:
+    uint32_t m_mpLastBroadcast = 0;         // quando o host difundiu a mesa
 
     void showMultiplayer();           // o botão 1005 do menu principal
     void mpLoadScenarios();           // as missões M* que servem de cenário
     void mpSyncGsi();                 // passa os controles para o m_mpGsi
     void mpPump();                    // bombeia o lobby enquanto a tela está no ar
+    void mpControlChanged(int id);    // um controle do GAME SETTINGS mudou
+    void mpTableToUi(const LobbyTable& t);   // o estado que o host difundiu
+    void mpUiToTable(LobbyTable& t) const;   // o estado para difundir
+    void mpSendChat(const std::string& line);
     bool mpStartHost();               // CREATE: abre o lobby
     bool mpFindSessions();            // a descoberta por broadcast
     bool mpJoinSelected();            // entra na sessão escolhida

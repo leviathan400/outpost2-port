@@ -509,10 +509,11 @@ static int runMpUi(const std::string& mode, const std::string& nome) {
     menu.init("OP2SHRES.DLL");
 
     std::string relato;
+    menu.m_mpEjectTest = (nome == "EJECT");
     const bool ok = menu.mpFlowTest(host, nome, relato);
     std::printf("[MpUi] %s: %s%c", host ? "host" : "join", relato.c_str(), 10);
 
-    if (ok) {
+    if (ok && !menu.m_mpEjectTest) {
         op2::GameStartInfo gsi;
         menu.launchStartInfo(gsi);
         std::printf("[MpUi] flags=%08x (desastres=%d dia/noite=%d moral=%d maxjog=%d veic=%d)%c",

@@ -38,6 +38,7 @@
 #include "shell_menu.h"
 
 #include <algorithm>
+#include <functional>
 #include <cctype>
 #include <cstring>
 #include <filesystem>
@@ -144,60 +145,143 @@ void ShellMenu::showMpScreen(int which, bool host, int players) {
 
 // Percorre o fluxo das telas chamando o mesmo despacho dos botoes, para que o
 // teste exercite o caminho de verdade e nao um atalho: MULTIPLAYER -> TCP/IP
-// -> CREATE/JOIN -> (nome/busca) -> GAME SETTINGS -> START.
+// -> CREATE/JOIN -> (nome/busca) -> GAME SETTINGS, e la dentro exercita a
+// sincronizacao: o host muda opcoes e o cliente tem de ve-las, o cliente marca
+// Ready e o host tem de ve-lo, e os dois conversam pelo chat.
 bool ShellMenu::mpFlowTest(bool host, const std::string& name, std::string& report) {
-    auto step = [&](const char* what) { report += what; report += "; "; };
+    auto step = [&](const std::string& what) { report += what; report += "; "; };
+    // Espera uma condicao bombeando o lobby, como a tela faz a cada quadro.
+    auto waitFor = [&](const std::function<bool()>& cond, int ms) {
+        const uint32_t fim = SDL_GetTicks() + uint32_t(ms);
+        while (SDL_GetTicks() < fim) {
+            mpPump();
+            if (cond()) return true;
+            SDL_Delay(5);
+        }
+        return cond();
+    };
 
     showMultiplayer();
     if (m_state != MenuState::MpConnection) { report += "nao abriu o 259"; return false; }
-    step("259 aberto");
+    step("259");
 
     dispatchButton(3);                       // TCP/IP
     if (m_state != MenuState::MpNetOptions) { report += "nao abriu o 260"; return false; }
-    step("260 aberto");
+    step("260");
 
     m_mpPlayerName = name;
     if (host) {
         dispatchButton(1074);                // CREATE
         if (m_state != MenuState::MpNewGame) { report += "nao abriu o 2012"; return false; }
-        step("2012 aberto");
+        step("2012");
         dispatchButton(1);                   // OK -> abre o lobby
         if (m_state != MenuState::MpGameSettings) {
             report += "o host nao chegou ao 196: " + m_mpStatus;
             return false;
         }
-        step("196 aberto (host)");
-        // Espera o outro lado entrar, bombeando o lobby como a tela faz.
-        const uint32_t fim = SDL_GetTicks() + 30000;
-        while (SDL_GetTicks() < fim && m_mpPlayerCount < 2) {
-            mpPump();
-            SDL_Delay(5);
+        step("196 (host)");
+        if (!waitFor([&] { return m_mpPlayerCount >= 2; }, 30000)) {
+            report += "ninguem entrou"; return false;
         }
-        if (m_mpPlayerCount < 2) { report += "ninguem entrou"; return false; }
-        step("o outro lado entrou");
+        step("o cliente entrou");
+
+        // O host muda opcoes da mesa; elas tem de chegar ao outro lado.
+        m_mpDisasters = true;
+        m_mpDayNight = true;
+        if (m_mpScenarioList.size() > 1) m_mpScenario = 1;
+        mpControlChanged(1077);
+        step("host mudou desastres/dia-noite/cenario");
+
+        mpSendChat("HOST: ola");
+        if (!waitFor([&] {
+                for (const std::string& l : m_mpChat)
+                    if (l.rfind("JOIN:", 0) == 0) return true;
+                return false;
+            }, 15000)) {
+            report += "o chat do cliente nao chegou"; return false;
+        }
+        step("chat do cliente recebido");
+
+        if (!waitFor([&] { return m_mpReady[1]; }, 15000)) {
+            report += "o Ready do cliente nao chegou"; return false;
+        }
+        step("Ready do cliente recebido");
     } else {
         dispatchButton(1075);                // JOIN
         if (m_state != MenuState::MpFindSession) { report += "nao abriu o 2010"; return false; }
-        step("2010 aberto");
-        dispatchButton(1);                   // OK -> busca por broadcast
+        step("2010");
+        // Procura pelo endereco (radio 1007), que e o modo dirigido de
+        // sub_491860 — assim o teste cobre os dois caminhos de busca.
+        m_mpFindMode = 1;
+        m_mpFindAddr = "127.0.0.1";
+        dispatchButton(1);
         if (m_state != MenuState::MpPickSession) { report += "nao abriu o 195"; return false; }
-        step("195 aberto");
-        if (m_mpSessions.empty()) { report += "nenhuma sessao encontrada"; return false; }
-        step(("achou " + std::to_string(m_mpSessions.size()) + " sessao(oes)").c_str());
+        if (m_mpSessions.empty()) { report += "nenhuma sessao por endereco"; return false; }
+        step("195 por endereco: " + std::to_string(m_mpSessions.size()));
         dispatchButton(1);                   // OK -> nome
         if (m_state != MenuState::MpJoinName) { report += "nao abriu o 2013"; return false; }
-        step("2013 aberto");
+        step("2013");
         dispatchButton(1);                   // OK -> entra
         if (m_state != MenuState::MpGameSettings) {
             report += "nao entrou: " + m_mpStatus;
             return false;
         }
-        step("196 aberto (cliente)");
+        step("196 (cliente)");
+
+        // As opcoes que o host mudou tem de aparecer aqui.
+        if (!waitFor([&] { return m_mpDisasters && m_mpDayNight; }, 20000)) {
+            report += "as opcoes do host nao chegaram"; return false;
+        }
+        step("opcoes do host recebidas");
+
+        mpSendChat("JOIN: ola");
+        if (!waitFor([&] {
+                for (const std::string& l : m_mpChat)
+                    if (l.rfind("HOST:", 0) == 0) return true;
+                return false;
+            }, 15000)) {
+            report += "o chat do host nao chegou"; return false;
+        }
+        step("chat do host recebido");
+
+        // Marca Ready, que e o controle 40004+5i do proprio lugar.
+        const int me = 1;
+        m_mpReady[me] = true;
+        mpControlChanged(40000 + 5 * me + 4);
+        step("Ready marcado");
     }
 
-    dispatchButton(1045);                    // START
-    if (!m_netLaunch) { report += "o START nao pediu a partida: " + m_mpStatus; return false; }
-    step("START aceito");
+    // Com `ejectTest`, o host remove o visitante em vez de comecar, e o outro
+    // lado tem de receber o aviso (o 1046+i do GAME SETTINGS).
+    if (m_mpEjectTest) {
+        if (host) {
+            dispatchButton(1047);            // EJECT do lugar 1
+            if (m_mpPlayerCount != 1) {
+                report += "a mesa nao voltou a 1 lugar: " +
+                          std::to_string(m_mpPlayerCount);
+                return false;
+            }
+            step("EJECT feito, mesa com 1");
+        } else {
+            if (!waitFor([&] { return m_mpEjected; }, 15000)) {
+                report += "o aviso de EJECT nao chegou"; return false;
+            }
+            step("EJECT recebido");
+        }
+        return true;
+    }
+
+    if (host) {
+        dispatchButton(1045);                // START
+        if (!m_netLaunch) { report += "o START nao pediu a partida: " + m_mpStatus; return false; }
+        step("START aceito");
+    } else {
+        // O cliente nao aperta START: ele recebe o aviso do host.
+        if (!waitFor([&] { return m_netLaunch; }, 20000)) {
+            report += "o aviso de START nao chegou"; return false;
+        }
+        step("START recebido do host");
+    }
     return true;
 }
 
@@ -280,7 +364,8 @@ bool ShellMenu::mpFindSessions() {
     // O original manda 8 rajadas com 250 ms entre elas (sub_491710). Aqui a
     // tela fica parada esses dois segundos, como o diálogo de progresso
     // "Finding Local Sessions" do original.
-    if (!lobbyFind(m_mpPassword, 8, found, err)) {
+    if (!lobbyFind(m_mpPassword, 8, found, err,
+                   m_mpFindMode == 1 ? m_mpFindAddr : std::string())) {
         m_mpStatus = "A busca falhou: " + err;
         return false;
     }
@@ -318,19 +403,150 @@ bool ShellMenu::mpJoinSelected() {
     return true;
 }
 
+// O estado da mesa que o host difunde, e o caminho de volta.
+void ShellMenu::mpUiToTable(LobbyTable& t) const {
+    t.flags = 0x10;
+    if (m_mpDisasters)    t.flags |= 0x1;
+    if (m_mpDayNight)     t.flags |= 0x2;
+    if (m_mpMoraleSteady) t.flags |= 0x4;
+    t.flags |= uint32_t((m_mpMaxPlayers + 2) & 7) << 6;
+    t.flags |= uint32_t(m_mpInitialVehicles & 0xF) << 17;
+    t.scenario = m_mpScenario;
+    for (int i = 0; i < 6; ++i) {
+        t.slots[i].name      = m_mpNames[i];
+        t.slots[i].color     = uint8_t(m_mpColor[i]);
+        t.slots[i].eden      = uint8_t(m_mpEden[i] ? 1 : 0);
+        t.slots[i].resources = uint8_t(m_mpResources[i]);
+        t.slots[i].ready     = uint8_t(m_mpReady[i] ? 1 : 0);
+        t.slots[i].occupied  = uint8_t(i < m_mpPlayerCount ? 1 : 0);
+    }
+}
+
+void ShellMenu::mpTableToUi(const LobbyTable& t) {
+    m_mpDisasters    = (t.flags & 0x1) != 0;
+    m_mpDayNight     = (t.flags & 0x2) != 0;
+    m_mpMoraleSteady = (t.flags & 0x4) != 0;
+    m_mpMaxPlayers   = std::max(0, int((t.flags >> 6) & 7) - 2);
+    m_mpInitialVehicles = int((t.flags >> 17) & 0xF);
+    m_mpScenario = t.scenario;
+    int live = 0;
+    const int me = netActive() ? netLocalPlayer() : 1;
+    for (int i = 0; i < 6; ++i) {
+        // O nosso proprio lugar nao e sobrescrito: o que vale para ele e o que
+        // esta na nossa tela, e o host ja o recebeu por kLobbyMsgChange.
+        if (i != me) {
+            m_mpNames[i]     = t.slots[i].name;
+            m_mpColor[i]     = t.slots[i].color;
+            m_mpEden[i]      = t.slots[i].eden != 0;
+            m_mpResources[i] = t.slots[i].resources;
+            m_mpReady[i]     = t.slots[i].ready != 0;
+        }
+        if (t.slots[i].occupied) ++live;
+    }
+    m_mpPlayerCount = std::max(1, live);
+}
+
+void ShellMenu::mpSendChat(const std::string& line) {
+    m_mpChat.push_back(line);
+    lobbyMsgSendChat(line);
+}
+
+// Um controle do GAME SETTINGS mudou. Em sub_45EF90 quem hospeda manda a mesa
+// inteira e os outros avisam so o que mexeram (loc_460FAC).
+void ShellMenu::mpControlChanged(int id) {
+    const int me = netActive() ? netLocalPlayer() : (m_mpIsHost ? 0 : 1);
+    if (m_mpIsHost) {
+        LobbyTable t;
+        mpUiToTable(t);
+        lobbyMsgSendTable(t);
+        return;
+    }
+    // Só os controles do próprio lugar sobem; o resto é visual.
+    const int base = 40000 + 5 * me;
+    if (id == base + 1)      lobbyMsgSendChange(me, 1, m_mpColor[me]);
+    else if (id == base + 3) lobbyMsgSendChange(me, 3, m_mpEden[me] ? 1 : 0);
+    else if (id == base + 2) lobbyMsgSendChange(me, 2, m_mpResources[me]);
+    else if (id == base + 4) lobbyMsgSendChange(me, 4, m_mpReady[me] ? 1 : 0);
+}
+
 // Enquanto o GAME SETTINGS está no ar o host precisa continuar respondendo às
-// consultas e aos pedidos de entrada (os threads sub_48C1F0 / sub_48C300).
+// consultas e aos pedidos de entrada (os threads sub_48C1F0 / sub_48C300) e os
+// dois lados trocam o estado da mesa pelo canal da partida.
 void ShellMenu::mpPump() {
-    if (!lobbyHostActive()) return;
-    lobbyHostPump();
-    const int n = lobbyHostActiveCount();
-    if (n != m_mpPlayerCount) {
-        for (int i = m_mpPlayerCount; i < n && i < 6; ++i)
-            if (m_mpNames[i].empty()) m_mpNames[i] = "PLAYER " + std::to_string(i + 1);
-        m_mpPlayerCount = n;
-        m_mpChat.push_back("Jogadores na mesa: " + std::to_string(n));
-        m_mpStatus = (n >= m_mpMaxPlayers + 2) ? "Mesa cheia — pode comecar"
-                                               : "Aguardando jogadores...";
+    if (lobbyHostActive()) {
+        lobbyHostPump();
+        const int n = lobbyHostActiveCount();
+        if (n != m_mpPlayerCount) {
+            for (int i = m_mpPlayerCount; i < n && i < 6; ++i)
+                if (m_mpNames[i].empty()) m_mpNames[i] = "PLAYER " + std::to_string(i + 1);
+            m_mpPlayerCount = n;
+            mpSendChat("Jogadores na mesa: " + std::to_string(n));
+            m_mpStatus = (n >= m_mpMaxPlayers + 2) ? "Mesa cheia - pode comecar"
+                                                   : "Aguardando jogadores...";
+            LobbyTable t;
+            mpUiToTable(t);
+            lobbyMsgSendTable(t);
+        }
+        // Repete a mesa de tempos em tempos: UDP perde pacote, e quem acabou de
+        // entrar precisa de um estado inteiro de qualquer jeito.
+        const uint32_t now = SDL_GetTicks();
+        if (now - m_mpLastBroadcast > 1000) {
+            m_mpLastBroadcast = now;
+            if (m_mpPlayerCount > 1) {
+                LobbyTable t;
+                mpUiToTable(t);
+                lobbyMsgSendTable(t);
+            }
+        }
+    }
+
+    int type = 0;
+    std::vector<uint8_t> body;
+    while (lobbyMsgPoll(type, body)) {
+        switch (type) {
+        case kLobbyMsgState: {
+            LobbyTable t;
+            if (!m_mpIsHost && lobbyDecodeTable(body, t)) mpTableToUi(t);
+            break;
+        }
+        case kLobbyMsgChange: {
+            if (!m_mpIsHost || body.size() < 12) break;
+            const int who = int(body[0] | (body[1] << 8));
+            const int ctrl = int(body[4] | (body[5] << 8));
+            const int val  = int(body[8] | (body[9] << 8));
+            if (who < 0 || who >= 6) break;
+            if (ctrl == 1)      m_mpColor[who] = val;
+            else if (ctrl == 3) m_mpEden[who] = val != 0;
+            else if (ctrl == 2) m_mpResources[who] = val;
+            else if (ctrl == 4) m_mpReady[who] = val != 0;
+            LobbyTable t;                       // a mesa volta para todos
+            mpUiToTable(t);
+            lobbyMsgSendTable(t);
+            break;
+        }
+        case kLobbyMsgChat:
+            m_mpChat.push_back(std::string(body.begin(), body.end()));
+            break;
+        case kLobbyMsgEject:
+            m_mpEjected = true;
+            m_mpStatus = "O host removeu voce da partida";
+            break;
+        case kLobbyMsgStart:
+            if (!m_mpIsHost) {
+                mpSyncGsi();
+                m_netLaunchDll = (m_mpScenario >= 0 &&
+                                  m_mpScenario < (int)m_mpScenarioDlls.size())
+                               ? m_mpScenarioDlls[m_mpScenario] : std::string();
+                if (!m_netLaunchDll.empty()) {
+                    m_launchGsi = m_mpGsi;
+                    m_launchHasGsi = true;
+                    m_netLaunch = true;
+                }
+            }
+            break;
+        default:
+            break;
+        }
     }
 }
 
@@ -343,11 +559,18 @@ void ShellMenu::renderMpConnection(Renderer& renderer) {
     const int ox = (640 - 332) / 2, oy = (480 - 244) / 2;
     renderer.fillRect(0, 0, 640, 480, 0x88000000);
     renderer.drawDialogFrame(ox - 16, oy - 36, 364, 292, "PICK CONNECTION METHOD");
-    // Só o TCP/IP está portado; os outros ficam visíveis e desabilitados, como
-    // o original os mostra quando o provedor não está instalado.
-    Font::drawTextCentered(renderer.getFramebuffer(), 640, 480,
-                           "(apenas TCP/IP esta portado)", 320, oy + 236,
-                           0xFF8090A8, true);
+    // Os outros transportes ficam visíveis e desabilitados, como o original os
+    // mostra quando o provedor não está instalado. Nenhum deles tem como
+    // funcionar hoje: o IPX saiu do Windows depois do XP, MODEM e SERIAL são
+    // DirectPlay sobre linha discada e cabo serial, e o SIGS era o serviço
+    // online da Sierra, desligado há décadas. O TCP/IP cobre os dois usos que
+    // restam: o broadcast acha partidas na rede local e o endereço direto
+    // alcança qualquer host.
+    uint32_t* fb = renderer.getFramebuffer();
+    Font::drawTextCentered(fb, 640, 480, "TCP/IP: rede local ou endereco direto",
+                           320, oy + 232, 0xFF8090A8, true);
+    Font::drawTextCentered(fb, 640, 480, "(IPX, modem, serial e SIGS nao existem mais)",
+                           320, oy + 248, 0xFF60708A, true);
 }
 
 // Dialog 260 "NET GAME OPTIONS" (124x66)
