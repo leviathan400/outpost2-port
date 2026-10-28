@@ -596,6 +596,41 @@ static int runDemoTest() {
             if (antes != 0 || depois != 10) ok = false;
         }
     }
+
+    // E cada demo ate o proprio fim: o gatilho de tempo que os ademo armam
+    // como condicao de vitoria tem de encerrar com o codigo 11 (fim do demo),
+    // nao com o 3 (missao cumprida).
+    if (ok) {
+        for (int n = 1; n <= 3 && ok; ++n) {
+            char nome[32];
+            std::snprintf(nome, sizeof(nome), "ademo%d.dll", n);
+            op2::GameStartInfo gsi;
+            gsi.flags |= 1u | 2u;
+            gsi.demo = true;
+            gsi.dll = nome;
+            op2::GameState gs;
+            if (!gs.loadMission(nome, &gsi)) { ok = false; break; }
+            gs.onActivate();
+            int camX = gs.camX(), camY = gs.camY(), saltos = 0, fimTick = -1;
+            // O script parca a camera com CenterViewOn no InitProc; o centro
+            // da vista tem de estar onde ele pediu. A vista do mapa tem 416x416
+            // (o resto da tela e a moldura e o painel), entao o centro esta a
+            // 208 px do canto -- dividir 640x480 daria um tile errado.
+            std::printf("[DemoTest] %s: camera inicial centrada no tile (%d,%d)%c", nome,
+                        (camX + 208) >> 5, (camY + 208) >> 5, 10);
+            for (int k = 0; k < 20000 && fimTick < 0; ++k) {
+                gs.onIdle(renderer, 0.2501f / 4.0f);
+                if (gs.camX() != camX || gs.camY() != camY) {
+                    ++saltos; camX = gs.camX(); camY = gs.camY();
+                }
+                if (op2::gameEndCode()) fimTick = op2::TethysGame::tick();
+            }
+            const int codigo = op2::gameEndCode();
+            std::printf("[DemoTest] %s: fim no tique %d com codigo %d (esperado 11),"
+                        " camera movida %d vezes%c", nome, fimTick, codigo, saltos, 10);
+            if (codigo != 11) ok = false;
+        }
+    }
     std::fflush(stdout);
     renderer.shutdown();
     SDL_Quit();
