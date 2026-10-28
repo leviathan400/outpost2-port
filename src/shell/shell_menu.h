@@ -183,6 +183,9 @@ public:
     // mouse (clique, arrasto, pontas) e pelo teclado, e confere que o mixer
     // recebeu cada mudanca.
     bool sliderTest(std::string& report);
+    // Teste por linha de comando (--uitest): os botoes LESS/MORE das
+    // velocidades e os limites de cada uma.
+    bool prefsTest(std::string& report);
     // Teste por linha de comando (--mpui): percorre o fluxo das telas como se
     // os botoes tivessem sido clicados, e devolve o relato de cada passo.
     bool mpFlowTest(bool host, const std::string& name, std::string& report);
@@ -260,6 +263,10 @@ private:
     bool m_prefUnitShadows = false, m_prefStructShadows = false;
     // "AILevel": 0 = AUTO (o nivel que a partida escolher), 1..3 Easy/Normal/
     // Hard. Nao existe no jogo original — ver loadPrefs/savePrefs.
+    // Velocidades do [Game], com as faixas do original (ver o despacho dos
+    // botoes 1095/1099 e 1097/1101): GameSpeed 1..10, ScrollRate 1..6.
+    int  m_prefGameSpeed = 5;
+    int  m_prefScrollRate = 4;
     int  m_prefAiLevel = 0;
     // "AudioVolume" (0..100): volume mestre, tambem acrescimo deste porte. A
     // barra mexe no som na hora, para poder ser ouvida; o que esta gravado

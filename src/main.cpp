@@ -676,10 +676,13 @@ static int runUiTest() {
     std::string relatoBarra;
     const bool okBarra = menu.sliderTest(relatoBarra);
     std::printf("[UiTest] barra: %s%c", relatoBarra.c_str(), 10);
+    std::string relatoPrefs;
+    const bool okPrefs = menu.prefsTest(relatoPrefs);
+    std::printf("[UiTest] velocidades: %s%c", relatoPrefs.c_str(), 10);
     std::fflush(stdout);
     renderer.shutdown();
     SDL_Quit();
-    return (ok && okBarra) ? 0 : 1;
+    return (ok && okBarra && okPrefs) ? 0 : 1;
 }
 
 // --mpui <host|join> [nome]: percorre as TELAS de multijogador (259 -> 260 ->

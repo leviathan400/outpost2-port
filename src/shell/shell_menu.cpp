@@ -377,6 +377,13 @@ void ShellMenu::rebuildControls() {
         addCheck("Ambient Animations",    cy, &m_prefAnimations); cy += 24;
         addCheck("Unit Shadows",          cy, &m_prefUnitShadows);cy += 24;
         addCheck("Structure Shadows",     cy, &m_prefStructShadows);
+        // Velocidades: os botoes LESS/MORE do Dialog 142, com os ids do
+        // original (1095/1099 jogo, 1097/1101 rolagem). O rotulo e o valor
+        // saem no render.
+        addButton(1095, "LESS", kPrX + 188, kPrY + 156, 56, 20);
+        addButton(1099, "MORE", kPrX + 250, kPrY + 156, 56, 20);
+        addButton(1097, "LESS", kPrX + 188, kPrY + 182, 56, 20);
+        addButton(1101, "MORE", kPrX + 250, kPrY + 182, 56, 20);
         // Nivel da IA: acrescimo deste porte. O rotulo e desenhado no render.
         addCombo(1200, &kAiLevelNames, &m_prefAiLevel,
                  kPrX + 130, kPrY + 214, 110, 22);
@@ -712,6 +719,21 @@ void ShellMenu::dispatchButton(int id) {
         }
         break;
     case MenuState::Preferences:
+        // LESS/MORE das velocidades. As faixas sao as do original: o jogo anda
+        // de 1 a 10 (sub_45F0D0/sub_466100) e a rolagem de 1 a 6 (sub_49ACA0),
+        // e o botao simplesmente nao passa do limite, como la.
+        if (id == 1095 || id == 1099) {
+            m_prefGameSpeed += (id == 1099) ? 1 : -1;
+            if (m_prefGameSpeed < 1) m_prefGameSpeed = 1;
+            if (m_prefGameSpeed > 10) m_prefGameSpeed = 10;
+            break;
+        }
+        if (id == 1097 || id == 1101) {
+            m_prefScrollRate += (id == 1101) ? 1 : -1;
+            if (m_prefScrollRate < 1) m_prefScrollRate = 1;
+            if (m_prefScrollRate > 6) m_prefScrollRate = 6;
+            break;
+        }
         if (id == 1) { savePrefs(); setState(MenuState::MainMenu); }
         break;
     case MenuState::About:
@@ -1638,6 +1660,8 @@ void ShellMenu::loadPrefs() {
     m_prefAnimations   = gs.ambient != 0;
     m_prefUnitShadows  = gs.mobileShadows != 0;
     m_prefStructShadows = gs.stationaryShadows != 0;
+    m_prefGameSpeed = gs.gameSpeed < 1 ? 1 : (gs.gameSpeed > 10 ? 10 : gs.gameSpeed);
+    m_prefScrollRate = gs.scrollRate < 1 ? 1 : (gs.scrollRate > 6 ? 6 : gs.scrollRate);
     m_prefAiLevel = (gs.aiLevel >= 0 && gs.aiLevel <= 3) ? gs.aiLevel : 0;
     m_prefAudioVolume = gs.audioVolume < 0 ? 0 : (gs.audioVolume > 100 ? 100 : gs.audioVolume);
     m_prefAudioVolumeIni = m_prefAudioVolume;
@@ -1652,6 +1676,8 @@ void ShellMenu::savePrefs() {
     gs.ambient           = m_prefAnimations ? 1 : 0;
     gs.mobileShadows     = m_prefUnitShadows ? 1 : 0;
     gs.stationaryShadows = m_prefStructShadows ? 1 : 0;
+    gs.gameSpeed         = m_prefGameSpeed;
+    gs.scrollRate        = m_prefScrollRate;
     gs.aiLevel           = m_prefAiLevel;
     gs.audioVolume       = m_prefAudioVolume;
     m_prefAudioVolumeIni = m_prefAudioVolume;    // o ACCEPT é que torna isso o som gravado
@@ -1663,10 +1689,23 @@ void ShellMenu::renderPreferencesDialog(Renderer& renderer) {
     renderer.dimRect(0, 0, 640, 480, 0x88);
     renderer.drawDialogFrame(kPrX, kPrY, kPrW, kPrH, "PREFERENCES");
     uint32_t* fb = renderer.getFramebuffer();
-    // Linhas não-interativas (as checkboxes são desenhadas por drawControls()).
-    int y = kPrY + 40 + 5 * 24 + 4;
-    Font::drawText(fb, 640, 480, "Game Speed: 5 / 10", kPrX + 24, y, 0xFFD8E4F8, true); y += 24;
-    Font::drawText(fb, 640, 480, "Scroll Speed: 4 / 10", kPrX + 24, y, 0xFFD8E4F8, true);
+    // Velocidades: o rótulo e o valor; quem muda são os botões LESS/MORE.
+    // O valor aparece como "n / máximo" para o limite ficar à vista, já que
+    // os dois têm faixas diferentes (10 e 6, como no original).
+    {
+        char buf[32];
+        const struct { const char* rotulo; int valor, maximo, y; } linhas[] = {
+            { "Game Speed:",   m_prefGameSpeed,  10, kPrY + 160 },
+            { "Scroll Speed:", m_prefScrollRate,  6, kPrY + 186 },
+        };
+        for (const auto& l : linhas) {
+            Font::drawText(fb, 640, 480, l.rotulo, kPrX + 24, l.y, 0xFFD8E4F8, true);
+            std::snprintf(buf, sizeof(buf), "%d / %d", l.valor, l.maximo);
+            // alinhado a direita, encostando nos botoes
+            Font::drawText(fb, 640, 480, buf, kPrX + 178 - Font::getTextWidth(buf),
+                           l.y, 0xFFFFD24A, true);
+        }
+    }
     // Nível da IA (só deste porte): o rótulo do combo 1200 e a explicação do
     // AUTO, que é como o jogo original se comporta.
     Font::drawText(fb, 640, 480, "AI Level:", kPrX + 24, kPrY + 219, 0xFFD8E4F8, true);

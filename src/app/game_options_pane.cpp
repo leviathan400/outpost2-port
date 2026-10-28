@@ -16,13 +16,16 @@ GameSettings g_opt;
 
 const char* kDetail[3] = {"Low", "Medium", "High"};
 
-// Limites do original: volumes e velocidades em 0..10, detalhe 0..2.
+// Limites do original: volumes 0..10, detalhe 0..2 e, conferidos no
+// disassembly, GameSpeed 1..10 (sub_45F0D0: GetInt padrao 5, teto 0Ah; o MORE
+// de sub_466100 para em 10 e o LESS em 1) e ScrollRate **1..6** (sub_49ACA0:
+// GetInt padrao 4, depois clamp 1..6; o MORE para em 6).
 void clampAll() {
     auto cl = [](int& v, int lo, int hi) { if (v < lo) v = lo; if (v > hi) v = hi; };
     cl(g_opt.musicVol, 0, 10);
     cl(g_opt.soundVol, 0, 10);
     cl(g_opt.gameSpeed, 1, 10);
-    cl(g_opt.scrollRate, 0, 10);
+    cl(g_opt.scrollRate, 1, 6);
     cl(g_opt.spiffyDraw, 0, 2);
 }
 }

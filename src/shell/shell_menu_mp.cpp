@@ -53,6 +53,7 @@
 #include <SDL.h>
 
 #include "../audio/sound.h"
+#include "../core/config.h"
 #include "../gfx/font.h"
 #include "../res/pe_resource.h"
 
@@ -286,6 +287,62 @@ bool ShellMenu::comboTest(std::string& report) {
         step("a roda rolou a lista de cenarios");
     }
     handleKeyDown(SDLK_ESCAPE);
+    return true;
+}
+
+// --uitest: os botoes LESS/MORE das velocidades do PREFERENCES. As faixas sao
+// as do original: o jogo anda de 1 a 10 e a rolagem de 1 a 6.
+bool ShellMenu::prefsTest(std::string& report) {
+    auto step = [&](const std::string& what) { report += what; report += "; "; };
+    showPreferences();
+    if (m_state != MenuState::Preferences) { report += "nao abriu o PREFERENCES"; return false; }
+
+    struct Caso { const char* nome; int menos, mais, minimo, maximo; const int* valor; };
+    const Caso casos[] = {
+        { "Game Speed",   1095, 1099, 1, 10, &m_prefGameSpeed },
+        { "Scroll Speed", 1097, 1101, 1,  6, &m_prefScrollRate },
+    };
+    for (const Caso& c : casos) {
+        // Um clique no MORE anda exatamente um.
+        const int antes = *c.valor;
+        if (antes < c.maximo) {
+            dispatchButton(c.mais);
+            if (*c.valor != antes + 1) {
+                report += std::string(c.nome) + ": o MORE deu " + std::to_string(*c.valor);
+                return false;
+            }
+        }
+        // Batendo no teto, para de subir.
+        for (int k = 0; k < 20; ++k) dispatchButton(c.mais);
+        if (*c.valor != c.maximo) {
+            report += std::string(c.nome) + ": parou em " + std::to_string(*c.valor) +
+                      " em vez de " + std::to_string(c.maximo);
+            return false;
+        }
+        // E no piso, para de descer.
+        for (int k = 0; k < 20; ++k) dispatchButton(c.menos);
+        if (*c.valor != c.minimo) {
+            report += std::string(c.nome) + ": desceu ate " + std::to_string(*c.valor) +
+                      " em vez de " + std::to_string(c.minimo);
+            return false;
+        }
+        step(std::string(c.nome) + " anda de " + std::to_string(c.minimo) + " a " +
+             std::to_string(c.maximo));
+    }
+
+    // Sair sem ACCEPT nao grava: reabrir devolve o que esta no INI.
+    const int baixo = m_prefGameSpeed;
+    showMainMenu();
+    showPreferences();
+    if (m_prefGameSpeed == baixo && baixo == 1) {
+        // So e prova se o INI nao estiver justamente em 1.
+        Config cfg("OUTPOST2.INI");
+        GameSettings gs;
+        if (cfg.load()) gs.loadFrom(cfg);
+        if (gs.gameSpeed != 1) { report += "sair sem ACCEPT gravou"; return false; }
+    }
+    step("sair sem ACCEPT nao gravou");
+    showMainMenu();
     return true;
 }
 
