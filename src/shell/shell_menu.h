@@ -11,6 +11,7 @@
 #include "../net/net_lobby.h"
 #include "../net/net_game.h"
 #include "rtf_text.h"
+#include "../res/winhelp.h"
 #include "scores.h"
 
 namespace op2 {
@@ -29,6 +30,7 @@ enum class MenuState {
     Chapters,      // Dialog 215 (0x735): capítulos do ch_title.txt
     EnterName,     // Dialog 224 (0x73e): nome do vencedor de um jogo de colônia
     Scores,        // Dialog 223: COLONY GAME SCORES (botão SCORES do Dialog 222)
+    Help,          // o manual do OUTPOST2.HLP (no original, WinHelp)
     // --- multijogador: as telas vêm do OUT2RES.DLL, não do shell, porque no
     // original o botão MULTIPLAYER chama TApp::DoNetGame no executável.
     // O Dialog 259 "PICK CONNECTION METHOD" (sub_411E30) nao existe aqui: dos
@@ -155,6 +157,13 @@ public:
     void showMainMenu() { setState(MenuState::MainMenu); }
     void showNewCampaign() { setState(MenuState::NewCampaign); }
     void showPreferences() { setState(MenuState::Preferences); }
+    void showHelp() { openHelp(); }
+    // Teste por linha de comando (--demotest): monta o pedido do demo de
+    // atracao como a ociosidade faria, e devolve o relato.
+    bool demoTest(std::string& report);
+    // Teste por linha de comando (--helptest): abre o manual e percorre a
+    // lista e o texto pelo mesmo caminho do teclado e da roda.
+    bool helpTest(std::string& report);
     void showColonyGames() { setState(MenuState::ColonyGames); }
     void showAbout() { setState(MenuState::About); }
     void showScores() { openScores(); }
@@ -183,6 +192,12 @@ private:
     MenuState m_state = MenuState::Splash;
     bool m_quitRequested = false;
     float m_splashTimer = 0.0f;     // tempo na tela de splash
+    // Demo de atracao: o shell do original conta o tempo desde a ultima
+    // atividade (GetTickCount - dword_130158DC) e, passado um minuto, manda a
+    // mensagem 0x741, que dispara ademo%d.dll. Ver startAttractDemo.
+    uint32_t m_lastActivity = 0;
+    void noteActivity();            // zera o relogio da ociosidade
+    void startAttractDemo();        // a mensagem 0x741 do shell
 
     // Pedido de início de missão (START/OK): nome do .map resolvido via MapName.
     bool m_launchRequested = false;
@@ -243,6 +258,20 @@ private:
     int  m_prefAudioVolumeIni = 50;
     void loadPrefs();   // le o [Game] do OUTPOST2.INI para a tela
     void savePrefs();   // grava de volta (botao ACCEPT)
+
+    // --- manual (OUTPOST2.HLP) ---
+    WinHelpFile m_help;
+    bool m_helpTried = false;        // ja tentamos carregar (nao insiste a cada clique)
+    std::string m_helpFallback;      // manual externo aberto, quando nao ha .HLP
+    int m_helpTopic = 0;             // topico escolhido na lista
+    int m_helpListScroll = 0;        // 1o topico visivel
+    int m_helpTextScroll = 0;        // 1a linha visivel do texto
+    int m_helpBuiltFor = -1;         // topico de m_helpLines
+    std::vector<RtfLine> m_helpLines;
+    void openHelp();                 // botao 1012 / F1
+    void helpBuildLines();           // monta o texto do topico escolhido
+    int  helpVisibleLines() const;
+    void renderHelp(Renderer& renderer);
 
     std::vector<std::string> m_colonyGameList;    // LevelDesc das c*.dll
     std::vector<std::string> m_colonyGameDlls;    // arquivo correspondente

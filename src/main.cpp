@@ -14,6 +14,7 @@
 #include "core/config.h"
 #include "gfx/pbmp.h"
 #include "res/res_manager.h"
+#include "res/winhelp.h"
 #include "game/game_map.h"
 #include "game/walls.h"
 #include "game/garage.h"
@@ -268,6 +269,7 @@ static int runScreenshot(int argc, char* argv[], const std::string& outPath) {
         else if (a == "--prefs") shellMenu.showPreferences();
         else if (a == "--colony") shellMenu.showColonyGames();
         else if (a == "--about") shellMenu.showAbout();
+        else if (a == "--help2") shellMenu.showHelp();
         else if (a == "--scores") shellMenu.showScores();
         else if (a == "--ename") shellMenu.showEnterName("Colony: Eden Starship");
         else if (a == "--mpopts")  shellMenu.showMpScreen(0, true, 1);
@@ -500,6 +502,106 @@ static uint64_t simHash();
 
 // --uitest: exercita a lista suspensa dos combos pelo caminho do mouse e do
 // teclado, sem rede nenhuma.
+// --helptest [topico]: le o OUTPOST2.HLP e imprime o que o leitor entendeu.
+static int runHelpTest(const std::string& alvo) {
+    op2::WinHelpFile hlp;
+    if (!hlp.load("OUTPOST2.HLP")) {
+        std::printf("[HelpTest] falhou: %s%c", hlp.error().c_str(), 10);
+        return 2;
+    }
+    std::printf("[HelpTest] \"%s\": %d topicos%c", hlp.manualTitle().c_str(),
+                (int)hlp.topics().size(), 10);
+    int paras = 0, vazios = 0;
+    for (const op2::HelpTopic& t : hlp.topics()) {
+        paras += (int)t.paras.size();
+        if (t.title.empty() || t.paras.empty()) ++vazios;
+    }
+    std::printf("[HelpTest] %d paragrafos; topicos sem titulo ou sem texto: %d%c",
+                paras, vazios, 10);
+    for (const op2::HelpTopic& t : hlp.topics()) {
+        if (!alvo.empty() && t.title != alvo) continue;
+        std::printf("[HelpTest] ----- %s (%d paragrafos)%c", t.title.c_str(),
+                    (int)t.paras.size(), 10);
+        int n = 0;
+        for (const op2::HelpPara& par : t.paras) {
+            if (++n > 12) break;
+            std::string linha;
+            for (size_t i = 0; i < par.cells.size(); ++i) {
+                if (par.cells[i].empty()) continue;
+                if (!linha.empty()) linha += par.table ? " | " : "";
+                linha += par.cells[i];
+            }
+            if (linha.size() > 120) linha = linha.substr(0, 120) + "...";
+            std::printf("   [%s] %s%c", par.table ? "tab" : "par", linha.c_str(), 10);
+        }
+        if (!alvo.empty()) break;
+    }
+    std::fflush(stdout);
+    if (!alvo.empty()) return 0;
+
+    // E a tela: abre o manual e percorre a lista e o texto pelo teclado.
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 helptest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::ShellMenu menu;
+    menu.init("OP2SHRES.DLL");
+    std::string relato;
+    const bool ok = menu.helpTest(relato);
+    std::printf("[HelpTest] tela: %s%c", relato.c_str(), 10);
+    std::fflush(stdout);
+    renderer.shutdown();
+    SDL_Quit();
+    return ok ? 0 : 1;
+}
+
+// --demotest: monta o pedido do demo de atracao tres vezes e confere a
+// rotacao e o GameStartInfo, sem precisar esperar o minuto de ociosidade.
+static int runDemoTest() {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 demotest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::ShellMenu menu;
+    menu.init("OP2SHRES.DLL");
+    std::string relato;
+    bool ok = menu.demoTest(relato);
+    std::printf("[DemoTest] %s%c", relato.c_str(), 10);
+
+    // E agora o demo rodando de verdade: carrega, anda alguns tiques e e
+    // interrompido por uma tecla, como os ganchos do original fazem.
+    if (ok) {
+        op2::g_art.load();
+        op2::GameStartInfo gsi;
+        gsi.flags |= 1u | 2u;
+        gsi.demo = true;
+        gsi.dll = "ademo1.dll";
+        op2::GameState gs;
+        if (!gs.loadMission("ademo1.dll", &gsi)) {
+            std::printf("[DemoTest] ademo1.dll nao carregou%c", 10);
+            ok = false;
+        } else {
+            gs.onActivate();
+            for (int k = 0; k < 40; ++k) gs.onIdle(renderer, 0.2501f / 4.0f);
+            const int antes = op2::gameEndCode();
+            std::printf("[DemoTest] ademo1.dll rodou 40 tiques (t=%d, fim=%d)%c",
+                        op2::TethysGame::tick(), antes, 10);
+            SDL_Event ev{};
+            ev.type = SDL_KEYDOWN;
+            ev.key.keysym.sym = SDLK_SPACE;
+            gs.handleEvent(renderer, ev);
+            const int depois = op2::gameEndCode();
+            std::printf("[DemoTest] tecla durante o demo -> codigo %d (esperado 10)%c",
+                        depois, 10);
+            if (antes != 0 || depois != 10) ok = false;
+        }
+    }
+    std::fflush(stdout);
+    renderer.shutdown();
+    SDL_Quit();
+    return ok ? 0 : 1;
+}
+
 static int runUiTest() {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
     op2::g_ResManager.init(".");
@@ -3409,6 +3511,10 @@ int main(int argc, char* argv[]) {
             return runUnitTest();
         if (std::strcmp(argv[i], "--aitest") == 0 && i + 1 < argc)
             return runAiTest(argv[i + 1], i + 2 < argc ? argv[i + 2] : "");
+        if (std::strcmp(argv[i], "--demotest") == 0)
+            return runDemoTest();
+        if (std::strcmp(argv[i], "--helptest") == 0)
+            return runHelpTest(i + 1 < argc ? argv[i + 1] : "");
         if (std::strcmp(argv[i], "--uitest") == 0)
             return runUiTest();
         if (std::strcmp(argv[i], "--mpui") == 0 && i + 1 < argc)

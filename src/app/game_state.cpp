@@ -215,6 +215,7 @@ bool GameState::loadMission(const std::string& dllName, const GameStartInfo* gsi
     // (testes por linha de comando) vale o tipo da missao, que so e M* em
     // multijogador. Sem isto o CreateOnePlayerLeftTrigger das M* ve um unico
     // humano vivo e declara vitoria no primeiro tique.
+    setDemoGame(gsi && gsi->demo);                      // dword_56DF08 bit 3
     const bool multiGame = gsi ? ((gsi->flags & 0x10) != 0)
                                : (d->missionType <= -4 && d->missionType >= -8);
     // (o registro vem pronto do GameStartInfo: só o campo, sem GoAI/GoHuman).
@@ -1343,6 +1344,12 @@ void GameState::selectBox(int x0, int y0, int x1, int y1) {
 }
 
 void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
+    // Demo de atracao: qualquer tecla ou clique encerra (codigo 10). No
+    // original isso vem de dois ganchos do Windows instalados durante o demo.
+    if (demoGame() && (e.type == SDL_KEYDOWN || e.type == SDL_MOUSEBUTTONDOWN)) {
+        endDemoGame();
+        return;
+    }
     if (m_saveDlg.active()) {                                // TFileDialog (modal)
         const SaveSlotsDialog::Result r = m_saveDlg.handleEvent(renderer, e);
         if (r == SaveSlotsDialog::kDoSave) {

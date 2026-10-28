@@ -15,6 +15,10 @@ struct AIModDesc;
 // guarda em 0x13015a34 para a próxima missão.
 struct GameStartInfo {
     uint32_t flags = 0;            // +0x00: 8 = campanha, 0x10 = multijogador
+    // +0x0C bit 3: a partida e o DEMO DE ATRACAO. O shell a liga ao disparar
+    // ademo%d.dll; copiada para dword_56DF08, ela muda o fim da missao
+    // (sub_403110: vitoria -> codigo 11 em vez de 3/7).
+    bool demo = false;
     std::string dll;               // +0x10 nome da DLL da missão
     uint32_t playerWord[6] = {};   // +0x30: bit 2 Eden, bits 3-4 dificuldade, 5-7 cor
     int endCode = 0;               // +0xBA (TethysGame+0x9C)

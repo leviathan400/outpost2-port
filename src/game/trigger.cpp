@@ -90,6 +90,7 @@ static std::vector<int> s_triggers, s_victory, s_failure;
 static std::vector<int> s_special;   // SpecialTargetTrigger (dword_4EA084, inserção na cabeça)
 
 static int s_endCode = 0;      // TethysGame +0x9C (dword_56DEF4)
+static bool s_demo = false;    // dword_56DF08 bit 3: demo de atracao
 static int s_endTick = 0x7FFFFFFF;   // TethysGame +0x98
 static int s_speed = 40;       // TethysGame +0x50
 
@@ -105,6 +106,7 @@ void resetTriggers() {
     strategiesReset();
     s_special.clear();
     s_endCode = 0;
+    s_demo = false;
     s_endTick = 0x7FFFFFFF;
 }
 
@@ -868,12 +870,18 @@ void missionTriggerTick(MissionScript* mission) {          // sub_403110
         win = 0;
     }
     if (win) {
-        uint32_t winners = win;
-        for (int p = 0; p < n; ++p)
-            if (win & (1u << p)) winners |= g_playerData[p].allyMask;   // sub_490C80
-        const bool mp = isMultiplayerType(mission);
-        if (winners & (1u << local)) { endGame(mp ? 7 : 3, 2); soundVoice(0x87, -1, -1); }
-        else { endGame(mp ? 8 : 4, 2); soundVoice(0x86, -1, -1); }
+        // loc_4032D7: no demo de atracao a vitoria nao e "missao cumprida" —
+        // e o fim do demo, que volta direto ao menu.
+        if (s_demo) {
+            endGame(11, 1);
+        } else {
+            uint32_t winners = win;
+            for (int p = 0; p < n; ++p)
+                if (win & (1u << p)) winners |= g_playerData[p].allyMask;   // sub_490C80
+            const bool mp = isMultiplayerType(mission);
+            if (winners & (1u << local)) { endGame(mp ? 7 : 3, 2); soundVoice(0x87, -1, -1); }
+            else { endGame(mp ? 8 : 4, 2); soundVoice(0x86, -1, -1); }
+        }
     }
     // 5) Derrota: FailureCondition habilitada com o bit do jogador local.
     for (int id : s_failure) {
@@ -881,6 +889,10 @@ void missionTriggerTick(MissionScript* mission) {          // sub_403110
         if (t && t->enabled && (t->playerMask & (1u << local))) endGame(4, 2);
     }
 }
+
+void setDemoGame(bool on) { s_demo = on; }
+bool demoGame() { return s_demo; }
+void endDemoGame() { if (s_demo) endGame(10, 0); }   // sub_49C720: 10, sem atraso
 
 std::vector<std::string> missionObjectives() {
     std::vector<std::string> v;

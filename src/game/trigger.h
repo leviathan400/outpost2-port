@@ -115,4 +115,13 @@ int gameEndTick();
 const char* gameEndText(int code);     // sub_49CAC0
 void setGameSpeedValue(int v);         // TethysGame +0x50 (GameStartInfo +0xAE)
 
+// Demo de atracao (dword_56DF08 bit 3, vindo de GameStartInfo+0x0C): com ele
+// a condicao de vitoria encerra com o codigo 11 em vez de 3/7, e qualquer
+// tecla ou clique encerra com o 10 -- os dois saem direto para o shell, sem a
+// caixa de dialogo (sub_49C830). No original, quem escuta o teclado e o mouse
+// durante o demo sao dois ganchos do Windows (sub_49C720 e o seguinte).
+void setDemoGame(bool on);
+bool demoGame();
+void endDemoGame();                 // o codigo 10: o jogador interrompeu
+
 } // namespace op2

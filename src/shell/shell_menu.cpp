@@ -27,6 +27,22 @@ constexpr int kSliderPage = 20;
 
 // ---- Geometria das telas (fiel aos diálogos do OP2SHRES.DLL onde aplicável) ----
 
+// MANUAL (OUTPOST2.HLP). Não há diálogo do original para copiar: no jogo de
+// 1997 quem desenhava esta janela era o WinHelp do Windows, que não existe
+// mais. A lista de tópicos à esquerda e o texto à direita seguem o mesmo
+// esqueleto das outras telas do shell.
+namespace {
+    constexpr int kHpX = 20, kHpY = 28, kHpW = 600, kHpH = 424;
+    constexpr int kHpListX = kHpX + 14, kHpListY = kHpY + 40;
+    constexpr int kHpListW = 210, kHpListH = 322;
+    constexpr int kHpSbW = 14;
+    constexpr int kHpRowH = 14;
+    constexpr int kHpVisible = kHpListH / kHpRowH;
+    constexpr int kHpTextX = kHpListX + kHpListW + 14;
+    constexpr int kHpTextY = kHpListY, kHpTextH = kHpListH;
+    constexpr int kHpTextW = kHpX + kHpW - 14 - kHpTextX;
+}
+
 // MAIN MENU (Dialog 137): painel à direita, revelando a nave Conestoga.
 namespace {
     constexpr int kMenuDlgW = 190, kMenuDlgH = 320;
@@ -372,6 +388,16 @@ void ShellMenu::rebuildControls() {
     case MenuState::About:
         addButton(1, "OK", kAbX + (kAbW - 100) / 2, kAbY + 258, 100, 26, true);
         break;
+    case MenuState::Help: {
+        Control lc; lc.kind = CtrlKind::List; lc.id = 1090;
+        lc.x = kHpListX; lc.y = kHpListY; lc.w = kHpListW - kHpSbW; lc.h = kHpListH;
+        lc.listSel = &m_helpTopic;
+        lc.listCount = m_help.ok() ? (int)m_help.topics().size() : 0;
+        m_controls.push_back(lc);
+        addButton(2, "BACK TO MAIN MENU", kHpX + (kHpW - 180) / 2,
+                  kHpY + kHpH - 40, 180, 26, true);
+        break;
+    }
     // --- multijogador -------------------------------------------------------
     // A geometria sai dos templates do OUT2RES.DLL, em unidades de diálogo:
     // cada controle fica onde o original o põe, e o DlgBox faz a conversão.
@@ -573,6 +599,7 @@ void ShellMenu::dispatchButton(int id) {
         case 1013: m_quitRequested = true; break;
         case 1007: m_loadRequested = true; break;            // LOAD GAME (TFileDialog)
         case 1005: showMultiplayer(); break;                 // TApp::DoNetGame
+        case 1012: openHelp(); break;                        // TApp::GetHelp
         default: std::cout << "[Menu] botão " << id << " (ainda sem função)" << std::endl; break;
         }
         break;
@@ -688,6 +715,9 @@ void ShellMenu::dispatchButton(int id) {
     case MenuState::About:
         if (id == 1) setState(MenuState::MainMenu);
         break;
+    case MenuState::Help:
+        if (id == 2) setState(MenuState::MainMenu);
+        break;
 
     // --- multijogador -------------------------------------------------------
     case MenuState::MpNetOptions:
@@ -784,6 +814,127 @@ void ShellMenu::dispatchButton(int id) {
 
 // --------------------------------- input ---------------------------------
 
+void ShellMenu::noteActivity() { m_lastActivity = SDL_GetTicks(); }
+
+// A mensagem 0x741 do shell (caso 33 da tabela em 0x13009028 do OP2SHELL.DLL).
+// O original:
+//   - zera o GameStartInfo guardado em 0x13015a34;
+//   - le "[Game] Demo" do INI, que NAO e um liga-desliga mas um CONTADOR:
+//     escolhe ademo{1,2,3}.dll por `Demo % 3` e regrava Demo+1, de modo que a
+//     cada vez entra um demo diferente, inclusive entre execucoes;
+//   - liga os bits 0 e 1 das opcoes (desastres e dia/noite) e desliga os bits
+//     3 e 4 (campanha e multijogador);
+//   - liga o bit 3 de +0x0C, a marca de demo;
+//   - poe a velocidade: clamp("[Game] GameSpeed", 1, 10) * 4 — que neste porte
+//     ja vem do mesmo lugar, em GameState::loadSettings;
+//   - e chama TApp::StartSingleGame.
+void ShellMenu::startAttractDemo() {
+    Config cfg("OUTPOST2.INI");
+    cfg.load();
+    int contador = cfg.getInt("Game", "Demo", 0);
+    if (contador < 0) contador = 0;
+    char dll[32];
+    std::snprintf(dll, sizeof(dll), "ademo%d.dll", contador % 3 + 1);
+    cfg.setInt("Game", "Demo", contador + 1);
+    cfg.save();
+
+    m_launchGsi = GameStartInfo();
+    m_launchGsi.flags |= 1u | 2u;          // desastres e ciclo dia/noite
+    m_launchGsi.flags &= ~(8u | 0x10u);    // nem campanha nem multijogador
+    m_launchGsi.demo = true;               // +0x0C bit 3
+    m_launchGsi.dll = dll;
+    m_launchHasGsi = true;
+    m_launchMap = dll;
+    m_launchRequested = true;
+    noteActivity();
+    std::cout << "[Shell] demo de atracao: " << dll << std::endl;
+}
+
+bool ShellMenu::demoTest(std::string& report) {
+    Config antes("OUTPOST2.INI");
+    antes.load();
+    const int gravado = antes.getInt("Game", "Demo", 0);
+    showMainMenu();
+    std::string vistos;
+    for (int k = 0; k < 3; ++k) {
+        startAttractDemo();
+        std::string dllName;
+        if (!consumeLaunch(dllName)) { report += "nao pediu o lancamento"; return false; }
+        GameStartInfo gsi;
+        if (!launchStartInfo(gsi)) { report += "sem GameStartInfo"; return false; }
+        if (!gsi.demo) { report += "sem a marca de demo"; return false; }
+        if (gsi.campaign()) { report += "marcou campanha"; return false; }
+        if ((gsi.flags & 0x10u) != 0) { report += "marcou multijogador"; return false; }
+        if ((gsi.flags & 3u) != 3u) { report += "sem desastres/dia-noite"; return false; }
+        vistos += (k ? ", " : "") + dllName;
+    }
+    if (vistos.find("ademo1.dll") == std::string::npos ||
+        vistos.find("ademo2.dll") == std::string::npos ||
+        vistos.find("ademo3.dll") == std::string::npos) {
+        report += "a rotacao nao passou pelos tres: " + vistos;
+        return false;
+    }
+    report += "rodou " + vistos;
+    // Devolve o contador como estava, para o teste nao mexer no INI de verdade.
+    Config volta("OUTPOST2.INI");
+    volta.load();
+    volta.setInt("Game", "Demo", gravado);
+    volta.save();
+    report += "; contador devolvido a " + std::to_string(gravado);
+    return true;
+}
+
+bool ShellMenu::helpTest(std::string& report) {
+    openHelp();
+    if (m_state != MenuState::Help) { report += "nao abriu o manual"; return false; }
+    if (!m_help.ok()) { report += "sem manual: " + m_help.error(); return false; }
+    const int n = (int)m_help.topics().size();
+    report += std::to_string(n) + " topicos";
+
+    helpBuildLines();
+    const size_t linhas0 = m_helpLines.size();
+    if (linhas0 < 3) { report += "; o primeiro topico saiu com " +
+                                 std::to_string(linhas0) + " linhas"; return false; }
+    report += "; '" + m_help.topics()[0].title + "' em " + std::to_string(linhas0) + " linhas";
+
+    // A seta desce na lista e o texto tem de ser remontado.
+    m_focusIndex = 0;
+    handleKeyDown(SDLK_DOWN);
+    if (m_helpTopic != 1) { report += "; a seta nao andou na lista"; return false; }
+    helpBuildLines();
+    if (m_helpLines.empty()) { report += "; o segundo topico saiu vazio"; return false; }
+    report += "; a seta foi para '" + m_help.topics()[1].title + "'";
+
+    // A lista rola junto quando a selecao passa do fim da janela.
+    for (int k = 0; k < kHpVisible + 3; ++k) handleKeyDown(SDLK_DOWN);
+    if (m_helpListScroll <= 0) { report += "; a lista nao rolou"; return false; }
+    if (m_helpTopic < m_helpListScroll ||
+        m_helpTopic >= m_helpListScroll + kHpVisible) {
+        report += "; o item escolhido saiu da janela"; return false;
+    }
+    report += "; a lista rolou ate " + std::to_string(m_helpListScroll);
+
+    // A roda e o End andam pelo TEXTO, nao pela lista.
+    const int topico = m_helpTopic;
+    helpBuildLines();
+    if ((int)m_helpLines.size() > helpVisibleLines()) {
+        handleMouseWheel(-2);
+        if (m_helpTextScroll <= 0) { report += "; a roda nao rolou o texto"; return false; }
+        handleKeyDown(SDLK_END);
+        const int fim = (int)m_helpLines.size() - helpVisibleLines();
+        if (m_helpTextScroll != fim) { report += "; o End nao foi ao fim"; return false; }
+        handleKeyDown(SDLK_HOME);
+        if (m_helpTextScroll != 0) { report += "; o Home nao voltou"; return false; }
+        report += "; roda/End/Home andaram no texto";
+    }
+    if (m_helpTopic != topico) { report += "; o texto mexeu na lista"; return false; }
+
+    dispatchButton(2);
+    if (m_state != MenuState::MainMenu) { report += "; o BACK nao voltou"; return false; }
+    report += "; o BACK voltou ao menu";
+    return true;
+}
+
 void ShellMenu::handleMouseMove(int x, int y) {
     // Arrastando uma barra, o cursor é dela até soltar o botão — inclusive
     // fora do controle, como o trackbar do Windows.
@@ -806,6 +957,7 @@ void ShellMenu::handleMouseMove(int x, int y) {
 
 void ShellMenu::handleMouseDown(int x, int y, uint8_t button) {
     if (button != SDL_BUTTON_LEFT) return;
+    noteActivity();
     if (m_state == MenuState::Splash) return;
 
     // Lista solta aberta: o clique é dela. Dentro escolhe, fora fecha — e é
@@ -813,6 +965,19 @@ void ShellMenu::handleMouseDown(int x, int y, uint8_t button) {
     if (m_openCombo >= 0) {
         comboClose(comboItemAt(x, y));
         return;
+    }
+
+    // Setas da barra de rolagem da lista do manual.
+    if (m_state == MenuState::Help && m_help.ok()) {
+        const int sbX = kHpListX + kHpListW - kHpSbW;
+        if (x >= sbX && x < sbX + kHpSbW && y >= kHpListY && y < kHpListY + kHpListH) {
+            const int total = (int)m_help.topics().size();
+            const int maxScroll = (total > kHpVisible) ? (total - kHpVisible) : 0;
+            if (y < kHpListY + kHpSbW) m_helpListScroll = std::max(0, m_helpListScroll - 1);
+            else if (y >= kHpListY + kHpListH - kHpSbW)
+                m_helpListScroll = std::min(maxScroll, m_helpListScroll + 1);
+            return;
+        }
     }
 
     // Setas da scrollbar dos tutoriais (não são controles focáveis).
@@ -844,10 +1009,13 @@ void ShellMenu::handleMouseDown(int x, int y, uint8_t button) {
         if (c.listSel) {   // seleciona o item sob o cursor
             int rowH = (m_state == MenuState::Tutorials) ? kTutRowH
                      : m_state == MenuState::Chapters ? kChRowH
+                     : m_state == MenuState::Help ? kHpRowH
                      : m_state == MenuState::MpPickSession ? 15 : kCgRowH;
             int top  = (m_state == MenuState::Tutorials) ? (c.y + 4)
+                     : m_state == MenuState::Help ? (c.y + 1)
                      : m_state == MenuState::MpPickSession ? (c.y + 22) : (c.y + 8);
-            int scroll = (m_state == MenuState::Tutorials) ? m_tutorialScroll : 0;
+            int scroll = (m_state == MenuState::Tutorials) ? m_tutorialScroll
+                       : m_state == MenuState::Help ? m_helpListScroll : 0;
             int row = (y - top) / rowH;
             int sel = scroll + row;
             if (row >= 0 && sel >= 0 && sel < c.listCount) *c.listSel = sel;
@@ -881,6 +1049,7 @@ void ShellMenu::handleMouseUp(int x, int y, uint8_t button) {
 }
 
 void ShellMenu::handleMouseWheel(int delta) {
+    noteActivity();
     if (m_openCombo >= 0 && m_openCombo < (int)m_controls.size()) {
         const Control& c = m_controls[m_openCombo];
         int x, y, w, h;
@@ -900,6 +1069,12 @@ void ShellMenu::handleMouseWheel(int delta) {
         if (!c.hovered && i != m_focusIndex) continue;
         if (!c.sliderTarget) continue;
         sliderSet(c, *c.sliderTarget + delta * kSliderStep);
+        return;
+    }
+    // No manual, a roda rola o TEXTO (é o que se está lendo).
+    if (m_state == MenuState::Help) {
+        const int maxTxt = std::max(0, (int)m_helpLines.size() - helpVisibleLines());
+        m_helpTextScroll = std::max(0, std::min(maxTxt, m_helpTextScroll - delta * 3));
         return;
     }
     if (m_state == MenuState::RtfView) {
@@ -966,6 +1141,7 @@ void ShellMenu::handleTextInput(const char* text) {
 
 void ShellMenu::handleKeyDown(int keyCode) {
     if (m_state == MenuState::Splash) return;
+    noteActivity();
     SDL_Keymod mod = SDL_GetModState();
 
     // Com a lista solta no ar ela é modal, como o combo do Windows: as setas
@@ -1080,6 +1256,9 @@ void ShellMenu::handleKeyDown(int keyCode) {
             if (m_state == MenuState::Tutorials) {   // manter visível
                 if (s < m_tutorialScroll) m_tutorialScroll = s;
                 else if (s >= m_tutorialScroll + kTutVisible) m_tutorialScroll = s - kTutVisible + 1;
+            } else if (m_state == MenuState::Help) {
+                if (s < m_helpListScroll) m_helpListScroll = s;
+                else if (s >= m_helpListScroll + kHpVisible) m_helpListScroll = s - kHpVisible + 1;
             }
         } else if (c.kind == CtrlKind::Combo && c.comboSel && c.comboItems &&
                    !c.comboItems->empty() && !c.disabled) {
@@ -1108,10 +1287,25 @@ void ShellMenu::handleKeyDown(int keyCode) {
         break;
     }
 
+    case SDLK_F1:                       // WM_HELP -> TApp::GetHelp
+        if (m_state != MenuState::Help) openHelp();
+        break;
+
     case SDLK_PAGEUP:
     case SDLK_PAGEDOWN:
     case SDLK_HOME:
     case SDLK_END:
+        // No manual, Page/Home/End andam pelo TEXTO.
+        if (m_state == MenuState::Help) {
+            const int vis = helpVisibleLines();
+            const int maxTxt = std::max(0, (int)m_helpLines.size() - vis);
+            if (keyCode == SDLK_PAGEUP)        m_helpTextScroll -= vis - 1;
+            else if (keyCode == SDLK_PAGEDOWN) m_helpTextScroll += vis - 1;
+            else if (keyCode == SDLK_HOME)     m_helpTextScroll = 0;
+            else                               m_helpTextScroll = maxTxt;
+            m_helpTextScroll = std::max(0, std::min(maxTxt, m_helpTextScroll));
+            break;
+        }
         if (m_focusIndex >= 0 && m_focusIndex < (int)m_controls.size() &&
             m_controls[m_focusIndex].kind == CtrlKind::Slider) {
             Control& c = m_controls[m_focusIndex];
@@ -1139,6 +1333,15 @@ void ShellMenu::handleKeyDown(int keyCode) {
 }
 
 void ShellMenu::update(float dt) {
+    // Um minuto parado no menu principal chama o demo de atracao (0xEA60 ms no
+    // OP2SHELL.DLL). So no menu principal: com um dialogo aberto o original
+    // nem chega a essa conta.
+    if (m_state == MenuState::MainMenu && !m_launchRequested) {
+        if (m_lastActivity == 0) noteActivity();
+        else if (SDL_GetTicks() - m_lastActivity > 60000u) startAttractDemo();
+    } else {
+        noteActivity();
+    }
     // Enquanto o GAME SETTINGS esta no ar, o host continua respondendo as
     // consultas de descoberta e aos pedidos de entrada.
     if (m_state == MenuState::MpGameSettings) {
@@ -1184,6 +1387,7 @@ void ShellMenu::render(Renderer& renderer) {
     case MenuState::EnterName: renderEnterName(renderer); break;
     case MenuState::Scores: renderScores(renderer); break;
     case MenuState::Tutorials:   renderTutorialsDialog(renderer); break;
+    case MenuState::Help:        renderHelp(renderer); break;
     case MenuState::Preferences: renderPreferencesDialog(renderer); break;
     case MenuState::About:       renderAboutDialog(renderer); break;
     case MenuState::MissionMenu: renderMissionMenu(renderer); break;
@@ -1473,6 +1677,161 @@ void ShellMenu::renderPreferencesDialog(Renderer& renderer) {
                    kPrY + 270, 0xFFFFD24A, true);
 }
 
+// O botão HELP (1012) e a tecla F1 — no original, WM_HELP -> TApp::GetHelp,
+// que chamava o WinHelp com HELP_INDEX quando estava no shell.
+void ShellMenu::openHelp() {
+    if (!m_helpTried) {
+        m_helpTried = true;
+        if (m_help.load("OUTPOST2.HLP")) {
+            std::cout << "[Help] " << m_help.manualTitle() << ": "
+                      << m_help.topics().size() << " topicos." << std::endl;
+        } else {
+            std::cout << "[Help] OUTPOST2.HLP: " << m_help.error() << std::endl;
+            m_helpFallback = helpOpenExternalManual();
+            if (!m_helpFallback.empty())
+                std::cout << "[Help] abri o manual externo: " << m_helpFallback << std::endl;
+        }
+    }
+    // Sem o .HLP mas com um PDF ao lado, quem mostra o manual é o leitor do
+    // sistema — não há tela nossa para abrir.
+    if (!m_help.ok() && !m_helpFallback.empty()) return;
+    m_helpTopic = 0;
+    m_helpListScroll = 0;
+    m_helpTextScroll = 0;
+    m_helpBuiltFor = -1;
+    setState(MenuState::Help);
+}
+
+int ShellMenu::helpVisibleLines() const { return kHpTextH / (Font::getTextHeight() + 2); }
+
+void ShellMenu::helpBuildLines() {
+    m_helpBuiltFor = m_helpTopic;
+    m_helpLines.clear();
+    m_helpTextScroll = 0;
+    if (!m_help.ok()) return;
+    const std::vector<HelpTopic>& tops = m_help.topics();
+    if (m_helpTopic < 0 || m_helpTopic >= (int)tops.size()) return;
+
+    auto apara = [](std::string t) {
+        size_t a = 0, b = t.size();
+        while (a < b && (unsigned char)t[a] <= ' ') ++a;
+        while (b > a && (unsigned char)t[b - 1] <= ' ') --b;
+        return t.substr(a, b - a);
+    };
+
+    std::vector<RtfRun> runs;
+    bool primeiro = true;
+    // Uma linha do texto. `bloco` abre um parágrafo novo (linha em branco
+    // antes); as linhas seguidas de uma mesma tabela não abrem.
+    auto linha = [&](const std::string& txt, uint32_t cor, bool bloco) {
+        if (!primeiro && bloco) { RtfRun b; b.newline = true; runs.push_back(b); }
+        RtfRun r; r.text = txt; r.color = cor; r.newline = !primeiro;
+        runs.push_back(r);
+        primeiro = false;
+    };
+
+    for (const HelpPara& par : tops[m_helpTopic].paras) {
+        // Os pedaços de um link vêm terminados em NUL e VÁRIOS SÃO VAZIOS —
+        // são as marcas de formatação entre os textos. Só os com conteúdo
+        // valem como células.
+        std::vector<std::string> cel;
+        for (const std::string& c : par.cells) {
+            const std::string t = apara(c);
+            if (!t.empty()) cel.push_back(t);
+        }
+        if (cel.empty()) continue;
+        if (par.table) {
+            // As tabelas do manual são pares (rótulo, valor), às vezes dois
+            // pares no mesmo link. Cada par vira uma linha, com o valor numa
+            // coluna enquanto o rótulo couber nela.
+            bool abre = true;
+            for (size_t i = 0; i < cel.size(); i += 2) {
+                std::string t = cel[i];
+                if (i + 1 < cel.size()) {
+                    if (t.size() < 26) t += std::string(26 - t.size(), ' ');
+                    else t += "  ";
+                    t += cel[i + 1];
+                }
+                linha(t, 0xFFB8C8E0, abre);
+                abre = false;
+            }
+        } else {
+            std::string t;
+            for (size_t i = 0; i < cel.size(); ++i) {
+                if (i) t += " ";
+                t += cel[i];
+            }
+            linha(t, primeiro ? 0xFFFFD24A : 0xFFD8E4F8, true);
+        }
+    }
+    m_helpLines = rtfLayout(runs, kHpTextW);
+}
+
+void ShellMenu::renderHelp(Renderer& renderer) {
+    renderer.dimRect(0, 0, 640, 480, 0x88);
+    renderer.drawDialogFrame(kHpX, kHpY, kHpW, kHpH,
+                             m_help.ok() ? m_help.manualTitle() : std::string("ONLINE MANUAL"));
+    uint32_t* fb = renderer.getFramebuffer();
+
+    if (!m_help.ok()) {
+        Font::drawText(fb, 640, 480, "O manual nao pode ser aberto:", kHpX + 24, kHpY + 60,
+                       0xFFD8E4F8, true);
+        Font::drawText(fb, 640, 480, m_help.error(), kHpX + 24, kHpY + 82, 0xFFFF9999, true);
+        Font::drawText(fb, 640, 480, "Ponha o OUTPOST2.HLP (ou um manual em PDF) junto do jogo.",
+                       kHpX + 24, kHpY + 110, 0xFF8090A8, true);
+        return;
+    }
+    if (m_helpBuiltFor != m_helpTopic) helpBuildLines();
+
+    // ---- lista de tópicos ----
+    const std::vector<HelpTopic>& tops = m_help.topics();
+    renderer.drawRect(kHpListX, kHpListY, kHpListW, kHpListH, 0xFF405068);
+    const int total = (int)tops.size();
+    const int maxScroll = (total > kHpVisible) ? (total - kHpVisible) : 0;
+    if (m_helpListScroll > maxScroll) m_helpListScroll = maxScroll;
+    for (int k = 0; k < kHpVisible; ++k) {
+        const int i = m_helpListScroll + k;
+        if (i < 0 || i >= total) break;
+        const int y = kHpListY + 2 + k * kHpRowH;
+        const bool sel = (i == m_helpTopic);
+        if (sel) renderer.fillRect(kHpListX + 2, y - 1, kHpListW - kHpSbW - 4, kHpRowH, 0xFF2A3A55);
+        std::string t = tops[i].title;
+        const int cabe = (kHpListW - kHpSbW - 12) / 8;
+        if ((int)t.size() > cabe && cabe > 2) t = t.substr(0, cabe - 2) + "..";
+        Font::drawText(fb, 640, 480, t, kHpListX + 6, y, sel ? 0xFFFFFF99 : 0xFFC8D4E8, true);
+    }
+    // barra de rolagem da lista: as duas setas e o cursor
+    const int sbX = kHpListX + kHpListW - kHpSbW;
+    renderer.drawRect(sbX, kHpListY, kHpSbW, kHpListH, 0xFF405068);
+    Font::drawTextCentered(fb, 640, 480, "^", sbX + kHpSbW / 2, kHpListY + 2, 0xFF8090A8, true);
+    Font::drawTextCentered(fb, 640, 480, "v", sbX + kHpSbW / 2, kHpListY + kHpListH - 14,
+                           0xFF8090A8, true);
+    if (maxScroll > 0) {
+        const int faixa = kHpListH - 2 * kHpSbW - 8;
+        const int cy = kHpListY + kHpSbW + 4 + faixa * m_helpListScroll / maxScroll;
+        renderer.fillRect(sbX + 3, cy, kHpSbW - 6, 10, 0xFF6C8CC0);
+    }
+
+    // ---- texto do tópico ----
+    const int lineH = Font::getTextHeight() + 2;
+    const int vis = helpVisibleLines();
+    const int maxTxt = (int)m_helpLines.size() > vis ? (int)m_helpLines.size() - vis : 0;
+    if (m_helpTextScroll > maxTxt) m_helpTextScroll = maxTxt;
+    if (m_helpTextScroll < 0) m_helpTextScroll = 0;
+    for (int k = 0; k < vis; ++k) {
+        const int i = m_helpTextScroll + k;
+        if (i < 0 || i >= (int)m_helpLines.size()) break;
+        const int y = kHpTextY + k * lineH;
+        for (const RtfLine::Piece& pc : m_helpLines[i].pieces)
+            Font::drawText(fb, 640, 480, pc.text, kHpTextX + pc.x, y, pc.color, true);
+    }
+    if (maxTxt > 0) {
+        char buf[64];
+        std::snprintf(buf, sizeof(buf), "%d%%", 100 * m_helpTextScroll / maxTxt);
+        Font::drawText(fb, 640, 480, buf, kHpX + kHpW - 50, kHpY + kHpH - 34, 0xFF8090A8, true);
+    }
+}
+
 void ShellMenu::renderColonyGamesDialog(Renderer& renderer) {
     renderer.dimRect(0, 0, 640, 480, 0x88);
     renderer.drawDialogFrame(kCgX, kCgY, kCgW, kCgH, "COLONY GAMES");
@@ -1551,6 +1910,9 @@ int ShellMenu::rtfVisibleLines() const { return kRvTextH / (Font::getTextHeight(
 // (opção Game/ShowMovies, mensagem 0x72b) não existem aqui: vai direto ao passo
 // seguinte ([+0x540]).
 void ShellMenu::afterGame(int reason, const GameStartInfo* results) {
+    // Voltando de uma partida (inclusive do proprio demo), o relogio da
+    // ociosidade recomeca — senao o demo seguinte entraria na mesma hora.
+    noteActivity();
     if (results) m_gsi = *results;
     if (results && m_gsi.campaign() && reason == 3) {        // 0x13008b3e
         if (m_gsi.missionNumber == 12) openChapters();       // fim da campanha: 0x735

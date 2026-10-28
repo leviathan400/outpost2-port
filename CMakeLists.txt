@@ -32,6 +32,7 @@ add_executable(outpost2_modern
     src/res/pe_resource.cpp
     src/res/lzhuf.cpp
     src/res/vol.cpp
+    src/res/winhelp.cpp
     src/res/res_manager.cpp
     src/gfx/pbmp.cpp
     src/gfx/artfile.cpp
