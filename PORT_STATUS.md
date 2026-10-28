@@ -110,7 +110,10 @@ jogo e o entrega ao leitor do sistema.
 Um minuto parado no menu principal dispara o **demo de atração**, como no
 original: `ademo{1,2,3}.dll` em rodízio pelo contador `[Game] Demo` do INI
 (que é um contador, não um liga-desliga), com desastres e dia/noite ligados.
-Qualquer tecla ou clique interrompe.
+Qualquer tecla ou clique interrompe. Dois acréscimos deste porte deixam o demo
+assistível: a **câmera passeia** pelos pontos de ação (no original ela fica
+parada e boa parte da cena acontece fora da tela) e o **inimigo aparece no
+escuro** — só no demo; numa partida a cegueira noturna continua valendo.
 
 ### Multijogador
 Partida em **rede, em lockstep bit-exato**, com lobby sincronizado
@@ -126,6 +129,7 @@ preferências; o original ignora chaves que não conhece.
 | `AILevel` | 0..3 | 0 (AUTO) | Força o nível da IA nas campanhas e colônias. AUTO = o comportamento do original. **Não se aplica em rede**, onde a dificuldade é por jogador e vem do lobby. |
 | `NightDarkness` | 0..100 | 75 | Quanto da curva de escurecimento noturno se aplica (100 = o original, que leva a noite plena a ~15% do brilho e faz as unidades, que nunca escurecem, recortarem contra o preto). |
 | `AudioVolume` | 0..100 | 50 | Volume mestre sobre a mistura final (sons e música). O original só tem `MusicVol`/`SoundVol`, por canal e em 6 degraus. |
+| `DemoCamera` | 0/1 | 1 | No demo de atração a câmera passeia pelos pontos de ação (desastre, combate, unidades). 0 devolve a câmera parada do original. |
 
 ---
 
