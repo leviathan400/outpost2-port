@@ -59,13 +59,38 @@ struct Control {
     int*  radioTarget = nullptr;  int radioValue = 0;   // Radio: seta *target=value
     bool* checkTarget = nullptr;                          // Check: alterna *target
     int*  listSel = nullptr;      int listCount = 0;      // List: índice selecionado
-    // Combo: as opções e o índice escolhido (um clique passa para a seguinte,
-    // como um ciclo — o original abre a lista suspensa do Windows).
+    // Combo: as opções e o índice escolhido. Um clique abre a lista suspensa
+    // (CBS_DROPDOWNLIST do original), que fica por cima dos demais controles
+    // até a escolha; com a lista fechada as setas trocam a opção direto, como
+    // no Windows.
     const std::vector<std::string>* comboItems = nullptr;
     int*  comboSel = nullptr;
     std::string* editTarget = nullptr;   // Edit: o texto que recebe digitação
     size_t editMax = 0;                  // limite de caracteres (0 = sem limite)
 };
+
+// Geometria de um diálogo do OUT2RES.DLL/OP2SHRES.DLL na tela de 640x480. O
+// template dá tudo em unidades de diálogo (DLU), e com MS Sans Serif 8 — a
+// fonte de todos eles — 1 DLU vale 1,5 px na horizontal e 1,6 px na vertical,
+// a mesma conversão que o resto do shell usa. O quadro acrescenta a borda e a
+// barra de título; (ox,oy) é o canto do cliente, de onde as DLU contam.
+struct DlgBox {
+    int fx = 0, fy = 0, fw = 0, fh = 0;   // o quadro inteiro
+    int ox = 0, oy = 0;                   // a origem do cliente
+    int sxn = 3, sxd = 2;                 // DLU -> px na horizontal
+    int syn = 8, syd = 5;                 // DLU -> px na vertical
+    int x(int dlu) const { return ox + dlu * sxn / sxd; }
+    int y(int dlu) const { return oy + dlu * syn / syd; }
+    int w(int dlu) const { return dlu * sxn / sxd; }
+    int h(int dlu) const { return dlu * syn / syd; }
+};
+// Centraliza na tela um diálogo de cxDlu x cyDlu.
+DlgBox dlgBox(int cxDlu, int cyDlu);
+// O GAME SETTINGS é a tela mais cheia do jogo, e a nossa fonte de 8x12 é bem
+// mais larga que a MS Sans Serif 8 proporcional do original — a linha das
+// opções, por exemplo, precisa de ~610 px onde o template reserva 460. Então
+// esse diálogo ocupa a tela inteira, a 2 px por DLU, e só ele.
+DlgBox dlgBoxFull(int cxDlu, int cyDlu);
 
 // As opcoes dos combos do GAME SETTINGS, de Format[] no executavel: as cores
 // vem dos indices 0x28B..0x290 (tabela unk_4D5470) e os recursos de
@@ -125,6 +150,11 @@ public:
     // Captura (--screenshot): abre uma tela de multijogador sem passar pela
     // rede. `host` decide quais controles ficam ativos no GAME SETTINGS.
     void showMpScreen(int which, bool host, int players);
+    // Captura (--screenshot): solta a lista do combo de id `id` na tela atual.
+    void debugOpenCombo(int id);
+    // Teste por linha de comando (--uitest): exercita a lista suspensa pelo
+    // mesmo caminho do mouse e do teclado, e devolve o relato de cada passo.
+    bool comboTest(std::string& report);
     // Teste por linha de comando (--mpui): percorre o fluxo das telas como se
     // os botoes tivessem sido clicados, e devolve o relato de cada passo.
     bool mpFlowTest(bool host, const std::string& name, std::string& report);
@@ -165,6 +195,14 @@ private:
     // Controles da tela atual + foco de teclado
     std::vector<Control> m_controls;
     int m_focusIndex = -1;          // controle com foco (Tab); -1 = nenhum
+    // Lista suspensa aberta (o combo "solto" do Windows): enquanto houver uma,
+    // ela é modal — o cursor e o teclado só falam com ela. O id acompanha a
+    // reconstrução dos controles, que acontece sozinha quando alguém entra na
+    // mesa, para a lista não fechar na cara de quem estava escolhendo.
+    int m_openCombo = -1;           // índice em m_controls; -1 = nenhuma
+    int m_openComboId = 0;          // id do controle, para reencontrá-lo
+    int m_comboHover = -1;          // item sob o cursor (ou destacado pelo teclado)
+    int m_comboScroll = 0;          // 1º item visível, quando a lista não cabe
 
     // Sub-dialog states
     int m_campaignColony = 0;     // 0 = Eden, 1 = Plymouth
@@ -197,6 +235,12 @@ private:
     void activateControl(int index);      // aciona clique/Espaço
     void dispatchButton(int id);    // ação de cada botão por (estado, id)
     void drawControls(Renderer& renderer);
+    // --- lista suspensa dos combos ---
+    void comboOpen(int index);              // abre a lista do controle
+    void comboClose(int chosen);            // fecha; >=0 escolhe o item
+    bool comboRect(const Control& c, int& x, int& y, int& w, int& h) const;
+    int  comboItemAt(int x, int y) const;   // item sob o cursor; -1 fora
+    void drawOpenCombo(Renderer& renderer); // desenhada por cima de tudo
     Control& addButton(int id, const std::string& text, int x, int y, int w, int h,
                        bool isDefault = false, bool disabled = false);
     Control& addCheck(int id, const std::string& text, int x, int y, int w, bool* tgt);

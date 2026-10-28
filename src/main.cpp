@@ -276,6 +276,8 @@ static int runScreenshot(int argc, char* argv[], const std::string& outPath) {
         else if (a == "--mppick")  shellMenu.showMpScreen(4, false, 1);
         else if (a == "--mpjoin")  shellMenu.showMpScreen(5, false, 1);
         else if (a == "--mpsettings") shellMenu.showMpScreen(6, true, 2);
+        else if (a == "--mpcombo") { shellMenu.showMpScreen(6, true, 2); shellMenu.debugOpenCombo(40001); }
+        else if (a == "--mpcombo2") { shellMenu.showMpScreen(6, true, 2); shellMenu.debugOpenCombo(40032); }
         else if (a == "--mpsettings2") shellMenu.showMpScreen(6, false, 2);
         else if ((a == "--cmenu" || a == "--cbrief" || a == "--cobj" || a == "--cchap" || a == "--cstory") &&
                  i + 1 < argc) {
@@ -495,6 +497,24 @@ static int runPlaceShot(const std::string& mapName, const std::string& outPath, 
 }
 
 static uint64_t simHash();
+
+// --uitest: exercita a lista suspensa dos combos pelo caminho do mouse e do
+// teclado, sem rede nenhuma.
+static int runUiTest() {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 uitest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::ShellMenu menu;
+    menu.init("OP2SHRES.DLL");
+    std::string relato;
+    const bool ok = menu.comboTest(relato);
+    std::printf("[UiTest] combo: %s%c", relato.c_str(), 10);
+    std::fflush(stdout);
+    renderer.shutdown();
+    SDL_Quit();
+    return ok ? 0 : 1;
+}
 
 // --mpui <host|join> [nome]: percorre as TELAS de multijogador (259 -> 260 ->
 // 2012/2010+195+2013 -> 196 -> START) chamando o mesmo despacho dos botoes, e
@@ -3267,6 +3287,8 @@ int main(int argc, char* argv[]) {
             return runPlayerTest();
         if (std::strcmp(argv[i], "--unittest") == 0)
             return runUnitTest();
+        if (std::strcmp(argv[i], "--uitest") == 0)
+            return runUiTest();
         if (std::strcmp(argv[i], "--mpui") == 0 && i + 1 < argc)
             return runMpUi(argv[i + 1], i + 2 < argc ? argv[i + 2] : "PLAYER");
         if (std::strcmp(argv[i], "--mplan") == 0 && i + 3 < argc)

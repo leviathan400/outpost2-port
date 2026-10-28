@@ -30,6 +30,9 @@ public:
     void blitBitmapSub(const Bitmap& bmp, int srcX, int srcY, int srcW, int srcH, int destX, int destY);
 
     void fillRect(int x, int y, int w, int h, uint32_t color);
+    // Escurece o que já está desenhado (alpha 0..255; 255 = preto). O fillRect
+    // grava a cor crua, então não serve para velar o fundo.
+    void dimRect(int x, int y, int w, int h, uint8_t amount);
     void drawRect(int x, int y, int w, int h, uint32_t color);
     void drawBevelRect(int x, int y, int w, int h, uint32_t topLeftColor, uint32_t bottomRightColor);
 

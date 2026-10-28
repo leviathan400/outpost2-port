@@ -204,6 +204,21 @@ void Renderer::fillRect(int x, int y, int w, int h, uint32_t color) {
     }
 }
 
+void Renderer::dimRect(int x, int y, int w, int h, uint8_t amount) {
+    const int x1 = std::max(0, x), y1 = std::max(0, y);
+    const int x2 = std::min(NATIVE_WIDTH, x + w), y2 = std::min(NATIVE_HEIGHT, y + h);
+    const uint32_t keep = 255u - amount;
+    for (int cy = y1; cy < y2; ++cy) {
+        for (int cx = x1; cx < x2; ++cx) {
+            uint32_t& p = m_framebuffer[cy * NATIVE_WIDTH + cx];
+            const uint32_t r = ((p >> 16) & 0xFF) * keep / 255;
+            const uint32_t g = ((p >> 8) & 0xFF) * keep / 255;
+            const uint32_t b = (p & 0xFF) * keep / 255;
+            p = 0xFF000000u | (r << 16) | (g << 8) | b;
+        }
+    }
+}
+
 void Renderer::drawRect(int x, int y, int w, int h, uint32_t color) {
     if (w <= 0 || h <= 0) return;
     for (int cx = x; cx < x + w; ++cx) {

@@ -62,13 +62,34 @@ const std::vector<std::string> kVehicleNames = { "0", "1", "2", "3", "4", "5" };
 
 namespace {
 
-// O diálogo 196 tem 316x226 unidades e o 259 tem 166x122; o nosso quadro é de
-// 640x480, então as telas são centralizadas com a mesma proporção de 1 unidade
-// = 1 pixel que o resto do shell usa.
-int originX(int w) { return (640 - w) / 2; }
-int originY(int h) { return (480 - h) / 2; }
+// Altura da barra de título que o drawDialogFrame desenha (3 px de folga, 18
+// de faixa, 3 de folga), que o cliente do diálogo tem de pular.
+constexpr int kTitleBarH = 24;
+constexpr int kFrameEdge = 4;      // a borda dupla de cada lado
 
 } // namespace
+
+DlgBox dlgBox(int cxDlu, int cyDlu) {
+    DlgBox b;
+    b.fw = cxDlu * b.sxn / b.sxd + kFrameEdge * 2;
+    b.fh = cyDlu * b.syn / b.syd + kFrameEdge * 2 + kTitleBarH;
+    b.fx = (640 - b.fw) / 2;
+    b.fy = (480 - b.fh) / 2;
+    b.ox = b.fx + kFrameEdge;
+    b.oy = b.fy + kFrameEdge + kTitleBarH;
+    return b;
+}
+
+DlgBox dlgBoxFull(int cxDlu, int cyDlu) {
+    DlgBox b;
+    b.sxn = 2; b.sxd = 1;
+    b.syn = 2; b.syd = 1;
+    b.fx = 0; b.fy = 0; b.fw = 640; b.fh = 480;
+    b.ox = (640 - cxDlu * 2) / 2;
+    b.oy = kTitleBarH;
+    (void)cyDlu;                   // o quadro é a tela; só a origem importa
+    return b;
+}
 
 // ---------------------------------------------------------------------------
 // Os controles que as telas de multijogador usam e as outras ainda nao tinham.
@@ -141,6 +162,125 @@ void ShellMenu::showMpScreen(int which, bool host, int players) {
         MenuState::MpGameSettings
     };
     setState(kScreens[which < 0 ? 0 : (which > 6 ? 6 : which)]);
+}
+
+void ShellMenu::debugOpenCombo(int id) {
+    for (int i = 0; i < (int)m_controls.size(); ++i)
+        if (m_controls[i].id == id && m_controls[i].kind == CtrlKind::Combo) {
+            comboOpen(i);
+            m_focusIndex = i;
+            return;
+        }
+}
+
+// Exercita a lista suspensa pelo mesmo caminho do usuario: um clique no combo
+// a solta, um clique num item escolhe, e com ela fechada as setas trocam a
+// opcao. Nada aqui chama comboOpen/comboClose direto.
+bool ShellMenu::comboTest(std::string& report) {
+    auto step = [&](const std::string& what) { report += what; report += "; "; };
+
+    showMpScreen(6, true, 2);                 // GAME SETTINGS como host
+    int idx = -1;
+    for (int i = 0; i < (int)m_controls.size(); ++i)
+        if (m_controls[i].id == 40001) { idx = i; break; }   // cor do jogador 1
+    if (idx < 0) { report += "nao achei o combo de cor"; return false; }
+    const Control c = m_controls[idx];
+    const int antes = m_mpColor[0];
+
+    // Clique no combo: o botao solta no mouse-up, como no Windows.
+    handleMouseDown(c.x + 4, c.y + 4, SDL_BUTTON_LEFT);
+    handleMouseUp(c.x + 4, c.y + 4, SDL_BUTTON_LEFT);
+    if (m_openCombo < 0) { report += "o clique nao abriu a lista"; return false; }
+    step("a lista abriu");
+
+    int lx, ly, lw, lh;
+    if (!comboRect(m_controls[m_openCombo], lx, ly, lw, lh)) {
+        report += "a lista nao tem caixa"; return false;
+    }
+    // Escolhe um item diferente do atual.
+    const int alvo = (antes + 2) % (int)kColorNames.size();
+    const int iy = ly + 2 + (alvo - m_comboScroll) * 15 + 2;
+    handleMouseMove(lx + 4, iy);
+    if (m_comboHover != alvo) {
+        report += "o cursor nao destacou o item " + std::to_string(alvo);
+        return false;
+    }
+    step("o cursor destacou " + kColorNames[alvo]);
+
+    handleMouseDown(lx + 4, iy, SDL_BUTTON_LEFT);
+    handleMouseUp(lx + 4, iy, SDL_BUTTON_LEFT);
+    if (m_openCombo >= 0) { report += "a lista nao fechou"; return false; }
+    if (m_mpColor[0] != alvo) {
+        report += "a escolha nao pegou: " + std::to_string(m_mpColor[0]);
+        return false;
+    }
+    step("escolheu " + kColorNames[alvo] + " e fechou");
+
+    // Com a lista fechada, a seta troca a opcao direto (padrao do Windows).
+    m_focusIndex = idx;
+    handleKeyDown(SDLK_DOWN);
+    if (m_mpColor[0] != alvo + 1) {
+        report += "a seta nao trocou a opcao"; return false;
+    }
+    step("a seta trocou para " + kColorNames[m_mpColor[0]]);
+
+    // Esc com a lista aberta desiste sem mudar nada.
+    const int mantido = m_mpColor[0];
+    handleMouseDown(c.x + 4, c.y + 4, SDL_BUTTON_LEFT);
+    handleMouseUp(c.x + 4, c.y + 4, SDL_BUTTON_LEFT);
+    if (m_openCombo < 0) { report += "nao reabriu"; return false; }
+    handleKeyDown(SDLK_DOWN);
+    handleKeyDown(SDLK_ESCAPE);
+    if (m_openCombo >= 0) { report += "Esc nao fechou"; return false; }
+    if (m_mpColor[0] != mantido) { report += "Esc mudou a opcao"; return false; }
+    step("Esc desistiu sem mudar");
+
+    // Um clique fora fecha sem escolher.
+    handleMouseDown(c.x + 4, c.y + 4, SDL_BUTTON_LEFT);
+    handleMouseUp(c.x + 4, c.y + 4, SDL_BUTTON_LEFT);
+    handleMouseDown(4, 4, SDL_BUTTON_LEFT);
+    if (m_openCombo >= 0) { report += "o clique fora nao fechou"; return false; }
+    if (m_mpColor[0] != mantido) { report += "o clique fora mudou a opcao"; return false; }
+    step("o clique fora fechou");
+
+    // Com a lista fechada, a letra salta para a opcao que comeca por ela.
+    m_focusIndex = idx;
+    handleTextInput("g");
+    if (kColorNames[m_mpColor[0]] != "Green") {
+        report += "a letra nao saltou: " + kColorNames[m_mpColor[0]];
+        return false;
+    }
+    step("a letra G saltou para Green");
+
+    // E com a lista aberta a letra so move o destaque, sem escolher.
+    handleMouseDown(c.x + 4, c.y + 4, SDL_BUTTON_LEFT);
+    handleMouseUp(c.x + 4, c.y + 4, SDL_BUTTON_LEFT);
+    handleTextInput("m");
+    if (m_openCombo < 0) { report += "a letra fechou a lista"; return false; }
+    if (kColorNames[m_comboHover] != "Magenta") {
+        report += "a letra nao destacou Magenta";
+        return false;
+    }
+    if (kColorNames[m_mpColor[0]] != "Green") {
+        report += "a letra escolheu antes do Enter";
+        return false;
+    }
+    handleKeyDown(SDLK_RETURN);
+    if (kColorNames[m_mpColor[0]] != "Magenta") {
+        report += "o Enter nao confirmou"; return false;
+    }
+    step("na lista aberta, M destacou e o Enter confirmou");
+
+    // A lista do cenario tem mais itens que a janela: a rolagem tem de andar.
+    debugOpenCombo(40032);
+    if (m_openCombo >= 0 && (int)m_mpScenarioList.size() > 8) {
+        const int antesScroll = m_comboScroll;
+        handleMouseWheel(-3);
+        if (m_comboScroll == antesScroll) { report += "a roda nao rolou"; return false; }
+        step("a roda rolou a lista de cenarios");
+    }
+    handleKeyDown(SDLK_ESCAPE);
+    return true;
 }
 
 // Percorre o fluxo das telas chamando o mesmo despacho dos botoes, para que o
@@ -551,77 +691,97 @@ void ShellMenu::mpPump() {
 }
 
 // ---------------------------------------------------------------------------
-// Cada tela escurece o fundo e usa o mesmo quadro de diálogo do resto do shell,
-// com o título do recurso correspondente.
+// O desenho de cada tela: os textos fixos (os STATIC do template) e o que os
+// controles não cobrem. Cada posição vem das mesmas unidades de diálogo que o
+// layout usa, para o rótulo cair ao lado do controle a que pertence.
+
+namespace {
+
+// Encurta um texto ao que cabe em `px` pixels, com reticências.
+std::string fitText(const std::string& t, int px) {
+    const int cw = Font::getTextWidth("M");
+    const int n = px / (cw > 0 ? cw : 8);
+    if ((int)t.size() <= n) return t;
+    if (n <= 3) return t.substr(0, std::max(0, n));
+    return t.substr(0, size_t(n - 3)) + "...";
+}
+
+} // namespace
 
 // Dialog 259 "PICK CONNECTION METHOD" (166x122 DLU)
 void ShellMenu::renderMpConnection(Renderer& renderer) {
-    const int ox = (640 - 332) / 2, oy = (480 - 244) / 2;
-    renderer.fillRect(0, 0, 640, 480, 0x88000000);
-    renderer.drawDialogFrame(ox - 16, oy - 36, 364, 292, "PICK CONNECTION METHOD");
-    // Os outros transportes ficam visíveis e desabilitados, como o original os
-    // mostra quando o provedor não está instalado. Nenhum deles tem como
-    // funcionar hoje: o IPX saiu do Windows depois do XP, MODEM e SERIAL são
-    // DirectPlay sobre linha discada e cabo serial, e o SIGS era o serviço
-    // online da Sierra, desligado há décadas. O TCP/IP cobre os dois usos que
-    // restam: o broadcast acha partidas na rede local e o endereço direto
-    // alcança qualquer host.
-    uint32_t* fb = renderer.getFramebuffer();
-    Font::drawTextCentered(fb, 640, 480, "TCP/IP: rede local ou endereco direto",
-                           320, oy + 232, 0xFF8090A8, true);
-    Font::drawTextCentered(fb, 640, 480, "(IPX, modem, serial e SIGS nao existem mais)",
-                           320, oy + 248, 0xFF60708A, true);
+    const DlgBox d = dlgBox(166, 122);
+    renderer.dimRect(0, 0, 640, 480, 0x88);
+    renderer.drawDialogFrame(d.fx, d.fy, d.fw, d.fh, "PICK CONNECTION METHOD");
+    // Só o TCP/IP está portado: IPX saiu do Windows, MODEM e SERIAL são
+    // DirectPlay sobre linha discada e cabo, e o SIGS era o serviço da Sierra.
+    // O aviso não é do diálogo original, então fica sob o quadro.
+    Font::drawTextCentered(renderer.getFramebuffer(), 640, 480,
+                           "(somente TCP/IP esta portado)",
+                           d.fx + d.fw / 2, d.fy + d.fh + 8, 0xFF8090A8, true);
 }
 
-// Dialog 260 "NET GAME OPTIONS" (124x66)
+// Dialog 260 "NET GAME OPTIONS" (124x66 DLU)
 void ShellMenu::renderMpNetOptions(Renderer& renderer) {
-    const int ox = (640 - 248) / 2, oy = (480 - 132) / 2;
-    renderer.fillRect(0, 0, 640, 480, 0x88000000);
-    renderer.drawDialogFrame(ox - 16, oy - 36, 280, 180, "NET GAME OPTIONS");
+    const DlgBox d = dlgBox(124, 66);
+    renderer.dimRect(0, 0, 640, 480, 0x88);
+    renderer.drawDialogFrame(d.fx, d.fy, d.fw, d.fh, "NET GAME OPTIONS");
 }
 
-// Dialog 2012 "NEW NETWORK GAME" (284x122)
+// Dialog 2012 "NEW NETWORK GAME" (284x122 DLU)
 void ShellMenu::renderMpNewGame(Renderer& renderer) {
     uint32_t* fb = renderer.getFramebuffer();
-    const int ox = (640 - 568) / 2, oy = (480 - 244) / 2;
-    renderer.fillRect(0, 0, 640, 480, 0x88000000);
-    renderer.drawDialogFrame(ox - 16, oy - 36, 600, 296, "NEW NETWORK GAME");
-    Font::drawText(fb, 640, 480, "Your Name:",     ox + 16, oy + 20, 0xFFD8E4F8, true);
-    Font::drawText(fb, 640, 480, "Password:",      ox + 16, oy + 58, 0xFFD8E4F8, true);
-    Font::drawText(fb, 640, 480, "Max Players:",   ox + 16, oy + 96, 0xFFD8E4F8, true);
-    Font::drawText(fb, 640, 480, "Scenario Type:", ox + 16, oy + 134, 0xFFD8E4F8, true);
-    if (!m_mpStatus.empty())
-        Font::drawText(fb, 640, 480, m_mpStatus, ox + 16, oy + 212, 0xFFFFD24A, true);
+    const DlgBox d = dlgBox(284, 122);
+    renderer.dimRect(0, 0, 640, 480, 0x88);
+    renderer.drawDialogFrame(d.fx, d.fy, d.fw, d.fh, "NEW NETWORK GAME");
+    Font::drawText(fb, 640, 480, "Your Name:",     d.x(10), d.y(10), 0xFFD8E4F8, true);
+    Font::drawText(fb, 640, 480, "Password:",      d.x(10), d.y(29), 0xFFD8E4F8, true);
+    Font::drawText(fb, 640, 480, "Max Players:",   d.x(10), d.y(47), 0xFFD8E4F8, true);
+    Font::drawText(fb, 640, 480, "Scenario Type:", d.x(10), d.y(68), 0xFFD8E4F8, true);
+    if (!m_mpStatus.empty())                       // Static 1093
+        Font::drawText(fb, 640, 480, fitText(m_mpStatus, d.w(268)),
+                       d.x(8), d.y(100), 0xFFFFD24A, true);
 }
 
-// Dialog 2010 "FIND SESSION" (232x98)
+// Dialog 2010 "FIND SESSION" (232x98 DLU)
 void ShellMenu::renderMpFindSession(Renderer& renderer) {
     uint32_t* fb = renderer.getFramebuffer();
-    const int ox = (640 - 464) / 2, oy = (480 - 196) / 2;
-    renderer.fillRect(0, 0, 640, 480, 0x88000000);
-    renderer.drawDialogFrame(ox - 16, oy - 36, 496, 248, "FIND SESSION");
-    Font::drawText(fb, 640, 480, "Look for sessions by:", ox + 14, oy + 14, 0xFFD8E4F8, true);
+    const DlgBox d = dlgBox(232, 98);
+    renderer.dimRect(0, 0, 640, 480, 0x88);
+    renderer.drawDialogFrame(d.fx, d.fy, d.fw, d.fh, "FIND SESSION");
+    Font::drawText(fb, 640, 480, "Look for sessions by:", d.x(7), d.y(7), 0xFFD8E4F8, true);
     if (!m_mpStatus.empty())
-        Font::drawText(fb, 640, 480, m_mpStatus, ox + 14, oy + 188, 0xFFFFD24A, true);
+        Font::drawText(fb, 640, 480, fitText(m_mpStatus, d.w(218)),
+                       d.x(7), d.y(65), 0xFFFFD24A, true);
 }
 
-// Dialog 195 "PICK SESSION" (362x126) — o SysListView32 1000, com as colunas
-// que a resposta de descoberta traz (nome, endereço, lugares, ida e volta).
+// Dialog 195 "PICK SESSION" (362x126 DLU) — o SysListView32 1000, com as
+// colunas que a resposta de descoberta traz (nome, endereço, lugares, ida e
+// volta).
 void ShellMenu::renderMpPickSession(Renderer& renderer) {
     uint32_t* fb = renderer.getFramebuffer();
-    const int ox = (640 - 600) / 2, oy = (480 - 260) / 2;
-    renderer.fillRect(0, 0, 640, 480, 0x88000000);
-    renderer.drawDialogFrame(ox - 16, oy - 36, 632, 300, "PICK SESSION");
-    renderer.drawRect(ox, oy, 600, 150, 0xFF405068);
-    Font::drawText(fb, 640, 480, "Sessao",   ox + 8,   oy + 6, 0xFF8090A8, true);
-    Font::drawText(fb, 640, 480, "Endereco", ox + 250, oy + 6, 0xFF8090A8, true);
-    Font::drawText(fb, 640, 480, "Jog.",     ox + 420, oy + 6, 0xFF8090A8, true);
-    Font::drawText(fb, 640, 480, "ms",       ox + 480, oy + 6, 0xFF8090A8, true);
-    for (size_t i = 0; i < m_mpSessions.size() && i < 8; ++i) {
+    const DlgBox d = dlgBox(362, 126);
+    renderer.dimRect(0, 0, 640, 480, 0x88);
+    renderer.drawDialogFrame(d.fx, d.fy, d.fw, d.fh, "PICK SESSION");
+
+    const int lx = d.x(7), ly = d.y(9), lw = d.w(348), lh = d.h(64);
+    renderer.drawRect(lx, ly, lw, lh, 0xFF405068);
+    // As quatro colunas, em frações da largura da lista.
+    const int cName = lx + 6, cAddr = lx + lw * 42 / 100,
+              cPlay = lx + lw * 70 / 100, cPing = lx + lw * 85 / 100;
+    Font::drawText(fb, 640, 480, "Sessao",   cName, ly + 4, 0xFF8090A8, true);
+    Font::drawText(fb, 640, 480, "Endereco", cAddr, ly + 4, 0xFF8090A8, true);
+    Font::drawText(fb, 640, 480, "Jog.",     cPlay, ly + 4, 0xFF8090A8, true);
+    Font::drawText(fb, 640, 480, "ms",       cPing, ly + 4, 0xFF8090A8, true);
+    renderer.fillRect(lx + 2, ly + 18, lw - 4, 1, 0xFF405068);
+
+    const int rowH = 15, first = ly + 22;
+    const int maxRows = (ly + lh - first) / rowH;
+    for (size_t i = 0; i < m_mpSessions.size() && (int)i < maxRows; ++i) {
         const LobbySession& ses = m_mpSessions[i];
-        const int ly = oy + 24 + int(i) * 15;
+        const int ry = first + int(i) * rowH;
         const bool sel = (int)i == m_mpSelSession;
-        if (sel) renderer.fillRect(ox + 2, ly - 2, 596, 14, 0xFF2A3A55);
+        if (sel) renderer.fillRect(lx + 2, ry - 2, lw - 4, rowH - 1, 0xFF2A3A55);
         const uint32_t col = sel ? 0xFFFFFF99 : 0xFFC8D4E8;
         unsigned char ip[4];
         std::memcpy(ip, &ses.addr, 4);
@@ -629,76 +789,92 @@ void ShellMenu::renderMpPickSession(Renderer& renderer) {
         std::snprintf(addr, sizeof(addr), "%u.%u.%u.%u", ip[0], ip[1], ip[2], ip[3]);
         std::snprintf(players, sizeof(players), "%d", ses.maxPlayers);
         std::snprintf(ping, sizeof(ping), "%d", ses.replies ? ses.pingMs / ses.replies : 0);
-        Font::drawText(fb, 640, 480, ses.name, ox + 8,   ly, col, true);
-        Font::drawText(fb, 640, 480, addr,     ox + 250, ly, col, true);
-        Font::drawText(fb, 640, 480, players,  ox + 420, ly, col, true);
-        Font::drawText(fb, 640, 480, ping,     ox + 480, ly, col, true);
+        Font::drawText(fb, 640, 480, fitText(ses.name, cAddr - cName - 8), cName, ry, col, true);
+        Font::drawText(fb, 640, 480, addr,    cAddr, ry, col, true);
+        Font::drawText(fb, 640, 480, players, cPlay, ry, col, true);
+        Font::drawText(fb, 640, 480, ping,    cPing, ry, col, true);
     }
     if (m_mpSessions.empty())
-        Font::drawText(fb, 640, 480, "(nenhuma sessao)", ox + 8, oy + 24, 0xFF8090A8, true);
-    if (!m_mpStatus.empty())
-        Font::drawText(fb, 640, 480, m_mpStatus, ox, oy + 158, 0xFFFFD24A, true);
+        Font::drawText(fb, 640, 480, "(nenhuma sessao)", cName, first, 0xFF8090A8, true);
+    if (!m_mpStatus.empty())                       // Static 1093
+        Font::drawText(fb, 640, 480, fitText(m_mpStatus, d.w(268)),
+                       d.x(7), d.y(88), 0xFFFFD24A, true);
 }
 
-// Dialog 2013 "JOIN A MULTIPLAYER GAME" (226x57)
+// Dialog 2013 "JOIN A MULTIPLAYER GAME" (226x57 DLU)
 void ShellMenu::renderMpJoinName(Renderer& renderer) {
     uint32_t* fb = renderer.getFramebuffer();
-    const int ox = (640 - 452) / 2, oy = (480 - 114) / 2;
-    renderer.fillRect(0, 0, 640, 480, 0x88000000);
-    renderer.drawDialogFrame(ox - 16, oy - 36, 484, 170, "JOIN A MULTIPLAYER GAME");
-    Font::drawText(fb, 640, 480, "Your Name:", ox + 16, oy + 30, 0xFFD8E4F8, true);
+    const DlgBox d = dlgBox(226, 57);
+    renderer.dimRect(0, 0, 640, 480, 0x88);
+    renderer.drawDialogFrame(d.fx, d.fy, d.fw, d.fh, "JOIN A MULTIPLAYER GAME");
+    Font::drawText(fb, 640, 480, "Your Name:", d.x(8), d.y(17), 0xFFD8E4F8, true);
     if (!m_mpStatus.empty())
-        Font::drawText(fb, 640, 480, m_mpStatus, ox + 16, oy + 110, 0xFFFFD24A, true);
+        Font::drawTextCentered(fb, 640, 480, fitText(m_mpStatus, d.w(210)),
+                               d.fx + d.fw / 2, d.y(3), 0xFFFFD24A, true);
 }
 
-// Dialog 196 "GAME SETTINGS" (316x226) — o lobby da partida.
+// Dialog 196 "GAME SETTINGS" (316x226 DLU) — o lobby da partida. É a única
+// tela que ocupa o quadro inteiro; ver dlgBoxFull.
 void ShellMenu::renderMpGameSettings(Renderer& renderer) {
     uint32_t* fb = renderer.getFramebuffer();
-    const int ox = (640 - 632) / 2, oy = (480 - 452) / 2;
-    renderer.fillRect(0, 0, 640, 480, 0xCC000000);
-    renderer.drawDialogFrame(ox - 4, oy - 20, 640, 476, "GAME SETTINGS");
+    const DlgBox d = dlgBoxFull(316, 226);
+    renderer.dimRect(0, 0, 640, 480, 0xCC);
+    renderer.drawDialogFrame(d.fx, d.fy, d.fw, d.fh, "GAME SETTINGS");
 
-    // Linha do cenário: combo 40032 para quem hospeda, Static 1075 para os
-    // outros (eles recebem a escolha do host).
-    Font::drawText(fb, 640, 480, "Scenario:", ox + 8, oy + 8, 0xFFD8E4F8, true);
+    // O estado da sessão não existe no original; vai na barra de título, à
+    // direita, onde não disputa espaço com nada do diálogo.
+    if (!m_mpStatus.empty()) {
+        const std::string st = fitText(m_mpStatus, 240);
+        Font::drawText(fb, 640, 480, st, 630 - Font::getTextWidth(st), d.fy + 6,
+                       0xFFFFD24A, true);
+    }
+
+    // Static 1080 e, para quem não hospeda, o Static 1075 no lugar do combo.
+    Font::drawText(fb, 640, 480, "Scenario:", d.x(8), d.y(4), 0xFFD8E4F8, true);
     if (!m_mpIsHost) {
         const std::string nm = (m_mpScenario >= 0 && m_mpScenario < (int)m_mpScenarioList.size())
                              ? m_mpScenarioList[m_mpScenario] : "Unknown Mission";
-        Font::drawText(fb, 640, 480, nm, ox + 100, oy + 8, 0xFFC8D4E8, true);
+        Font::drawText(fb, 640, 480, fitText(nm, d.w(250)), d.x(52), d.y(4),
+                       0xFFC8D4E8, true);
     }
 
-    // Cabeçalho das colunas, nas posições do diálogo.
-    const int rowY = oy + 44, rowH = 30;
-    Font::drawText(fb, 640, 480, "Name",      ox + 32,  rowY - 18, 0xFF8090A8, true);
-    Font::drawText(fb, 640, 480, "Color",     ox + 200, rowY - 18, 0xFF8090A8, true);
-    Font::drawText(fb, 640, 480, "Eden",      ox + 290, rowY - 18, 0xFF8090A8, true);
-    Font::drawText(fb, 640, 480, "Resources", ox + 348, rowY - 18, 0xFF8090A8, true);
-    Font::drawText(fb, 640, 480, "Ready?",    ox + 442, rowY - 18, 0xFF8090A8, true);
-    renderer.fillRect(ox + 16, rowY - 6, 596, 1, 0xFF405068);
+    // Cabeçalho das colunas: "Name" e "Resources" são SS_CENTER no template, os
+    // outros à esquerda.
+    Font::drawTextCentered(fb, 640, 480, "Name",      d.x(54),  d.y(19), 0xFF8090A8, true);
+    Font::drawText(fb, 640, 480,         "Color",     d.x(103), d.y(20), 0xFF8090A8, true);
+    Font::drawText(fb, 640, 480,         "Eden",      d.x(148), d.y(20), 0xFF8090A8, true);
+    Font::drawTextCentered(fb, 640, 480, "Resources", d.x(196), d.y(19), 0xFF8090A8, true);
+    Font::drawText(fb, 640, 480,         "Ready?",    d.x(224), d.y(20), 0xFF8090A8, true);
+    renderer.fillRect(d.x(8), d.y(31), d.w(296), 1, 0xFF405068);   // o Static de 1 DLU
 
+    // Os nomes (Static 40000+5i, centrados na coluna de 76 DLU).
     for (int i = 0; i < 6; ++i) {
-        const int ly = rowY + i * rowH;
         const bool taken = i < m_mpPlayerCount;
         const uint32_t col = taken ? 0xFFE0ECFF : 0xFF60708A;
         const std::string nm = taken ? (m_mpNames[i].empty() ? "PLAYER" : m_mpNames[i])
                                      : "(vazio)";
-        Font::drawText(fb, 640, 480, nm, ox + 32, ly, col, true);
+        Font::drawTextCentered(fb, 640, 480, fitText(nm, d.w(76)),
+                               d.x(54), d.y(39 + 15 * i), col, true);
     }
 
-    // Chat: Edit 40031 guarda o registro, 40030 a linha que se digita.
-    const int chatY = oy + 300;
-    renderer.drawRect(ox + 16, chatY, 600, 72, 0xFF405068);
-    int line = 0;
-    const int first = std::max(0, (int)m_mpChat.size() - 4);
-    for (size_t i = first; i < m_mpChat.size(); ++i, ++line)
-        Font::drawText(fb, 640, 480, m_mpChat[i], ox + 22, chatY + 6 + line * 15,
-                       0xFFA8B8D0, true);
-    Font::drawText(fb, 640, 480, "Chat:", ox + 18, oy + 382, 0xFFD8E4F8, true);
-    // Static 1084, à direita do combo 1018.
-    Font::drawText(fb, 640, 480, "Initial Vehicles", ox + 462, oy + 270, 0xFFD8E4F8, true);
+    // Static 1084, à direita do combo 1018 — segue a linha que o layout mediu.
+    for (const Control& c : m_controls)
+        if (c.id == 1018) {
+            Font::drawText(fb, 640, 480, "Initial Vehicles", c.x + c.w + 10, c.y + 4,
+                           m_mpIsHost ? 0xFFD8E4F8 : 0xFF60708A, true);
+            break;
+        }
 
-    if (!m_mpStatus.empty())
-        Font::drawTextCentered(fb, 640, 480, m_mpStatus, 320, 466, 0xFFFFD24A, true);
+    // O registro da conversa (Edit 40031, multilinha) e o rótulo do Edit 40030.
+    const int cx = d.x(8), cy = d.y(149), cw = d.w(300), ch = d.h(39);
+    renderer.drawRect(cx, cy, cw, ch, 0xFF405068);
+    const int lineH = 14, rows = (ch - 8) / lineH;
+    const int firstLine = std::max(0, (int)m_mpChat.size() - rows);
+    int line = 0;
+    for (size_t i = firstLine; i < m_mpChat.size(); ++i, ++line)
+        Font::drawText(fb, 640, 480, fitText(m_mpChat[i], cw - 12),
+                       cx + 6, cy + 4 + line * lineH, 0xFFA8B8D0, true);
+    Font::drawText(fb, 640, 480, "Chat:", d.x(8), d.y(192), 0xFFD8E4F8, true);
 }
 
 } // namespace op2

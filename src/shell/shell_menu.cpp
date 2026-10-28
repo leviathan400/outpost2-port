@@ -12,6 +12,12 @@
 
 namespace op2 {
 
+// A lista suspensa de um combo (ver comboRect e companhia, mais abaixo).
+namespace {
+constexpr int kComboItemH = 15;    // altura de um item da lista
+constexpr int kComboMaxVis = 8;    // itens visíveis antes de rolar
+}
+
 // ---- Geometria das telas (fiel aos diálogos do OP2SHRES.DLL onde aplicável) ----
 
 // MAIN MENU (Dialog 137): painel à direita, revelando a nave Conestoga.
@@ -176,6 +182,9 @@ Control& ShellMenu::addButton(int id, const std::string& text, int x, int y,
 
 void ShellMenu::setState(MenuState s) {
     m_state = s;
+    m_openComboId = 0;         // trocar de tela fecha qualquer lista solta
+    m_comboHover = -1;
+    m_comboScroll = 0;
     if (s == MenuState::Splash) m_splashTimer = 0.0f;
     rebuildControls();
 }
@@ -183,6 +192,7 @@ void ShellMenu::setState(MenuState s) {
 void ShellMenu::rebuildControls() {
     m_controls.clear();
     m_focusIndex = -1;
+    m_openCombo = -1;          // reencontrado pelo id no fim, se ainda existir
 
     switch (m_state) {
     case MenuState::MainMenu: {
@@ -299,101 +309,136 @@ void ShellMenu::rebuildControls() {
     case MenuState::About:
         addButton(1, "OK", kAbX + (kAbW - 100) / 2, kAbY + 258, 100, 26, true);
         break;
-    // --- multijogador: a geometria sai dos dialogos do OUT2RES.DLL, em
-    // unidades de dialogo dobradas (1 DLU = 2 px), centralizadas no quadro.
+    // --- multijogador -------------------------------------------------------
+    // A geometria sai dos templates do OUT2RES.DLL, em unidades de diálogo:
+    // cada controle fica onde o original o põe, e o DlgBox faz a conversão.
     case MenuState::MpConnection: {
-        const int ox = (640 - 332) / 2, oy = (480 - 244) / 2;
-        // Dialog 259: os ids sao os do original e a tabela unk_4DF370 liga
-        // cada um ao transporte. Só o TCP/IP (3) esta portado.
-        addButton(6, "INTERNET (SIGS)", ox + 14, oy + 8,   304, 28, false, true);
-        addButton(4, "MODEM",           ox + 14, oy + 44,  304, 28, false, true);
-        addButton(5, "IPX",             ox + 14, oy + 80,  304, 28, false, true);
-        addButton(3, "TCP/IP",          ox + 14, oy + 116, 304, 28, true);
-        addButton(7, "SERIAL",          ox + 14, oy + 152, 304, 28, false, true);
-        addButton(2, "CANCEL",          ox + 16, oy + 200, 304, 28);
+        // Dialog 259 (166x122): os ids sao os do original e a tabela
+        // unk_4DF370 liga cada um ao transporte. Só o TCP/IP (3) esta portado.
+        const DlgBox d = dlgBox(166, 122);
+        addButton(6, "INTERNET (SIGS)", d.x(7), d.y(4),   d.w(152), d.h(14), false, true);
+        addButton(4, "MODEM",           d.x(7), d.y(22),  d.w(152), d.h(14), false, true);
+        addButton(5, "IPX",             d.x(7), d.y(40),  d.w(152), d.h(14), false, true);
+        addButton(3, "TCP/IP",          d.x(7), d.y(58),  d.w(152), d.h(14), true);
+        addButton(7, "SERIAL",          d.x(7), d.y(76),  d.w(152), d.h(14), false, true);
+        addButton(2, "CANCEL",          d.x(8), d.y(100), d.w(152), d.h(14));
         break;
     }
     case MenuState::MpNetOptions: {
-        const int ox = (640 - 248) / 2, oy = (480 - 132) / 2;
-        addButton(1074, "CREATE", ox + 74, oy + 8,  100, 28, true);
-        addButton(1075, "JOIN",   ox + 74, oy + 48, 100, 28);
-        addButton(2,    "CANCEL", ox + 74, oy + 88, 100, 28);
+        const DlgBox d = dlgBox(124, 66);               // Dialog 260
+        addButton(1074, "CREATE", d.x(37), d.y(4),  d.w(50), d.h(14), true);
+        addButton(1075, "JOIN",   d.x(37), d.y(24), d.w(50), d.h(14));
+        addButton(2,    "CANCEL", d.x(37), d.y(44), d.w(50), d.h(14));
         break;
     }
     case MenuState::MpNewGame: {
-        const int ox = (640 - 568) / 2, oy = (480 - 244) / 2;
-        addEdit(1044, &m_mpPlayerName, 11, ox + 152, oy + 14,  186, 24);
-        addEdit(1037, &m_mpPassword,   11, ox + 152, oy + 52,  186, 24);
-        addCombo(1015, &kMaxPlayerNames, &m_mpMaxPlayers, ox + 152, oy + 90, 64, 24);
-        addCombo(1039, &m_mpScenarioList, &m_mpScenario,  ox + 16, oy + 156, 536, 24);
-        addButton(1, "OK",     ox + 374, oy + 14, 180, 28, true);
-        addButton(2, "CANCEL", ox + 374, oy + 52, 180, 28);
+        const DlgBox d = dlgBox(284, 122);              // Dialog 2012
+        addEdit(1044, &m_mpPlayerName, 11, d.x(76), d.y(8),  d.w(93), d.h(14));
+        addEdit(1037, &m_mpPassword,   11, d.x(76), d.y(26), d.w(93), d.h(14));
+        addCombo(1015, &kMaxPlayerNames,  &m_mpMaxPlayers, d.x(76), d.y(44), d.w(32), d.h(14));
+        addCombo(1039, &m_mpScenarioList, &m_mpScenario,   d.x(8),  d.y(79), d.w(268), d.h(14));
+        addButton(1, "OK",     d.x(187), d.y(8),  d.w(90), d.h(14), true);
+        addButton(2, "CANCEL", d.x(187), d.y(26), d.w(90), d.h(14));
         break;
     }
     case MenuState::MpFindSession: {
-        const int ox = (640 - 464) / 2, oy = (480 - 196) / 2;
-        addRadio(1005, "Broadcasting on the local network.", ox + 22, oy + 44, 400,
-                 &m_mpFindMode, 0);
-        addRadio(1007, "Looking at the IP address:",         ox + 22, oy + 76, 400,
-                 &m_mpFindMode, 1);
-        addEdit(1008, &m_mpFindAddr, 15, ox + 82, oy + 100, 182, 24);
-        addButton(1, "OK",     ox + 60,  oy + 150, 144, 28, true);
-        addButton(2, "CANCEL", ox + 260, oy + 150, 144, 28);
+        const DlgBox d = dlgBox(232, 98);               // Dialog 2010
+        // O quadradinho do radio fica em x=11 e o rótulo em x=25; como o nosso
+        // desenha "( ) " junto, o controle começa no quadradinho e o rótulo cai
+        // quase no mesmo lugar.
+        addRadio(1005, "Broadcasting on the local network.", d.x(11), d.y(22),
+                 d.w(214), &m_mpFindMode, 0);
+        addRadio(1007, "Looking at the IP address:", d.x(11), d.y(41),
+                 d.w(214), &m_mpFindMode, 1);
+        addEdit(1008, &m_mpFindAddr, 15, d.x(41), d.y(51), d.w(91), d.h(14));
+        addButton(1, "OK",     d.x(30),  d.y(76), d.w(72), d.h(14), true);
+        addButton(2, "CANCEL", d.x(130), d.y(76), d.w(72), d.h(14));
         break;
     }
     case MenuState::MpPickSession: {
-        const int ox = (640 - 600) / 2, oy = (480 - 260) / 2;
+        const DlgBox d = dlgBox(362, 126);              // Dialog 195
         Control lc; lc.kind = CtrlKind::List; lc.id = 1000;   // SysListView32
-        lc.x = ox; lc.y = oy; lc.w = 600; lc.h = 150;
+        lc.x = d.x(7); lc.y = d.y(9); lc.w = d.w(348); lc.h = d.h(64);
         lc.listSel = &m_mpSelSession; lc.listCount = (int)m_mpSessions.size();
         m_controls.push_back(lc);
-        addButton(3, "REFRESH", ox + 246, oy + 180, 106, 28);
-        addButton(2, "CANCEL",  ox + 366, oy + 180, 106, 28);
-        addButton(1, "OK",      ox + 486, oy + 180, 106, 28, true);
+        addButton(3, "REFRESH", d.x(148), d.y(104), d.w(64), d.h(14));
+        addButton(2, "CANCEL",  d.x(220), d.y(104), d.w(64), d.h(14));
+        addButton(1, "OK",      d.x(291), d.y(104), d.w(64), d.h(14), true);
         break;
     }
     case MenuState::MpJoinName: {
-        const int ox = (640 - 452) / 2, oy = (480 - 114) / 2;
-        addEdit(1035, &m_mpPlayerName, 11, ox + 134, oy + 26, 264, 24);
-        addButton(1, "OK",     ox + 24,  oy + 68, 180, 28, true);
-        addButton(2, "CANCEL", ox + 238, oy + 68, 180, 28);
+        const DlgBox d = dlgBox(226, 57);               // Dialog 2013
+        addEdit(1035, &m_mpPlayerName, 11, d.x(67), d.y(15), d.w(132), d.h(14));
+        addButton(1, "OK",     d.x(12),  d.y(36), d.w(90), d.h(14), true);
+        addButton(2, "CANCEL", d.x(119), d.y(36), d.w(90), d.h(14));
         break;
     }
     case MenuState::MpGameSettings: {
-        const int ox = (640 - 632) / 2, oy = (480 - 452) / 2;
+        const DlgBox d = dlgBoxFull(316, 226);          // Dialog 196
         // O combo do cenario so existe para quem hospeda (Static 1075 para os
         // outros, que recebem a escolha do host).
         if (m_mpIsHost)
-            addCombo(40032, &m_mpScenarioList, &m_mpScenario, ox + 100, oy + 4, 500, 22);
-        const int rowY = oy + 38, rowH = 30;
+            addCombo(40032, &m_mpScenarioList, &m_mpScenario,
+                     d.x(51), d.y(2), d.w(251), d.h(14));
+        // As seis linhas de jogador: a tabela dword_4E2FA0 dá os ids
+        // (40000+5i a 40004+5i) e o template a posição de cada coluna.
         for (int i = 0; i < 6; ++i) {
-            const int ly = rowY + i * rowH;
+            const int rowC = 38 + 15 * i;    // combos e EJECT
+            const int rowK = 39 + 15 * i;    // caixas de marcar
             const bool mine = (i == (netActive() ? netLocalPlayer() : (m_mpIsHost ? 0 : 1)));
             const bool live = i < m_mpPlayerCount;
-            addCombo(40001 + 5 * i, &kColorNames, &m_mpColor[i], ox + 200, ly - 2, 86, 22)
+            addCombo(40001 + 5 * i, &kColorNames, &m_mpColor[i],
+                     d.x(96), d.y(rowC), d.w(46), d.h(14))
                 .disabled = !(live && (mine || m_mpIsHost));
-            addCheck(40003 + 5 * i, "", ox + 296, ly, 40, &m_mpEden[i])
+            addCheck(40003 + 5 * i, "", d.x(154), d.y(rowK), d.w(20), &m_mpEden[i])
                 .disabled = !(live && (mine || m_mpIsHost));
-            addCombo(40002 + 5 * i, &kResourceNames, &m_mpResources[i], ox + 348, ly - 2, 86, 22)
+            addCombo(40002 + 5 * i, &kResourceNames, &m_mpResources[i],
+                     d.x(176), d.y(rowC), d.w(46), d.h(14))
                 .disabled = !(live && (mine || m_mpIsHost));
-            addCheck(40004 + 5 * i, "", ox + 448, ly, 40, &m_mpReady[i])
+            addCheck(40004 + 5 * i, "", d.x(231), d.y(rowK), d.w(20), &m_mpReady[i])
                 .disabled = !(live && mine);
-            addButton(1046 + i, "EJECT", ox + 512, ly - 2, 96, 24, false,
+            addButton(1046 + i, "EJECT", d.x(252), d.y(rowC), d.w(52), d.h(14), false,
                       !(live && m_mpIsHost && i != 0));
         }
-        // As opcoes globais (flags do GameStartInfo): só o host as muda.
-        addCheck(1077, "Disasters",     ox + 18,  oy + 270, 110, &m_mpDisasters).disabled = !m_mpIsHost;
-        addCheck(1078, "Morale Steady", ox + 132, oy + 270, 140, &m_mpMoraleSteady).disabled = !m_mpIsHost;
-        addCheck(1079, "Day and Night", ox + 282, oy + 270, 140, &m_mpDayNight).disabled = !m_mpIsHost;
-        addCombo(1018, &kVehicleNames, &m_mpInitialVehicles, ox + 392, oy + 266, 62, 22)
-            .disabled = !m_mpIsHost;
-        addEdit(40030, &m_mpChatInput, 60, ox + 72, oy + 378, 544, 24);
-        addButton(1045, "START",  ox + 120, oy + 414, 136, 28, true, !m_mpIsHost);
-        addButton(1090, "CANCEL", ox + 366, oy + 414, 136, 28);
+        // As opcoes globais (flags do GameStartInfo): só o host as muda. O
+        // template as alinha supondo a fonte proporcional do Windows; como a
+        // nossa é de largura fixa, a linha é remontada medindo cada rótulo,
+        // a partir do mesmo x em que o original começa.
+        {
+            int cx = d.x(9);
+            const int gap = 10, box = Font::getTextWidth("[X] ");
+            auto opt = [&](int id, const char* label, bool* tgt) {
+                const int wTotal = box + Font::getTextWidth(label);
+                addCheck(id, label, cx, d.y(135), wTotal, tgt).disabled = !m_mpIsHost;
+                cx += wTotal + gap;
+            };
+            opt(1077, "Disasters",     &m_mpDisasters);
+            opt(1078, "Morale Steady", &m_mpMoraleSteady);
+            opt(1079, "Day and Night", &m_mpDayNight);
+            addCombo(1018, &kVehicleNames, &m_mpInitialVehicles,
+                     cx, d.y(132), d.w(31), d.h(14)).disabled = !m_mpIsHost;
+        }
+        addEdit(40030, &m_mpChatInput, 60, d.x(36), d.y(189), d.w(272), d.h(14));
+        addButton(1045, "START",  d.x(60),  d.y(207), d.w(68), d.h(14), true, !m_mpIsHost);
+        addButton(1090, "CANCEL", d.x(183), d.y(207), d.w(68), d.h(14));
         break;
     }
     default:
         break;
+    }
+
+    // Se havia uma lista solta, ela continua aberta no controle de mesmo id —
+    // a mesa se reconstrói sozinha quando alguém entra, e não é hora de fechar
+    // a lista na cara de quem estava escolhendo.
+    if (m_openComboId != 0) {
+        for (int i = 0; i < (int)m_controls.size(); ++i)
+            if (m_controls[i].id == m_openComboId &&
+                m_controls[i].kind == CtrlKind::Combo && !m_controls[i].disabled) {
+                m_openCombo = i;
+                break;
+            }
+        if (m_openCombo < 0) { m_openComboId = 0; m_comboHover = -1; m_comboScroll = 0; }
+        else { m_focusIndex = m_openCombo; return; }
     }
 
     // Foco inicial: nas telas de multijogador, o botão default do diálogo
@@ -435,17 +480,14 @@ void ShellMenu::activateControl(int index) {
     case CtrlKind::Check:  if (c.checkTarget) *c.checkTarget = !*c.checkTarget; break;
     case CtrlKind::Radio:  if (c.radioTarget) *c.radioTarget = c.radioValue; break;
     case CtrlKind::List:   break;
-    // O original abre a lista suspensa do Windows; aqui um clique passa para a
-    // opcao seguinte, em ciclo.
+    // CBS_DROPDOWNLIST: solta a lista; a escolha sai em comboClose.
     case CtrlKind::Combo:
-        if (c.comboSel && c.comboItems && !c.comboItems->empty())
-            *c.comboSel = (*c.comboSel + 1) % (int)c.comboItems->size();
-        break;
+        comboOpen(index);
+        return;
     case CtrlKind::Edit:   break;   // recebe texto por handleTextInput
     }
     // No lobby, mexer num controle avisa o outro lado.
-    if (m_state == MenuState::MpGameSettings &&
-        (c.kind == CtrlKind::Combo || c.kind == CtrlKind::Check))
+    if (m_state == MenuState::MpGameSettings && c.kind == CtrlKind::Check)
         mpControlChanged(c.id);
 }
 
@@ -696,6 +738,14 @@ void ShellMenu::dispatchButton(int id) {
 // --------------------------------- input ---------------------------------
 
 void ShellMenu::handleMouseMove(int x, int y) {
+    // Com uma lista solta, só ela escuta o cursor (o combo do Windows captura
+    // o mouse enquanto está aberto).
+    if (m_openCombo >= 0) {
+        const int item = comboItemAt(x, y);
+        if (item >= 0) m_comboHover = item;
+        for (auto& c : m_controls) c.hovered = false;
+        return;
+    }
     for (auto& c : m_controls)
         c.hovered = (!c.disabled && x >= c.x && x < c.x + c.w && y >= c.y && y < c.y + c.h);
 }
@@ -703,6 +753,13 @@ void ShellMenu::handleMouseMove(int x, int y) {
 void ShellMenu::handleMouseDown(int x, int y, uint8_t button) {
     if (button != SDL_BUTTON_LEFT) return;
     if (m_state == MenuState::Splash) return;
+
+    // Lista solta aberta: o clique é dela. Dentro escolhe, fora fecha — e é
+    // consumido, como no Windows.
+    if (m_openCombo >= 0) {
+        comboClose(comboItemAt(x, y));
+        return;
+    }
 
     // Setas da scrollbar dos tutoriais (não são controles focáveis).
     if (m_state == MenuState::Tutorials) {
@@ -754,6 +811,18 @@ void ShellMenu::handleMouseUp(int x, int y, uint8_t button) {
 }
 
 void ShellMenu::handleMouseWheel(int delta) {
+    if (m_openCombo >= 0 && m_openCombo < (int)m_controls.size()) {
+        const Control& c = m_controls[m_openCombo];
+        int x, y, w, h;
+        if (comboRect(c, x, y, w, h)) {
+            const int n = (int)c.comboItems->size();
+            const int vis = (h - 4) / kComboItemH;
+            m_comboScroll -= delta;
+            if (m_comboScroll > n - vis) m_comboScroll = n - vis;
+            if (m_comboScroll < 0) m_comboScroll = 0;
+        }
+        return;
+    }
     if (m_state == MenuState::RtfView) {
         const int maxScroll = std::max(0, static_cast<int>(m_rtfLines.size()) - rtfVisibleLines());
         m_rtfScroll = std::max(0, std::min(maxScroll, m_rtfScroll - delta * 3));
@@ -768,6 +837,37 @@ void ShellMenu::handleMouseWheel(int delta) {
 
 void ShellMenu::handleTextInput(const char* text) {
     if (!text) return;
+    // Num combo — solto ou fechado — a letra salta para o item seguinte que
+    // comece por ela, como no Windows. Procura em ciclo a partir do atual.
+    const int combo = (m_openCombo >= 0) ? m_openCombo : m_focusIndex;
+    if (combo >= 0 && combo < (int)m_controls.size() &&
+        m_controls[combo].kind == CtrlKind::Combo && !m_controls[combo].disabled) {
+        Control& c = m_controls[combo];
+        if (c.comboItems && !c.comboItems->empty() && text[0] >= 0x20) {
+            const char want = char(std::tolower((unsigned char)text[0]));
+            const int n = (int)c.comboItems->size();
+            const int from = (m_openCombo >= 0) ? m_comboHover
+                           : (c.comboSel ? *c.comboSel : 0);
+            for (int k = 1; k <= n; ++k) {
+                const int item = (from + k % n + n) % n;
+                const std::string& t = (*c.comboItems)[item];
+                if (t.empty()) continue;
+                if (char(std::tolower((unsigned char)t[0])) != want) continue;
+                if (m_openCombo >= 0) {
+                    m_comboHover = item;
+                    int x, y, w, h;
+                    const int vis = comboRect(c, x, y, w, h) ? (h - 4) / kComboItemH : 1;
+                    if (item < m_comboScroll) m_comboScroll = item;
+                    else if (item >= m_comboScroll + vis) m_comboScroll = item - vis + 1;
+                } else if (c.comboSel && *c.comboSel != item) {
+                    *c.comboSel = item;
+                    if (m_state == MenuState::MpGameSettings) mpControlChanged(c.id);
+                }
+                break;
+            }
+            return;
+        }
+    }
     // Qualquer Edit com foco recebe o texto (os campos de nome, senha, endereço
     // e a linha de chat do GAME SETTINGS).
     if (m_focusIndex >= 0 && m_focusIndex < (int)m_controls.size()) {
@@ -788,6 +888,49 @@ void ShellMenu::handleTextInput(const char* text) {
 void ShellMenu::handleKeyDown(int keyCode) {
     if (m_state == MenuState::Splash) return;
     SDL_Keymod mod = SDL_GetModState();
+
+    // Com a lista solta no ar ela é modal, como o combo do Windows: as setas
+    // andam pelos itens, Enter/Espaço escolhem, Esc e Tab desistem.
+    if (m_openCombo >= 0 && m_openCombo < (int)m_controls.size()) {
+        const Control& c = m_controls[m_openCombo];
+        const int n = c.comboItems ? (int)c.comboItems->size() : 0;
+        int x, y, w, h, vis = 1;
+        if (comboRect(c, x, y, w, h)) vis = (h - 4) / kComboItemH;
+        switch (keyCode) {
+        case SDLK_UP:
+        case SDLK_DOWN:
+        case SDLK_PAGEUP:
+        case SDLK_PAGEDOWN:
+        case SDLK_HOME:
+        case SDLK_END: {
+            int sel = m_comboHover;
+            if (keyCode == SDLK_UP)        sel -= 1;
+            else if (keyCode == SDLK_DOWN) sel += 1;
+            else if (keyCode == SDLK_PAGEUP)   sel -= vis;
+            else if (keyCode == SDLK_PAGEDOWN) sel += vis;
+            else if (keyCode == SDLK_HOME) sel = 0;
+            else                           sel = n - 1;
+            if (sel < 0) sel = 0;
+            if (sel > n - 1) sel = n - 1;
+            m_comboHover = sel;
+            if (sel < m_comboScroll) m_comboScroll = sel;
+            else if (sel >= m_comboScroll + vis) m_comboScroll = sel - vis + 1;
+            return;
+        }
+        case SDLK_RETURN:
+        case SDLK_KP_ENTER:
+        case SDLK_SPACE:
+            comboClose(m_comboHover);
+            return;
+        default:
+            // As letras e os números saltam para o item: quem trata é o
+            // handleTextInput, que recebe o caractere de verdade.
+            if ((keyCode >= SDLK_a && keyCode <= SDLK_z) ||
+                (keyCode >= SDLK_0 && keyCode <= SDLK_9)) return;
+            comboClose(-1);     // qualquer outra tecla desiste da escolha
+            return;
+        }
+    }
 
     if (keyCode == SDLK_BACKSPACE) {
         if (m_focusIndex >= 0 && m_focusIndex < (int)m_controls.size()) {
@@ -851,6 +994,17 @@ void ShellMenu::handleKeyDown(int keyCode) {
             if (m_state == MenuState::Tutorials) {   // manter visível
                 if (s < m_tutorialScroll) m_tutorialScroll = s;
                 else if (s >= m_tutorialScroll + kTutVisible) m_tutorialScroll = s - kTutVisible + 1;
+            }
+        } else if (c.kind == CtrlKind::Combo && c.comboSel && c.comboItems &&
+                   !c.comboItems->empty() && !c.disabled) {
+            // Combo fechado: a seta troca a opção sem soltar a lista.
+            const int n = (int)c.comboItems->size();
+            int sel = *c.comboSel + dir;
+            if (sel < 0) sel = 0;
+            if (sel > n - 1) sel = n - 1;
+            if (sel != *c.comboSel) {
+                *c.comboSel = sel;
+                if (m_state == MenuState::MpGameSettings) mpControlChanged(c.id);
             }
         } else if (c.kind == CtrlKind::Radio && c.radioTarget) {
             // move a seleção dentro do grupo (mesmo radioTarget)
@@ -947,6 +1101,95 @@ void ShellMenu::render(Renderer& renderer) {
     drawControls(renderer);
 }
 
+// ---------------------------------------------------------------------------
+// A lista suspensa dos combos. O original usa CBS_DROPDOWNLIST, o combo do
+// Windows que não aceita digitação: um clique solta a lista por cima de tudo,
+// o item escolhido fecha, e com a lista fechada as setas trocam a opção direto.
+
+bool ShellMenu::comboRect(const Control& c, int& x, int& y, int& w, int& h) const {
+    if (c.kind != CtrlKind::Combo || !c.comboItems || c.comboItems->empty())
+        return false;
+    const int n = (int)c.comboItems->size();
+    const int vis = (n < kComboMaxVis) ? n : kComboMaxVis;
+    w = c.w;
+    h = vis * kComboItemH + 4;
+    x = c.x;
+    y = c.y + c.h;                       // o Windows solta a lista para baixo
+    if (y + h > 478) y = c.y - h;        // sem espaço: abre para cima
+    if (y < 2) y = 2;
+    return true;
+}
+
+int ShellMenu::comboItemAt(int px, int py) const {
+    if (m_openCombo < 0 || m_openCombo >= (int)m_controls.size()) return -1;
+    const Control& c = m_controls[m_openCombo];
+    int x, y, w, h;
+    if (!comboRect(c, x, y, w, h)) return -1;
+    if (px < x || px >= x + w || py < y + 2 || py >= y + h - 2) return -1;
+    const int idx = m_comboScroll + (py - y - 2) / kComboItemH;
+    return (idx >= 0 && idx < (int)c.comboItems->size()) ? idx : -1;
+}
+
+void ShellMenu::comboOpen(int index) {
+    if (index < 0 || index >= (int)m_controls.size()) return;
+    const Control& c = m_controls[index];
+    if (c.disabled || !c.comboItems || c.comboItems->empty()) return;
+    m_openCombo = index;
+    m_openComboId = c.id;
+    m_comboHover = (c.comboSel && *c.comboSel >= 0 &&
+                    *c.comboSel < (int)c.comboItems->size()) ? *c.comboSel : 0;
+    // Abre já mostrando a opção corrente.
+    const int n = (int)c.comboItems->size();
+    const int vis = (n < kComboMaxVis) ? n : kComboMaxVis;
+    m_comboScroll = m_comboHover - vis / 2;
+    if (m_comboScroll > n - vis) m_comboScroll = n - vis;
+    if (m_comboScroll < 0) m_comboScroll = 0;
+}
+
+void ShellMenu::comboClose(int chosen) {
+    const int index = m_openCombo;
+    m_openCombo = -1;
+    m_openComboId = 0;
+    m_comboHover = -1;
+    m_comboScroll = 0;
+    if (index < 0 || index >= (int)m_controls.size() || chosen < 0) return;
+    Control& c = m_controls[index];
+    if (!c.comboSel || !c.comboItems || chosen >= (int)c.comboItems->size()) return;
+    if (*c.comboSel == chosen) return;
+    *c.comboSel = chosen;
+    // CBN_SELCHANGE: no lobby, mexer num controle avisa o outro lado.
+    if (m_state == MenuState::MpGameSettings) mpControlChanged(c.id);
+}
+
+void ShellMenu::drawOpenCombo(Renderer& renderer) {
+    if (m_openCombo < 0 || m_openCombo >= (int)m_controls.size()) return;
+    const Control& c = m_controls[m_openCombo];
+    int x, y, w, h;
+    if (!comboRect(c, x, y, w, h)) return;
+    uint32_t* fb = renderer.getFramebuffer();
+    const int n = (int)c.comboItems->size();
+    const int vis = (h - 4) / kComboItemH;
+
+    renderer.fillRect(x, y, w, h, 0xFF101620);
+    renderer.drawRect(x, y, w, h, 0xFFFFD24A);
+    for (int k = 0; k < vis; ++k) {
+        const int item = m_comboScroll + k;
+        if (item < 0 || item >= n) break;
+        const int iy = y + 2 + k * kComboItemH;
+        const bool hot = (item == m_comboHover);
+        if (hot) renderer.fillRect(x + 2, iy, w - 4, kComboItemH, 0xFF2A3A55);
+        Font::drawText(fb, 640, 480, (*c.comboItems)[item], x + 5, iy + 2,
+                       hot ? 0xFFFFFF99 : 0xFFC8D4E8, true);
+    }
+    // As setinhas de rolagem, quando a lista é maior que a janela.
+    if (n > vis) {
+        if (m_comboScroll > 0)
+            Font::drawText(fb, 640, 480, "^", x + w - 10, y + 2, 0xFF8090A8, true);
+        if (m_comboScroll + vis < n)
+            Font::drawText(fb, 640, 480, "v", x + w - 10, y + h - 14, 0xFF8090A8, true);
+    }
+}
+
 void ShellMenu::drawControls(Renderer& renderer) {
     uint32_t* fb = renderer.getFramebuffer();
     for (int i = 0; i < (int)m_controls.size(); ++i) {
@@ -984,7 +1227,8 @@ void ShellMenu::drawControls(Renderer& renderer) {
             Font::drawText(fb, 640, 480, txt, c.x + 4, c.y + (c.h - 10) / 2,
                            c.disabled ? 0xFF60708A : (hl ? 0xFFFFFF99 : 0xFFC8D4E8), true);
             // a marca da lista suspensa, no canto direito
-            Font::drawText(fb, 640, 480, "v", c.x + c.w - 10, c.y + (c.h - 10) / 2,
+            Font::drawText(fb, 640, 480, (i == m_openCombo) ? "^" : "v",
+                           c.x + c.w - 10, c.y + (c.h - 10) / 2,
                            c.disabled ? 0xFF60708A : 0xFF8090A8, true);
             break;
         }
@@ -1003,6 +1247,7 @@ void ShellMenu::drawControls(Renderer& renderer) {
         if (focused && !c.disabled)
             renderer.drawRect(c.x - 3, c.y - 3, c.w + 6, c.h + 6, 0xFFFFD24A);
     }
+    drawOpenCombo(renderer);   // a lista solta fica por cima de todos
 }
 
 void ShellMenu::renderSplash(Renderer& renderer) {
@@ -1022,7 +1267,7 @@ void ShellMenu::renderMainMenu(Renderer& renderer) {
 }
 
 void ShellMenu::renderNewCampaignDialog(Renderer& renderer) {
-    renderer.fillRect(0, 0, 640, 480, 0x88000000);
+    renderer.dimRect(0, 0, 640, 480, 0x88);
     renderer.drawDialogFrame(kNcX, kNcY, kNcW, kNcH, "NEW CAMPAIGN OPTIONS");
     uint32_t* fb = renderer.getFramebuffer();
     Font::drawText(fb, 640, 480, "Colony:", kNcX + 16, kNcY + 36, 0xFFD8E4F8, true);
@@ -1031,7 +1276,7 @@ void ShellMenu::renderNewCampaignDialog(Renderer& renderer) {
 }
 
 void ShellMenu::renderAboutDialog(Renderer& renderer) {
-    renderer.fillRect(0, 0, 640, 480, 0x88000000);
+    renderer.dimRect(0, 0, 640, 480, 0x88);
     renderer.drawDialogFrame(kAbX, kAbY, kAbW, kAbH, "ABOUT OUTPOST 2...");
     uint32_t* fb = renderer.getFramebuffer();
     Font::drawTextCentered(fb, 640, 480, "Outpost 2: Divided Destiny", kAbX + kAbW/2, kAbY + 36, 0xFFFFFFFF, true);
@@ -1051,7 +1296,7 @@ void ShellMenu::renderAboutDialog(Renderer& renderer) {
 }
 
 void ShellMenu::renderPreferencesDialog(Renderer& renderer) {
-    renderer.fillRect(0, 0, 640, 480, 0x88000000);
+    renderer.dimRect(0, 0, 640, 480, 0x88);
     renderer.drawDialogFrame(kPrX, kPrY, kPrW, kPrH, "PREFERENCES");
     uint32_t* fb = renderer.getFramebuffer();
     // Linhas não-interativas (as checkboxes são desenhadas por drawControls()).
@@ -1061,7 +1306,7 @@ void ShellMenu::renderPreferencesDialog(Renderer& renderer) {
 }
 
 void ShellMenu::renderColonyGamesDialog(Renderer& renderer) {
-    renderer.fillRect(0, 0, 640, 480, 0x88000000);
+    renderer.dimRect(0, 0, 640, 480, 0x88);
     renderer.drawDialogFrame(kCgX, kCgY, kCgW, kCgH, "COLONY GAMES");
 
     renderer.fillRect(kCgListX, kCgListY, kCgListW, kCgListH, 0xFF0D121B);
@@ -1078,7 +1323,7 @@ void ShellMenu::renderColonyGamesDialog(Renderer& renderer) {
 }
 
 void ShellMenu::renderTutorialsDialog(Renderer& renderer) {
-    renderer.fillRect(0, 0, 640, 480, 0x88000000);
+    renderer.dimRect(0, 0, 640, 480, 0x88);
     renderer.drawDialogFrame(kTutDlgX, kTutDlgY, kTutDlgW, kTutDlgH, "TUTORIALS");
 
     int lx = kTutListX, ly = kTutListY, lw = kTutListW - kTutSbW, lh = kTutListH;
@@ -1170,7 +1415,7 @@ int ShellMenu::scoreVisibleLines() const { return (kScListH - 12) / kScRowH; }
 
 // Dialog 224 (0x73e): parabeniza e pede o nome; o Edit 1093 recebe o texto.
 void ShellMenu::renderEnterName(Renderer& renderer) {
-    renderer.fillRect(0, 0, 640, 480, 0x88000000);
+    renderer.dimRect(0, 0, 640, 480, 0x88);
     renderer.drawDialogFrame(kEnX, kEnY, kEnW, kEnH, "ENTER YOUR NAME");
     uint32_t* fb = renderer.getFramebuffer();
     const int tx = kEnX + 10, ty = kEnY + 22 + 11;
@@ -1187,7 +1432,7 @@ void ShellMenu::renderEnterName(Renderer& renderer) {
 
 // Dialog 223: a listbox com uma linha por entrada (scoreLine).
 void ShellMenu::renderScores(Renderer& renderer) {
-    renderer.fillRect(0, 0, 640, 480, 0x88000000);
+    renderer.dimRect(0, 0, 640, 480, 0x88);
     renderer.drawDialogFrame(kScX, kScY, kScW, kScH, "COLONY GAME SCORES");
     uint32_t* fb = renderer.getFramebuffer();
     renderer.fillRect(kScListX, kScListY, kScListW, kScListH, 0xFF0D121B);
@@ -1275,7 +1520,7 @@ void ShellMenu::renderMissionMenu(Renderer& renderer) {
 }
 
 void ShellMenu::renderRtfView(Renderer& renderer) {
-    renderer.fillRect(0, 0, 640, 480, 0x88000000);
+    renderer.dimRect(0, 0, 640, 480, 0x88);
     renderer.drawDialogFrame(kRvX, kRvY, kRvW, kRvH, m_rtfTitle);
     renderer.fillRect(kRvTextX, kRvTextY, kRvTextW, kRvTextH, 0xFF000000);   // EM_SETBKGNDCOLOR(0)
     renderer.drawBevelRect(kRvTextX - 1, kRvTextY - 1, kRvTextW + 2, kRvTextH + 2, 0xFF05080E, 0xFF35445B);
@@ -1300,7 +1545,7 @@ void ShellMenu::renderRtfView(Renderer& renderer) {
 }
 
 void ShellMenu::renderChapters(Renderer& renderer) {
-    renderer.fillRect(0, 0, 640, 480, 0x88000000);
+    renderer.dimRect(0, 0, 640, 480, 0x88);
     renderer.drawDialogFrame(kChX, kChY, kChW, kChH, "CHAPTERS");
     renderer.fillRect(kChListX, kChListY, kChListW, kChListH, 0xFF0D121B);
     renderer.drawBevelRect(kChListX, kChListY, kChListW, kChListH, 0xFF05080E, 0xFF35445B);
