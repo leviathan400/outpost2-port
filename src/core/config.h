@@ -88,6 +88,11 @@ struct GameSettings {
     // noturno do original se aplica, em porcento (100 = o jogo tal como e,
     // 0 = sem noite). Ver op2::setNightDarkness.
     int nightDarkness = 75;
+    // "AudioVolume": idem, 0..100 por cento. Volume MESTRE, que multiplica a
+    // mistura final (sons e musica juntos) sem mexer nas atenuacoes do
+    // original -- o jogo so tem MusicVol/SoundVol, cada um em 6 degraus e cada
+    // um no seu canal, e nada que regule o conjunto. Ver soundSetMasterVolume.
+    int audioVolume = 50;
 
     // [WindowInfo]
     int miniMapButtons = 0;

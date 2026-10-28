@@ -48,6 +48,7 @@
 
 #include <SDL.h>
 
+#include "../audio/sound.h"
 #include "../gfx/font.h"
 #include "../res/pe_resource.h"
 
@@ -281,6 +282,85 @@ bool ShellMenu::comboTest(std::string& report) {
         step("a roda rolou a lista de cenarios");
     }
     handleKeyDown(SDLK_ESCAPE);
+    return true;
+}
+
+// --uitest: exercita a barra do volume do PREFERENCES pelo mesmo caminho do
+// mouse e do teclado, e confere que o mixer recebeu cada mudanca -- o valor da
+// tela nao serve de prova se o som nao acompanha.
+bool ShellMenu::sliderTest(std::string& report) {
+    auto step = [&](const std::string& what) { report += what; report += "; "; };
+
+    showPreferences();
+    int idx = -1;
+    for (int i = 0; i < (int)m_controls.size(); ++i)
+        if (m_controls[i].id == 1201) { idx = i; break; }
+    if (idx < 0) { report += "nao achei a barra do volume"; return false; }
+    const Control c = m_controls[idx];
+
+    // Clique no meio da barra: o cursor vai para la e o som acompanha.
+    const int meio = c.x + c.w / 2;
+    handleMouseDown(meio, c.y + c.h / 2, SDL_BUTTON_LEFT);
+    if (m_prefAudioVolume < 48 || m_prefAudioVolume > 52) {
+        report += "o clique no meio deu " + std::to_string(m_prefAudioVolume);
+        return false;
+    }
+    if (soundMasterVolume() != m_prefAudioVolume) {
+        report += "o mixer ficou em " + std::to_string(soundMasterVolume());
+        return false;
+    }
+    step("o clique no meio deu " + std::to_string(m_prefAudioVolume) + "%");
+
+    // Arrasto: o cursor segue o mouse, inclusive para fora do controle, e as
+    // pontas dao exatamente 0 e 100.
+    handleMouseMove(c.x + c.w / 4, c.y + c.h / 2);
+    const int quarto = m_prefAudioVolume;
+    if (quarto < 20 || quarto > 30) {
+        report += "o arrasto ao quarto deu " + std::to_string(quarto);
+        return false;
+    }
+    handleMouseMove(c.x + c.w + 500, c.y + 200);
+    if (m_prefAudioVolume != 100) { report += "a ponta direita nao deu 100"; return false; }
+    handleMouseMove(c.x - 500, c.y + c.h / 2);
+    if (m_prefAudioVolume != 0) { report += "a ponta esquerda nao deu 0"; return false; }
+    if (soundMasterVolume() != 0) { report += "o mixer nao zerou"; return false; }
+    step("o arrasto passou por " + std::to_string(quarto) + "%, 100% e 0%");
+
+    handleMouseUp(c.x - 500, c.y, SDL_BUTTON_LEFT);
+    if (m_dragSlider >= 0) { report += "o arrasto nao terminou"; return false; }
+
+    // Teclado: a seta anda um degrau, Page um salto, End vai ao maximo.
+    m_focusIndex = idx;
+    handleKeyDown(SDLK_RIGHT);
+    if (m_prefAudioVolume != 5) {
+        report += "a seta deu " + std::to_string(m_prefAudioVolume); return false;
+    }
+    handleKeyDown(SDLK_PAGEDOWN);
+    if (m_prefAudioVolume != 25) {
+        report += "o Page deu " + std::to_string(m_prefAudioVolume); return false;
+    }
+    handleKeyDown(SDLK_END);
+    if (m_prefAudioVolume != 100) { report += "o End nao foi ao maximo"; return false; }
+    handleKeyDown(SDLK_HOME);
+    if (m_prefAudioVolume != 0) { report += "o Home nao foi ao minimo"; return false; }
+    step("as teclas andaram 5, 20, End e Home");
+
+    // A roda do mouse sobre a barra tambem anda um degrau.
+    handleMouseMove(meio, c.y + c.h / 2);
+    handleMouseWheel(+3);
+    if (m_prefAudioVolume != 15) {
+        report += "a roda deu " + std::to_string(m_prefAudioVolume); return false;
+    }
+    step("a roda andou 15%");
+
+    // Sair sem ACCEPT devolve o som ao que esta gravado, e o ACCEPT grava.
+    const int gravado = m_prefAudioVolumeIni;
+    showMainMenu();
+    if (soundMasterVolume() != gravado) {
+        report += "sair sem ACCEPT deixou o som em " + std::to_string(soundMasterVolume());
+        return false;
+    }
+    step("sair sem ACCEPT devolveu o som a " + std::to_string(gravado) + "%");
     return true;
 }
 

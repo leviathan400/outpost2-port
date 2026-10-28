@@ -511,10 +511,13 @@ static int runUiTest() {
     std::string relato;
     const bool ok = menu.comboTest(relato);
     std::printf("[UiTest] combo: %s%c", relato.c_str(), 10);
+    std::string relatoBarra;
+    const bool okBarra = menu.sliderTest(relatoBarra);
+    std::printf("[UiTest] barra: %s%c", relatoBarra.c_str(), 10);
     std::fflush(stdout);
     renderer.shutdown();
     SDL_Quit();
-    return ok ? 0 : 1;
+    return (ok && okBarra) ? 0 : 1;
 }
 
 // --mpui <host|join> [nome]: percorre as TELAS de multijogador (259 -> 260 ->

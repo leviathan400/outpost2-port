@@ -181,6 +181,7 @@ void GameSettings::loadFrom(const Config& cfg) {
     demo              = cfg.getInt("Game", "Demo", demo);
     aiLevel           = cfg.getInt("Game", "AILevel", aiLevel);
     nightDarkness     = cfg.getInt("Game", "NightDarkness", nightDarkness);
+    audioVolume       = cfg.getInt("Game", "AudioVolume", audioVolume);
     name              = cfg.getString("Game", "Name", name);
 
     miniMapButtons    = cfg.getInt("WindowInfo", "MiniMapButtons", miniMapButtons);
@@ -205,6 +206,7 @@ void GameSettings::saveTo(Config& cfg) const {
     cfg.setInt("Game", "Demo", demo);
     cfg.setInt("Game", "AILevel", aiLevel);
     cfg.setInt("Game", "NightDarkness", nightDarkness);
+    cfg.setInt("Game", "AudioVolume", audioVolume);
     cfg.setString("Game", "Name", name);
 
     cfg.setInt("WindowInfo", "MiniMapButtons", miniMapButtons);

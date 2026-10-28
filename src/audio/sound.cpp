@@ -2,6 +2,7 @@
 
 #include <SDL.h>
 
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -72,6 +73,9 @@ Sample s_samples[252];
 Channel s_ch[63];
 bool s_enabled = false;
 int s_soundVol = 0;                                      // [+0x914] "SoundVol"
+// Volume mestre em 0..100 ("AudioVolume", so deste porte). O callback do mixer
+// o le fora da trava, por isso atomico.
+std::atomic<int> s_master{50};
 int s_lx = 0, s_ly = 0;                                  // centro da vista (pixels)
 std::vector<Voice> s_queue;                              // +0x924 (8)
 uint32_t s_nextVoice = 0;                                // +0x9A4
@@ -91,8 +95,10 @@ void mix(void*, Uint8* stream, int len) {
         if (c.pos >= n) c.s = nullptr;
     }
     musicMix(acc.data(), frames, s_spec.freq);              // dword_564750 (buffer próprio no original)
+    // O volume mestre vem por ultimo, sobre a mistura inteira (ver sound.h).
+    const float master = static_cast<float>(s_master.load(std::memory_order_relaxed)) / 100.f;
     for (int i = 0; i < frames * 2; ++i) {
-        float v = acc[i];
+        float v = acc[i] * master;
         if (v > 32767.f) v = 32767.f;
         if (v < -32768.f) v = -32768.f;
         out[i] = static_cast<int16_t>(v);
@@ -174,6 +180,7 @@ bool soundInit() {                                        // sub_47E020
     Config cfg("OUTPOST2.INI");
     if (cfg.load()) {
         s_soundVol = cfg.getInt("Game", "SoundVol", 0);
+        soundSetMasterVolume(cfg.getInt("Game", "AudioVolume", 50));
         if (!cfg.getInt("Game", "Sound", 1)) return false;
     }
     SDL_AudioSpec want{};
@@ -191,6 +198,14 @@ bool soundInit() {                                        // sub_47E020
     SDL_PauseAudioDevice(s_dev, 0);
     return s_enabled;
 }
+
+void soundSetMasterVolume(int percent) {
+    if (percent < 0) percent = 0;
+    if (percent > 100) percent = 100;
+    s_master.store(percent, std::memory_order_relaxed);
+}
+
+int soundMasterVolume() { return s_master.load(std::memory_order_relaxed); }
 
 void soundLockAudio(bool lock) {
     if (!s_dev) return;

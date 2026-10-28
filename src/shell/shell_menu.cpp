@@ -3,6 +3,7 @@
 #include "../res/res_manager.h"
 #include "../core/config.h"
 #include "../game/tethys_game.h"
+#include "../audio/sound.h"
 #include <iostream>
 #include <filesystem>
 #include <algorithm>
@@ -17,6 +18,11 @@ namespace op2 {
 namespace {
 constexpr int kComboItemH = 15;    // altura de um item da lista
 constexpr int kComboMaxVis = 8;    // itens visíveis antes de rolar
+// A barra de rolagem: largura do cursor e quanto andam as teclas (a seta anda
+// um degrau, Page um salto, Home/End vao as pontas).
+constexpr int kSliderKnobW = 11;
+constexpr int kSliderStep = 5;
+constexpr int kSliderPage = 20;
 }
 
 // ---- Geometria das telas (fiel aos diálogos do OP2SHRES.DLL onde aplicável) ----
@@ -85,7 +91,7 @@ namespace {
 // NEW CAMPAIGN / PREFERENCES / ABOUT
 namespace {
     constexpr int kNcX = 180, kNcY = 130, kNcW = 280, kNcH = 220;
-    constexpr int kPrX = 140, kPrY = 94, kPrW = 360, kPrH = 322;
+    constexpr int kPrX = 140, kPrY = 59, kPrW = 360, kPrH = 362;
     constexpr int kAbX = 140, kAbY = 100, kAbW = 360, kAbH = 300;
 }
 
@@ -181,7 +187,55 @@ Control& ShellMenu::addButton(int id, const std::string& text, int x, int y,
     return m_controls.back();
 }
 
+Control& ShellMenu::addSlider(int id, int* tgt, int lo, int hi,
+                              int x, int y, int w, int h) {
+    Control c;
+    c.kind = CtrlKind::Slider;
+    c.id = id;
+    c.x = x; c.y = y; c.w = w; c.h = h;
+    c.sliderTarget = tgt; c.sliderMin = lo; c.sliderMax = hi;
+    m_controls.push_back(c);
+    return m_controls.back();
+}
+
+// A faixa util desconta a largura do cursor, para que as pontas da barra sejam
+// exatamente o minimo e o maximo.
+int ShellMenu::sliderKnobX(const Control& c) const {
+    const int span = c.sliderMax - c.sliderMin;
+    const int track = c.w - kSliderKnobW;
+    if (span <= 0 || track <= 0) return c.x;
+    int v = c.sliderTarget ? *c.sliderTarget : c.sliderMin;
+    if (v < c.sliderMin) v = c.sliderMin;
+    if (v > c.sliderMax) v = c.sliderMax;
+    return c.x + (v - c.sliderMin) * track / span;
+}
+
+int ShellMenu::sliderValueAt(const Control& c, int px) const {
+    const int span = c.sliderMax - c.sliderMin;
+    const int track = c.w - kSliderKnobW;
+    if (span <= 0 || track <= 0) return c.sliderMin;
+    int t = px - c.x - kSliderKnobW / 2;        // o cursor segue o seu centro
+    if (t < 0) t = 0;
+    if (t > track) t = track;
+    return c.sliderMin + (t * span + track / 2) / track;
+}
+
+void ShellMenu::sliderSet(Control& c, int value) {
+    if (!c.sliderTarget) return;
+    if (value < c.sliderMin) value = c.sliderMin;
+    if (value > c.sliderMax) value = c.sliderMax;
+    if (*c.sliderTarget == value) return;
+    *c.sliderTarget = value;
+    // O volume mestre vale na hora, senao nao haveria como ouvir o que se
+    // escolheu (so o ACCEPT grava — ver setState e savePrefs).
+    if (c.id == 1201) soundSetMasterVolume(value);
+}
+
 void ShellMenu::setState(MenuState s) {
+    // Sair do PREFERENCES sem ACCEPT devolve o som ao volume gravado.
+    if (m_state == MenuState::Preferences && s != MenuState::Preferences)
+        soundSetMasterVolume(m_prefAudioVolumeIni);
+    m_dragSlider = -1;
     m_state = s;
     m_openComboId = 0;         // trocar de tela fecha qualquer lista solta
     m_comboHover = -1;
@@ -308,7 +362,11 @@ void ShellMenu::rebuildControls() {
         // Nivel da IA: acrescimo deste porte. O rotulo e desenhado no render.
         addCombo(1200, &kAiLevelNames, &m_prefAiLevel,
                  kPrX + 130, kPrY + 214, 110, 22);
-        addButton(1, "ACCEPT", kPrX + (kPrW - 100) / 2, kPrY + 280, 100, 26, true);
+        // Volume mestre: idem. O original tem LESS/MORE por canal (botoes 1096
+        // e 1100 do Dialog 142); aqui e uma barra de 0 a 100 por cento.
+        addSlider(1201, &m_prefAudioVolume, 0, 100,
+                  kPrX + 24, kPrY + 290, kPrW - 48, 16);
+        addButton(1, "ACCEPT", kPrX + (kPrW - 100) / 2, kPrY + 320, 100, 26, true);
         break;
     }
     case MenuState::About:
@@ -490,6 +548,7 @@ void ShellMenu::activateControl(int index) {
         comboOpen(index);
         return;
     case CtrlKind::Edit:   break;   // recebe texto por handleTextInput
+    case CtrlKind::Slider: break;  // o valor muda no arrasto, nao no clique
     }
     // No lobby, mexer num controle avisa o outro lado.
     if (m_state == MenuState::MpGameSettings && c.kind == CtrlKind::Check)
@@ -743,6 +802,13 @@ void ShellMenu::dispatchButton(int id) {
 // --------------------------------- input ---------------------------------
 
 void ShellMenu::handleMouseMove(int x, int y) {
+    // Arrastando uma barra, o cursor é dela até soltar o botão — inclusive
+    // fora do controle, como o trackbar do Windows.
+    if (m_dragSlider >= 0 && m_dragSlider < (int)m_controls.size()) {
+        Control& c = m_controls[m_dragSlider];
+        sliderSet(c, sliderValueAt(c, x));
+        return;
+    }
     // Com uma lista solta, só ela escuta o cursor (o combo do Windows captura
     // o mouse enquanto está aberto).
     if (m_openCombo >= 0) {
@@ -785,7 +851,13 @@ void ShellMenu::handleMouseDown(int x, int y, uint8_t button) {
     if (idx < 0) return;
     m_focusIndex = idx;
     Control& c = m_controls[idx];
-    if (c.kind == CtrlKind::List) {
+    if (c.kind == CtrlKind::Slider) {
+        // Um clique na barra leva o cursor para onde se clicou e começa o
+        // arrasto; o som acompanha na hora.
+        sliderSet(c, sliderValueAt(c, x));
+        m_dragSlider = idx;
+        c.pressed = true;
+    } else if (c.kind == CtrlKind::List) {
         if (c.listSel) {   // seleciona o item sob o cursor
             int rowH = (m_state == MenuState::Tutorials) ? kTutRowH
                      : m_state == MenuState::Chapters ? kChRowH
@@ -804,6 +876,16 @@ void ShellMenu::handleMouseDown(int x, int y, uint8_t button) {
 
 void ShellMenu::handleMouseUp(int x, int y, uint8_t button) {
     if (button != SDL_BUTTON_LEFT) return;
+    if (m_dragSlider >= 0) {
+        // Soltar a barra toca o clique da interface (som 0x57), que é o que se
+        // ouve no volume recém-escolhido.
+        if (m_dragSlider < (int)m_controls.size()) {
+            m_controls[m_dragSlider].pressed = false;
+            if (m_controls[m_dragSlider].id == 1201) soundPlay(0x57);
+        }
+        m_dragSlider = -1;
+        return;
+    }
     int toActivate = -1;
     for (int i = 0; i < (int)m_controls.size(); ++i) {
         Control& c = m_controls[i];
@@ -826,6 +908,15 @@ void ShellMenu::handleMouseWheel(int delta) {
             if (m_comboScroll > n - vis) m_comboScroll = n - vis;
             if (m_comboScroll < 0) m_comboScroll = 0;
         }
+        return;
+    }
+    // A roda sobre a barra (ou com ela focada) anda um degrau, como no Windows.
+    for (int i = 0; i < (int)m_controls.size(); ++i) {
+        Control& c = m_controls[i];
+        if (c.kind != CtrlKind::Slider || c.disabled) continue;
+        if (!c.hovered && i != m_focusIndex) continue;
+        if (!c.sliderTarget) continue;
+        sliderSet(c, *c.sliderTarget + delta * kSliderStep);
         return;
     }
     if (m_state == MenuState::RtfView) {
@@ -989,11 +1080,18 @@ void ShellMenu::handleKeyDown(int keyCode) {
         break;
 
     case SDLK_UP:
-    case SDLK_DOWN: {
+    case SDLK_DOWN:
+    // Esquerda/direita andam o mesmo que cima/baixo: é o que o Windows faz
+    // numa barra, num combo fechado e num grupo de radios.
+    case SDLK_LEFT:
+    case SDLK_RIGHT: {
         if (m_focusIndex < 0) break;
         Control& c = m_controls[m_focusIndex];
-        int dir = (keyCode == SDLK_DOWN) ? +1 : -1;
-        if (c.kind == CtrlKind::List && c.listSel && c.listCount > 0) {
+        int dir = (keyCode == SDLK_DOWN || keyCode == SDLK_RIGHT) ? +1 : -1;
+        if (c.kind == CtrlKind::Slider && c.sliderTarget && !c.disabled) {
+            sliderSet(c, *c.sliderTarget + dir * kSliderStep);
+            if (c.id == 1201) soundPlay(0x57);
+        } else if (c.kind == CtrlKind::List && c.listSel && c.listCount > 0) {
             int s = std::max(0, std::min(c.listCount - 1, *c.listSel + dir));
             *c.listSel = s;
             if (m_state == MenuState::Tutorials) {   // manter visível
@@ -1029,6 +1127,22 @@ void ShellMenu::handleKeyDown(int keyCode) {
 
     case SDLK_PAGEUP:
     case SDLK_PAGEDOWN:
+    case SDLK_HOME:
+    case SDLK_END:
+        if (m_focusIndex >= 0 && m_focusIndex < (int)m_controls.size() &&
+            m_controls[m_focusIndex].kind == CtrlKind::Slider) {
+            Control& c = m_controls[m_focusIndex];
+            if (c.sliderTarget && !c.disabled) {
+                int v = *c.sliderTarget;
+                if (keyCode == SDLK_PAGEUP)        v -= kSliderPage;
+                else if (keyCode == SDLK_PAGEDOWN) v += kSliderPage;
+                else if (keyCode == SDLK_HOME)     v = c.sliderMin;
+                else                               v = c.sliderMax;
+                sliderSet(c, v);
+                if (c.id == 1201) soundPlay(0x57);
+            }
+            break;
+        }
         if (m_state == MenuState::RtfView)
             handleMouseWheel(keyCode == SDLK_PAGEUP ? rtfVisibleLines() / 3 : -(rtfVisibleLines() / 3));
         break;
@@ -1237,6 +1351,27 @@ void ShellMenu::drawControls(Renderer& renderer) {
                            c.disabled ? 0xFF60708A : 0xFF8090A8, true);
             break;
         }
+        case CtrlKind::Slider: {
+            const int v = c.sliderTarget ? *c.sliderTarget : c.sliderMin;
+            const int span = c.sliderMax - c.sliderMin;
+            const int kx = sliderKnobX(c);
+            const int ty = c.y + c.h / 2 - 2;     // a calha, no meio da altura
+            renderer.fillRect(c.x, ty, c.w, 4, 0xFF10161F);
+            renderer.drawRect(c.x, ty, c.w, 4, c.disabled ? 0xFF2A3545 : 0xFF405068);
+            // a parte já percorrida, até o cursor
+            const int fill = kx - c.x + kSliderKnobW / 2;
+            if (fill > 0 && span > 0)
+                renderer.fillRect(c.x + 1, ty + 1, fill, 2,
+                                  c.disabled ? 0xFF48566C : 0xFF6C8CC0);
+            // os riscos das pontas e do meio, para dar escala à barra
+            for (int k = 0; k <= 4; ++k) {
+                const int mx = c.x + kSliderKnobW / 2 + k * (c.w - kSliderKnobW) / 4;
+                renderer.fillRect(mx, c.y + c.h - 3, 1, 3, 0xFF48566C);
+            }
+            renderer.drawButton(kx, c.y, kSliderKnobW, c.h, "", hl, c.pressed, c.disabled);
+            (void)v;
+            break;
+        }
         case CtrlKind::Edit: {
             const bool active = focused && !c.disabled;
             renderer.drawRect(c.x, c.y, c.w, c.h, active ? 0xFFFFD24A : 0xFF405068);
@@ -1312,6 +1447,8 @@ void ShellMenu::loadPrefs() {
     m_prefUnitShadows  = gs.mobileShadows != 0;
     m_prefStructShadows = gs.stationaryShadows != 0;
     m_prefAiLevel = (gs.aiLevel >= 0 && gs.aiLevel <= 3) ? gs.aiLevel : 0;
+    m_prefAudioVolume = gs.audioVolume < 0 ? 0 : (gs.audioVolume > 100 ? 100 : gs.audioVolume);
+    m_prefAudioVolumeIni = m_prefAudioVolume;
 }
 
 void ShellMenu::savePrefs() {
@@ -1324,6 +1461,8 @@ void ShellMenu::savePrefs() {
     gs.mobileShadows     = m_prefUnitShadows ? 1 : 0;
     gs.stationaryShadows = m_prefStructShadows ? 1 : 0;
     gs.aiLevel           = m_prefAiLevel;
+    gs.audioVolume       = m_prefAudioVolume;
+    m_prefAudioVolumeIni = m_prefAudioVolume;    // o ACCEPT é que torna isso o som gravado
     gs.saveTo(cfg);
     cfg.save();
 }
@@ -1343,6 +1482,13 @@ void ShellMenu::renderPreferencesDialog(Renderer& renderer) {
                    m_prefAiLevel == 0 ? "(o nivel que a partida escolher)"
                                       : "(vale em campanha e colonia)",
                    kPrX + 24, kPrY + 246, 0xFF8090A8, true);
+    // Volume do áudio (idem): o rótulo à esquerda e o valor na mesma linha,
+    // como o original põe o static 1103 ao lado do "Volume:".
+    Font::drawText(fb, 640, 480, "Audio Volume:", kPrX + 24, kPrY + 270, 0xFFD8E4F8, true);
+    char pct[16];
+    std::snprintf(pct, sizeof(pct), "%d%%", m_prefAudioVolume);
+    Font::drawText(fb, 640, 480, pct, kPrX + kPrW - 24 - Font::getTextWidth(pct),
+                   kPrY + 270, 0xFFFFD24A, true);
 }
 
 void ShellMenu::renderColonyGamesDialog(Renderer& renderer) {

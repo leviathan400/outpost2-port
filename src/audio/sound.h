@@ -22,6 +22,15 @@ void soundPlayAt(int pixelX, int pixelY, int id);   // sub_47EE00
 void soundVoice(int id, int pixelX, int pixelY);    // sub_47F060
 void soundUpdate();                        // fila de vozes (sub_47F250)
 
+// Volume mestre, de 0 a 100 por cento ("[Game] AudioVolume"; 50 por padrao).
+// Nao existe no original: la cada canal tem a sua atenuacao fixa (MusicVol
+// 0..5 pela tabela dword_4D4AD0, SoundVol a -250/100 dB por degrau) e nada
+// regula o conjunto. Multiplica a mistura final, depois dos sons e da musica,
+// portanto vale para os dois e nao mexe em nenhuma conta do original. Linear
+// na amplitude: 50% = metade, ou cerca de -6 dB.
+void soundSetMasterVolume(int percent);
+int  soundMasterVolume();
+
 // Trava/destrava o callback do mixer (a música altera o estado dele).
 void soundLockAudio(bool lock);
 

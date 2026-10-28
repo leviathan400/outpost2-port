@@ -40,7 +40,7 @@ enum class MenuState {
     MpGameSettings // Dialog 196 "GAME SETTINGS" (o lobby da partida)
 };
 
-enum class CtrlKind { Button, Radio, Check, List, Combo, Edit };
+enum class CtrlKind { Button, Radio, Check, List, Combo, Edit, Slider };
 
 // Controle genérico de UI (botão, radio, checkbox ou listbox). Cada tela monta
 // sua lista de controles; hover (mouse) e foco (teclado, Tab/Shift-Tab) são
@@ -67,6 +67,10 @@ struct Control {
     int*  comboSel = nullptr;
     std::string* editTarget = nullptr;   // Edit: o texto que recebe digitação
     size_t editMax = 0;                  // limite de caracteres (0 = sem limite)
+    // Slider: a barra de rolagem horizontal. O cursor arrasta com o mouse e as
+    // setas andam de kSliderStep; o valor vive em *sliderTarget.
+    int*  sliderTarget = nullptr;
+    int   sliderMin = 0, sliderMax = 100;
 };
 
 // Geometria de um diálogo do OUT2RES.DLL/OP2SHRES.DLL na tela de 640x480. O
@@ -158,6 +162,10 @@ public:
     // Teste por linha de comando (--uitest): exercita a lista suspensa pelo
     // mesmo caminho do mouse e do teclado, e devolve o relato de cada passo.
     bool comboTest(std::string& report);
+    // Teste por linha de comando (--uitest): exercita a barra do volume pelo
+    // mouse (clique, arrasto, pontas) e pelo teclado, e confere que o mixer
+    // recebeu cada mudanca.
+    bool sliderTest(std::string& report);
     // Teste por linha de comando (--mpui): percorre o fluxo das telas como se
     // os botoes tivessem sido clicados, e devolve o relato de cada passo.
     bool mpFlowTest(bool host, const std::string& name, std::string& report);
@@ -206,6 +214,9 @@ private:
     int m_openComboId = 0;          // id do controle, para reencontrá-lo
     int m_comboHover = -1;          // item sob o cursor (ou destacado pelo teclado)
     int m_comboScroll = 0;          // 1º item visível, quando a lista não cabe
+    // Barra sendo arrastada (índice em m_controls); -1 = nenhuma. Enquanto
+    // arrasta, o cursor fala só com ela, mesmo que saia do controle.
+    int m_dragSlider = -1;
 
     // Sub-dialog states
     int m_campaignColony = 0;     // 0 = Eden, 1 = Plymouth
@@ -220,6 +231,11 @@ private:
     // "AILevel": 0 = AUTO (o nivel que a partida escolher), 1..3 Easy/Normal/
     // Hard. Nao existe no jogo original — ver loadPrefs/savePrefs.
     int  m_prefAiLevel = 0;
+    // "AudioVolume" (0..100): volume mestre, tambem acrescimo deste porte. A
+    // barra mexe no som na hora, para poder ser ouvida; o que esta gravado
+    // fica em m_prefAudioVolumeIni, e sair sem ACCEPT devolve o som a ele.
+    int  m_prefAudioVolume = 50;
+    int  m_prefAudioVolumeIni = 50;
     void loadPrefs();   // le o [Game] do OUTPOST2.INI para a tela
     void savePrefs();   // grava de volta (botao ACCEPT)
 
@@ -257,6 +273,11 @@ private:
     Control& addCombo(int id, const std::vector<std::string>* items, int* sel,
                       int x, int y, int w, int h);
     Control& addEdit(int id, std::string* tgt, size_t maxLen, int x, int y, int w, int h);
+    Control& addSlider(int id, int* tgt, int lo, int hi, int x, int y, int w, int h);
+    // --- barra de rolagem ---
+    int  sliderKnobX(const Control& c) const;        // canto esquerdo do cursor
+    int  sliderValueAt(const Control& c, int px) const;   // valor sob o cursor
+    void sliderSet(Control& c, int value);           // grava, limita e aplica
 
     void renderSplash(Renderer& renderer);
     void renderMainMenu(Renderer& renderer);

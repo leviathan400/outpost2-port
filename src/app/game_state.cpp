@@ -78,6 +78,7 @@ void GameState::loadSettings() {
     m_aiLevel = gs.aiLevel;                            // "AILevel" (so deste porte)
     if (m_aiLevel < 0 || m_aiLevel > 3) m_aiLevel = 0;
     setNightDarkness(gs.nightDarkness);                // "NightDarkness" (idem)
+    soundSetMasterVolume(gs.audioVolume);              // "AudioVolume" (idem)
 }
 
 bool GameState::loadMap(const std::string& mapName) {
