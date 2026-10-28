@@ -140,6 +140,7 @@ Revisado item a item em 2026-10-28, conferindo no código.
    fixa em 2 em `app/shell_state.cpp` e em `main.cpp`. Para 3–6 jogadores são
    precisas N conexões (ou retransmissão pelo host) e roteamento dos turnos por
    jogador. Mapas e GAME SETTINGS já suportam 6.
+
 ### Multijogador, peças soltas
 
 2. **TRANSFER** — doar as unidades e abandonar a partida. É o **único** comando
