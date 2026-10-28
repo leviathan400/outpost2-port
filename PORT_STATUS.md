@@ -1,163 +1,188 @@
-# Outpost 2: Divided Destiny — Port Moderno (C++/SDL2)
+# Outpost 2: Divided Destiny — Port Moderno (C++17/SDL2)
 
-> Documentação do estado atual do port. Reconstruída por engenharia reversa a
-> partir dos arquivos existentes na pasta (a IA anterior não deixou registro
-> escrito). Última análise: **2026-09-29**.
-
----
-
-## 1. Visão geral
-
-Este é um **port em andamento** do RTS *Outpost 2: Divided Destiny* (Sierra
-On-Line / Dynamix, 1997) para plataformas modernas usando **C++17 + SDL2**.
-
-O jogo original é um executável Win32 de 32 bits (`OUTPOST2.EXE`, 1.1 MB,
-compilado com Visual C++, roda a 640×480 em 16-bit color). O port ainda **não
-reimplementa o jogo em si** — o que existe hoje é a **fundação técnica** e uma
-**reconstrução funcional do menu principal (shell)**, lendo os recursos de arte
-e diálogos diretamente das DLLs originais de 1997.
-
-A estratégia adotada pela IA anterior é clara pelos artefatos:
-1. **Disassembly completo** do `OUTPOST2.EXE` via IDA Pro (Hex-Rays) → base de
-   referência 1:1 para reimplementação.
-2. **Leitura direta dos recursos PE** (`.rsrc`) das DLLs originais em vez de
-   re-exportar assets — o port lê bitmaps e templates de diálogo de
-   `OP2SHRES.DLL` em tempo de execução.
-3. **Renderização própria** num framebuffer 640×480 nativo, escalado via SDL2
-   para telas modernas.
+> Estado do port. Última revisão: **2026-10-28** (163 commits), feita lendo o
+> código e rodando os testes, não a documentação anterior — que estava de
+> 2026-09-29 e dizia que o port "ainda não reimplementa o jogo em si".
 
 ---
 
-## 2. Estrutura de pastas
+## 1. O que isto é hoje
+
+Um porte **jogável** de *Outpost 2: Divided Destiny* (Sierra/Dynamix, 1997)
+para C++17 + SDL2. O jogo roda: campanha das duas facções, jogos de colônia,
+os 14 tutoriais e partidas de multijogador em rede.
+
+O mecanismo **sai do disassembly** (`Outpost2_src/OUTPOST2.asm`, IDA) e dos
+recursos das DLLs originais — nada é inventado. Quando o original tem um
+defeito identificado, o porte **corrige em vez de reproduzir**.
+
+Os arquivos de 1997 não são modificados nem redistribuídos: o porte os **lê**
+(`OP2SHRES.DLL`, `OUT2RES.DLL`, os `.VOL`, `OP2_ART.BMP`, as DLLs de missão).
+As missões originais rodam **de verdade**, carregadas por um carregador PE
+próprio com pontes de ABI para a API que elas importam do `OUTPOST2.EXE`.
+
+### Números de hoje
+
+| | |
+|---|---|
+| Código do porte | **41.500 linhas** de C++17 em `src/` |
+| Simulação (`src/game`, 38 .cpp) | 20.500 linhas |
+| UI in-game (`src/app`, 20 .cpp) | 7.300 linhas |
+| Shell/menus (`src/shell`) | 3.300 linhas |
+| Rede (`src/net`) | 1.400 linhas |
+| DLLs de missão que carregam e rodam | **94 de 94** |
+| Símbolos da API do EXE implementados | **222 de 222** (os que as 94 DLLs importam) |
+| Modos de teste por linha de comando | 81 |
+
+As duas linhas de missões são a medida honesta de cobertura: toda DLL de
+missão do disco carrega, cria as unidades e roda, e nenhuma importa um símbolo
+que o porte não tenha. Para refazer a conta: varredura com `--missiontest` em
+cada DLL, e a cobertura da API comparando as tabelas de importação das DLLs
+com o registro de `src/mission/op2_api.cpp`.
+
+---
+
+## 2. Estrutura
 
 ```
-Outpost 2 - Divided Destiny/
-├── src/                     # ← CÓDIGO DO PORT MODERNO (C++17)
-│   ├── main.cpp             #   Entry point, loop SDL2, modo --screenshot
-│   ├── gfx/
-│   │   ├── renderer.cpp/.h  #   Framebuffer 640x480 + SDL2, primitivas UI
-│   │   ├── bitmap.cpp/.h    #   Decoder DIB/BMP + RLE8 (recursos RT_BITMAP)
-│   │   └── font.cpp/.h      #   Fonte bitmap embutida (desenho de texto)
-│   ├── res/
-│   │   └── pe_resource.cpp/.h  # Leitor de recursos de PE (DLL/EXE Win32)
-│   ├── core/
-│   │   └── config.cpp/.h    #   Leitor/gravador do OUTPOST2.INI (= CConfig)
-│   └── shell/
-│       └── shell_menu.cpp/.h   # Máquina de estados do menu principal
-│
-├── Outpost2_src/            # ← DISASSEMBLY DE REFERÊNCIA (IDA Pro)
-│   ├── OUTPOST2.asm         #   13.7 MB — assembly x86 completo do EXE
-│   ├── OUTPOST2.lst         #   13.7 MB — listing com bytes + assembly
-│   └── OUTPOST2.amp.map     #   1 MB — mapa de símbolos (30.123 entradas)
-│
-├── tools/                   # ← SCRIPTS DE ANÁLISE (Python)
-│   ├── extract_menu.py      #   Extrai templates de diálogo das DLLs → JSON
-│   ├── dump_dialogs.py      #   Dump de diálogos
-│   ├── analyze_shell.py     #   Rastreia refs a IDs de recurso no assembly
-│   ├── extract_bmps.py      #   Extrai bitmaps das DLLs → PNG/BMP
-│   ├── extract_btns.py      #   Extrai bitmaps de botões
-│   ├── inspect_vol.py       #   Inspeciona arquivos .VOL (containers de assets)
-│   ├── parse_dlg.py         #   Parser de DLGTEMPLATE
-│   └── ... (bmp_*.png/bmp gerados como amostras)
-│
-├── third_party/
-│   └── SDL2-2.30.9/         #   SDL2 pré-compilado (include + lib x86/x64)
-│
-├── build/                   # ← BUILD CMake/MSVC (Visual Studio, Win32)
-│   └── Release/outpost2_modern.exe  (64 KB — build funcional)
-│
-├── CMakeLists.txt           # ← Build system do port
-├── menu_dialog.json         # Template de diálogo extraído (dump auxiliar)
-├── menu_screen.png/.bmp     # Screenshots do menu renderizado pelo port
-├── outpost2_modern.exe      # Cópia do executável do port na raiz
-│
-└── [ARQUIVOS ORIGINAIS DE 1997 — o jogo instalado]
-    ├── OUTPOST2.EXE         #   Executável original (alvo do disassembly)
-    ├── OUTPOST2.EXE.i64     #   Database do IDA Pro (17 MB)
-    ├── OP2SHRES.DLL         #   Recursos do shell/menu (2.4 MB) ← LIDO PELO PORT
-    ├── OP2SHELL.DLL         #   Código do shell/menu
-    ├── OUT2RES.DLL          #   Recursos do jogo (451 KB)
-    ├── *.VOL                #   Containers de assets (MAPS, SOUND, VOICES, etc.)
-    ├── *.DLL                #   Missões/campanhas (E##, P##, T##, M*, etc.)
-    ├── *.ANI                #   Cursores animados
-    └── OP2_ART.BMP          #   Spritesheet de arte (7.5 MB)
+src/
+  main.cpp        entrada + os 81 modos de teste/captura
+  app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
+                  as 6 abas do quadro, minimapa, globo, diálogos
+  game/           a simulação: unidades, estruturas, movimento, pathfinder,
+                  combate, economia, pesquisa, desastres, triggers, IA
+  gfx/            framebuffer 640x480, PBMP, sprites, fontes (bitmap e GDI)
+  res/            leitor de PE (.rsrc + exports), .VOL + LZHUF, ResManager
+  core/           OUTPOST2.INI (CConfig)
+  audio/          mixer SDL fiel ao DirectSound do original, música (.clm)
+  mission/        carregador PE das DLLs de missão + ponte da API
+  net/            lobby (descoberta/entrada) e partida em lockstep
+tools/            scripts Python de engenharia reversa (formatos, dumps)
+Outpost2_src/     disassembly de referência (NÃO versionado)
 ```
 
 ---
 
-## 3. O que já está implementado (o port moderno)
+## 3. O que está portado
 
-### 3.1. `main.cpp` — Entry point
-- Inicializa SDL2 (vídeo/áudio/timer).
-- Cria janela **1280×960** (2× do nativo 640×480) — não-fullscreen.
-- Instancia `Renderer` + `ShellMenu` (carregando `OP2SHRES.DLL`).
-- **Loop principal ~60 FPS** com delta-time: eventos de mouse/teclado →
-  `ShellMenu`, depois `update()` + `render()` + `present()`.
-- Mapeia coordenadas de tela → coordenadas nativas 640×480 (`screenToNative`).
-- **Modo `--screenshot <arquivo>`**: renderiza um frame do menu e salva como BMP
-  32-bit (usado para gerar `menu_screen.bmp`).
+### Simulação
+- **Relógio e RNG** determinísticos, bit-exatos com o original.
+- **Unidades**: pool, criação, desenho fiel (sprites `op2_art` com paleta e
+  cor de jogador), sombras, nº de série.
+- **Movimento e pathfinder** portados da arquitetura real (rotas, filas,
+  bloqueios) — nunca um A* inventado.
+- **Estruturas**: construção, ligar/desligar, dano, destruição, entulho,
+  desmonte, tomada, reparo, animações de ambiente.
+- **Economia da colônia** completa: rede de tubos, energia, trabalhadores,
+  cientistas, **comida, população e moral** (incluindo a moral forçada pelas
+  missões).
+- **Mineração**: Robo-Miner/GeoCon, `MINES.TXT`, caminhões, docas, smelters.
+- **Obras de terreno**: tubos, muros, Robo-Dozer, varredura de região.
+- **Combate**: todas as armas de tanque e de torre, EMP/espuma/ESG/ácido/
+  Thor/Scorpion, autodestruição, dano em área com armadura, paredes.
+- **Pesquisa**: as quatro árvores, laboratórios, cientistas, propagação.
+- **Desastres**: meteoro, raio, tornado, terremoto, erupção/lava e a
+  **praga (micróbio)**, com as três fases de aviso do original.
+- **Triggers**: os 16 `Create*Trigger`, vitória/derrota, objetivos.
+- **IA**: grupos (Sc/Fight/Build/Mine), o padrão do computador e o Pinwheel.
+- **Salvar/carregar** (`SGAME%d.OP2`), com teste de determinismo.
 
-### 3.2. `gfx/renderer.*` — Renderizador
-- Framebuffer software **640×480 em ARGB** (`std::vector<uint32_t>`), enviado a
-  uma `SDL_Texture` e escalado para a janela mantendo aspect ratio (viewport
-  com barras).
-- Primitivas: `clear`, `fillRect`, `drawRect`, `drawBevelRect` (bordas 3D
-  chanfradas), `blitBitmap` (+ color-key), `blitBitmapSub`.
-- **Widgets no estilo Outpost 2**: `drawDialogFrame` (moldura metálica escura
-  com título) e `drawButton` (estados hover/pressed/disabled).
+### Interface
+- **Shell**: menu principal, campanha (briefing/objetivos/capítulos do
+  `STORY.VOL`), jogos de colônia com placar, tutoriais, preferências, sobre.
+- **In-game**: painel direito, quadro da unidade, botoeira 3x3, botões de
+  prédio, linha de ajuda, as 6 abas de relatório, minimapa com zoom, visão
+  tática e globo, ciclo dia/noite.
+- **Controles** no padrão Windows: foco por teclado, combos com lista
+  suspensa, barras de rolagem.
 
-### 3.3. `gfx/bitmap.*` — Decoder de imagens
-- `loadFromDIB`: interpreta cabeçalho `BITMAPINFOHEADER` de recursos `RT_BITMAP`.
-- **Suporta 8-bit indexado + paleta e descompressão RLE8** (`decompressRLE8`),
-  que é o formato dos backgrounds do menu original.
-- Converte tudo para ARGB 32-bit interno.
+### Áudio
+Mixer SDL fiel ao do original (volume e pan por tile, fila de vozes), música
+`.clm` e **volume mestre** próprio do porte.
 
-### 3.4. `gfx/font.*` — Texto
-- Fonte **bitmap embutida no código** (não usa a fonte do sistema), com desenho
-  de texto, texto centralizado, sombra, e medição de largura/altura.
+### Multijogador
+Partida em **rede, em lockstep bit-exato**, com lobby sincronizado
+(descoberta por broadcast, entrada, chat, EJECT, opções), as telas do
+`OUT2RES.DLL` e as 51 missões M*.
 
-### 3.5. `res/pe_resource.*` — Leitor de recursos PE
-- **Parser completo de PE de 32 bits** (DOS header → NT headers → seções →
-  árvore `.rsrc`), com conversão RVA→offset.
-- `getBitmapDIB(id)` → recurso `RT_BITMAP` (tipo 2).
-- `getDialog(id)` → faz parsing de `DLGTEMPLATE` (controles, classes atômicas
-  Button/Edit/Static/ListBox/etc., estilos, texto). **Este é o coração da
-  fidelidade**: o layout do menu vem dos dados reais do jogo, não é chutado.
+### Acréscimos do porte (não existem no original)
+Três chaves no `[Game]` do `OUTPOST2.INI`, com controle na tela de
+preferências; o original ignora chaves que não conhece.
 
-### 3.6. `core/config.*` — Configurações (OUTPOST2.INI) ✅ (2026-09-30)
-Porta a classe **`CConfig`** do jogo original (que era um wrapper sobre
-`GetPrivateProfileInt/String` + `WritePrivateProfileString` do Windows), agora
-cross-platform. Mesma semântica confirmada no disassembly: seção/chave
-case-insensitive, `getInt` lê os dígitos iniciais e cai no default, `setInt`
-aceita `"Seção\\Chave"`. `GameSettings` espelha as chaves reais do `[Game]`
-(Music, MusicVol, Sound, SoundVol, GameSpeed, ScrollRate, Overlay, Ambient,
-StationaryShadows, MobileShadows, IntroAVI, ShowMovies, SpiffyDraw, Demo, Name)
-com os defaults do INI. **Validado**: lê o `OUTPOST2.INI` real, round-trip
-preserva todas as seções (`[GAME_WINDOW]`, `[ColonyGameScores]`, `[DESKTOP]`…) e
-o formato; já carregado no `main.cpp` no startup.
-
-### 3.7. `shell/shell_menu.*` — Menu principal (shell)
-Máquina de estados (`MenuState`) reconstruindo o menu do jogo:
-- Carrega de `OP2SHRES.DLL`: **Bitmap 190** (fundo espaço/planeta 640×480),
-  **Bitmap 145** (logo), **Dialog 137** ("MAIN MENU").
-- **9 botões** mapeados aos IDs reais do Dialog 137: `1014 TUTORIALS`,
-  `1000 NEW CAMPAIGN`, `1006 COLONY GAMES`, `1005 MULTIPLAYER` (desabilitado),
-  `1007 LOAD GAME`, `1011 GAME PREFERENCES`, `1012 HELP`,
-  `1010 ABOUT OUTPOST 2`, `1013 QUIT`.
-- Sub-diálogos **renderizados (placeholder/mock)**: New Campaign (seleção
-  Eden/Plymouth + dificuldade), Colony Games (lista), Preferences, About.
-- **Janela de Tutoriais ✅ fiel ao original** (Dialog 269 "TUTORIALS" do
-  OP2SHRES.DLL): listbox com scrollbar vertical + botões `START` e
-  `BACK TO MAIN MENU`. A lista é montada como no jogo: enumera as missões
-  `T01.DLL`..`T14.DLL` e lê o **export `LevelDesc`** de cada uma (14 tutoriais).
-  Suporta seleção por clique, scroll (roda/​setas) e recorte de texto. O
-  `PeResourceReader` ganhou `getExportString()` para ler exports de dados das
-  missões (`LevelDesc`, `MapName`, `TechtreeName`). Captura:
-  `outpost2_modern.exe --tutorials --screenshot out.bmp` (rodar da raiz do jogo).
+| Chave | Faixa | Padrão | O que faz |
+|---|---|---|---|
+| `AILevel` | 0..3 | 0 (AUTO) | Força o nível da IA nas campanhas e colônias. AUTO = o comportamento do original. **Não se aplica em rede**, onde a dificuldade é por jogador e vem do lobby. |
+| `NightDarkness` | 0..100 | 75 | Quanto da curva de escurecimento noturno se aplica (100 = o original, que leva a noite plena a ~15% do brilho e faz as unidades, que nunca escurecem, recortarem contra o preto). |
+| `AudioVolume` | 0..100 | 50 | Volume mestre sobre a mistura final (sons e música). O original só tem `MusicVol`/`SoundVol`, por canal e em 6 degraus. |
 
 ---
 
-## 4. Ferramentas de análise (`tools/`)
+## 4. O que FALTA portar
+
+Revisado item a item em 2026-10-28, conferindo no código.
+
+### Grande
+
+1. **Rede com mais de 2 jogadores.** O lockstep (anel de 16 turnos) e o lobby
+   já tratam a mesa inteira, mas o transporte é ponto a ponto: a contagem está
+   fixa em 2 em `app/shell_state.cpp` e em `main.cpp`. Para 3–6 jogadores são
+   precisas N conexões (ou retransmissão pelo host) e roteamento dos turnos por
+   jogador. Mapas e GAME SETTINGS já suportam 6.
+2. **Ajuda (botão HELP do menu).** Cai no `default` do despacho. O original
+   chama `WinHelpA("OUTPOST2.HLP")`; o arquivo está no disco, mas o WinHlp32 não
+   existe mais no Windows atual — seria preciso um leitor do formato HLP ou
+   converter o conteúdo.
+3. **Demo de atração.** O `OP2SHELL.DLL` referencia `ademo1/2/3.dll`: o menu
+   original joga sozinho quando fica ocioso. Não portado nem rastreado — o
+   OP2SHELL.DLL não está no IDA, só o EXE.
+
+### Multijogador, peças soltas
+
+4. **TRANSFER** — doar as unidades e abandonar a partida. É o **único** comando
+   de veículo que ainda cai em `NOT_PORTED`; falta o diálogo de escolha de
+   jogador (`sub_45D020`).
+5. **Trade Center** — o prédio existe e conta na estatística, mas não há a UI
+   de troca de recursos.
+6. **Modo Chat** da aba Communications (`[+0x1C4]` = 1), que só existe em
+   multijogador.
+7. **Estatísticas de fim de partida** multijogador (motivos 7..9 da mensagem
+   0x73e) e as matrizes de baixas por par de jogadores.
+
+### Miudezas de simulação (todas marcadas no código)
+
+8. Diálogo de confirmação do IDLE quando o prédio guarda metal ("All metal in
+   storage will be lost...").
+9. O painel STORAGE cobre 8 tipos de prédio; os demais respondem "ainda não
+   portado".
+10. Ordem "atirar no chão" (bit 0x2000, `sub_4A1BC0`).
+11. Estatísticas 0x1C4/0x1CC por jogador (baixas infligidas/sofridas).
+12. Revelação do mapa ao construir (`dword_574C88`) e o som de `sub_42F000`.
+13. Pacote 0x1D (tomar posse) para os grupos de IA.
+14. Modo 3 do pathfinder (`sub_438850`).
+15. Fila de waypoints com Shift.
+16. Dano em paredes nas autodestruições (`sub_4A23F0` no caminho de
+    `sub_4A4090`).
+
+### Não aplicável nesta instalação
+
+17. **Filmes (AVI).** O shell original toca `I.AVI`/`IE`/`IP` na abertura,
+    `E4.AVI`, `MEF`/`MPF` e as oito variantes de fim de campanha
+    (`MEBL`/`MEBW`/`MEUL`/`MEUW`/`MPBL`/`MPBW`/`MPUL`/`MPUW`) e as quatro de fim
+    de colônia (`CES`/`CEP`/`CPS`/`CPP`). **Nenhum `.AVI` existe no disco** —
+    ficavam no CD. Portar o player não teria o que tocar.
+
+### Decisões deliberadas (não são pendências)
+
+- **A tela 259 "PICK CONNECTION METHOD" não existe aqui.** Dos seis meios da
+  tabela `unk_4DF370` só o TCP/IP sobreviveu — o SIGS era o serviço da Sierra,
+  o IPX saiu do Windows, modem e serial eram DirectPlay sobre linha discada.
+  O MULTIPLAYER abre direto o Dialog 260. Por isso `MpNetOptions` é a primeira
+  tela de multijogador, e os testes `m_state >= MpNetOptions` dependem da ordem
+  do enum.
+
+---
+
+## 5. Ferramentas de análise (`tools/`)
 
 Scripts Python que usam **`pefile`** + **`capstone`** (disassembler) para
 engenharia reversa dos recursos e do código:
@@ -173,7 +198,7 @@ engenharia reversa dos recursos e do código:
 
 ---
 
-## 4.1. Formato `.VOL` — DECODIFICADO ✅ (2026-09-29)
+## 5.1. Formato `.VOL` — DECODIFICADO ✅ (2026-09-29)
 
 Container de assets do jogo, conceitualmente igual ao `.WAD` do Doom/Quake:
 diretório de entradas + dados concatenados. Usa **chunks com tag** (estilo
@@ -240,7 +265,7 @@ decoder LZHUF: [tools/lzhuf.py](tools/lzhuf.py).
 
 ---
 
-## 4.2. Formato `.map` — DECODIFICADO ✅ (2026-09-29)
+## 5.2. Formato `.map` — DECODIFICADO ✅ (2026-09-29)
 
 Mapas de terreno do jogo (tag `0x00001011`). Parser em [tools/op2map.py](tools/op2map.py),
 validado visualmente (render do grid mostra terreno coerente: mesas, lava, minério).
@@ -291,7 +316,7 @@ já aponta pro pool global); ela serve para animação de tile e tipagem de terr
 
 ---
 
-## 4.3. Tilesets `PBMP` + render de terreno — DECODIFICADO ✅ (2026-09-29)
+## 5.3. Tilesets `PBMP` + render de terreno — DECODIFICADO ✅ (2026-09-29)
 
 Os gráficos de terreno (`well0000.bmp`..`well0012.bmp`) ficam **dentro do
 `MAPS.VOL`** e usam o formato próprio **`PBMP`** (chunked, IFF-like). Carregados
@@ -323,7 +348,7 @@ motor desenhar o mundo.
 
 ---
 
-## 4.4. Planilhas de dados `.txt` — DECODIFICADAS ✅ (2026-09-29)
+## 5.4. Planilhas de dados `.txt` — DECODIFICADAS ✅ (2026-09-29)
 
 Os 10 `.txt` do `SHEETS.VOL` (LZHUF) são as tabelas de dados/balanceamento do
 jogo. Parser em [tools/sheets.py](tools/sheets.py). Dois formatos:
@@ -352,7 +377,7 @@ comparação case-insensitive. Uso: `python tools/sheets.py`.
 
 ---
 
-## 4.5. Sprites `op2_art.prt` + `OP2_ART.BMP` — DECODIFICADOS ✅ (2026-09-30)
+## 5.5. Sprites `op2_art.prt` + `OP2_ART.BMP` — DECODIFICADOS ✅ (2026-09-30)
 
 Sistema de sprites do jogo (estruturas, unidades, UI). Parser em
 [tools/artfile.py](tools/artfile.py), validado visualmente (estruturas da colônia
@@ -409,80 +434,68 @@ a paleta própria de cada imagem. Uso: `python tools/artanim.py`.
 
 ---
 
-## 5. Build
+---
 
-**Toolchain:** CMake ≥ 3.15 + MSVC (Visual Studio), C++17, SDL2 2.30.9 (em
-`third_party/`). Detecta x86/x64 automaticamente.
+## 6. Build e execução
+
+**Toolchain:** CMake >= 3.15 + MSVC, C++17, SDL2 2.30.9 (em `third_party/`).
+O build é **Win32 (x86)** — o carregador PE das missões executa código de 32
+bits das DLLs originais, então x64 não serve.
 
 ```powershell
-# A partir da raiz do projeto:
-cmake -B build -A Win32          # (ou -A x64)
+cmake -B build -S . -A Win32
 cmake --build build --config Release
-# Saída: build/Release/outpost2_modern.exe
 ```
 
-O `CMakeLists.txt` copia automaticamente para junto do executável:
-`menu_screen.bmp`, `menu_dialog.json`, `SDL2.dll` e **`OP2SHRES.DLL`** (a DLL de
-recursos que o port lê em runtime).
+O passo de pós-build copia `outpost2_modern.exe` e `SDL2.dll` para a raiz do
+jogo, que é de onde o executável tem de rodar (ele lê os `.VOL`, as DLLs de
+missão e os recursos originais do diretório de trabalho).
 
-**Executar:**
-```powershell
-./build/Release/outpost2_modern.exe
-# ou gerar screenshot do menu:
-./build/Release/outpost2_modern.exe --screenshot menu.bmp
-```
+> Se a cópia falhar com "Permission denied", o jogo está aberto — feche-o e
+> refaça o build. Filtrar a saída do build por `"error C"` **esconde** essa
+> falha; filtre por `error|denied`.
 
-> ⚠️ O executável precisa do `OP2SHRES.DLL` original ao lado para carregar a
-> arte/diálogos do menu.
+### Testes por linha de comando
+
+São 81 modos. Os que cobrem regressão de verdade:
+
+| Modo | O que prova |
+|---|---|
+| `--savetest <DLL> <ticks> <mais>` | determinismo: salvar, recarregar e continuar tem de dar o mesmo hash |
+| `--mplan host\|join <DLL> <ticks>` | lockstep em rede: as duas máquinas fecham com o mesmo hash |
+| `--mptest <DLL>` | missão multijogador local |
+| `--mpui host\|join` | o fluxo das telas de rede, pelo despacho de verdade dos botões |
+| `--uitest` | combos e barras de rolagem, pelo caminho do mouse e do teclado |
+| `--missiontest <DLL> <saida> <ticks>` | carrega e roda qualquer missão |
+| `--aitest <DLL campanha> <DLL multi>` | o `AILevel` chega ao jogador 0 e o multijogador fica intacto |
+| `--salvagetest`, `--oretest`, `--earthtest`, `--combattest`, `--researchtest`, `--garagetest`, `--gptest`, `--pinwheeltest` | cada subsistema |
+| `--screenshot` + `--menu`/`--prefs`/`--mpsettings`/`--panetest`/... | captura de telas para conferência visual |
 
 ---
 
-## 6. Estado atual — resumo
+## 7. Resumo por área
 
-| Área | Status |
-|------|--------|
-| Infra SDL2 (janela, loop, input, scaling) | ✅ Funcional |
-| Leitor de recursos PE (bitmaps + diálogos) | ✅ Funcional |
-| Decoder DIB / RLE8 | ✅ Funcional |
-| Renderer 640×480 + widgets estilo OP2 | ✅ Funcional |
-| Menu principal (shell) com arte original | ✅ Funcional |
-| Sub-diálogos (Campaign/Colony/Tutorials/Prefs/About) | 🟡 Placeholder/mock |
-| Disassembly de referência (IDA) | ✅ Disponível (não convertido) |
-| **Motor de jogo (RTS, simulação, mapas, IA, unidades)** | 🟡 Em porte (ver linhas abaixo) |
-| Leitura de `.VOL`/LZHUF no port (`ResManager`) | ✅ Funcional (byte-exato) |
-| `GameMap` + render de terreno no port (in-engine) | ✅ Funcional (pixel-exato) |
-| Backbone `TApp`/`UIState` (loop + troca shell↔jogo) | ✅ Funcional |
-| Núcleo de simulação `TethysGame` (clock + RNG determinístico) | ✅ Funcional (RNG bit-exato) |
-| `_Player` (modelo de jogador/economia + API) | ✅ Funcional (offsets reais) |
-| `Unit` (pool + CreateUnit + render de unidades) | ✅ Funcional (desenho fiel) |
-| Sprites de unidade (op2_art), movimento fiel (sub_44B650) | ✅ Funcional |
-| Estruturas: construção, dano, destruição, entulho, ambiente | ✅ Funcional (`structure.cpp`) |
-| Economia da colônia: energia/trabalhadores/cientistas, comida, população, moral (+ moral forçada das missões) | ✅ Funcional (`colony.cpp`) |
-| HUD: painel direito, quadro da unidade, minimapa com dia/noite, mensagens | 🟡 Parcial (moldura 3D e arte das abas pendentes) |
-| Combate: Laser, Microwave, Rail Gun e RPG em Lynx/Panther/Tiger — busca de alvo (linha de visada), torre, projétil, dano em área com armadura, morte do veículo | ✅ Funcional (`weapon.cpp`; `--combattest`) |
-| Combate pendente: Guard Post, EMP/ESG/Stickyfoam/Acid/Thor/Starflare/Supernova, paredes, ordem de ataque (retaliação/perseguição), sons | ⬜ Próximo passo |
-| Áudio / música / vídeos | ❌ Não iniciado |
-| Multiplayer / rede | ❌ Não iniciado |
-
-**Em uma frase:** temos um **shell/menu recriado com fidelidade** rodando sobre
-uma base SDL2 sólida que lê os assets reais de 1997, mais o **disassembly
-completo do EXE** como mapa para o próximo grande passo — que é reimplementar o
-motor do jogo em si.
-
----
-
-## 7. Próximos passos sugeridos
-
-1. **Tornar o menu 100% funcional** — hoje os sub-diálogos são mock; ligá-los aos
-   dados reais (listas de missões vêm das DLLs `E##`/`P##`/`T##` e dos `.VOL`).
-2. **Parser de `.VOL`** — os containers `MAPS.VOL`, `SOUND.VOL`, `VOICES.VOL`,
-   `STORY.VOL`, `SHEETS.VOL` guardam mapas, áudio e tabelas de dados do jogo
-   (`inspect_vol.py` já é um começo).
-3. **Estruturas de dados do jogo** — usar o `.map` (30k símbolos) + o `.asm` para
-   mapear as principais `sub_*` do motor (init, game loop, unidades, economia).
-4. **Formato de mapa e renderização de terreno** — o passo que abre caminho para
-   a simulação de fato.
-5. **Áudio via SDL2_mixer** e reprodução de vídeos.
+| Área | Estado |
+|---|---|
+| Infra (SDL2, framebuffer, entrada, escala) | Completo |
+| Leitura dos originais (PE, `.VOL`/LZHUF, PBMP, sprites, planilhas) | Completo |
+| Terreno e mapa | Completo (render pixel-idêntico ao original) |
+| Unidades, movimento, pathfinder | Completo |
+| Estruturas e construção | Completo |
+| Economia, comida, população, moral | Completo |
+| Combate | Completo (falta só o dano em paredes nas autodestruições) |
+| Pesquisa | Completo |
+| Desastres, lava e praga | Completo |
+| Triggers, objetivos, vitória/derrota | Completo |
+| IA (grupos, computador padrão, Pinwheel) | Completo |
+| Campanha, colônia, tutoriais | Completo |
+| Shell e telas | Completo (menos a Ajuda e a demo de atração) |
+| HUD, abas, minimapa, globo | Completo |
+| Áudio e música | Completo |
+| Salvar/carregar | Completo |
+| Multijogador em rede | Joga, **mas só a dois**; faltam chat in-game, troca e estatísticas |
+| Ajuda, demo de atração | Não portados |
+| Filmes | Não aplicável (arquivos não existem) |
 
 ---
 
