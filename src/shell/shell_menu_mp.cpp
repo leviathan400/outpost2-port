@@ -4,7 +4,9 @@
 //
 //   259 "PICK CONNECTION METHOD"  sub_411E30 -> escolhe o transporte
 //       (INTERNET/SIGS 6, MODEM 4, IPX 5, TCP/IP 3, SERIAL 7, CANCEL 2); a
-//       tabela unk_4DF370 liga cada botao ao objeto do transporte.
+//       tabela unk_4DF370 liga cada botao ao objeto do transporte. Aqui a tela
+//       so oferece o TCP/IP: os outros quatro meios nao existem mais fora do
+//       jogo (ver o comentario do caso MpConnection em shell_menu.cpp).
 //   260 "NET GAME OPTIONS"        sub_497610 -> CREATE (1074) ou JOIN (1075)
 //  2012 "NEW NETWORK GAME"        sub_40DEC0 -> nome, senha, maximo de
 //       jogadores (combo 1015) e cenario (combo 1039); chama sub_491BE0.
@@ -791,14 +793,12 @@ std::string fitText(const std::string& t, int px) {
 
 // Dialog 259 "PICK CONNECTION METHOD" (166x122 DLU)
 void ShellMenu::renderMpConnection(Renderer& renderer) {
-    const DlgBox d = dlgBox(166, 122);
+    const DlgBox d = dlgBox(166, 44);
     renderer.dimRect(0, 0, 640, 480, 0x88);
     renderer.drawDialogFrame(d.fx, d.fy, d.fw, d.fh, "PICK CONNECTION METHOD");
-    // Só o TCP/IP está portado: IPX saiu do Windows, MODEM e SERIAL são
-    // DirectPlay sobre linha discada e cabo, e o SIGS era o serviço da Sierra.
-    // O aviso não é do diálogo original, então fica sob o quadro.
+    // A nota não é do diálogo original, então fica sob o quadro.
     Font::drawTextCentered(renderer.getFramebuffer(), 640, 480,
-                           "(somente TCP/IP esta portado)",
+                           "(os outros meios do original nao existem mais)",
                            d.fx + d.fw / 2, d.fy + d.fh + 8, 0xFF8090A8, true);
 }
 

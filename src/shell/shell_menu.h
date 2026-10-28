@@ -300,7 +300,6 @@ private:
     // jogador, playerWord bit 2 Eden, bits 3-4 recursos (= o mesmo campo de
     // _Player::Difficulty), bits 5-7 a cor.
     GameStartInfo m_mpGsi;
-    int  m_mpConnection = 3;          // o botão do 259 (3 TCP/IP, 4 modem...)
     bool m_mpIsHost = false;
     std::string m_mpPlayerName = "PLAYER";   // Edit 1044 / 1035 "Your Name"
     std::string m_mpPassword;                // Edit 1037 "Password"

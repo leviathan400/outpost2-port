@@ -376,15 +376,16 @@ void ShellMenu::rebuildControls() {
     // A geometria sai dos templates do OUT2RES.DLL, em unidades de diálogo:
     // cada controle fica onde o original o põe, e o DlgBox faz a conversão.
     case MenuState::MpConnection: {
-        // Dialog 259 (166x122): os ids sao os do original e a tabela
-        // unk_4DF370 liga cada um ao transporte. Só o TCP/IP (3) esta portado.
-        const DlgBox d = dlgBox(166, 122);
-        addButton(6, "INTERNET (SIGS)", d.x(7), d.y(4),   d.w(152), d.h(14), false, true);
-        addButton(4, "MODEM",           d.x(7), d.y(22),  d.w(152), d.h(14), false, true);
-        addButton(5, "IPX",             d.x(7), d.y(40),  d.w(152), d.h(14), false, true);
-        addButton(3, "TCP/IP",          d.x(7), d.y(58),  d.w(152), d.h(14), true);
-        addButton(7, "SERIAL",          d.x(7), d.y(76),  d.w(152), d.h(14), false, true);
-        addButton(2, "CANCEL",          d.x(8), d.y(100), d.w(152), d.h(14));
+        // Dialog 259 (166x122 no original). Os ids sao os do original, mas dos
+        // seis botoes so restam dois: o TCP/IP (3) e o CANCEL (2). Os outros
+        // quatro transportes da tabela unk_4DF370 -- INTERNET/SIGS (6), MODEM
+        // (4), IPX (5) e SERIAL (7) -- nao existem mais fora do jogo: o SIGS
+        // era o servico da Sierra, que fechou; o IPX saiu do Windows; e modem
+        // e cabo serial eram DirectPlay sobre linha discada. Sem eles o quadro
+        // encolhe de 122 para 44 DLU de altura.
+        const DlgBox d = dlgBox(166, 44);
+        addButton(3, "TCP/IP", d.x(7), d.y(4),  d.w(152), d.h(14), true);
+        addButton(2, "CANCEL", d.x(7), d.y(26), d.w(152), d.h(14));
         break;
     }
     case MenuState::MpNetOptions: {
