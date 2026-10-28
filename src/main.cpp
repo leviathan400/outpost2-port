@@ -269,6 +269,14 @@ static int runScreenshot(int argc, char* argv[], const std::string& outPath) {
         else if (a == "--about") shellMenu.showAbout();
         else if (a == "--scores") shellMenu.showScores();
         else if (a == "--ename") shellMenu.showEnterName("Colony: Eden Starship");
+        else if (a == "--mpconn")  shellMenu.showMpScreen(0, true, 1);
+        else if (a == "--mpopts")  shellMenu.showMpScreen(1, true, 1);
+        else if (a == "--mpnew")   shellMenu.showMpScreen(2, true, 1);
+        else if (a == "--mpfind")  shellMenu.showMpScreen(3, false, 1);
+        else if (a == "--mppick")  shellMenu.showMpScreen(4, false, 1);
+        else if (a == "--mpjoin")  shellMenu.showMpScreen(5, false, 1);
+        else if (a == "--mpsettings") shellMenu.showMpScreen(6, true, 2);
+        else if (a == "--mpsettings2") shellMenu.showMpScreen(6, false, 2);
         else if ((a == "--cmenu" || a == "--cbrief" || a == "--cobj" || a == "--cchap" || a == "--cstory") &&
                  i + 1 < argc) {
             bool eden = true;
@@ -487,6 +495,41 @@ static int runPlaceShot(const std::string& mapName, const std::string& outPath, 
 }
 
 static uint64_t simHash();
+
+// --mpui <host|join> [nome]: percorre as TELAS de multijogador (259 -> 260 ->
+// 2012/2010+195+2013 -> 196 -> START) chamando o mesmo despacho dos botoes, e
+// confere o GameStartInfo que o lobby monta contra os bits do original.
+static int runMpUi(const std::string& mode, const std::string& nome) {
+    const bool host = (mode == "host");
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 mpui", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::ShellMenu menu;
+    menu.init("OP2SHRES.DLL");
+
+    std::string relato;
+    const bool ok = menu.mpFlowTest(host, nome, relato);
+    std::printf("[MpUi] %s: %s%c", host ? "host" : "join", relato.c_str(), 10);
+
+    if (ok) {
+        op2::GameStartInfo gsi;
+        menu.launchStartInfo(gsi);
+        std::printf("[MpUi] flags=%08x (desastres=%d dia/noite=%d moral=%d maxjog=%d veic=%d)%c",
+                    gsi.flags, int(gsi.flags & 1), int((gsi.flags >> 1) & 1),
+                    int((gsi.flags >> 2) & 1), int((gsi.flags >> 6) & 7),
+                    int((gsi.flags >> 17) & 0xF), 10);
+        for (int i = 0; i < 2; ++i)
+            std::printf("[MpUi] jogador %d: eden=%d recursos=%d cor=%d%c", i,
+                        int((gsi.playerWord[i] >> 2) & 1), gsi.difficulty(i),
+                        int((gsi.playerWord[i] >> 5) & 7), 10);
+    }
+    std::fflush(stdout);
+    op2::lobbyHostStop();
+    renderer.shutdown();
+    SDL_Quit();
+    return ok ? 0 : 1;
+}
 
 // --mplobby host <nome> <maxjog> <segundos> : abre o lobby e anuncia a partida
 // --mplobby find                            : procura partidas na rede local
@@ -3223,6 +3266,8 @@ int main(int argc, char* argv[]) {
             return runPlayerTest();
         if (std::strcmp(argv[i], "--unittest") == 0)
             return runUnitTest();
+        if (std::strcmp(argv[i], "--mpui") == 0 && i + 1 < argc)
+            return runMpUi(argv[i + 1], i + 2 < argc ? argv[i + 2] : "PLAYER");
         if (std::strcmp(argv[i], "--mplan") == 0 && i + 3 < argc)
             return runMpLan(argv[i + 1], argv[i + 2], atoi(argv[i + 3]));
         if (std::strcmp(argv[i], "--mplobby") == 0 && i + 1 < argc)

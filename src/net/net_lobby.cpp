@@ -13,23 +13,18 @@ namespace op2 {
 
 namespace {
 
-// O GUID da aplicacao. No original ele vem de fora (o shell o passa a
-// sub_491BE0 e o grava em [enumerador+0x10]) e NAO aparece no executavel, de
-// modo que o valor do jogo original nao pode ser lido do disassembly. Este e o
-// do port: serve ao mesmo fim — nao confundir a descoberta com a de outro
-// produto na mesma rede — mas nao conversa com o jogo original.
+// O GUID da aplicacao do Outpost 2, tirado de unk_4E9AE0 — e o arg_0 que
+// sub_40DEC0 (CREATE no TCP/IP) passa a sub_491BE0 e que o responder compara
+// em +6 da consulta. Em forma de GUID: {5A55CF11-B841-11CE-9210-00AA006C4972};
+// no pacote vai nesta ordem de bytes, que e a da memoria.
 const uint8_t kAppGuid[16] = {
-    0x4F, 0x50, 0x32, 0x44, 0x44, 0x50, 0x4F, 0x52,
-    0x54, 0x00, 0x1D, 0x72, 0xA3, 0x5C, 0x11, 0x9E,
+    0x11, 0xCF, 0x55, 0x5A, 0x41, 0xB8, 0xCE, 0x11,
+    0x92, 0x10, 0x00, 0xAA, 0x00, 0x6C, 0x49, 0x72,
 };
 
-// O terceiro bloco de 16 bytes da resposta (+0x2A, o arg_10 de sub_491BE0): no
-// original e o GUID do provedor de servico do DirectPlay. Aqui ele identifica
-// o transporte UDP proprio do port.
-const uint8_t kProviderGuid[16] = {
-    0x55, 0x44, 0x50, 0x00, 0x4F, 0x50, 0x32, 0x00,
-    0x9B, 0x41, 0x6D, 0x0A, 0xE2, 0x37, 0x84, 0xC1,
-};
+// O bloco de 16 bytes de +0x2A da resposta e o arg_10 de sub_491BE0: no
+// original e o inicio da estrutura de configuracao da partida (o maximo de
+// jogadores sai de `(flags & 0x1C0) >> 6` dela). Preenchido em lobbyHostStart.
 
 bool s_wsa = false;
 int  s_wsaRefs = 0;
@@ -43,6 +38,7 @@ SOCKET s_acceptSock[8];                // um por lugar, como sub_48C560
 uint32_t s_acceptSent[8];              // quando a ultima aceitacao saiu
 int      s_acceptTries[8];
 uint8_t  s_replyPkt[0x51];             // o buffer de sub_491BE0
+uint32_t s_settingsFlags = 0;          // os flags da partida (arg_10)
 uint32_t s_sessionId = 0;              // timeGetTime() & ~7
 int      s_maxPlayers = 0;
 int      s_activeCount = 0;
@@ -146,7 +142,9 @@ uint32_t lobbyPacketSum(const uint8_t* p) {
 // ---- host ------------------------------------------------------------------
 
 bool lobbyHostStart(const std::string& name, int maxPlayers,
-                    const std::string& password, std::string& error) {
+                    const std::string& password, std::string& error,
+                    uint32_t settingsFlags) {
+    s_settingsFlags = settingsFlags;
     if (s_hostActive) { error = "o lobby ja esta no ar"; return false; }
     if (!wsaUp(error)) return false;
     for (int i = 0; i < 8; ++i) {
@@ -209,7 +207,7 @@ bool lobbyHostStart(const std::string& name, int maxPlayers,
     GUID g{};
     CoCreateGuid(&g);
     std::memcpy(s_replyPkt + 0x1A, &g, 16);
-    std::memcpy(s_replyPkt + 0x2A, kProviderGuid, 16);
+    putU32(s_replyPkt + 0x2A, s_settingsFlags);   // a config da partida (arg_10)
     putU32(s_replyPkt + 0x3A, uint32_t(maxPlayers));
     std::strncpy(reinterpret_cast<char*>(s_replyPkt) + 0x42, name.c_str(), 14);
 
@@ -540,6 +538,7 @@ bool lobbyFind(const std::string& password, int attempts,
                         nm[14] = 0;
                         s.name = nm;
                         s.maxPlayers = int(getU32(r + 0x3A));
+                        s.settingsFlags = getU32(r + 0x2A);
                         s.pingMs = rtt;
                         s.replies = 1;
                         out.push_back(s);

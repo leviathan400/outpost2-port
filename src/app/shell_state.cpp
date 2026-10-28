@@ -5,6 +5,9 @@
 
 #include "tapp.h"
 #include "../gfx/renderer.h"
+#include "../game/tethys_game.h"
+#include "../net/net_game.h"
+#include "../net/net_lobby.h"
 
 namespace op2 {
 
@@ -31,6 +34,33 @@ void ShellState::onIdle(Renderer& renderer, float dt) {
     if (m_menu.consumeLoadRequest()) m_loadDlg.open(SaveSlotsDialog::kLoad, "");
     m_loadDlg.render(renderer);
     renderer.present();
+
+    // o lobby pediu a partida em REDE? O socket e o par ja vem negociados do
+    // net_lobby (pedido 0x32 / aceitacao 0x26 / confirmacao 0x14), entao a
+    // partida comeca direto no lockstep, sem refazer aperto de mao.
+    std::string netDll;
+    if (m_menu.consumeNetLaunch(netDll)) {
+        uint32_t peerAddr = 0;
+        uint16_t peerPort = 0;
+        std::string err;
+        if (!lobbyPeer(peerAddr, peerPort)) {
+            std::cerr << "[Shell] o lobby nao sabe onde esta o outro lado" << std::endl;
+            return;
+        }
+        const int me = lobbyHostActive() ? 0 : 1;
+        if (!netStartJoined(lobbyTakeGameSocket(), peerAddr, peerPort, me, 2, err)) {
+            std::cerr << "[Shell] a rede nao subiu: " << err << std::endl;
+            return;
+        }
+        if (lobbyHostActive()) lobbyHostStop();
+        GameStartInfo gsi;
+        const bool hasGsi = m_menu.launchStartInfo(gsi);
+        TethysGame::setLocalPlayer(me);
+        if (!gTApp.activateMission(netDll, hasGsi ? &gsi : nullptr))
+            std::cerr << "[Shell] nao foi possivel iniciar a missao em rede ("
+                      << netDll << ")" << std::endl;
+        return;
+    }
 
     // o menu pediu para iniciar uma missão?
     std::string dllName;

@@ -188,7 +188,7 @@ void ShellMenu::rebuildControls() {
     case MenuState::MainMenu: {
         struct Def { int id; const char* label; bool dis; } defs[] = {
             {1014, "TUTORIALS", false}, {1000, "NEW CAMPAIGN", false},
-            {1006, "COLONY GAMES", false}, {1005, "MULTIPLAYER", true},
+            {1006, "COLONY GAMES", false}, {1005, "MULTIPLAYER", false},
             {1007, "LOAD GAME", false}, {1011, "GAME PREFERENCES", false},
             {1012, "HELP", false}, {1010, "ABOUT OUTPOST 2", false},
             {1013, "QUIT", false}
@@ -299,13 +299,112 @@ void ShellMenu::rebuildControls() {
     case MenuState::About:
         addButton(1, "OK", kAbX + (kAbW - 100) / 2, kAbY + 258, 100, 26, true);
         break;
+    // --- multijogador: a geometria sai dos dialogos do OUT2RES.DLL, em
+    // unidades de dialogo dobradas (1 DLU = 2 px), centralizadas no quadro.
+    case MenuState::MpConnection: {
+        const int ox = (640 - 332) / 2, oy = (480 - 244) / 2;
+        // Dialog 259: os ids sao os do original e a tabela unk_4DF370 liga
+        // cada um ao transporte. Só o TCP/IP (3) esta portado.
+        addButton(6, "INTERNET (SIGS)", ox + 14, oy + 8,   304, 28, false, true);
+        addButton(4, "MODEM",           ox + 14, oy + 44,  304, 28, false, true);
+        addButton(5, "IPX",             ox + 14, oy + 80,  304, 28, false, true);
+        addButton(3, "TCP/IP",          ox + 14, oy + 116, 304, 28, true);
+        addButton(7, "SERIAL",          ox + 14, oy + 152, 304, 28, false, true);
+        addButton(2, "CANCEL",          ox + 16, oy + 200, 304, 28);
+        break;
+    }
+    case MenuState::MpNetOptions: {
+        const int ox = (640 - 248) / 2, oy = (480 - 132) / 2;
+        addButton(1074, "CREATE", ox + 74, oy + 8,  100, 28, true);
+        addButton(1075, "JOIN",   ox + 74, oy + 48, 100, 28);
+        addButton(2,    "CANCEL", ox + 74, oy + 88, 100, 28);
+        break;
+    }
+    case MenuState::MpNewGame: {
+        const int ox = (640 - 568) / 2, oy = (480 - 244) / 2;
+        addEdit(1044, &m_mpPlayerName, 11, ox + 152, oy + 14,  186, 24);
+        addEdit(1037, &m_mpPassword,   11, ox + 152, oy + 52,  186, 24);
+        addCombo(1015, &kMaxPlayerNames, &m_mpMaxPlayers, ox + 152, oy + 90, 64, 24);
+        addCombo(1039, &m_mpScenarioList, &m_mpScenario,  ox + 16, oy + 156, 536, 24);
+        addButton(1, "OK",     ox + 374, oy + 14, 180, 28, true);
+        addButton(2, "CANCEL", ox + 374, oy + 52, 180, 28);
+        break;
+    }
+    case MenuState::MpFindSession: {
+        const int ox = (640 - 464) / 2, oy = (480 - 196) / 2;
+        addRadio(1005, "Broadcasting on the local network.", ox + 22, oy + 44, 400,
+                 &m_mpFindMode, 0);
+        addRadio(1007, "Looking at the IP address:",         ox + 22, oy + 76, 400,
+                 &m_mpFindMode, 1);
+        addEdit(1008, &m_mpFindAddr, 15, ox + 82, oy + 100, 182, 24);
+        addButton(1, "OK",     ox + 60,  oy + 150, 144, 28, true);
+        addButton(2, "CANCEL", ox + 260, oy + 150, 144, 28);
+        break;
+    }
+    case MenuState::MpPickSession: {
+        const int ox = (640 - 600) / 2, oy = (480 - 260) / 2;
+        Control lc; lc.kind = CtrlKind::List; lc.id = 1000;   // SysListView32
+        lc.x = ox; lc.y = oy; lc.w = 600; lc.h = 150;
+        lc.listSel = &m_mpSelSession; lc.listCount = (int)m_mpSessions.size();
+        m_controls.push_back(lc);
+        addButton(3, "REFRESH", ox + 246, oy + 180, 106, 28);
+        addButton(2, "CANCEL",  ox + 366, oy + 180, 106, 28);
+        addButton(1, "OK",      ox + 486, oy + 180, 106, 28, true);
+        break;
+    }
+    case MenuState::MpJoinName: {
+        const int ox = (640 - 452) / 2, oy = (480 - 114) / 2;
+        addEdit(1035, &m_mpPlayerName, 11, ox + 134, oy + 26, 264, 24);
+        addButton(1, "OK",     ox + 24,  oy + 68, 180, 28, true);
+        addButton(2, "CANCEL", ox + 238, oy + 68, 180, 28);
+        break;
+    }
+    case MenuState::MpGameSettings: {
+        const int ox = (640 - 632) / 2, oy = (480 - 452) / 2;
+        // O combo do cenario so existe para quem hospeda (Static 1075 para os
+        // outros, que recebem a escolha do host).
+        if (m_mpIsHost)
+            addCombo(40032, &m_mpScenarioList, &m_mpScenario, ox + 100, oy + 4, 500, 22);
+        const int rowY = oy + 38, rowH = 30;
+        for (int i = 0; i < 6; ++i) {
+            const int ly = rowY + i * rowH;
+            const bool mine = (i == (netActive() ? netLocalPlayer() : (m_mpIsHost ? 0 : 1)));
+            const bool live = i < m_mpPlayerCount;
+            addCombo(40001 + 5 * i, &kColorNames, &m_mpColor[i], ox + 200, ly - 2, 86, 22)
+                .disabled = !(live && (mine || m_mpIsHost));
+            addCheck(40003 + 5 * i, "", ox + 296, ly, 40, &m_mpEden[i])
+                .disabled = !(live && (mine || m_mpIsHost));
+            addCombo(40002 + 5 * i, &kResourceNames, &m_mpResources[i], ox + 348, ly - 2, 86, 22)
+                .disabled = !(live && (mine || m_mpIsHost));
+            addCheck(40004 + 5 * i, "", ox + 448, ly, 40, &m_mpReady[i])
+                .disabled = !(live && mine);
+            addButton(1046 + i, "EJECT", ox + 512, ly - 2, 96, 24, false,
+                      !(live && m_mpIsHost && i != 0));
+        }
+        // As opcoes globais (flags do GameStartInfo): só o host as muda.
+        addCheck(1077, "Disasters",     ox + 18,  oy + 270, 110, &m_mpDisasters).disabled = !m_mpIsHost;
+        addCheck(1078, "Morale Steady", ox + 132, oy + 270, 140, &m_mpMoraleSteady).disabled = !m_mpIsHost;
+        addCheck(1079, "Day and Night", ox + 282, oy + 270, 140, &m_mpDayNight).disabled = !m_mpIsHost;
+        addCombo(1018, &kVehicleNames, &m_mpInitialVehicles, ox + 392, oy + 266, 62, 22)
+            .disabled = !m_mpIsHost;
+        addEdit(40030, &m_mpChatInput, 60, ox + 72, oy + 378, 544, 24);
+        addButton(1045, "START",  ox + 120, oy + 414, 136, 28, true, !m_mpIsHost);
+        addButton(1090, "CANCEL", ox + 366, oy + 414, 136, 28);
+        break;
+    }
     default:
         break;
     }
 
-    // Foco inicial: primeiro controle habilitado.
-    for (int i = 0; i < (int)m_controls.size(); ++i)
-        if (!m_controls[i].disabled) { m_focusIndex = i; break; }
+    // Foco inicial: nas telas de multijogador, o botão default do diálogo
+    // (como o Windows faz); nas demais, o primeiro controle habilitado.
+    if (m_state >= MenuState::MpConnection) {
+        for (int i = 0; i < (int)m_controls.size(); ++i)
+            if (m_controls[i].isDefault && !m_controls[i].disabled) { m_focusIndex = i; break; }
+    }
+    if (m_focusIndex < 0)
+        for (int i = 0; i < (int)m_controls.size(); ++i)
+            if (!m_controls[i].disabled) { m_focusIndex = i; break; }
 }
 
 int ShellMenu::controlAt(int x, int y) const {
@@ -336,6 +435,13 @@ void ShellMenu::activateControl(int index) {
     case CtrlKind::Check:  if (c.checkTarget) *c.checkTarget = !*c.checkTarget; break;
     case CtrlKind::Radio:  if (c.radioTarget) *c.radioTarget = c.radioValue; break;
     case CtrlKind::List:   break;
+    // O original abre a lista suspensa do Windows; aqui um clique passa para a
+    // opcao seguinte, em ciclo.
+    case CtrlKind::Combo:
+        if (c.comboSel && c.comboItems && !c.comboItems->empty())
+            *c.comboSel = (*c.comboSel + 1) % (int)c.comboItems->size();
+        break;
+    case CtrlKind::Edit:   break;   // recebe texto por handleTextInput
     }
 }
 
@@ -368,6 +474,7 @@ void ShellMenu::dispatchButton(int id) {
         case 1010: setState(MenuState::About); break;
         case 1013: m_quitRequested = true; break;
         case 1007: m_loadRequested = true; break;            // LOAD GAME (TFileDialog)
+        case 1005: showMultiplayer(); break;                 // TApp::DoNetGame
         default: std::cout << "[Menu] botão " << id << " (ainda sem função)" << std::endl; break;
         }
         break;
@@ -483,6 +590,92 @@ void ShellMenu::dispatchButton(int id) {
     case MenuState::About:
         if (id == 1) setState(MenuState::MainMenu);
         break;
+
+    // --- multijogador -------------------------------------------------------
+    case MenuState::MpConnection:
+        // Os ids sao os botoes do Dialog 259; sub_411E30 mapeia cada um a um
+        // transporte pela tabela unk_4DF370. Aqui so o TCP/IP (3) anda.
+        if (id == 3) setState(MenuState::MpNetOptions);
+        else if (id == 2) setState(MenuState::MainMenu);
+        break;
+    case MenuState::MpNetOptions:
+        if (id == 1074) {                       // CREATE
+            m_mpIsHost = true;
+            setState(MenuState::MpNewGame);
+        } else if (id == 1075) {                // JOIN
+            m_mpIsHost = false;
+            setState(MenuState::MpFindSession);
+        } else if (id == 2) {
+            setState(MenuState::MpConnection);
+        }
+        break;
+    case MenuState::MpNewGame:
+        if (id == 1) {
+            m_mpSessionName = m_mpPlayerName.empty() ? "OUTPOST 2" : m_mpPlayerName;
+            if (m_mpScenarioList.empty()) {
+                m_mpStatus = "Nenhum cenario M*.DLL encontrado";
+                break;
+            }
+            if (mpStartHost()) setState(MenuState::MpGameSettings);
+        } else if (id == 2) {
+            setState(MenuState::MpNetOptions);
+        }
+        break;
+    case MenuState::MpFindSession:
+        if (id == 1) {
+            // O radio 1007 do original procura num endereco; a nossa descoberta
+            // e por broadcast (sub_491710), e o modo dirigido (sub_491860)
+            // ainda nao esta portado.
+            if (m_mpFindMode == 1) {
+                m_mpStatus = "A busca por endereco ainda nao esta portada";
+                break;
+            }
+            mpFindSessions();
+            setState(MenuState::MpPickSession);
+        } else if (id == 2) {
+            setState(MenuState::MpNetOptions);
+        }
+        break;
+    case MenuState::MpPickSession:
+        if (id == 3) {                          // REFRESH
+            mpFindSessions();
+            rebuildControls();
+        } else if (id == 1) {
+            if (m_mpSessions.empty()) { m_mpStatus = "Nenhuma sessao para entrar"; break; }
+            setState(MenuState::MpJoinName);
+        } else if (id == 2) {
+            setState(MenuState::MpFindSession);
+        }
+        break;
+    case MenuState::MpJoinName:
+        if (id == 1) {
+            if (mpJoinSelected()) setState(MenuState::MpGameSettings);
+        } else if (id == 2) {
+            setState(MenuState::MpPickSession);
+        }
+        break;
+    case MenuState::MpGameSettings:
+        if (id == 1045) {                       // START
+            if (m_mpScenario < 0 || m_mpScenario >= (int)m_mpScenarioDlls.size()) {
+                m_mpStatus = "Escolha um cenario";
+                break;
+            }
+            mpSyncGsi();
+            m_launchGsi = m_mpGsi;        // o que launchStartInfo entrega
+            m_launchHasGsi = true;
+            m_netLaunchDll = m_mpScenarioDlls[m_mpScenario];
+            m_netLaunch = true;
+        } else if (id == 1090) {                // CANCEL
+            lobbyHostStop();
+            m_mpPlayerCount = 1;
+            setState(MenuState::MainMenu);
+        } else if (id >= 1046 && id <= 1051) {  // EJECT
+            const int slot = id - 1046;
+            m_mpChat.push_back("Jogador " + std::to_string(slot) + " removido");
+            m_mpNames[slot].clear();
+            m_mpStatus = "EJECT ainda nao avisa o jogador removido";
+        }
+        break;
     default: break;
     }
 }
@@ -519,8 +712,11 @@ void ShellMenu::handleMouseDown(int x, int y, uint8_t button) {
     Control& c = m_controls[idx];
     if (c.kind == CtrlKind::List) {
         if (c.listSel) {   // seleciona o item sob o cursor
-            int rowH = (m_state == MenuState::Tutorials) ? kTutRowH : m_state == MenuState::Chapters ? kChRowH : kCgRowH;
-            int top  = (m_state == MenuState::Tutorials) ? (c.y + 4) : (c.y + 8);
+            int rowH = (m_state == MenuState::Tutorials) ? kTutRowH
+                     : m_state == MenuState::Chapters ? kChRowH
+                     : m_state == MenuState::MpPickSession ? 15 : kCgRowH;
+            int top  = (m_state == MenuState::Tutorials) ? (c.y + 4)
+                     : m_state == MenuState::MpPickSession ? (c.y + 22) : (c.y + 8);
             int scroll = (m_state == MenuState::Tutorials) ? m_tutorialScroll : 0;
             int row = (y - top) / rowH;
             int sel = scroll + row;
@@ -558,7 +754,20 @@ void ShellMenu::handleMouseWheel(int delta) {
 }
 
 void ShellMenu::handleTextInput(const char* text) {
-    if (m_state != MenuState::EnterName || !text) return;
+    if (!text) return;
+    // Qualquer Edit com foco recebe o texto (os campos de nome, senha, endereço
+    // e a linha de chat do GAME SETTINGS).
+    if (m_focusIndex >= 0 && m_focusIndex < (int)m_controls.size()) {
+        Control& c = m_controls[m_focusIndex];
+        if (c.kind == CtrlKind::Edit && c.editTarget && !c.disabled) {
+            for (const char* p = text; *p; ++p)
+                if ((c.editMax == 0 || c.editTarget->size() < c.editMax) &&
+                    static_cast<unsigned char>(*p) >= 0x20)
+                    *c.editTarget += *p;
+            return;
+        }
+    }
+    if (m_state != MenuState::EnterName) return;
     for (const char* p = text; *p; ++p)
         if (m_scoreName.size() < 20 && static_cast<unsigned char>(*p) >= 0x20) m_scoreName += *p;
 }
@@ -567,8 +776,33 @@ void ShellMenu::handleKeyDown(int keyCode) {
     if (m_state == MenuState::Splash) return;
     SDL_Keymod mod = SDL_GetModState();
 
-    if (m_state == MenuState::EnterName && keyCode == SDLK_BACKSPACE) {
-        if (!m_scoreName.empty()) m_scoreName.pop_back();
+    if (keyCode == SDLK_BACKSPACE) {
+        if (m_focusIndex >= 0 && m_focusIndex < (int)m_controls.size()) {
+            Control& c = m_controls[m_focusIndex];
+            if (c.kind == CtrlKind::Edit && c.editTarget && !c.disabled) {
+                if (!c.editTarget->empty()) c.editTarget->pop_back();
+                return;
+            }
+        }
+        if (m_state == MenuState::EnterName) {
+            if (!m_scoreName.empty()) m_scoreName.pop_back();
+            return;
+        }
+    }
+    // Enter na linha de chat do GAME SETTINGS manda a linha (Edit 40030).
+    if ((keyCode == SDLK_RETURN || keyCode == SDLK_KP_ENTER) &&
+        m_state == MenuState::MpGameSettings &&
+        m_focusIndex >= 0 && m_focusIndex < (int)m_controls.size() &&
+        m_controls[m_focusIndex].kind == CtrlKind::Edit &&
+        m_controls[m_focusIndex].id == 40030) {
+        if (!m_mpChatInput.empty()) {
+            const int me = netActive() ? netLocalPlayer() : (m_mpIsHost ? 0 : 1);
+            const std::string who = m_mpNames[me].empty() ? "EU" : m_mpNames[me];
+            m_mpChat.push_back(who + ": " + m_mpChatInput);
+            m_mpChatInput.clear();
+            // O chat ainda nao atravessa a rede: no original ele vai num
+            // CommandPacket de lobby (o mesmo caminho do loc_460FAC).
+        }
         return;
     }
 
@@ -638,6 +872,13 @@ void ShellMenu::handleKeyDown(int keyCode) {
 }
 
 void ShellMenu::update(float dt) {
+    // Enquanto o GAME SETTINGS esta no ar, o host continua respondendo as
+    // consultas de descoberta e aos pedidos de entrada.
+    if (m_state == MenuState::MpGameSettings) {
+        const int before = m_mpPlayerCount;
+        mpPump();
+        if (m_mpPlayerCount != before) rebuildControls();
+    }
     if (m_state == MenuState::Splash) {
         m_splashTimer += dt;
         if (m_splashTimer > 2.0f) setState(MenuState::MainMenu);
@@ -657,8 +898,10 @@ void ShellMenu::render(Renderer& renderer) {
         return;
     }
 
-    // Logo no topo do menu, com 60% de transparência (40% opaco).
-    if (m_logoBitmap.getWidth() > 0)
+    // Logo no topo do menu, com 60% de transparência (40% opaco). As telas de
+    // multijogador ocupam o quadro todo, então ficam sem ele.
+    const bool mpScreen = m_state >= MenuState::MpConnection;
+    if (m_logoBitmap.getWidth() > 0 && !mpScreen)
         renderer.blitBitmapAlpha(m_logoBitmap, 48, 16, 102, true, 0xFF000000);
 
     switch (m_state) {
@@ -673,6 +916,13 @@ void ShellMenu::render(Renderer& renderer) {
     case MenuState::MissionMenu: renderMissionMenu(renderer); break;
     case MenuState::RtfView:     renderRtfView(renderer); break;
     case MenuState::Chapters:    renderChapters(renderer); break;
+    case MenuState::MpConnection:   renderMpConnection(renderer); break;
+    case MenuState::MpNetOptions:   renderMpNetOptions(renderer); break;
+    case MenuState::MpNewGame:      renderMpNewGame(renderer); break;
+    case MenuState::MpFindSession:  renderMpFindSession(renderer); break;
+    case MenuState::MpPickSession:  renderMpPickSession(renderer); break;
+    case MenuState::MpJoinName:     renderMpJoinName(renderer); break;
+    case MenuState::MpGameSettings: renderMpGameSettings(renderer); break;
     default: break;
     }
 
@@ -708,6 +958,28 @@ void ShellMenu::drawControls(Renderer& renderer) {
         }
         case CtrlKind::List:
             break;   // conteúdo desenhado no render do diálogo
+        case CtrlKind::Combo: {
+            const std::string txt = (c.comboItems && c.comboSel &&
+                                     *c.comboSel >= 0 &&
+                                     *c.comboSel < (int)c.comboItems->size())
+                                  ? (*c.comboItems)[*c.comboSel] : std::string();
+            renderer.drawRect(c.x, c.y, c.w, c.h, c.disabled ? 0xFF2A3545 : 0xFF405068);
+            Font::drawText(fb, 640, 480, txt, c.x + 4, c.y + (c.h - 10) / 2,
+                           c.disabled ? 0xFF60708A : (hl ? 0xFFFFFF99 : 0xFFC8D4E8), true);
+            // a marca da lista suspensa, no canto direito
+            Font::drawText(fb, 640, 480, "v", c.x + c.w - 10, c.y + (c.h - 10) / 2,
+                           c.disabled ? 0xFF60708A : 0xFF8090A8, true);
+            break;
+        }
+        case CtrlKind::Edit: {
+            const bool active = focused && !c.disabled;
+            renderer.drawRect(c.x, c.y, c.w, c.h, active ? 0xFFFFD24A : 0xFF405068);
+            std::string txt = c.editTarget ? *c.editTarget : std::string();
+            if (active) txt += "_";
+            Font::drawText(fb, 640, 480, txt, c.x + 4, c.y + (c.h - 10) / 2,
+                           c.disabled ? 0xFF60708A : 0xFFE0ECFF, true);
+            break;
+        }
         }
 
         // Retângulo de foco (amarelo) mostrando qual controle está focado.

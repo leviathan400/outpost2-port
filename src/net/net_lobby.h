@@ -53,6 +53,10 @@ struct LobbySession {
     uint8_t  guid[16]{};        // GUID da sessao (CoCreateGuid no host)
     std::string name;           // nome da partida (14 bytes no pacote)
     int maxPlayers = 0;         // o campo +0x3A, lido por sub_496170
+    uint32_t settingsFlags = 0; // +0x2A: os flags da partida (bit 0 desastres,
+                                //   bit 1 dia/noite, bit 2 moral fixa,
+                                //   bits 6-8 maximo de jogadores,
+                                //   bits 17-20 veiculos iniciais)
     int pingMs = 0;             // soma das idas e voltas
     int replies = 0;            // quantas respostas chegaram
 };
@@ -69,7 +73,8 @@ struct LobbyPlayer {
 
 // Abre as portas 0xBAA0/0xBAA1 e passa a anunciar a partida.
 bool lobbyHostStart(const std::string& name, int maxPlayers,
-                    const std::string& password, std::string& error);
+                    const std::string& password, std::string& error,
+                    uint32_t settingsFlags = 0);
 void lobbyHostStop();
 bool lobbyHostActive();
 
