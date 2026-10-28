@@ -158,6 +158,9 @@ public:
     void showNewCampaign() { setState(MenuState::NewCampaign); }
     void showPreferences() { setState(MenuState::Preferences); }
     void showHelp() { openHelp(); }
+    // Ajuste visual por linha de comando (--uialpha), so para comparar quadros
+    // na captura: opacidade do logo e do painel do menu.
+    void debugSetUiAlpha(int logo, int painel) { m_logoAlpha = (uint8_t)logo; m_menuAlpha = (uint8_t)painel; }
     // Teste por linha de comando (--demotest): monta o pedido do demo de
     // atracao como a ociosidade faria, e devolve o relato.
     bool demoTest(std::string& report);
@@ -224,6 +227,13 @@ private:
     PeDialogTemplate m_mainMenuDlg; // Dialog 137 template
 
     // Controles da tela atual + foco de teclado
+    // Opacidade dos quadros e dos botoes da tela atual (255 = opaco). So o
+    // MENU PRINCIPAL e translucido: ali o quadro e pequeno e o fundo e a arte
+    // da nave, que fica bonita aparecendo por tras. Nas telas de conteudo
+    // (listas, texto, manual) a translucidez atrapalharia a leitura.
+    uint8_t m_uiOpacity = 255;
+    uint8_t m_logoAlpha = 50;      // opacidade do logo sobre a arte (20%)
+    uint8_t m_menuAlpha = 178;     // opacidade do painel do menu principal
     std::vector<Control> m_controls;
     int m_focusIndex = -1;          // controle com foco (Tab); -1 = nenhum
     // Lista suspensa aberta (o combo "solto" do Windows): enquanto houver uma,

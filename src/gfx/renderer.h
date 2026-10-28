@@ -37,8 +37,17 @@ public:
     void drawBevelRect(int x, int y, int w, int h, uint32_t topLeftColor, uint32_t bottomRightColor);
 
     // Dialog / Window frame (classic Outpost 2 dark metallic beveled box)
-    void drawDialogFrame(int x, int y, int w, int h, const std::string& title = "");
-    void drawButton(int x, int y, int w, int h, const std::string& text, bool hovered, bool pressed, bool disabled = false);
+    // Preenchimento MISTURADO com o que ja esta no quadro: opacity 255 pinta
+    // por cima (o mesmo que fillRect), 0 nao pinta nada. E assim que os
+    // quadros translucidos deixam a arte do fundo aparecer -- fillRect com
+    // alpha na cor nao serve, porque grava a cor crua.
+    void fillRectAlpha(int x, int y, int w, int h, uint32_t color, uint8_t opacity);
+    // `opacity` < 255 deixa o fundo do quadro (e a barra de titulo)
+    // translucidos; as bordas e o texto continuam opacos, para nao borrar.
+    void drawDialogFrame(int x, int y, int w, int h, const std::string& title = "",
+                         uint8_t opacity = 255);
+    void drawButton(int x, int y, int w, int h, const std::string& text, bool hovered,
+                    bool pressed, bool disabled = false, uint8_t opacity = 255);
 
     uint32_t* getFramebuffer() { return m_framebuffer.data(); }
     int getWidth() const { return NATIVE_WIDTH; }

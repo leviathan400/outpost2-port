@@ -264,10 +264,28 @@ void Renderer::drawBevelRect(int x, int y, int w, int h, uint32_t topLeftColor, 
     }
 }
 
-void Renderer::drawDialogFrame(int x, int y, int w, int h, const std::string& title) {
+void Renderer::fillRectAlpha(int x, int y, int w, int h, uint32_t color, uint8_t opacity) {
+    if (opacity == 0) return;
+    if (opacity == 255) { fillRect(x, y, w, h, color); return; }
+    const int x1 = std::max(0, x), y1 = std::max(0, y);
+    const int x2 = std::min(NATIVE_WIDTH, x + w), y2 = std::min(NATIVE_HEIGHT, y + h);
+    const uint32_t a = opacity, inv = 255u - opacity;
+    const uint32_t sr = (color >> 16) & 0xFF, sg = (color >> 8) & 0xFF, sb = color & 0xFF;
+    for (int cy = y1; cy < y2; ++cy)
+        for (int cx = x1; cx < x2; ++cx) {
+            uint32_t& p = m_framebuffer[cy * NATIVE_WIDTH + cx];
+            const uint32_t r = (sr * a + ((p >> 16) & 0xFF) * inv) / 255;
+            const uint32_t g = (sg * a + ((p >> 8) & 0xFF) * inv) / 255;
+            const uint32_t b = (sb * a + (p & 0xFF) * inv) / 255;
+            p = 0xFF000000u | (r << 16) | (g << 8) | b;
+        }
+}
+
+void Renderer::drawDialogFrame(int x, int y, int w, int h, const std::string& title,
+                               uint8_t opacity) {
     // Outpost 2 UI style frame
     // Dark metallic background
-    fillRect(x, y, w, h, 0xFF141923);
+    fillRectAlpha(x, y, w, h, 0xFF141923, opacity);
 
     // Double bevel border
     drawRect(x, y, w, h, 0xFF000000);
@@ -277,7 +295,7 @@ void Renderer::drawDialogFrame(int x, int y, int w, int h, const std::string& ti
     if (!title.empty()) {
         // Title banner bar
         int bannerH = 18;
-        fillRect(x + 3, y + 3, w - 6, bannerH, 0xFF2B3A4F);
+        fillRectAlpha(x + 3, y + 3, w - 6, bannerH, 0xFF2B3A4F, opacity);
         drawBevelRect(x + 3, y + 3, w - 6, bannerH, 0xFF6C7B95, 0xFF10141D);
 
         // Title text centered
@@ -286,7 +304,8 @@ void Renderer::drawDialogFrame(int x, int y, int w, int h, const std::string& ti
     }
 }
 
-void Renderer::drawButton(int x, int y, int w, int h, const std::string& text, bool hovered, bool pressed, bool disabled) {
+void Renderer::drawButton(int x, int y, int w, int h, const std::string& text, bool hovered,
+                          bool pressed, bool disabled, uint8_t opacity) {
     uint32_t bgColor;
     uint32_t borderTL, borderBR;
     uint32_t textColor;
@@ -314,7 +333,7 @@ void Renderer::drawButton(int x, int y, int w, int h, const std::string& text, b
     }
 
     // Fill button background
-    fillRect(x, y, w, h, bgColor);
+    fillRectAlpha(x, y, w, h, bgColor, opacity);
 
     // Bevels
     drawRect(x, y, w, h, 0xFF000000);

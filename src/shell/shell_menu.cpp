@@ -261,6 +261,8 @@ void ShellMenu::setState(MenuState s) {
 }
 
 void ShellMenu::rebuildControls() {
+    // 30% de transparencia no menu principal; o resto opaco.
+    m_uiOpacity = (m_state == MenuState::MainMenu) ? m_menuAlpha : 255;
     m_controls.clear();
     m_focusIndex = -1;
     m_openCombo = -1;          // reencontrado pelo id no fim, se ainda existir
@@ -1374,11 +1376,14 @@ void ShellMenu::render(Renderer& renderer) {
         return;
     }
 
-    // Logo no topo do menu, com 60% de transparência (40% opaco). As telas de
-    // multijogador ocupam o quadro todo, então ficam sem ele.
+    // Logo no topo do menu, bem translúcido (50/255 = 20% opaco), para a arte
+    // da nave e as estrelas passarem por trás da placa dele. A placa é cinza,
+    // não preta, então a chave de cor (preto) não a recorta — quem a dissolve
+    // é a opacidade. As telas de multijogador ocupam o quadro
+    // todo, então ficam sem ele.
     const bool mpScreen = m_state >= MenuState::MpNetOptions;
     if (m_logoBitmap.getWidth() > 0 && !mpScreen)
-        renderer.blitBitmapAlpha(m_logoBitmap, 48, 16, 102, true, 0xFF000000);
+        renderer.blitBitmapAlpha(m_logoBitmap, 48, 16, m_logoAlpha, true, 0xFF000000);
 
     switch (m_state) {
     case MenuState::MainMenu:    renderMainMenu(renderer); break;
@@ -1505,7 +1510,7 @@ void ShellMenu::drawControls(Renderer& renderer) {
         switch (c.kind) {
         case CtrlKind::Button:
             renderer.drawButton(c.x, c.y, c.w, c.h, c.text,
-                                c.hovered || focused, c.pressed, c.disabled);
+                                c.hovered || focused, c.pressed, c.disabled, m_uiOpacity);
             break;
         case CtrlKind::Radio: {
             bool sel = c.radioTarget && (*c.radioTarget == c.radioValue);
@@ -1588,7 +1593,8 @@ void ShellMenu::renderSplash(Renderer& renderer) {
 }
 
 void ShellMenu::renderMainMenu(Renderer& renderer) {
-    renderer.drawDialogFrame(kMenuDlgX, kMenuDlgY, kMenuDlgW, kMenuDlgH, "MAIN MENU");
+    renderer.drawDialogFrame(kMenuDlgX, kMenuDlgY, kMenuDlgW, kMenuDlgH, "MAIN MENU",
+                             m_uiOpacity);
     // Os botões são desenhados por drawControls().
 }
 

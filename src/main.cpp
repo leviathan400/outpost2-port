@@ -270,6 +270,10 @@ static int runScreenshot(int argc, char* argv[], const std::string& outPath) {
         else if (a == "--colony") shellMenu.showColonyGames();
         else if (a == "--about") shellMenu.showAbout();
         else if (a == "--help2") shellMenu.showHelp();
+        else if (a == "--uialpha" && i + 2 < argc) {
+            shellMenu.debugSetUiAlpha(atoi(argv[i + 1]), atoi(argv[i + 2]));
+            shellMenu.showMainMenu();
+        }
         else if (a == "--scores") shellMenu.showScores();
         else if (a == "--ename") shellMenu.showEnterName("Colony: Eden Starship");
         else if (a == "--mpopts")  shellMenu.showMpScreen(0, true, 1);
