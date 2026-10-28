@@ -264,6 +264,18 @@ void Renderer::drawBevelRect(int x, int y, int w, int h, uint32_t topLeftColor, 
     }
 }
 
+bool Renderer::fullscreen() const {
+    return m_window && (SDL_GetWindowFlags(m_window) & SDL_WINDOW_FULLSCREEN_DESKTOP) != 0;
+}
+
+void Renderer::setFullscreen(bool on) {
+    if (!m_window) return;
+    SDL_SetWindowFullscreen(m_window, on ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
+    // Sem o cursor preso ao conteudo, sair da tela cheia pode deixar o rato
+    // num canto; recentrar a janela evita a janela nascer fora da area util.
+    if (!on) SDL_SetWindowPosition(m_window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+}
+
 void Renderer::fillRectAlpha(int x, int y, int w, int h, uint32_t color, uint8_t opacity) {
     if (opacity == 0) return;
     if (opacity == 255) { fillRect(x, y, w, h, color); return; }

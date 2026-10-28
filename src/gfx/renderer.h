@@ -17,6 +17,11 @@ public:
     ~Renderer();
 
     bool init(const std::string& title, int windowWidth = 640, int windowHeight = 480, bool fullscreen = false);
+    // Tela cheia sem troca de modo de video (FULLSCREEN_DESKTOP): a vista de
+    // 640x480 e escalada mantendo a proporcao, com barras onde sobrar.
+    void setFullscreen(bool on);
+    bool fullscreen() const;
+    void toggleFullscreen() { setFullscreen(!fullscreen()); }
     void shutdown();
 
     void clear(uint32_t color = 0xFF000000);

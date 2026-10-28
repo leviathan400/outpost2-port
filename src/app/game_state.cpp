@@ -405,20 +405,12 @@ void GameState::demoCameraTick() {
             else if (r.lastAttacker && agora - r.lastAttackTick < kRecente) briga.push_back(onde);
             else if (!(r.flags & UNIT_BUILDING)) gente.push_back(onde);
         }
-        const char* motivo = !desastre.empty() ? "desastre"
-                           : (!briga.empty() ? "combate" : "unidades");
         const std::vector<std::pair<int, int>>& lista =
             !desastre.empty() ? desastre : (!briga.empty() ? briga : gente);
         if (!lista.empty()) {
             const std::pair<int, int>& alvo = lista[m_demoCamSeq++ % lista.size()];
-            if (alvo.first != m_demoTargX || alvo.second != m_demoTargY) {
-                m_demoTargX = alvo.first;
-                m_demoTargY = alvo.second;
-                std::cout << "[Demo] camera -> tile ("
-                          << (m_demoTargX >> 5) << "," << (m_demoTargY >> 5)
-                          << ") " << motivo << " (" << lista.size() << " candidatos)"
-                          << std::endl;
-            }
+            m_demoTargX = alvo.first;
+            m_demoTargY = alvo.second;
         }
     }
     if (m_demoTargX < 0) return;
@@ -1558,9 +1550,12 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
         if (c == was) {
             if (c == 0) SDL_MinimizeWindow(renderer.getWindow());
             else if (c == 1) {
-                const bool max = (SDL_GetWindowFlags(renderer.getWindow()) & SDL_WINDOW_MAXIMIZED) != 0;
-                if (max) SDL_RestoreWindow(renderer.getWindow());
-                else SDL_MaximizeWindow(renderer.getWindow());
+                // Em tela cheia, "restaurar" devolve a janela; em janela, o
+                // botao leva a tela cheia (o maximizar do original).
+                if (renderer.fullscreen()) renderer.setFullscreen(false);
+                else if (SDL_GetWindowFlags(renderer.getWindow()) & SDL_WINDOW_MAXIMIZED)
+                    SDL_RestoreWindow(renderer.getWindow());
+                else renderer.setFullscreen(true);
             } else {
                 SDL_Event q{};
                 q.type = SDL_QUIT;

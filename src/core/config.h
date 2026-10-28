@@ -97,6 +97,11 @@ struct GameSettings {
     // passeia pelos pontos de acao; 0 = fica parada onde o InitProc do ademo
     // a pos, que e o comportamento do original. Ver GameState::demoCameraTick.
     int demoCamera = 1;
+    // "Fullscreen": idem, so deste porte. 1 = a janela abre em tela cheia
+    // (FULLSCREEN_DESKTOP: sem troca de modo de video, a vista de 640x480
+    // escalada mantendo a proporcao); 0 = janela. Alt+Enter alterna em
+    // qualquer um dos dois, e o botao de maximizar da barra de titulo tambem.
+    int fullscreen = 1;
 
     // [WindowInfo]
     int miniMapButtons = 0;

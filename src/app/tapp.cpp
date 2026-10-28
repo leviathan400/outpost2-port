@@ -45,8 +45,12 @@ bool TApp::init() {
     m_sdlReady = true;
     soundInit();                                  // sub_47E020 (unk_56C610)
 
+    std::cout << "[TApp] video: " << (settings.fullscreen ? "tela cheia" : "janela")
+              << " (\"[Game] Fullscreen\"; Alt+Enter alterna)" << std::endl;
     m_renderer = new Renderer();
-    if (!m_renderer->init("Outpost 2: Divided Destiny", 1280, 960, false)) {
+    // Tela cheia por padrao ("[Game] Fullscreen"); 1280x960 e o tamanho da
+    // janela quando se sai dela (o dobro da vista de 640x480).
+    if (!m_renderer->init("Outpost 2: Divided Destiny", 1280, 960, settings.fullscreen != 0)) {
         std::cerr << "Renderer init falhou." << std::endl;
         return false;
     }
@@ -119,6 +123,15 @@ void TApp::run() {
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT) { m_quit = true; break; }
+            // Alt+Enter alterna tela cheia e janela, em qualquer tela. Fica
+            // aqui, antes do despacho, para valer no shell e no jogo e para
+            // nao ser confundido com o Enter dos dialogos.
+            if (e.type == SDL_KEYDOWN && !e.key.repeat &&
+                (e.key.keysym.sym == SDLK_RETURN || e.key.keysym.sym == SDLK_KP_ENTER) &&
+                (e.key.keysym.mod & KMOD_ALT)) {
+                m_renderer->toggleFullscreen();
+                continue;
+            }
             if (m_cur) m_cur->handleEvent(*m_renderer, e);
         }
         if (m_quit) break;
