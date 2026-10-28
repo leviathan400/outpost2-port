@@ -625,9 +625,23 @@ static int runDemoTest() {
                 }
                 if (op2::gameEndCode()) fimTick = op2::TethysGame::tick();
             }
+            // Quantos inimigos estariam escondidos pela cegueira noturna? Os
+            // ademo chamam SetDaylightEverywhere(0), entao ha noite; no demo a
+            // regra nao vale, senao a cena mostra os tiros sem quem atira.
+            int noEscuro = 0;
+            for (size_t u = 1; u < op2::g_units.size(); ++u) {
+                const op2::UnitRecord& r = op2::g_units[u];
+                if (r.id == -1 || (r.flags & op2::UNIT_DEAD)) continue;
+                if (!(r.flags & op2::UNIT_VEHICLE) || (r.owner & 0x0F) == 0) continue;
+                if (op2::g_gameMap.lightDarkness((r.pixelX >> 5) + op2::g_gameMap.internalXOffset()
+                                                 - op2::TethysGame::daylightPos()) >= 16)
+                    ++noEscuro;
+            }
             const int codigo = op2::gameEndCode();
             std::printf("[DemoTest] %s: fim no tique %d com codigo %d (esperado 11),"
-                        " camera movida %d vezes%c", nome, fimTick, codigo, saltos, 10);
+                        " camera movida %d vezes, %d veiculos inimigos no escuro"
+                        " (visiveis no demo)%c",
+                        nome, fimTick, codigo, saltos, noEscuro, 10);
             if (codigo != 11) ok = false;
         }
     }

@@ -1211,6 +1211,9 @@ void GameState::drawGlobe(uint32_t* fb) {
 
     const int me = TethysGame::localPlayer();
     const bool shade = !TethysGame::daylightEverywhere();
+    // No demo de atracao o inimigo aparece mesmo no escuro (ver escondeInimigo
+    // no minimapa, logo abaixo): a cena fica confusa sem quem esta atirando.
+    const bool escondeInimigo = shade && !demoGame();
     // As mesmas cores de dono do minimapa, em RGB555 (a textura e de 16 bits).
     static const uint16_t kOC5[7] = { 0x219F, 0x7D48, 0x234E, 0x7F48, 0x619F, 0x239C, 0x7E46 };
     m_globeDirty.clear();
@@ -1218,7 +1221,7 @@ void GameState::drawGlobe(uint32_t* fb) {
         const UnitRecord& r = g_units[i];
         if (r.id == -1 || (r.flags & UNIT_DEAD) || !(r.flags & (UNIT_VEHICLE | UNIT_BUILDING))) continue;
         const int ow = r.owner & 0x0F;
-        if ((r.flags & UNIT_VEHICLE) && ow != me && shade) {
+        if ((r.flags & UNIT_VEHICLE) && ow != me && escondeInimigo) {
             const bool ally = (g_playerData[me].allyMask >> ow) & 1;
             if (!ally && !(r.flags & 1) &&
                 g_gameMap.lightDarkness((r.pixelX >> 5) + g_gameMap.internalXOffset()
@@ -2266,6 +2269,14 @@ void GameState::renderPanel(Renderer& renderer) {
     renderer.fillRect(mmX0, mmY0, mmW, mmH, 0xFF000000);
     if (m_mini.globe()) { drawGlobe(fb); } else {
     const bool shade = g_gameMap.ok() && !TethysGame::daylightEverywhere();
+    // ACRESCIMO DESTE PORTE, so no demo de atracao: o veiculo inimigo no
+    // escuro continua escondido numa partida de verdade (sub_48CCD0, que e a
+    // cegueira noturna do jogo), mas no demo ele aparece. Os tres ademo*.dll
+    // chamam SetDaylightEverywhere(0) de proposito, entao ha noite; sem esta
+    // excecao o demo mostra os tiros e as explosoes sem mostrar quem atira.
+    // O ESCURECIMENTO DO TERRENO continua valendo (shade), para a noite ainda
+    // ser noite -- aqui so cai a parte que esconde o inimigo.
+    const bool escondeInimigo = shade && !demoGame();
     // Brilho 0..31 da coluna do port (x interna = x + deslocamento).
     auto brightness = [&](int tx) {
         return 0x1F - g_gameMap.lightDarkness(tx + g_gameMap.internalXOffset() - TethysGame::daylightPos());
@@ -2327,7 +2338,7 @@ void GameState::renderPanel(Renderer& renderer) {
         const UnitRecord& r = g_units[i];
         if (r.id == -1 || (r.flags & UNIT_DEAD) || !(r.flags & (UNIT_VEHICLE | UNIT_BUILDING))) continue;
         const int ow = r.owner & 0x0F;
-        if ((r.flags & UNIT_VEHICLE) && ow != me && shade) {
+        if ((r.flags & UNIT_VEHICLE) && ow != me && escondeInimigo) {
             // sub_48CCD0: veículo de quem não é aliado só aparece com a escuridão
             // da coluna < 16 (ou com os faróis acesos, flag 1).
             const bool ally = (g_playerData[me].allyMask >> ow) & 1;
