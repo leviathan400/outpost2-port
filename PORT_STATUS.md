@@ -100,6 +100,18 @@ Outpost2_src/     disassembly de referência (NÃO versionado)
 Mixer SDL fiel ao do original (volume e pan por tile, fila de vozes), música
 `.clm` e **volume mestre** próprio do porte.
 
+### Manual (ajuda) e demo de atração
+O botão HELP e o F1 abrem o **OUTPOST2.HLP** — "Outpost 2 Online Manual", 145
+tópicos — numa tela do porte, porque o WinHelp que o original chamava não
+existe mais no Windows. O arquivo é lido onde está (`src/res/winhelp.*`), não
+convertido nem copiado; sem ele, o HELP procura um manual em PDF ao lado do
+jogo e o entrega ao leitor do sistema.
+
+Um minuto parado no menu principal dispara o **demo de atração**, como no
+original: `ademo{1,2,3}.dll` em rodízio pelo contador `[Game] Demo` do INI
+(que é um contador, não um liga-desliga), com desastres e dia/noite ligados.
+Qualquer tecla ou clique interrompe.
+
 ### Multijogador
 Partida em **rede, em lockstep bit-exato**, com lobby sincronizado
 (descoberta por broadcast, entrada, chat, EJECT, opções), as telas do
@@ -128,44 +140,36 @@ Revisado item a item em 2026-10-28, conferindo no código.
    fixa em 2 em `app/shell_state.cpp` e em `main.cpp`. Para 3–6 jogadores são
    precisas N conexões (ou retransmissão pelo host) e roteamento dos turnos por
    jogador. Mapas e GAME SETTINGS já suportam 6.
-2. **Ajuda (botão HELP do menu).** Cai no `default` do despacho. O original
-   chama `WinHelpA("OUTPOST2.HLP")`; o arquivo está no disco, mas o WinHlp32 não
-   existe mais no Windows atual — seria preciso um leitor do formato HLP ou
-   converter o conteúdo.
-3. **Demo de atração.** O `OP2SHELL.DLL` referencia `ademo1/2/3.dll`: o menu
-   original joga sozinho quando fica ocioso. Não portado nem rastreado — o
-   OP2SHELL.DLL não está no IDA, só o EXE.
-
 ### Multijogador, peças soltas
 
-4. **TRANSFER** — doar as unidades e abandonar a partida. É o **único** comando
+2. **TRANSFER** — doar as unidades e abandonar a partida. É o **único** comando
    de veículo que ainda cai em `NOT_PORTED`; falta o diálogo de escolha de
    jogador (`sub_45D020`).
-5. **Trade Center** — o prédio existe e conta na estatística, mas não há a UI
+3. **Trade Center** — o prédio existe e conta na estatística, mas não há a UI
    de troca de recursos.
-6. **Modo Chat** da aba Communications (`[+0x1C4]` = 1), que só existe em
+4. **Modo Chat** da aba Communications (`[+0x1C4]` = 1), que só existe em
    multijogador.
-7. **Estatísticas de fim de partida** multijogador (motivos 7..9 da mensagem
+5. **Estatísticas de fim de partida** multijogador (motivos 7..9 da mensagem
    0x73e) e as matrizes de baixas por par de jogadores.
 
 ### Miudezas de simulação (todas marcadas no código)
 
-8. Diálogo de confirmação do IDLE quando o prédio guarda metal ("All metal in
+6. Diálogo de confirmação do IDLE quando o prédio guarda metal ("All metal in
    storage will be lost...").
-9. O painel STORAGE cobre 8 tipos de prédio; os demais respondem "ainda não
+7. O painel STORAGE cobre 8 tipos de prédio; os demais respondem "ainda não
    portado".
-10. Ordem "atirar no chão" (bit 0x2000, `sub_4A1BC0`).
-11. Estatísticas 0x1C4/0x1CC por jogador (baixas infligidas/sofridas).
-12. Revelação do mapa ao construir (`dword_574C88`) e o som de `sub_42F000`.
-13. Pacote 0x1D (tomar posse) para os grupos de IA.
-14. Modo 3 do pathfinder (`sub_438850`).
-15. Fila de waypoints com Shift.
-16. Dano em paredes nas autodestruições (`sub_4A23F0` no caminho de
+8. Ordem "atirar no chão" (bit 0x2000, `sub_4A1BC0`).
+9. Estatísticas 0x1C4/0x1CC por jogador (baixas infligidas/sofridas).
+10. Revelação do mapa ao construir (`dword_574C88`) e o som de `sub_42F000`.
+11. Pacote 0x1D (tomar posse) para os grupos de IA.
+12. Modo 3 do pathfinder (`sub_438850`).
+13. Fila de waypoints com Shift.
+14. Dano em paredes nas autodestruições (`sub_4A23F0` no caminho de
     `sub_4A4090`).
 
 ### Não aplicável nesta instalação
 
-17. **Filmes (AVI).** O shell original toca `I.AVI`/`IE`/`IP` na abertura,
+15. **Filmes (AVI).** O shell original toca `I.AVI`/`IE`/`IP` na abertura,
     `E4.AVI`, `MEF`/`MPF` e as oito variantes de fim de campanha
     (`MEBL`/`MEBW`/`MEUL`/`MEUW`/`MPBL`/`MPBW`/`MPUL`/`MPUW`) e as quatro de fim
     de colônia (`CES`/`CEP`/`CPS`/`CPP`). **Nenhum `.AVI` existe no disco** —
@@ -468,6 +472,8 @@ São 81 modos. Os que cobrem regressão de verdade:
 | `--uitest` | combos e barras de rolagem, pelo caminho do mouse e do teclado |
 | `--missiontest <DLL> <saida> <ticks>` | carrega e roda qualquer missão |
 | `--aitest <DLL campanha> <DLL multi>` | o `AILevel` chega ao jogador 0 e o multijogador fica intacto |
+| `--helptest [tópico]` | o leitor do `.HLP` e a navegação da tela do manual |
+| `--demotest` | o rodízio dos `ademo`, o `GameStartInfo` do demo e a interrupção por tecla |
 | `--salvagetest`, `--oretest`, `--earthtest`, `--combattest`, `--researchtest`, `--garagetest`, `--gptest`, `--pinwheeltest` | cada subsistema |
 | `--screenshot` + `--menu`/`--prefs`/`--mpsettings`/`--panetest`/... | captura de telas para conferência visual |
 
@@ -489,12 +495,12 @@ São 81 modos. Os que cobrem regressão de verdade:
 | Triggers, objetivos, vitória/derrota | Completo |
 | IA (grupos, computador padrão, Pinwheel) | Completo |
 | Campanha, colônia, tutoriais | Completo |
-| Shell e telas | Completo (menos a Ajuda e a demo de atração) |
+| Shell e telas | Completo |
+| Manual (OUTPOST2.HLP) e demo de atração | Completo |
 | HUD, abas, minimapa, globo | Completo |
 | Áudio e música | Completo |
 | Salvar/carregar | Completo |
 | Multijogador em rede | Joga, **mas só a dois**; faltam chat in-game, troca e estatísticas |
-| Ajuda, demo de atração | Não portados |
 | Filmes | Não aplicável (arquivos não existem) |
 
 ---
