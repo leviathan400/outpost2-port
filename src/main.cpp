@@ -12,6 +12,7 @@
 #include "shell/shell_menu.h"
 #include "shell/scores.h"
 #include "core/config.h"
+#include "gfx/pbmp.h"
 #include "res/res_manager.h"
 #include "game/game_map.h"
 #include "game/walls.h"
@@ -776,6 +777,65 @@ static int runMpLan(const std::string& mode, const std::string& dll, int ticks) 
 // se e humano, quantas unidades/predios tem e se o Command Center esta
 // operante — que e o que o CreateOnePlayerLeftTrigger (sub_492970) olha.
 // Serve para ver se a partida se sustenta em vez de acabar no primeiro tique.
+// --aitest <DLL de campanha> <DLL multijogador>: confere o "AILevel" do INI
+// pelo caminho de verdade — grava a chave, carrega a missao e le a dificuldade
+// com que os scripts vao ser atendidos. Restaura o INI no fim.
+static int runAiTest(const std::string& dll, const std::string& mpDll) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 aitest", 1280, 960, false)) { SDL_Quit(); return 1; }
+
+    op2::Config cfg("OUTPOST2.INI");
+    const bool tinha = cfg.load();
+    const int antes = tinha ? cfg.getInt("Game", "AILevel", 0) : 0;
+    const bool haviaChave = tinha && cfg.hasKey("Game", "AILevel");
+
+    static const char* kNome[4] = {"AUTO", "Easy", "Normal", "Hard"};
+    bool ok = true;
+    for (int n = 0; n < 4; ++n) {
+        cfg.setInt("Game", "AILevel", n);
+        cfg.save();
+        op2::GameState gs;
+        if (!gs.loadMission(dll)) { ok = false; break; }
+        gs.onActivate();
+        const int vista = op2::Player[0].Difficulty();
+        // AUTO tem de deixar o que a partida escolheu (1 = Normal, sem
+        // GameStartInfo); os outros forcam n-1.
+        const int esperado = (n == 0) ? 1 : n - 1;
+        if (vista != esperado) ok = false;
+        std::printf("[AiTest] %-6s -> jogador 0 ve %d (esperado %d) %s%c",
+                    kNome[n], vista, esperado, vista == esperado ? "ok" : "FALHOU", 10);
+    }
+
+    // Em multijogador a dificuldade vem do lobby e nao pode ser sobrescrita,
+    // ou os dois lados simulariam diferente.
+    if (ok && !mpDll.empty()) {
+        cfg.setInt("Game", "AILevel", 3);        // Hard
+        cfg.save();
+        op2::GameState gs;
+        if (gs.loadMission(mpDll)) {
+            gs.onActivate();
+            const int vista = op2::Player[0].Difficulty();
+            const bool intacto = (vista != 2);
+            if (!intacto) ok = false;
+            std::printf("[AiTest] multijogador com Hard -> jogador 0 ve %d %s%c",
+                        vista, intacto ? "(intacto, ok)" : "(FOI SOBRESCRITO)", 10);
+        }
+    }
+
+    // Devolve o INI como estava.
+    if (haviaChave) cfg.setInt("Game", "AILevel", antes);
+    else cfg.setInt("Game", "AILevel", 0);
+    cfg.save();
+
+    std::fflush(stdout);
+    renderer.shutdown();
+    SDL_Quit();
+    return ok ? 0 : 1;
+}
+
 static int runMpTest(const std::string& dll, int ticks) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
     op2::g_ResManager.init(".");
@@ -831,6 +891,64 @@ static void dumpDark(const op2::GameState& gs) {
     for (int tx = 0; tx < 14; ++tx)
         std::printf(" %d", op2::GameState::tileDarkness(gs.camX() / 32 + tx));
     std::printf("%c", 10);
+}
+
+// --nightshot <DLL> <prefixo> [percentuais...]: carrega a missao, poe a base do
+// jogador em plena noite (gira a faixa de luz ate a coluna da camera ficar na
+// escuridao maxima) e salva um quadro para cada ajuste de "NightDarkness", para
+// comparar as curvas lado a lado. Sem percentuais, usa 100 (o original) e o que
+// estiver no INI.
+static int runNightShot(const std::string& dll, const std::string& prefix,
+                        const std::vector<int>& niveis) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 nightshot", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    for (int i = 0; i < 5; ++i) gs.onIdle(renderer, 0.1f);
+
+    // Centra a camera no primeiro predio do jogador 0, que e onde o contraste
+    // entre o terreno escuro e os sprites, que nao escurecem, aparece.
+    for (size_t i = 1; i < op2::g_units.size(); ++i) {
+        const op2::UnitRecord& r = op2::g_units[i];
+        if (r.id == -1 || (r.flags & op2::UNIT_DEAD)) continue;
+        if ((r.owner & 0x0F) != 0 || !(r.flags & op2::UNIT_BUILDING)) continue;
+        gs.setCamera(r.pixelX - 300, r.pixelY - 220);
+        break;
+    }
+
+    // Gira a faixa de luz ate a coluna do centro da vista ficar no escuro.
+    const int w = op2::g_gameMap.internalWidth();
+    const int alvo = (gs.camX() + 320) / 32;
+    int melhorFase = 0, melhorEscuro = -1;
+    for (int fase = 0; fase < 0x10000; fase += 256) {
+        op2::TethysGame::setDaylightPhase(fase, w);
+        const int d = op2::GameState::tileDarkness(alvo);
+        if (d > melhorEscuro) { melhorEscuro = d; melhorFase = fase; }
+    }
+    op2::TethysGame::setDaylightPhase(melhorFase, w);
+    std::printf("[NightShot] coluna %d com escuridao %d (fase 0x%04X)%c",
+                alvo, melhorEscuro, melhorFase, 10);
+
+    bool ok = true;
+    for (int n : niveis) {
+        op2::setNightDarkness(n);
+        gs.onIdle(renderer, 0.0f);
+        char out[512];
+        std::snprintf(out, sizeof(out), "%s_%03d.bmp", prefix.c_str(), n);
+        if (!writeBmp32(out, renderer.getFramebuffer(),
+                        op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT))
+            ok = false;
+        std::printf("[NightShot] %d%%: brilho no escuro %d/32 -> %s%c",
+                    n, op2::nightShadeMul(melhorEscuro), out, 10);
+    }
+    std::fflush(stdout);
+    renderer.shutdown();
+    SDL_Quit();
+    return ok ? 0 : 1;
 }
 
 static int runPlayShot(const std::string& mapName, const std::string& outPath, bool passOverlay,
@@ -3287,6 +3405,8 @@ int main(int argc, char* argv[]) {
             return runPlayerTest();
         if (std::strcmp(argv[i], "--unittest") == 0)
             return runUnitTest();
+        if (std::strcmp(argv[i], "--aitest") == 0 && i + 1 < argc)
+            return runAiTest(argv[i + 1], i + 2 < argc ? argv[i + 2] : "");
         if (std::strcmp(argv[i], "--uitest") == 0)
             return runUiTest();
         if (std::strcmp(argv[i], "--mpui") == 0 && i + 1 < argc)
@@ -3301,6 +3421,12 @@ int main(int argc, char* argv[]) {
                             i + 5 < argc ? argv[i + 5] : "127.0.0.1");
         if (std::strcmp(argv[i], "--mptest") == 0 && i + 1 < argc)
             return runMpTest(argv[i + 1], i + 2 < argc ? atoi(argv[i + 2]) : 200);
+        if (std::strcmp(argv[i], "--nightshot") == 0 && i + 2 < argc) {
+            std::vector<int> niveis;
+            for (int k = i + 3; k < argc; ++k) niveis.push_back(atoi(argv[k]));
+            if (niveis.empty()) { niveis.push_back(100); niveis.push_back(op2::nightDarkness()); }
+            return runNightShot(argv[i + 1], argv[i + 2], niveis);
+        }
         if (std::strcmp(argv[i], "--playshot") == 0 && i + 2 < argc) {
             bool pass = (i + 3 < argc && std::strcmp(argv[i + 3], "pass") == 0);
             return runPlayShot(argv[i + 1], argv[i + 2], pass,

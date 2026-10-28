@@ -75,6 +75,9 @@ void GameState::loadSettings() {
     m_mobileShadows = gs.mobileShadows != 0;           // dword_575638
     m_overlay = gs.overlay != 0;                       // "Overlay" → dword_57562C
     m_frameSkip = gs.frameSkip;                        // Value (FrameSkip)
+    m_aiLevel = gs.aiLevel;                            // "AILevel" (so deste porte)
+    if (m_aiLevel < 0 || m_aiLevel > 3) m_aiLevel = 0;
+    setNightDarkness(gs.nightDarkness);                // "NightDarkness" (idem)
 }
 
 bool GameState::loadMap(const std::string& mapName) {
@@ -223,6 +226,16 @@ bool GameState::loadMission(const std::string& dllName, const GameStartInfo* gsi
     m_endPhase = 0;
     if (gsi)
         for (int p = 0; p < d->numPlayers && p < 6; ++p) g_playerData[p].difficulty = gsi->difficulty(p);
+    // "AILevel" do INI, que o original nao tem. A dificuldade e o unico botao
+    // que mexe com o adversario: as DLLs de campanha chamam
+    // _Player::Difficulty() do jogador 0 e calibram o inimigo com ela (E01..E12
+    // e P01..P12 todas consultam). Em multijogador ela e por jogador e vem
+    // combinada no lobby (o combo Resources grava nos mesmos bits 3-4), entao
+    // uma preferencia local mudaria a simulacao de um lado so e quebraria o
+    // lockstep — por isso so vale fora do multijogador.
+    if (m_aiLevel > 0 && !multiGame)
+        for (int p = 0; p < d->numPlayers && p < 6; ++p)
+            g_playerData[p].difficulty = m_aiLevel - 1;
     // sub_4893A0: planilhas relidas (sub_445070) e árvore da missão (sub_4733B0).
     reloadSheets();
     loadMoraleSheet();
@@ -2249,10 +2262,12 @@ void GameState::renderPanel(Renderer& renderer) {
     auto brightness = [&](int tx) {
         return 0x1F - g_gameMap.lightDarkness(tx + g_gameMap.internalXOffset() - TethysGame::daylightPos());
     };
-    // Escurecimento de um canal de 5 bits (tabelas byte_585000/585400/585C00).
+    // Escurecimento de um canal de 5 bits (tabelas byte_585000/585400/585C00),
+    // comprimido pelo mesmo ajuste do terreno para o minimapa nao destoar.
     auto shade5 = [](int c5, int b) {
         if (c5 == 31) return 31;
-        const int m = std::min(b + 8, 33);
+        const int orig = std::min(b + 8, 33);
+        const int m = 32 - (32 - orig) * nightDarkness() / 100;
         return (c5 * m) >> 5;
     };
     // Com zoom o mapa é maior que a janela: tudo sai recortado nela.

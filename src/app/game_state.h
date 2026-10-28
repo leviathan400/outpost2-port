@@ -130,6 +130,9 @@ private:
     bool m_overlay = true;           // "Overlay" (dword_57562C): luz de status dos prédios
     bool m_mobileShadows = false;     // INI MobileShadows (dword_575638)
     int  m_frameSkip = 1;             // INI FrameSkip (Value)
+    // "AILevel" do INI: 0 = AUTO (vale o que a partida escolheu), 1..3 forcam
+    // Easy/Normal/Hard. Ver applyAiLevel em activateMission.
+    int m_aiLevel = 0;
     int  m_shakeX = 0, m_shakeY = 0;  // tremor acumulado (vista +0x138/+0x13C)
 
     // --- Seleção / interação (a "MAINE" / command pane) ---

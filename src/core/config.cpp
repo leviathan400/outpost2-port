@@ -179,6 +179,8 @@ void GameSettings::loadFrom(const Config& cfg) {
     showMovies        = cfg.getInt("Game", "ShowMovies", showMovies);
     spiffyDraw        = cfg.getInt("Game", "SpiffyDraw", spiffyDraw);
     demo              = cfg.getInt("Game", "Demo", demo);
+    aiLevel           = cfg.getInt("Game", "AILevel", aiLevel);
+    nightDarkness     = cfg.getInt("Game", "NightDarkness", nightDarkness);
     name              = cfg.getString("Game", "Name", name);
 
     miniMapButtons    = cfg.getInt("WindowInfo", "MiniMapButtons", miniMapButtons);
@@ -201,6 +203,8 @@ void GameSettings::saveTo(Config& cfg) const {
     cfg.setInt("Game", "ShowMovies", showMovies);
     cfg.setInt("Game", "SpiffyDraw", spiffyDraw);
     cfg.setInt("Game", "Demo", demo);
+    cfg.setInt("Game", "AILevel", aiLevel);
+    cfg.setInt("Game", "NightDarkness", nightDarkness);
     cfg.setString("Game", "Name", name);
 
     cfg.setInt("WindowInfo", "MiniMapButtons", miniMapButtons);

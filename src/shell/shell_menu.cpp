@@ -1,6 +1,7 @@
 #include "shell_menu.h"
 #include "font.h"
 #include "../res/res_manager.h"
+#include "../core/config.h"
 #include "../game/tethys_game.h"
 #include <iostream>
 #include <filesystem>
@@ -84,7 +85,7 @@ namespace {
 // NEW CAMPAIGN / PREFERENCES / ABOUT
 namespace {
     constexpr int kNcX = 180, kNcY = 130, kNcW = 280, kNcH = 220;
-    constexpr int kPrX = 140, kPrY = 100, kPrW = 360, kPrH = 300;
+    constexpr int kPrX = 140, kPrY = 94, kPrW = 360, kPrH = 322;
     constexpr int kAbX = 140, kAbY = 100, kAbW = 360, kAbH = 300;
 }
 
@@ -291,6 +292,7 @@ void ShellMenu::rebuildControls() {
         break;
     }
     case MenuState::Preferences: {
+        loadPrefs();
         auto addCheck = [&](const char* t, int y, bool* tgt) {
             Control c; c.kind = CtrlKind::Check; c.text = t;
             c.x = kPrX + 24; c.y = y; c.w = 240; c.h = 14;
@@ -303,7 +305,10 @@ void ShellMenu::rebuildControls() {
         addCheck("Ambient Animations",    cy, &m_prefAnimations); cy += 24;
         addCheck("Unit Shadows",          cy, &m_prefUnitShadows);cy += 24;
         addCheck("Structure Shadows",     cy, &m_prefStructShadows);
-        addButton(1, "ACCEPT", kPrX + (kPrW - 100) / 2, kPrY + 258, 100, 26, true);
+        // Nivel da IA: acrescimo deste porte. O rotulo e desenhado no render.
+        addCombo(1200, &kAiLevelNames, &m_prefAiLevel,
+                 kPrX + 130, kPrY + 214, 110, 22);
+        addButton(1, "ACCEPT", kPrX + (kPrW - 100) / 2, kPrY + 280, 100, 26, true);
         break;
     }
     case MenuState::About:
@@ -631,7 +636,7 @@ void ShellMenu::dispatchButton(int id) {
         }
         break;
     case MenuState::Preferences:
-        if (id == 1) setState(MenuState::MainMenu);
+        if (id == 1) { savePrefs(); setState(MenuState::MainMenu); }
         break;
     case MenuState::About:
         if (id == 1) setState(MenuState::MainMenu);
@@ -1295,6 +1300,34 @@ void ShellMenu::renderAboutDialog(Renderer& renderer) {
     // Botão OK desenhado por drawControls().
 }
 
+// O PREFERENCES mexe no [Game] do OUTPOST2.INI, como o original faz. Fora o
+// AILevel, que e acrescimo deste porte, as chaves sao as mesmas.
+void ShellMenu::loadPrefs() {
+    Config cfg("OUTPOST2.INI");
+    GameSettings gs;
+    if (cfg.load()) gs.loadFrom(cfg);
+    m_prefSound        = gs.sound != 0;
+    m_prefMusic        = gs.music != 0;
+    m_prefAnimations   = gs.ambient != 0;
+    m_prefUnitShadows  = gs.mobileShadows != 0;
+    m_prefStructShadows = gs.stationaryShadows != 0;
+    m_prefAiLevel = (gs.aiLevel >= 0 && gs.aiLevel <= 3) ? gs.aiLevel : 0;
+}
+
+void ShellMenu::savePrefs() {
+    Config cfg("OUTPOST2.INI");
+    GameSettings gs;
+    if (cfg.load()) gs.loadFrom(cfg);     // preserva o que a tela nao mostra
+    gs.sound             = m_prefSound ? 1 : 0;
+    gs.music             = m_prefMusic ? 1 : 0;
+    gs.ambient           = m_prefAnimations ? 1 : 0;
+    gs.mobileShadows     = m_prefUnitShadows ? 1 : 0;
+    gs.stationaryShadows = m_prefStructShadows ? 1 : 0;
+    gs.aiLevel           = m_prefAiLevel;
+    gs.saveTo(cfg);
+    cfg.save();
+}
+
 void ShellMenu::renderPreferencesDialog(Renderer& renderer) {
     renderer.dimRect(0, 0, 640, 480, 0x88);
     renderer.drawDialogFrame(kPrX, kPrY, kPrW, kPrH, "PREFERENCES");
@@ -1303,6 +1336,13 @@ void ShellMenu::renderPreferencesDialog(Renderer& renderer) {
     int y = kPrY + 40 + 5 * 24 + 4;
     Font::drawText(fb, 640, 480, "Game Speed: 5 / 10", kPrX + 24, y, 0xFFD8E4F8, true); y += 24;
     Font::drawText(fb, 640, 480, "Scroll Speed: 4 / 10", kPrX + 24, y, 0xFFD8E4F8, true);
+    // Nível da IA (só deste porte): o rótulo do combo 1200 e a explicação do
+    // AUTO, que é como o jogo original se comporta.
+    Font::drawText(fb, 640, 480, "AI Level:", kPrX + 24, kPrY + 219, 0xFFD8E4F8, true);
+    Font::drawText(fb, 640, 480,
+                   m_prefAiLevel == 0 ? "(o nivel que a partida escolher)"
+                                      : "(vale em campanha e colonia)",
+                   kPrX + 24, kPrY + 246, 0xFF8090A8, true);
 }
 
 void ShellMenu::renderColonyGamesDialog(Renderer& renderer) {

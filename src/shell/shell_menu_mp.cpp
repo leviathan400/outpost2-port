@@ -59,6 +59,7 @@ const std::vector<std::string> kColorNames = {
 const std::vector<std::string> kResourceNames = { "High", "Med", "Low" };
 const std::vector<std::string> kMaxPlayerNames = { "2", "3", "4", "5", "6" };
 const std::vector<std::string> kVehicleNames = { "0", "1", "2", "3", "4", "5" };
+const std::vector<std::string> kAiLevelNames = { "AUTO", "Easy", "Normal", "Hard" };
 
 namespace {
 

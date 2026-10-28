@@ -79,6 +79,15 @@ struct GameSettings {
     int spiffyDraw = 1;
     int demo = 1;
     std::string name = "";
+    // "AILevel": acrescimo DESTE porte, nao existe no INI original (o jogo so
+    // escolhe o nivel ao comecar: Dialog 140 na campanha, o combo Resources no
+    // multijogador). 0 = AUTO, que deixa valer o que a partida escolheu; 1..3
+    // forcam Easy/Normal/Hard. O original ignora chaves que nao conhece.
+    int aiLevel = 0;
+    // "NightDarkness": tambem so deste porte. Quanto da curva de escurecimento
+    // noturno do original se aplica, em porcento (100 = o jogo tal como e,
+    // 0 = sem noite). Ver op2::setNightDarkness.
+    int nightDarkness = 75;
 
     // [WindowInfo]
     int miniMapButtons = 0;

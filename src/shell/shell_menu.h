@@ -99,6 +99,9 @@ extern const std::vector<std::string> kColorNames;
 extern const std::vector<std::string> kResourceNames;
 extern const std::vector<std::string> kMaxPlayerNames;
 extern const std::vector<std::string> kVehicleNames;
+// As opcoes do combo de nivel: AUTO deixa valer o que a partida escolheu, e os
+// outros tres sao os nomes que o jogo usa (Dialog 140 e off_4E9028).
+extern const std::vector<std::string> kAiLevelNames;
 
 class ShellMenu {
 public:
@@ -214,6 +217,11 @@ private:
     // Estado dos checkboxes de Preferences (antes eram fixos)
     bool m_prefSound = true, m_prefMusic = true, m_prefAnimations = true;
     bool m_prefUnitShadows = false, m_prefStructShadows = false;
+    // "AILevel": 0 = AUTO (o nivel que a partida escolher), 1..3 Easy/Normal/
+    // Hard. Nao existe no jogo original — ver loadPrefs/savePrefs.
+    int  m_prefAiLevel = 0;
+    void loadPrefs();   // le o [Game] do OUTPOST2.INI para a tela
+    void savePrefs();   // grava de volta (botao ACCEPT)
 
     std::vector<std::string> m_colonyGameList;    // LevelDesc das c*.dll
     std::vector<std::string> m_colonyGameDlls;    // arquivo correspondente

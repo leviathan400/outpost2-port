@@ -6,6 +6,24 @@
 
 namespace op2 {
 
+namespace { int s_nightDarkness = 75; }
+
+void setNightDarkness(int percent) {
+    if (percent < 0) percent = 0;
+    if (percent > 100) percent = 100;
+    s_nightDarkness = percent;
+}
+
+int nightDarkness() { return s_nightDarkness; }
+
+int nightShadeMul(int darkness) {
+    if (darkness < 0) darkness = 0;
+    if (darkness >= Pbmp::kShadeLevels) darkness = Pbmp::kShadeLevels - 1;
+    const int N = Pbmp::kShadeLevels;
+    const int orig = std::min(N - darkness + 4, N);     // a conta de sub_4A9BF0
+    return N - (N - orig) * s_nightDarkness / 100;
+}
+
 namespace {
 // Varre os chunks {tag u32, len u32} a partir de `start` (até `end`) e devolve o
 // offset do payload do chunk `tag` (e seu tamanho em outLen). -1 se não achar.
@@ -70,27 +88,33 @@ bool Pbmp::load(const uint8_t* d, size_t size) {
     if (dl < need) return false;
     m_pixels.assign(d + pxo, d + pxo + need);
 
-    // sub_4A9BF0(paleta, N = 32): para o nível L = N..1 (ou seja escuridão
-    // d = N − L), cada canal vira canal * min(L + 4, N) / N e e truncado a 5
-    // bits (a superfície do jogo e RGB555). Com d <= 4 o multiplicador satura
-    // em N e a cor fica intacta.
-    m_shaded.assign(static_cast<size_t>(kShadeLevels) * 256, 0xFF000000u);
-    for (int d = 0; d < kShadeLevels; ++d) {
-        const int mult = std::min(kShadeLevels - d + 4, kShadeLevels);
-        for (int i = 0; i < 256; ++i) {
-            const uint32_t c = m_palette[i];
-            const int r = (static_cast<int>((c >> 16) & 0xFF) * mult) / kShadeLevels;
-            const int g = (static_cast<int>((c >> 8) & 0xFF) * mult) / kShadeLevels;
-            const int b = (static_cast<int>(c & 0xFF) * mult) / kShadeLevels;
-            m_shaded[static_cast<size_t>(d) * 256 + i] =
-                0xFF000000u | (static_cast<uint32_t>(r & 0xF8) << 16)
-                            | (static_cast<uint32_t>(g & 0xF8) << 8)
-                            | static_cast<uint32_t>(b & 0xF8);
-        }
-    }
+    m_shadeGen = -1;        // as paletas do ciclo saem na primeira consulta
 
     m_ok = true;
     return true;
+}
+
+// sub_4A9BF0(paleta, N = 32): para o nível L = N..1 (ou seja escuridão d =
+// N − L) cada canal vira canal * min(L + 4, N) / N; com d <= 4 o multiplicador
+// satura em N e a cor fica intacta. O ajuste comprime essa curva na direção do
+// dia sem mudar o seu formato: a 100% é a conta do original, a 0% nada
+// escurece.
+void Pbmp::buildShades() const {
+    m_shaded.assign(static_cast<size_t>(kShadeLevels) * 256, 0xFF000000u);
+    for (int d = 0; d < kShadeLevels; ++d) {
+        const int mult = nightShadeMul(d);
+        for (int i = 0; i < 256; ++i) {
+            const uint32_t c = m_palette[i];
+            // O original trunca a 5 bits porque a superfície dele é RGB555;
+            // a nossa é de 32, e truncar só criaria faixas no escuro.
+            const uint32_t r = uint32_t((int((c >> 16) & 0xFF) * mult) / kShadeLevels);
+            const uint32_t g = uint32_t((int((c >> 8) & 0xFF) * mult) / kShadeLevels);
+            const uint32_t b = uint32_t((int(c & 0xFF) * mult) / kShadeLevels);
+            m_shaded[static_cast<size_t>(d) * 256 + i] =
+                0xFF000000u | (r << 16) | (g << 8) | b;
+        }
+    }
+    m_shadeGen = nightDarkness();
 }
 
 const uint8_t* Pbmp::tileIndices(int index) const {
@@ -99,6 +123,9 @@ const uint8_t* Pbmp::tileIndices(int index) const {
 }
 
 const uint32_t* Pbmp::palette(int darkness) const {
+    if (!m_ok) return m_palette.data();
+    // Remonta quando o ajuste da noite mudou (o jogador mexeu nas opções).
+    if (m_shadeGen != nightDarkness()) buildShades();
     if (m_shaded.empty()) return m_palette.data();
     if (darkness < 0) darkness = 0;
     if (darkness >= kShadeLevels) darkness = kShadeLevels - 1;
