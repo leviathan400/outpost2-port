@@ -130,6 +130,7 @@ preferências; o original ignora chaves que não conhece.
 | `NightDarkness` | 0..100 | 75 | Quanto da curva de escurecimento noturno se aplica (100 = o original, que leva a noite plena a ~15% do brilho e faz as unidades, que nunca escurecem, recortarem contra o preto). |
 | `AudioVolume` | 0..100 | 50 | Volume mestre sobre a mistura final (sons e música). O original só tem `MusicVol`/`SoundVol`, por canal e em 6 degraus. |
 | `DemoCamera` | 0/1 | 1 | No demo de atração a câmera passeia pelos pontos de ação (desastre, combate, unidades). 0 devolve a câmera parada do original. |
+| `Fullscreen` | 0/1 | 1 | Abre em tela cheia (sem troca de modo de vídeo; a vista de 640×480 escalada com a proporção mantida). Alt+Enter alterna a qualquer momento. |
 
 ---
 
