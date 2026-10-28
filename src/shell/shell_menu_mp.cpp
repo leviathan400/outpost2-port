@@ -4,9 +4,11 @@
 //
 //   259 "PICK CONNECTION METHOD"  sub_411E30 -> escolhe o transporte
 //       (INTERNET/SIGS 6, MODEM 4, IPX 5, TCP/IP 3, SERIAL 7, CANCEL 2); a
-//       tabela unk_4DF370 liga cada botao ao objeto do transporte. Aqui a tela
-//       so oferece o TCP/IP: os outros quatro meios nao existem mais fora do
-//       jogo (ver o comentario do caso MpConnection em shell_menu.cpp).
+//       tabela unk_4DF370 liga cada botao ao objeto do transporte. ESTA TELA
+//       NAO EXISTE AQUI: dos seis meios so o TCP/IP sobreviveu -- o SIGS era o
+//       servico da Sierra, que fechou; o IPX saiu do Windows; e modem e cabo
+//       serial eram DirectPlay sobre linha discada --, e uma escolha de um
+//       item so nao e escolha. O MULTIPLAYER abre direto o 260.
 //   260 "NET GAME OPTIONS"        sub_497610 -> CREATE (1074) ou JOIN (1075)
 //  2012 "NEW NETWORK GAME"        sub_40DEC0 -> nome, senha, maximo de
 //       jogadores (combo 1015) e cenario (combo 1039); chama sub_491BE0.
@@ -145,13 +147,13 @@ void ShellMenu::showMpScreen(int which, bool host, int players) {
     m_mpStatus.clear();
     for (int i = 0; i < 6; ++i)
         if (m_mpNames[i].empty()) m_mpNames[i] = "PLAYER " + std::to_string(i + 1);
-    if (which == 6) {
+    if (which == 5) {                   // GAME SETTINGS
         m_mpChat.clear();
         m_mpChat.push_back("Partida criada: OUTPOST 2");
         m_mpChat.push_back("PLAYER 2 entrou na mesa");
         m_mpStatus = host ? "Aguardando jogadores..." : "Aguardando o host comecar";
     }
-    if (which == 4 && m_mpSessions.empty()) {
+    if (which == 3 && m_mpSessions.empty()) {   // PICK SESSION
         // Uma linha de exemplo, para a tela poder ser conferida sem rede.
         LobbySession s;
         s.addr = 0x0101A8C0;            // 192.168.1.1
@@ -161,11 +163,11 @@ void ShellMenu::showMpScreen(int which, bool host, int players) {
         m_mpSessions.push_back(s);
     }
     static const MenuState kScreens[] = {
-        MenuState::MpConnection, MenuState::MpNetOptions, MenuState::MpNewGame,
-        MenuState::MpFindSession, MenuState::MpPickSession, MenuState::MpJoinName,
-        MenuState::MpGameSettings
+        MenuState::MpNetOptions, MenuState::MpNewGame, MenuState::MpFindSession,
+        MenuState::MpPickSession, MenuState::MpJoinName, MenuState::MpGameSettings
     };
-    setState(kScreens[which < 0 ? 0 : (which > 6 ? 6 : which)]);
+    const int n = (int)(sizeof(kScreens) / sizeof(kScreens[0]));
+    setState(kScreens[which < 0 ? 0 : (which >= n ? n - 1 : which)]);
 }
 
 void ShellMenu::debugOpenCombo(int id) {
@@ -183,7 +185,7 @@ void ShellMenu::debugOpenCombo(int id) {
 bool ShellMenu::comboTest(std::string& report) {
     auto step = [&](const std::string& what) { report += what; report += "; "; };
 
-    showMpScreen(6, true, 2);                 // GAME SETTINGS como host
+    showMpScreen(5, true, 2);                 // GAME SETTINGS como host
     int idx = -1;
     for (int i = 0; i < (int)m_controls.size(); ++i)
         if (m_controls[i].id == 40001) { idx = i; break; }   // cor do jogador 1
@@ -385,10 +387,6 @@ bool ShellMenu::mpFlowTest(bool host, const std::string& name, std::string& repo
     };
 
     showMultiplayer();
-    if (m_state != MenuState::MpConnection) { report += "nao abriu o 259"; return false; }
-    step("259");
-
-    dispatchButton(3);                       // TCP/IP
     if (m_state != MenuState::MpNetOptions) { report += "nao abriu o 260"; return false; }
     step("260");
 
@@ -511,7 +509,7 @@ bool ShellMenu::mpFlowTest(bool host, const std::string& name, std::string& repo
 void ShellMenu::showMultiplayer() {
     mpLoadScenarios();
     m_mpStatus.clear();
-    setState(MenuState::MpConnection);
+    setState(MenuState::MpNetOptions);        // o 259 nao existe aqui
 }
 
 // Os cenários do multijogador são as missões M* (MF/ML/MM/MR/MU), lidas pelo
@@ -792,16 +790,6 @@ std::string fitText(const std::string& t, int px) {
 } // namespace
 
 // Dialog 259 "PICK CONNECTION METHOD" (166x122 DLU)
-void ShellMenu::renderMpConnection(Renderer& renderer) {
-    const DlgBox d = dlgBox(166, 44);
-    renderer.dimRect(0, 0, 640, 480, 0x88);
-    renderer.drawDialogFrame(d.fx, d.fy, d.fw, d.fh, "PICK CONNECTION METHOD");
-    // A nota não é do diálogo original, então fica sob o quadro.
-    Font::drawTextCentered(renderer.getFramebuffer(), 640, 480,
-                           "(os outros meios do original nao existem mais)",
-                           d.fx + d.fw / 2, d.fy + d.fh + 8, 0xFF8090A8, true);
-}
-
 // Dialog 260 "NET GAME OPTIONS" (124x66 DLU)
 void ShellMenu::renderMpNetOptions(Renderer& renderer) {
     const DlgBox d = dlgBox(124, 66);

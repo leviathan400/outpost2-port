@@ -270,16 +270,15 @@ static int runScreenshot(int argc, char* argv[], const std::string& outPath) {
         else if (a == "--about") shellMenu.showAbout();
         else if (a == "--scores") shellMenu.showScores();
         else if (a == "--ename") shellMenu.showEnterName("Colony: Eden Starship");
-        else if (a == "--mpconn")  shellMenu.showMpScreen(0, true, 1);
-        else if (a == "--mpopts")  shellMenu.showMpScreen(1, true, 1);
-        else if (a == "--mpnew")   shellMenu.showMpScreen(2, true, 1);
-        else if (a == "--mpfind")  shellMenu.showMpScreen(3, false, 1);
-        else if (a == "--mppick")  shellMenu.showMpScreen(4, false, 1);
-        else if (a == "--mpjoin")  shellMenu.showMpScreen(5, false, 1);
-        else if (a == "--mpsettings") shellMenu.showMpScreen(6, true, 2);
-        else if (a == "--mpcombo") { shellMenu.showMpScreen(6, true, 2); shellMenu.debugOpenCombo(40001); }
-        else if (a == "--mpcombo2") { shellMenu.showMpScreen(6, true, 2); shellMenu.debugOpenCombo(40032); }
-        else if (a == "--mpsettings2") shellMenu.showMpScreen(6, false, 2);
+        else if (a == "--mpopts")  shellMenu.showMpScreen(0, true, 1);
+        else if (a == "--mpnew")   shellMenu.showMpScreen(1, true, 1);
+        else if (a == "--mpfind")  shellMenu.showMpScreen(2, false, 1);
+        else if (a == "--mppick")  shellMenu.showMpScreen(3, false, 1);
+        else if (a == "--mpjoin")  shellMenu.showMpScreen(4, false, 1);
+        else if (a == "--mpsettings") shellMenu.showMpScreen(5, true, 2);
+        else if (a == "--mpcombo") { shellMenu.showMpScreen(5, true, 2); shellMenu.debugOpenCombo(40001); }
+        else if (a == "--mpcombo2") { shellMenu.showMpScreen(5, true, 2); shellMenu.debugOpenCombo(40032); }
+        else if (a == "--mpsettings2") shellMenu.showMpScreen(5, false, 2);
         else if ((a == "--cmenu" || a == "--cbrief" || a == "--cobj" || a == "--cchap" || a == "--cstory") &&
                  i + 1 < argc) {
             bool eden = true;

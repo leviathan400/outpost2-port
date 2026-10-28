@@ -375,19 +375,6 @@ void ShellMenu::rebuildControls() {
     // --- multijogador -------------------------------------------------------
     // A geometria sai dos templates do OUT2RES.DLL, em unidades de diálogo:
     // cada controle fica onde o original o põe, e o DlgBox faz a conversão.
-    case MenuState::MpConnection: {
-        // Dialog 259 (166x122 no original). Os ids sao os do original, mas dos
-        // seis botoes so restam dois: o TCP/IP (3) e o CANCEL (2). Os outros
-        // quatro transportes da tabela unk_4DF370 -- INTERNET/SIGS (6), MODEM
-        // (4), IPX (5) e SERIAL (7) -- nao existem mais fora do jogo: o SIGS
-        // era o servico da Sierra, que fechou; o IPX saiu do Windows; e modem
-        // e cabo serial eram DirectPlay sobre linha discada. Sem eles o quadro
-        // encolhe de 122 para 44 DLU de altura.
-        const DlgBox d = dlgBox(166, 44);
-        addButton(3, "TCP/IP", d.x(7), d.y(4),  d.w(152), d.h(14), true);
-        addButton(2, "CANCEL", d.x(7), d.y(26), d.w(152), d.h(14));
-        break;
-    }
     case MenuState::MpNetOptions: {
         const DlgBox d = dlgBox(124, 66);               // Dialog 260
         addButton(1074, "CREATE", d.x(37), d.y(4),  d.w(50), d.h(14), true);
@@ -507,7 +494,7 @@ void ShellMenu::rebuildControls() {
 
     // Foco inicial: nas telas de multijogador, o botão default do diálogo
     // (como o Windows faz); nas demais, o primeiro controle habilitado.
-    if (m_state >= MenuState::MpConnection) {
+    if (m_state >= MenuState::MpNetOptions) {
         for (int i = 0; i < (int)m_controls.size(); ++i)
             if (m_controls[i].isDefault && !m_controls[i].disabled) { m_focusIndex = i; break; }
     }
@@ -703,12 +690,6 @@ void ShellMenu::dispatchButton(int id) {
         break;
 
     // --- multijogador -------------------------------------------------------
-    case MenuState::MpConnection:
-        // Os ids sao os botoes do Dialog 259; sub_411E30 mapeia cada um a um
-        // transporte pela tabela unk_4DF370. Aqui so o TCP/IP (3) anda.
-        if (id == 3) setState(MenuState::MpNetOptions);
-        else if (id == 2) setState(MenuState::MainMenu);
-        break;
     case MenuState::MpNetOptions:
         if (id == 1074) {                       // CREATE
             m_mpIsHost = true;
@@ -717,7 +698,8 @@ void ShellMenu::dispatchButton(int id) {
             m_mpIsHost = false;
             setState(MenuState::MpFindSession);
         } else if (id == 2) {
-            setState(MenuState::MpConnection);
+            // Sem o 259 no caminho, o CANCEL daqui volta ao menu principal.
+            setState(MenuState::MainMenu);
         }
         break;
     case MenuState::MpNewGame:
@@ -1191,7 +1173,7 @@ void ShellMenu::render(Renderer& renderer) {
 
     // Logo no topo do menu, com 60% de transparência (40% opaco). As telas de
     // multijogador ocupam o quadro todo, então ficam sem ele.
-    const bool mpScreen = m_state >= MenuState::MpConnection;
+    const bool mpScreen = m_state >= MenuState::MpNetOptions;
     if (m_logoBitmap.getWidth() > 0 && !mpScreen)
         renderer.blitBitmapAlpha(m_logoBitmap, 48, 16, 102, true, 0xFF000000);
 
@@ -1207,7 +1189,6 @@ void ShellMenu::render(Renderer& renderer) {
     case MenuState::MissionMenu: renderMissionMenu(renderer); break;
     case MenuState::RtfView:     renderRtfView(renderer); break;
     case MenuState::Chapters:    renderChapters(renderer); break;
-    case MenuState::MpConnection:   renderMpConnection(renderer); break;
     case MenuState::MpNetOptions:   renderMpNetOptions(renderer); break;
     case MenuState::MpNewGame:      renderMpNewGame(renderer); break;
     case MenuState::MpFindSession:  renderMpFindSession(renderer); break;

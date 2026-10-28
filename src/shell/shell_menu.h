@@ -31,7 +31,11 @@ enum class MenuState {
     Scores,        // Dialog 223: COLONY GAME SCORES (botão SCORES do Dialog 222)
     // --- multijogador: as telas vêm do OUT2RES.DLL, não do shell, porque no
     // original o botão MULTIPLAYER chama TApp::DoNetGame no executável.
-    MpConnection,  // Dialog 259 "PICK CONNECTION METHOD" (sub_411E30)
+    // O Dialog 259 "PICK CONNECTION METHOD" (sub_411E30) nao existe aqui: dos
+    // seis transportes da tabela unk_4DF370 so o TCP/IP (3) sobreviveu ao
+    // tempo, entao o MULTIPLAYER abre direto o 260 e o CANCEL dele volta ao
+    // menu principal. MpNetOptions e a primeira tela de multijogador, e a
+    // ordem deste enum importa: o render usa ">= MpNetOptions".
     MpNetOptions,  // Dialog 260 "NET GAME OPTIONS" CREATE/JOIN (sub_497610)
     MpNewGame,     // Dialog 2012 "NEW NETWORK GAME" (criar, sub_40DEC0)
     MpFindSession, // Dialog 2010 "FIND SESSION" broadcast ou endereço
@@ -155,7 +159,8 @@ public:
     void showAbout() { setState(MenuState::About); }
     void showScores() { openScores(); }
     // Captura (--screenshot): abre uma tela de multijogador sem passar pela
-    // rede. `host` decide quais controles ficam ativos no GAME SETTINGS.
+    // rede (0 = 260, 1 = 2012, 2 = 2010, 3 = 195, 4 = 2013, 5 = 196).
+    // `host` decide quais controles ficam ativos no GAME SETTINGS.
     void showMpScreen(int which, bool host, int players);
     // Captura (--screenshot): solta a lista do combo de id `id` na tela atual.
     void debugOpenCombo(int id);
@@ -341,7 +346,6 @@ private:
     bool mpStartHost();               // CREATE: abre o lobby
     bool mpFindSessions();            // a descoberta por broadcast
     bool mpJoinSelected();            // entra na sessão escolhida
-    void renderMpConnection(Renderer& renderer);
     void renderMpNetOptions(Renderer& renderer);
     void renderMpNewGame(Renderer& renderer);
     void renderMpFindSession(Renderer& renderer);
