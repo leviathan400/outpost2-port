@@ -28,6 +28,7 @@ public:
 
     // Troca de estado (equivale a ActivateShell/ActivateGame/SetUIState).
     void activateShell();
+    void silenceGameAudio();       // cala a partida ao voltar ao menu
     // TApp::ActivateShell(GameTermReasons, MissionResults*): o shell recebe o
     // motivo do fim e os resultados (CreateShell) e decide a próxima tela (0x73a).
     void activateShell(int reason, const GameStartInfo* results);

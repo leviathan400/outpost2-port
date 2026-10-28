@@ -31,6 +31,19 @@ void soundUpdate();                        // fila de vozes (sub_47F250)
 void soundSetMasterVolume(int percent);
 int  soundMasterVolume();
 
+// sub_47E0C0: cala TUDO -- solta os 63 canais de uma vez. No original e o
+// que TApp::ActivateShell faz ao voltar da partida para o menu, logo depois de
+// parar a musica (sub_489FB0 -> sub_4506C0). Sem isto o som da partida
+// continua tocando por cima do menu ate as amostras acabarem.
+// A fila de vozes do Savant tambem e descartada: no original ela morre com o
+// objeto do jogo, e deixa-la aqui faria uma voz atrasada estourar no meio da
+// partida seguinte.
+void soundStopAll();
+
+// Quantos dos 63 canais estao tocando agora (so para os testes conferirem que
+// o soundStopAll de fato calou).
+int soundActiveChannels();
+
 // Trava/destrava o callback do mixer (a música altera o estado dele).
 void soundLockAudio(bool lock);
 

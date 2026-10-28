@@ -11,6 +11,7 @@
 #include "../core/config.h"
 #include "../res/res_manager.h"
 #include "../audio/sound.h"
+#include "../audio/music.h"
 
 namespace op2 {
 
@@ -92,11 +93,22 @@ void TApp::setUIState(UIState* next) {
     if (m_cur) m_cur->onActivate();
 }
 
+// TApp::ActivateShell: antes de trocar de tela o original cala a partida --
+// sub_489FB0 (que leva a sub_4506C0, o fim da musica) e sub_47E0C0 (que solta
+// os 63 canais de som). Sem isso o que estava tocando atravessa a troca e vai
+// morrendo por cima do menu.
+void TApp::silenceGameAudio() {
+    musicEndGame();     // sub_4506C0
+    soundStopAll();     // sub_47E0C0
+}
+
 void TApp::activateShell() {
+    silenceGameAudio();
     setUIState(m_shell);
 }
 
 void TApp::activateShell(int reason, const GameStartInfo* results) {
+    silenceGameAudio();
     if (m_shell) m_shell->setReturn(reason, results);
     setUIState(m_shell);
 }

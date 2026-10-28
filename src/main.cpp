@@ -19,6 +19,7 @@
 #include "game/walls.h"
 #include "game/garage.h"
 #include "audio/music.h"
+#include "audio/sound.h"
 #include "game/salvage.h"
 #include "game/terrain_renderer.h"
 #include "game/game_rng.h"
@@ -648,6 +649,21 @@ static int runDemoTest(const std::string& prefixo) {
                 if (op2::g_gameMap.lightDarkness((r.pixelX >> 5) + op2::g_gameMap.internalXOffset()
                                                  - op2::TethysGame::daylightPos()) >= 16)
                     ++noEscuro;
+            }
+            // Ao sair do demo o audio da partida tem de ser cortado, como o
+            // TApp::ActivateShell do original faz (sub_489FB0 + sub_47E0C0).
+            if (n == 1 && SDL_InitSubSystem(SDL_INIT_AUDIO) == 0 && op2::soundInit()) {
+                op2::soundPlay(0x57);
+                op2::soundPlay(0x56);
+                const int tocando = op2::soundActiveChannels();
+                op2::musicEndGame();
+                op2::soundStopAll();
+                const int depois = op2::soundActiveChannels();
+                std::printf("[DemoTest] audio: %d canais tocando -> %d depois de voltar"
+                            " ao menu (esperado 0)%c", tocando, depois, 10);
+                if (tocando <= 0 || depois != 0) ok = false;
+                op2::soundShutdown();
+                SDL_QuitSubSystem(SDL_INIT_AUDIO);
             }
             const int codigo = op2::gameEndCode();
             std::printf("[DemoTest] %s: fim no tique %d com codigo %d (esperado 11),"

@@ -207,6 +207,21 @@ void soundSetMasterVolume(int percent) {
 
 int soundMasterVolume() { return s_master.load(std::memory_order_relaxed); }
 
+void soundStopAll() {                                     // sub_47E0C0
+    if (!s_dev) return;
+    SDL_LockAudioDevice(s_dev);
+    for (Channel& c : s_ch) { c.s = nullptr; c.positional = false; }
+    SDL_UnlockAudioDevice(s_dev);
+    s_queue.clear();
+    s_nextVoice = SDL_GetTicks();
+}
+
+int soundActiveChannels() {
+    int n = 0;
+    for (const Channel& c : s_ch) if (c.s) ++n;
+    return n;
+}
+
 void soundLockAudio(bool lock) {
     if (!s_dev) return;
     if (lock) SDL_LockAudioDevice(s_dev); else SDL_UnlockAudioDevice(s_dev);
