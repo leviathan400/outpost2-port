@@ -93,6 +93,10 @@ struct GameSettings {
     // original -- o jogo so tem MusicVol/SoundVol, cada um em 6 degraus e cada
     // um no seu canal, e nada que regule o conjunto. Ver soundSetMasterVolume.
     int audioVolume = 50;
+    // "DemoCamera": idem, so deste porte. 1 = no demo de atracao a camera
+    // passeia pelos pontos de acao; 0 = fica parada onde o InitProc do ademo
+    // a pos, que e o comportamento do original. Ver GameState::demoCameraTick.
+    int demoCamera = 1;
 
     // [WindowInfo]
     int miniMapButtons = 0;

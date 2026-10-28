@@ -79,6 +79,7 @@ void GameState::loadSettings() {
     if (m_aiLevel < 0 || m_aiLevel > 3) m_aiLevel = 0;
     setNightDarkness(gs.nightDarkness);                // "NightDarkness" (idem)
     soundSetMasterVolume(gs.audioVolume);              // "AudioVolume" (idem)
+    m_demoCam = gs.demoCamera != 0;                    // "DemoCamera" (idem)
 }
 
 bool GameState::loadMap(const std::string& mapName) {
@@ -367,6 +368,79 @@ bool GameState::load(const std::string& mapName) {
     return true;
 }
 
+// ---------------------------------------------------------------------------
+// Passeio da câmera durante o demo de atração — ACRÉSCIMO DESTE PORTE.
+//
+// Os três ademo*.dll chamam CenterViewOn UMA vez, no InitProc, e a câmera
+// fica parada o demo inteiro (conferido nas três DLLs: é a única chamada em
+// cada uma). O resultado é que boa parte do que o demo monta acontece fora da
+// tela — no ademo1 o tornado cai em (3,34) com a câmera parada em (44,42).
+//
+// Então aqui a câmera passeia: a cada poucos segundos escolhe um ponto de
+// interesse e rola até ele. A ordem de preferência é desastre em cena, depois
+// combate recente, depois as unidades de cada jogador; entre candidatos de
+// mesmo peso há rodízio, para não ficar voltando ao mesmo lugar.
+//
+// Nada disto toca a simulação: mexe só em m_camX/m_camY, e a escolha usa um
+// contador próprio em vez do RNG do jogo, que é determinístico e não pode
+// receber consumos a mais. Quem quiser o comportamento do original põe
+// "[Game] DemoCamera=0".
+void GameState::demoCameraTick() {
+    if (!demoGame() || !m_demoCam) return;
+
+    constexpr int kEspera = 110;    // ~5,5 s parado em cada ponto
+    constexpr int kPasso = 7;       // px por tique (≈140 px/s)
+    constexpr int kRecente = 160;   // "combate recente": 8 s
+
+    if (--m_demoCamHold <= 0) {
+        m_demoCamHold = kEspera;
+        // Candidatos, do mais interessante ao menos.
+        std::vector<std::pair<int, int>> desastre, briga, gente;
+        const int agora = static_cast<int>(TethysGame::tick());
+        for (size_t i = 1; i < g_units.size(); ++i) {
+            const UnitRecord& r = g_units[i];
+            if (r.id == -1 || (r.flags & UNIT_DEAD)) continue;
+            const std::pair<int, int> onde(unitOX(r), unitOY(r));
+            if (r.type >= 0x4C && r.type <= 0x50) desastre.push_back(onde);
+            else if (r.lastAttacker && agora - r.lastAttackTick < kRecente) briga.push_back(onde);
+            else if (!(r.flags & UNIT_BUILDING)) gente.push_back(onde);
+        }
+        const char* motivo = !desastre.empty() ? "desastre"
+                           : (!briga.empty() ? "combate" : "unidades");
+        const std::vector<std::pair<int, int>>& lista =
+            !desastre.empty() ? desastre : (!briga.empty() ? briga : gente);
+        if (!lista.empty()) {
+            const std::pair<int, int>& alvo = lista[m_demoCamSeq++ % lista.size()];
+            if (alvo.first != m_demoTargX || alvo.second != m_demoTargY) {
+                m_demoTargX = alvo.first;
+                m_demoTargY = alvo.second;
+                std::cout << "[Demo] camera -> tile ("
+                          << (m_demoTargX >> 5) << "," << (m_demoTargY >> 5)
+                          << ") " << motivo << " (" << lista.size() << " candidatos)"
+                          << std::endl;
+            }
+        }
+    }
+    if (m_demoTargX < 0) return;
+
+    // Rola até o alvo. Em X o mapa dá a volta, então vai pelo lado mais curto.
+    const int larguraPx = g_gameMap.ok() ? g_gameMap.width() * 32 : 0;
+    int dx = m_demoTargX - (m_camX + viewportW() / 2);
+    if (larguraPx) {
+        while (dx > larguraPx / 2) dx -= larguraPx;
+        while (dx < -larguraPx / 2) dx += larguraPx;
+    }
+    const int dy = m_demoTargY - (m_camY + viewportH() / 2);
+    auto anda = [&](int d) { return d > kPasso ? kPasso : (d < -kPasso ? -kPasso : d); };
+    m_camX += anda(dx);
+    m_camY += anda(dy);
+    if (larguraPx) {
+        while (m_camX < 0) m_camX += larguraPx;
+        while (m_camX >= larguraPx) m_camX -= larguraPx;
+    }
+    clampCamera();
+}
+
 void GameState::clampCamera() {
     if (m_camY < 0) m_camY = 0;
     if (m_camY > m_maxY) m_camY = m_maxY;
@@ -474,6 +548,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         missionTriggerTick(currentMission());    // triggers, AIProc, vitória/derrota (sub_403110)
         tickMovement();                          // move as unidades pela rota do pathfinder
         tickUnits();                             // predios + efeitos (sub_43AC30)
+        demoCameraTick();                        // só a vista; não mexe na simulação
         if ((TethysGame::tick() & 3) == 2) {     // sub_47EA60: listener = centro da vista
             soundSetListener(m_camX + viewportW() / 2, m_camY + viewportH() / 2);
             soundUpdate();                       // sub_47F250: fila de vozes

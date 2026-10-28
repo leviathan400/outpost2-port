@@ -121,6 +121,12 @@ private:
     void drawSound(int unitId, int x, int y, int id);
     bool onScreen(int sx, int sy) const;
     int m_maxX = 0, m_maxY = 0;
+    // --- passeio da camera no demo de atracao (so deste porte) ---
+    bool m_demoCam = true;         // "[Game] DemoCamera"
+    int  m_demoCamHold = 0;        // tiques ate escolher o proximo ponto
+    int  m_demoCamSeq = 0;         // rodizio entre os candidatos (sem usar o RNG)
+    int  m_demoTargX = -1, m_demoTargY = -1;   // centro de vista perseguido
+    void demoCameraTick();         // escolhe o ponto e rola ate ele
     float m_tickAccum = 0.0f;     // acumulador p/ avançar o tick de simulação
     float m_tickPeriod = 0.05f;   // s/tick: 1/clamp(GameSpeed*4, 4, 40) (sub_49BF80)
     int m_lastRand = 0;           // última amostra do RNG (1 por tick), p/ o HUD

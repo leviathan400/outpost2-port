@@ -24,18 +24,33 @@ static std::vector<std::string> objectiveLines(int width) {
     for (const std::string& line : missionObjectives()) {
         const std::string tag = line.substr(0, 4), text = line.substr(4);
         if (tag == "<C0>" && !objectivesShowCompleted()) continue;   // cumprido: fora se dword_57563C == 0
-        std::string cur, word;
-        for (size_t i = 0; i <= text.size(); ++i) {
-            if (i == text.size() || text[i] == ' ') {
-                const std::string cand = cur.empty() ? word : cur + " " + word;
-                if (!cur.empty() && UiFont::width(cand) > width) { out.push_back(tag + cur); cur = word; }
-                else cur = cand;
-                word.clear();
-            } else {
-                word += text[i];
+        // O texto pode trazer quebras de linha do proprio script da missao --
+        // o demo de atracao, por exemplo, manda "Outpost 2 demo mode.", duas
+        // quebras e "Press any key to return to the Main Menu.". Elas contam
+        // como fim de linha; dentro de cada pedaco a quebra e por palavras, na
+        // largura da lista. Sem isto a quebra vira parte de uma "palavra" e o
+        // texto sai fora de ordem na tela.
+        size_t ini = 0;
+        while (ini <= text.size()) {
+            size_t fim = text.find('\n', ini);
+            if (fim == std::string::npos) fim = text.size();
+            const std::string pedaco = text.substr(ini, fim - ini);
+            std::string cur, word;
+            for (size_t i = 0; i <= pedaco.size(); ++i) {
+                if (i == pedaco.size() || pedaco[i] == ' ') {
+                    const std::string cand = cur.empty() ? word : cur + " " + word;
+                    if (!cur.empty() && UiFont::width(cand) > width) { out.push_back(tag + cur); cur = word; }
+                    else cur = cand;
+                    word.clear();
+                } else {
+                    word += pedaco[i];
+                }
             }
+            if (!cur.empty()) out.push_back(tag + cur);
+            else if (fim < text.size()) out.push_back("");   // linha em branco pedida pelo script
+            if (fim == text.size()) break;
+            ini = fim + 1;
         }
-        if (!cur.empty()) out.push_back(tag + cur);
         out.push_back("");                               // espaço entre objetivos
     }
     if (!out.empty()) out.pop_back();

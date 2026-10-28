@@ -557,7 +557,7 @@ static int runHelpTest(const std::string& alvo) {
 
 // --demotest: monta o pedido do demo de atracao tres vezes e confere a
 // rotacao e o GameStartInfo, sem precisar esperar o minuto de ociosidade.
-static int runDemoTest() {
+static int runDemoTest(const std::string& prefixo) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
     op2::g_ResManager.init(".");
     op2::Renderer renderer;
@@ -611,7 +611,7 @@ static int runDemoTest() {
             op2::GameState gs;
             if (!gs.loadMission(nome, &gsi)) { ok = false; break; }
             gs.onActivate();
-            int camX = gs.camX(), camY = gs.camY(), saltos = 0, fimTick = -1;
+            int camX = gs.camX(), camY = gs.camY(), saltos = 0, fimTick = -1, quadro = 0;
             // O script parca a camera com CenterViewOn no InitProc; o centro
             // da vista tem de estar onde ele pediu. A vista do mapa tem 416x416
             // (o resto da tela e a moldura e o painel), entao o centro esta a
@@ -624,6 +624,14 @@ static int runDemoTest() {
                     ++saltos; camX = gs.camX(); camY = gs.camY();
                 }
                 if (op2::gameEndCode()) fimTick = op2::TethysGame::tick();
+                // Alguns quadros ao longo do demo, para conferir a vista e o
+                // minimapa com os proprios olhos.
+                if (!prefixo.empty() && n == 1 && (k == 150 || k == 500 || k == 850)) {
+                    char out[512];
+                    std::snprintf(out, sizeof(out), "%s_%d.bmp", prefixo.c_str(), ++quadro);
+                    writeBmp32(out, renderer.getFramebuffer(),
+                               op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+                }
             }
             // Quantos inimigos estariam escondidos pela cegueira noturna? Os
             // ademo chamam SetDaylightEverywhere(0), entao ha noite; no demo a
@@ -3561,7 +3569,7 @@ int main(int argc, char* argv[]) {
         if (std::strcmp(argv[i], "--aitest") == 0 && i + 1 < argc)
             return runAiTest(argv[i + 1], i + 2 < argc ? argv[i + 2] : "");
         if (std::strcmp(argv[i], "--demotest") == 0)
-            return runDemoTest();
+            return runDemoTest(i + 1 < argc ? argv[i + 1] : "");
         if (std::strcmp(argv[i], "--helptest") == 0)
             return runHelpTest(i + 1 < argc ? argv[i + 1] : "");
         if (std::strcmp(argv[i], "--uitest") == 0)
