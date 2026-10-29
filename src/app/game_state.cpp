@@ -621,47 +621,12 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         0xFF40A0FF, 0xFFFF5040, 0xFF40D070, 0xFFFFD040,
         0xFFC060FF, 0xFF40E0E0, 0xFFFF9030,
     };
-    // Overlay de ordem de movimento: linha da unidade até o destino + marcador no
-    // tile-alvo. Lê o estado REAL da ordem (order.waypoints, gravado por DoMove ->
-    // dispatcher -> bloco de ordem). Prova visível do pipeline de comando (o
-    // movimento em si entra quando o pathfinder/integrador estiverem portados).
-    {
-        uint32_t* fb = renderer.getFramebuffer();
-        const int VW = Renderer::NATIVE_WIDTH, VH = Renderer::NATIVE_HEIGHT;
-        auto putPx = [&](int x, int y, uint32_t c) {
-            if (x >= 0 && x < VW && y >= 0 && y < VH) fb[y * VW + x] = c;
-        };
-        auto drawLine = [&](int x0, int y0, int x1, int y1, uint32_t c) {
-            int dx = std::abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
-            int dy = -std::abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
-            int err = dx + dy;
-            for (;;) {
-                putPx(x0, y0, c);
-                if (x0 == x1 && y0 == y1) break;
-                int e2 = 2 * err;
-                if (e2 >= dy) { err += dy; x0 += sx; }
-                if (e2 <= dx) { err += dx; y0 += sy; }
-            }
-        };
-        for (size_t i = 1; i < g_units.size(); ++i) {
-            const UnitRecord& r = g_units[i];
-            if (r.id == -1 || (r.flags & UNIT_DEAD)) continue;
-            if (!r.hasOrder || (r.action != CMD_MOVE && r.action != 0x26) || r.order.waypoints.empty()) continue;
-            uint32_t dest = r.order.waypoints.back();
-            int dxt = unpackLocX(dest), dyt = unpackLocY(dest);
-            int ux = screenXOf(r.pixelX) + 16;
-            int uy = r.pixelY + 16 - m_camY;
-            int dsx = screenXOf(dxt * 32) + 16;
-            int dsy = dyt * 32 + 16 - m_camY;
-            uint32_t col = kOwnerColor[(r.owner & 0x0F) % 7];
-            drawLine(ux, uy, dsx, dsy, col);
-            // Marcador em X no destino.
-            for (int k = -5; k <= 5; ++k) {
-                putPx(dsx + k, dsy + k, 0xFFFFFFFF);
-                putPx(dsx + k, dsy - k, 0xFFFFFFFF);
-            }
-        }
-    }
+    // (Aqui havia um desenho de depuracao SEMPRE LIGADO: uma linha de cada
+    // unidade com ordem de movimento ate o destino, mais um X branco no tile
+    // alvo. Era a prova visivel do caminho do comando enquanto o pathfinder e
+    // o integrador nao estavam portados -- e ficou ligado depois que eles
+    // entraram, aparecendo ate no demo de atracao. O original nao desenha nada
+    // disso. Para depurar rota, os modos --movelog e --movecap continuam.)
 
     // Blit de um frame de animação do op2_art (g_art) CENTRADO no ponto da unidade
     // na tela. As pictures são posicionadas por (x,y) menos o HOTSPOT da animação
