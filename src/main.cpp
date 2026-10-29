@@ -371,6 +371,13 @@ static int runFontTest() {
     std::printf("[FontTest] normal: altura=%d ascent=%d | negrito: altura=%d ascent=%d\n",
                 op2::UiFont::lineHeight(false), op2::UiFont::ascent(false),
                 op2::UiFont::lineHeight(true), op2::UiFont::ascent(true));
+    std::printf("[FontTest] barra de estado (Arial +12 negrito, TFrame+0x14):"
+                " altura=%d ascent=%d | \"FOOD STORES ARE PLENTIFUL\" = %d px"
+                " (nos paineis daria %d)\n",
+                op2::UiFont::lineHeight(op2::UiFont::kStatus),
+                op2::UiFont::ascent(op2::UiFont::kStatus),
+                op2::UiFont::width("FOOD STORES ARE PLENTIFUL", op2::UiFont::kStatus),
+                op2::UiFont::width("FOOD STORES ARE PLENTIFUL"));
     const char* kSamples[] = {"Added to Storage", "Food in Storage", "Mission Objectives (Alt+O)",
                               "Display Completed Objectives", "0123456789"};
     for (const char* s : kSamples)

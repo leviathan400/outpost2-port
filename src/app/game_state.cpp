@@ -2554,6 +2554,10 @@ void GameState::renderPanel(Renderer& renderer) {
     }
 
     // --- Barra de status sob a vista (sub_4998D0 / sub_499A30) ---
+    // A fonte AQUI nao e a dos paineis: sub_499A30 seleciona TFrame+0x14, que
+    // sub_49B140 cria com lfHeight **+12** negrito. Positivo e altura de
+    // CELULA, entao os glifos saem menores que os da fonte de −11 usada no
+    // resto da interface -- e por isso a barra do original parece miuda.
     // Retângulos na área cliente: linha 1 em y = (H & ~31) + 6, linha 2 12 px
     // abaixo; contadores de minério em x = vista - 0x51 + 8 (ícone 211 comum /
     // 210 raro + número em branco); texto à esquerda até vista - 0x51.
@@ -2564,12 +2568,12 @@ void GameState::renderPanel(Renderer& renderer) {
         char num[16];
         m_frame.drawPiece(fb, VW, VH, 23, oreX, y1 + 2);                 // 211 (comum)
         std::snprintf(num, sizeof(num), "%d", pd.ore);
-        UiFont::draw(fb, VW, VH, num, oreX + m_frame.width(23) + 2, y1, 0xFFFFFFFF, false);
+        UiFont::draw(fb, VW, VH, num, oreX + m_frame.width(23) + 2, y1, 0xFFFFFFFF, UiFont::kStatus);
         // [+0xA8]: linha do minério raro. PROVISÓRIO: mostrada quando há raro.
         if (pd.rareOre > 0) {
             m_frame.drawPiece(fb, VW, VH, 24, oreX, y2 + 2);             // 210 (raro)
             std::snprintf(num, sizeof(num), "%d", pd.rareOre);
-            UiFont::draw(fb, VW, VH, num, oreX + m_frame.width(24) + 2, y2, 0xFFFFFFFF, false);
+            UiFont::draw(fb, VW, VH, num, oreX + m_frame.width(24) + 2, y2, 0xFFFFFFFF, UiFont::kStatus);
         }
         // Linha 1: o objeto de ajuda (unk_575570) — a descrição do controle sob o
         // cursor ou, sobre o mapa, "x,y" (sub_436E50: x = tile − deslocamento
@@ -2589,17 +2593,17 @@ void GameState::renderPanel(Renderer& renderer) {
             for (char ch : help) up += static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
             const size_t amp = up.find('&');
             int hx = tx0;
-            const int lh = UiFont::lineHeight();
+            const int lh = UiFont::lineHeight(UiFont::kStatus);
             auto put = [&](const std::string& s, uint32_t c) {
-                UiFont::draw(fb, VW, VH, s, hx, y1, c, false);
-                hx += UiFont::width(s);
+                UiFont::draw(fb, VW, VH, s, hx, y1, c, UiFont::kStatus);
+                hx += UiFont::width(s, UiFont::kStatus);
             };
             if (amp == std::string::npos || amp + 1 >= up.size()) {
                 put(up, 0xFFFFFFFFu);
             } else {
                 put(up.substr(0, amp), 0xFFFFFFFFu);
                 const std::string acc = up.substr(amp + 1, 1);
-                const int accX = hx, accW = UiFont::width(acc);
+                const int accX = hx, accW = UiFont::width(acc, UiFont::kStatus);
                 put(acc, 0xFFFF0000u);
                 renderer.fillRect(accX, y1 + lh - 1, accW, 1, 0xFFFF0000u);
                 put(up.substr(amp + 2), 0xFFFFFFFFu);
@@ -2607,8 +2611,8 @@ void GameState::renderPanel(Renderer& renderer) {
         }
         const std::string& msg = (m_targetCmd >= 0 && !uiCommandHint().empty()) ? uiCommandHint() : statusBarText();
         std::string clipped = msg;
-        while (!clipped.empty() && tx0 + UiFont::width(clipped) > oreX - 8) clipped.pop_back();
-        UiFont::draw(fb, VW, VH, clipped, tx0, y2, 0xFFE8E8E8, false);
+        while (!clipped.empty() && tx0 + UiFont::width(clipped, UiFont::kStatus) > oreX - 8) clipped.pop_back();
+        UiFont::draw(fb, VW, VH, clipped, tx0, y2, 0xFFE8E8E8, UiFont::kStatus);
     }
 }
 

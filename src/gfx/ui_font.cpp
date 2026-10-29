@@ -29,7 +29,7 @@ struct FaceData {
     Glyph g[256];
 };
 
-FaceData s_face[2];
+FaceData s_face[3];
 bool s_init = false;
 
 #ifdef _WIN32
@@ -62,11 +62,11 @@ bool metricsFromOS2(HDC dc, int px, int& height, int& ascent) {
     return true;
 }
 
-void buildFace(FaceData& f, int weight) {           // sub_415C00
+void buildFace(FaceData& f, int weight, int lfHeight) {   // sub_415C00
     HDC dc = CreateCompatibleDC(nullptr);
     if (!dc) return;
     LOGFONTA lf{};
-    lf.lfHeight = -11;
+    lf.lfHeight = lfHeight;
     lf.lfWeight = weight;
     lf.lfCharSet = DEFAULT_CHARSET;                  // 1
     lf.lfOutPrecision = OUT_TT_ONLY_PRECIS;          // 7
@@ -80,7 +80,11 @@ void buildFace(FaceData& f, int weight) {           // sub_415C00
     f.height = tm.tmHeight;                          // [+0x44]
     f.ascent = tm.tmAscent;                          // [+0x48]
     int h = 0, a = 0;
-    if (metricsFromOS2(dc, -lf.lfHeight, h, a)) { f.height = h; f.ascent = a; }
+    // O ajuste pela tabela OS/2 vale para o corpo pedido em ALTURA DE
+    // CARACTERE (lfHeight negativo), que é como a GDI de 1997 media. Com
+    // lfHeight positivo quem escolhe o corpo é a GDI, para a célula fechar na
+    // altura pedida, e aí as métricas dela são as que valem.
+    if (lf.lfHeight < 0 && metricsFromOS2(dc, -lf.lfHeight, h, a)) { f.height = h; f.ascent = a; }
     MAT2 mat{};
     mat.eM11.value = 1; mat.eM22.value = 1;          // identidade
     for (int c = 0x20; c < 256; ++c) {
@@ -113,23 +117,28 @@ void init() {
     if (s_init) return;
     s_init = true;
 #ifdef _WIN32
-    buildFace(s_face[0], FW_NORMAL);                 // 400
-    buildFace(s_face[1], FW_BOLD);                   // 700
+    buildFace(s_face[0], FW_NORMAL, -11);            // 400, texto dos painéis
+    buildFace(s_face[1], FW_BOLD, -11);              // 700, títulos
+    buildFace(s_face[2], FW_BOLD, 12);               // 700, barra de estado (sub_49B140)
 #endif
 }
 
-const FaceData& face(bool bold) { init(); return s_face[bold ? 1 : 0]; }
+const FaceData& face(int i) {
+    init();
+    if (i < 0 || i > 2) i = 0;
+    return s_face[i];
+}
 
 } // namespace
 
-int UiFont::lineHeight(bool bold) {
-    const FaceData& f = face(bold);
+int UiFont::lineHeight(int faceIdx) {
+    const FaceData& f = face(faceIdx);
     return f.ok ? f.height : Font::getTextHeight() + 3;
 }
-int UiFont::ascent(bool bold) { return face(bold).ascent; }
+int UiFont::ascent(int faceIdx) { return face(faceIdx).ascent; }
 
-int UiFont::width(const std::string& text, bool bold) {
-    const FaceData& f = face(bold);
+int UiFont::width(const std::string& text, int faceIdx) {
+    const FaceData& f = face(faceIdx);
     if (!f.ok) return Font::getTextWidth(text);
     int w = 0;
     for (unsigned char c : text) w += f.g[c].adv;
@@ -137,8 +146,8 @@ int UiFont::width(const std::string& text, bool bold) {
 }
 
 void UiFont::draw(uint32_t* fb, int fbW, int fbH, const std::string& text, int x, int y, uint32_t color,
-                  bool bold, int clipL, int clipT, int clipR, int clipB) {
-    const FaceData& f = face(bold);
+                  int faceIdx, int clipL, int clipT, int clipR, int clipB) {
+    const FaceData& f = face(faceIdx);
     if (!f.ok) { Font::drawText(fb, fbW, fbH, text, x, y, color, false); return; }
     if (clipR > fbW) clipR = fbW;
     if (clipB > fbH) clipB = fbH;
@@ -196,8 +205,8 @@ void uiFontDumpSizes() {
 }
 
 void UiFont::drawCentered(uint32_t* fb, int fbW, int fbH, const std::string& text, int cx, int y,
-                          uint32_t color, bool bold) {
-    draw(fb, fbW, fbH, text, cx - width(text, bold) / 2, y, color, bold);
+                          uint32_t color, int faceIdx) {
+    draw(fb, fbW, fbH, text, cx - width(text, faceIdx) / 2, y, color, faceIdx);
 }
 
 } // namespace op2
