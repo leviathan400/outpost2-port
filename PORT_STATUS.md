@@ -162,8 +162,10 @@ Revisado item a item em 2026-10-28, conferindo no código.
 
 6. Diálogo de confirmação do IDLE quando o prédio guarda metal ("All metal in
    storage will be lost...").
-7. O painel STORAGE cobre 8 tipos de prédio; os demais respondem "ainda não
-   portado".
+7. ~~O painel STORAGE~~ — **não é pendência**: conferido em 2026-10-28, a
+   regra do original (`loc_456560`) habilita o comando para 0x19, 0x1A, 0x27,
+   0x29, 0x2F e 0x36–0x38, que são exatamente os oito tipos que o painel
+   cobre. A mensagem de "ainda não portado" é só uma guarda inalcançável.
 8. Ordem "atirar no chão" (bit 0x2000, `sub_4A1BC0`).
 9. Estatísticas 0x1C4/0x1CC por jogador (baixas infligidas/sofridas).
 10. Revelação do mapa ao construir (`dword_574C88`) e o som de `sub_42F000`.
