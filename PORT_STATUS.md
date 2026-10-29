@@ -171,7 +171,13 @@ Revisado item a item em 2026-10-28, conferindo no código.
    uma unidade **do computador** armada de Laser (0x3D) ou Microwave (0x3E)
    esbarra num tubo/parede sem ter alvo — é assim que a IA abre caminho. Não
    existe comando do jogador para isso.
-9. Estatísticas 0x1C4/0x1CC por jogador (baixas infligidas/sofridas).
+9. ~~Estatísticas de baixas por jogador~~ — **não serão portadas**: conferido
+   em 2026-10-29, os quatro contadores (`Player+0x1C4` prédios perdidos,
+   `+0x1C8` veículos perdidos, `+0x1CC` prédios destruídos, `+0x1D0` veículos
+   destruídos) são incrementados em três pontos e **nunca lidos**. Nem o EXE,
+   nem o `OP2Shell.dll` (que importa só três símbolos de dado), nem as DLLs de
+   missão alcançam esses campos, e o `MissionResults` não os copia. Portá-los
+   seria somar números que ninguém pode observar.
 10. Revelação do mapa ao construir (`dword_574C88`) e o som de `sub_42F000`.
 11. Pacote 0x1D (tomar posse) para os grupos de IA.
 12. Modo 3 do pathfinder (`sub_438850`).

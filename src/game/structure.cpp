@@ -492,7 +492,8 @@ static void actionTickBody(int id) {
                     r.field22 = SUB_REMOVE;
                     structureRemoveFromMap(r, true);            // vt+0x80(1)
                     // loc_43D764: crédito ao atacante de outro dono ([+0x26],
-                    // sub_44FBE0) — estatísticas 0x1CC/0x1C4 do jogador pendentes.
+                    // sub_44FBE0). Os contadores de baixas 0x1C4..0x1D0 do original
+                    // sao dados mortos -- ver a nota em weapon.cpp.
                     if (r.lastAttacker > 0 && r.lastAttacker < static_cast<int>(g_units.size()) &&
                         ((g_units[r.lastAttacker].owner ^ r.owner) & 0x0F))
                         moraleEnemyStructureKilled(g_units[r.lastAttacker].owner & 0x0F, r.type);

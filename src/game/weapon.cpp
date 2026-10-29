@@ -1623,7 +1623,14 @@ static void acidPeriodic(int pid) {
                 t.damage = static_cast<int16_t>(hp);
                 t.flags |= UNIT_DEAD;
                 killUnit(occ, 5);
-                // (estatísticas 0x1C4/0x1CC dos jogadores — pendente.)
+                // (Os quatro contadores de baixas do original -- [Player+0x1C4] predios
+                // perdidos, +0x1C8 veiculos perdidos, +0x1CC predios destruidos e +0x1D0
+                // veiculos destruidos -- NAO sao portados de proposito: conferido em
+                // 2026-10-29, sao incrementados em tres pontos (sub_401050, sub_43ACA0,
+                // sub_481170) e NUNCA LIDOS. Nem o EXE, nem o OP2Shell.dll (que importa
+                // so 3 simbolos de dado: g_ResManager, gConfigFile e gTApp), nem as DLLs
+                // de missao conseguem le-los, e nao ha exportacao que os devolva nem copia
+                // deles no MissionResults de sub_489A30.)
             }
         }
     }
@@ -1678,7 +1685,7 @@ static bool esgPeriodic(int pid) {
                 t.damage = static_cast<int16_t>(hp);
                 t.flags |= UNIT_DEAD;
                 killUnit(occ, 5);
-                // (estatísticas 0x1C4/0x1CC dos jogadores — pendente.)
+                // (Contadores de baixas: ver a nota acima -- dados mortos no original.)
             }
             UnitRecord& q = g_units[pid];
             q.esgMask = static_cast<uint16_t>(q.esgMask & ~me);
@@ -1958,7 +1965,7 @@ void vehicleDeath(int id) {
     if (v.lastAttacker > 0 && v.lastAttacker < static_cast<int>(g_units.size()) &&
         ((g_units[v.lastAttacker].owner ^ v.owner) & 0x0F)) {
         moraleEnemyVehicleKilled(ownerOf(g_units[v.lastAttacker]));   // sub_44FD40
-        // (estatísticas 0x1CC/0x1C4 do jogador — pendente.)
+        // (Contadores de baixas: ver a nota acima -- dados mortos no original.)
     }
     // Som da morte (sub_43ACA0): com atacante 0x4D; senão pela carga — Starflare
     // (0x41) 0x4F / Tiger 0x4B, Supernova (0x42) 0x4B / Tiger 0x4A, outros 0x4E.
