@@ -1774,6 +1774,78 @@ static int runIdleTest(const std::string& dll) {
     return (ok && testados) ? 0 : 1;
 }
 
+// --takeovertest <map>: a Spider do COMPUTADOR tomando posse de um veiculo
+// inimigo paralisado. No original e sub_428BB0 (classe 4 do no do grupo):
+// sub_427CC0 escolhe o alvo -- veiculo com EMP (flag 0x80000) a ate 256 px --
+// e sub_42A100 manda o pacote 0x1D com a Spider e o alvo.
+static int runTakeOverTest(const std::string& mapName) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 takeovertest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    op2::resetUnits();
+
+    // Chao limpo para os dois.
+    const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
+    int bx = -1, by = -1;
+    for (int y = H / 2; y < H - 4 && bx < 0; ++y)
+        for (int x = W / 2; x < W - 8 && bx < 0; ++x) {
+            bool ok = true;
+            for (int dx = 0; dx < 6 && ok; ++dx)
+                if (!op2::g_gameMap.isPassable(op2::LOCATION{x + dx, y})) ok = false;
+            if (ok) { bx = x; by = y; }
+        }
+    if (bx < 0) { renderer.shutdown(); SDL_Quit(); return 3; }
+
+    op2::Unit spider, vitima;
+    if (!op2::TethysGame::CreateUnit(spider, op2::mapSpider, op2::LOCATION{bx, by}, 1) ||
+        !op2::TethysGame::CreateUnit(vitima, op2::mapCargoTruck, op2::LOCATION{bx + 3, by}, 0)) {
+        renderer.shutdown(); SDL_Quit(); return 4;
+    }
+    const int sid = spider.id(), vid = vitima.id();
+    // O alvo tem de estar PARALISADO: sub_427CC0 so olha veiculo com 0x80000.
+    op2::g_units[vid].flags |= op2::UNIT_EMP;
+    op2::g_units[vid].empTicks = 2000;
+
+    // Num mapa cru nao ha GameStartInfo: sem jogadores declarados, enemyMask
+    // sai vazia e o grupo nao enxerga ninguem.
+    op2::TethysGame::reset(0x12345678u, 2, 0);
+    // Tem de ser FightGroup: so ele roda o fightThink (vt[13], sub_428560),
+    // que e quem percorre os nos por classe e chega ao caso 4 da Spider.
+    const int stub = op2::aiCreateGroup(op2::GK_FIGHT, 1);
+    if (stub == 0xFF) { renderer.shutdown(); SDL_Quit(); return 5; }
+    // Sem area guardada o grupo em modo 0 nao coleta alvo nenhum (modeCollect
+    // nivel 1 varre justamente os retangulos guardados), e a Spider ficaria
+    // parada -- que e o comportamento certo. Damos a ela o que vigiar.
+    // ATENCAO as coordenadas: mapRectIterNext SOMA internalXOffset ao x da
+    // unidade antes de comparar com o retangulo, enquanto bx veio de varrer o
+    // mapa (tiles internos). O retangulo tem de ser dado no mesmo espaco, ou
+    // seja com o deslocamento somado -- senao ele cai 32 tiles fora.
+    const int offT = op2::g_gameMap.internalXOffset();
+    op2::aiFightSetRect(stub, bx + offT - 2, by - 2, bx + offT + 6, by + 2);
+    op2::aiTakeUnit(stub, sid);
+
+    const int donoAntes = op2::g_units[vid].owner & 0x0F;
+    int virouEm = -1;
+    for (int t = 0; t < 1200 && virouEm < 0; ++t) {
+        gs.onIdle(renderer, 0.2501f / 4.0f);
+        if ((op2::g_units[vid].owner & 0x0F) != donoAntes) virouEm = (int)op2::TethysGame::tick();
+    }
+    const int donoDepois = op2::g_units[vid].owner & 0x0F;
+    std::printf("[TakeOverTest] Spider do jogador 1 em (%d,%d), vitima paralisada do"
+                " jogador %d em (%d,%d)%c", bx, by, donoAntes, bx + 3, by, 10);
+    std::printf("[TakeOverTest] dono da vitima: %d -> %d%s (tique %d)%c",
+                donoAntes, donoDepois, donoDepois == 1 ? " OK" : " FALHOU", virouEm, 10);
+    std::fflush(stdout);
+    renderer.shutdown();
+    SDL_Quit();
+    return donoDepois == 1 ? 0 : 1;
+}
+
 static int runOreTest(const std::string& mapName, const std::string& prefix) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
     op2::g_ResManager.init(".");
@@ -3692,6 +3764,8 @@ int main(int argc, char* argv[]) {
             return runUnitTest();
         if (std::strcmp(argv[i], "--aitest") == 0 && i + 1 < argc)
             return runAiTest(argv[i + 1], i + 2 < argc ? argv[i + 2] : "");
+        if (std::strcmp(argv[i], "--takeovertest") == 0 && i + 1 < argc)
+            return runTakeOverTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--idletest") == 0 && i + 1 < argc)
             return runIdleTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--demotest") == 0)

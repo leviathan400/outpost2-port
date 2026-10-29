@@ -179,6 +179,15 @@ void orderAttack(Node& n, int target, int type) {           // sub_42A070 (0x24)
     processAttackPacket(ownerOf(g_units[n.unit]), type, {n.unit}, {},
                         static_cast<uint32_t>(target) | 0xFFFF0000u);
 }
+// sub_42A100: o pacote 0x1D (tomar posse) com a Spider do no e o alvo. O
+// original monta o pacote a mao -- tipo 0x1D, UMA unidade (a do no) e o alvo
+// com o meio-alto 0xFFFF, que e como se diz "e um id de unidade, nao um tile"
+// -- e carimba [no+0x0C] com o relogio (dword_56DEDC) antes de enviar.
+void orderTakeOver(Node& n, int target) {                   // sub_42A100 (pacote 0x1D)
+    n.tick = tick();
+    processRepairPacket(ownerOf(g_units[n.unit]), 0x1D, {n.unit}, {},
+                        static_cast<uint32_t>(target) | 0xFFFF0000u);
+}
 void orderPatrol(Node& n, const Group& g) {                 // sub_42A5D0 (pacote 0x28)
     n.tick = tick();
     CommandPacket pkt;
@@ -568,8 +577,7 @@ void classHandler(Group& g, Node& n, const TargetList& L) {
         case 4: {                                                    // sub_428BB0
             const int t = bestSpider(L, ux, uy);
             if (t) {                                                 // sub_42A100 (0x1D: tomar)
-                n.tick = tick();
-                // (tomar posse — pacote 0x1D ainda não portado)
+                orderTakeOver(n, t);
                 return;
             }
             if (!keepInRect(g, n, g.rect, 0)) modeIdle(g, n);

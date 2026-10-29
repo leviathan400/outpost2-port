@@ -184,7 +184,11 @@ Revisado item a item em 2026-10-28, conferindo no código.
     eles o realce de hover) — é a lista de **retângulos sujos** da vista. O
     Outpost 2 não tem névoa de guerra. Este porte repinta a tela inteira a cada
     quadro, então não há o que portar.
-11. Pacote 0x1D (tomar posse) para os grupos de IA.
+11. ~~Pacote 0x1D (tomar posse) para os grupos de IA~~ — **feito** em
+    2026-10-29: `orderTakeOver` em `ai_group.cpp` (porte de `sub_42A100`),
+    chamado do caso 4 do `classHandler`. A Spider do computador toma veículos
+    inimigos **paralisados por EMP** a até 256 px (`sub_427CC0`). Teste:
+    `--takeovertest <map>`.
 12. Modo 3 do pathfinder (`sub_438850`).
 13. ~~Fila de waypoints com Shift~~ — **não é pendência**: conferido em
     2026-10-29, a fila `unk_5471B0`/`dword_5471AC` é código morto no
