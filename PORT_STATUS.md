@@ -166,7 +166,11 @@ Revisado item a item em 2026-10-28, conferindo no código.
    regra do original (`loc_456560`) habilita o comando para 0x19, 0x1A, 0x27,
    0x29, 0x2F e 0x36–0x38, que são exatamente os oito tipos que o painel
    cobre. A mensagem de "ainda não portado" é só uma guarda inalcançável.
-8. Ordem "atirar no chão" (bit 0x2000, `sub_4A1BC0`).
+8. ~~Ordem "atirar no chão"~~ — **feito, e não era ordem**: o bit 0x2000 de um
+   veículo só é ligado em `loc_44B8F0` de `sub_44B650` (o movimento), quando
+   uma unidade **do computador** armada de Laser (0x3D) ou Microwave (0x3E)
+   esbarra num tubo/parede sem ter alvo — é assim que a IA abre caminho. Não
+   existe comando do jogador para isso.
 9. Estatísticas 0x1C4/0x1CC por jogador (baixas infligidas/sofridas).
 10. Revelação do mapa ao construir (`dword_574C88`) e o som de `sub_42F000`.
 11. Pacote 0x1D (tomar posse) para os grupos de IA.

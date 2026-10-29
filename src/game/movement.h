@@ -13,4 +13,10 @@ void moveDockArrive(int id);          // ações 3/4 no destino (giro + doca)
 // vt[0x7C] (sub_44B650) p/ um tile vizinho: monta o passo; false se não dá.
 bool unitStepToward(int id, int tx, int ty);
 
+// loc_44B8F0 de sub_44B650: a unidade do computador armada de Laser/Microwave
+// que esbarra num tubo ou parede passa a mirar o TILE. Exposta porque e uma
+// decisao com cinco condicoes, e o --walltest a exercita direto (fazer a
+// unidade esbarrar de verdade dependeria de o pathfinder nao contornar).
+void wallBlockTarget(struct UnitRecord& u, int nx, int ny);
+
 } // namespace op2

@@ -3160,8 +3160,40 @@ static int runWallTest(const std::string& mapName) {
             std::printf("\n");
         }
     }
+
+    // --- 2a parte: a IA atira na parede que bloqueia o caminho ---
+    // loc_44B8F0 de sub_44B650 so liga o flag 0x2000 para jogador NAO humano,
+    // armado de Laser (0x3D) ou Microwave (0x3E). Montamos os dois casos: o
+    // tanque do computador deve mirar o TILE da parede; o do humano, nao.
+    bool fgOk = true;
+    for (int humano = 0; humano <= 1; ++humano) {
+        for (int k = 0; k < 4; ++k) op2::createWallOrTube(bx + 2 * k, by, types[k]);
+        const int px = bx + 2, py = by;            // parede em (px,py)
+        op2::g_playerData[1].isHuman = humano;
+        op2::Unit tank;
+        if (!op2::TethysGame::CreateUnit(tank, static_cast<op2::map_id>(1),
+                                         op2::LOCATION{px, py - 1}, 1, 0x3D)) { fgOk = false; break; }
+        const int tid = tank.id();
+        op2::g_units[tid].flags |= op2::UNIT_ARMED;
+        op2::g_units[tid].cargo = 0x3D;            // Laser
+        op2::g_units[tid].field4E = 0x7FFF;        // sem alvo
+        op2::g_units[tid].flags &= ~op2::UNIT_FIRE_GROUND;
+        op2::wallBlockTarget(op2::g_units[tid], px, py);
+        const op2::UnitRecord& r = op2::g_units[tid];
+        const bool marcou = (r.flags & op2::UNIT_FIRE_GROUND) != 0;
+        const bool noTile = !r.targetIsUnit() && r.target4C == px && r.field4E == py;
+        std::printf("[WallTest] fire-ground: jogador %s -> flag=%d alvo=(%d,%d) %s%c",
+                    humano ? "HUMANO " : "do PC  ", marcou ? 1 : 0,
+                    (int)r.target4C, (int)r.field4E,
+                    humano ? "(esperado: nada)" : "(esperado: flag e o tile da parede)", 10);
+        if (humano) { if (marcou) fgOk = false; }
+        else if (!marcou || !noTile) fgOk = false;
+        op2::g_units[tid].flags |= op2::UNIT_DEAD;     // tira da cena
+    }
+    op2::g_playerData[1].isHuman = 1;
+    std::fflush(stdout);
     renderer.shutdown(); SDL_Quit();
-    return 0;
+    return fgOk ? 0 : 1;
 }
 
 // --quaketest <map>: terremoto de magnitude 3 no CC da cena demo; imprime o

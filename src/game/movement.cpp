@@ -7,6 +7,7 @@
 
 #include "unit.h"
 #include "game_map.h"
+#include "player.h"
 #include "tethys_game.h"
 #include "pathfinder.h"
 #include "command.h"
@@ -35,6 +36,39 @@ static void applyStepTick(UnitRecord& u) {
         --u.turnTicks;
         u.rotation = static_cast<uint8_t>(u.rotation + u.turnStep);
     }
+}
+
+// loc_44B8F0 de sub_44B650: a unidade do COMPUTADOR que esbarra num tubo ou
+// numa parede passa a ATIRAR NELA em vez de simplesmente parar. É assim que a
+// IA abre caminho pelas muralhas, e é o único lugar do jogo que liga o flag
+// 0x2000 ("atirar no chão") de um veículo — não existe ordem do jogador para
+// isso, apesar do nome.
+//
+// As condições são todas do original, nesta ordem:
+//   test ebx, 2FFF0000h   a célula de destino não pode ter ocupante nem
+//                         bloqueio duro (= CELL_OCCUPANCY | CELL_HARDBLOCK):
+//                         o que impede a passagem tem de ser a parede;
+//   [Player+0x28] == 0    só jogador NÃO humano (isHuman);
+//   [+0x44] & 0x10        veículo armado;
+//   [+0x24] 3Dh ou 3Eh    e a arma é Laser ou Microwave — justamente as duas
+//                         que levam 2,5x de dano contra parede em sub_4A23F0;
+//   cellType 17h..19h     o destino é tubo/parede;
+//   [+0x4E] == 7FFFh      e a unidade ainda não tem alvo.
+// Com tudo isso, [+0x4C]/[+0x4E] recebem o TILE (não um id de unidade) e o
+// flag liga; quem dispara é o weapon.cpp, que já trata alvo de tile.
+void wallBlockTarget(UnitRecord& u, int nx, int ny) {
+    const uint32_t cell = g_gameMap.rawCell(nx, ny);
+    if (cell & (GameMap::CELL_OCCUPANCY | GameMap::CELL_HARDBLOCK)) return;
+    const int p = u.owner & 0x0F;
+    if (p < 0 || p >= kMaxPlayers || g_playerData[p].isHuman) return;
+    if (!(u.flags & UNIT_ARMED)) return;
+    if (u.cargo != 0x3D && u.cargo != 0x3E) return;
+    const int ct = static_cast<int>(cell & 0x1F);
+    if (ct < GameMap::TUBE_CELLTYPE_LO || ct > GameMap::TUBE_CELLTYPE_HI) return;
+    if (u.field4E != 0x7FFF || (u.flags & UNIT_FIRE_GROUND)) return;
+    u.flags |= UNIT_FIRE_GROUND;
+    u.target4C = static_cast<int16_t>(nx);
+    u.field4E = static_cast<int16_t>(ny);
 }
 
 // Monta o passo na direção `dir` — sub_44B650. Retorna false se o passo não
@@ -76,7 +110,10 @@ static bool setupStep(int id, int dir) {
     // Célula de destino: ocupada por outra unidade → o original desvia
     // (sub_44BD60/sub_44BBA0); aqui a rota é recalculada pelo pathfinder.
     pfSetContext(id);
-    if (!pfCanEnter(nx, ny)) return false;
+    if (!pfCanEnter(nx, ny)) {
+        wallBlockTarget(u, nx, ny);    // parede no caminho: a IA atira nela
+        return false;
+    }
     const int srcCT = g_gameMap.getCellType(LOCATION{curX, curY});
     const int dstCT = g_gameMap.getCellType(LOCATION{nx, ny});
     const int dstCost = terrainMoveCost(dstCT, u.moveClass);
