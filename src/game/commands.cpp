@@ -437,8 +437,14 @@ static void sendScatter(const std::vector<int>& sel) {
 
 // Patrulhar (off_4D4D60, instância dword_564940): [+4] já tem o 1º ponto,
 // [+0xC] nº de pontos, [+0xE] índice do ponto inicial, [+0x12...] pontos.
-// (Os pontos enfileirados antes de cada clique — unk_5471B0/dword_5471AC, a
-// fila de waypoints com Shift — ainda não existem no port: fila vazia.)
+// (A fila de pontos unk_5471B0/dword_5471AC do original é CÓDIGO MORTO, o que
+// foi conferido em 2026-10-29: o contador é o campo +0x3C do objeto do modo de
+// mira (dword_547170), sub_41B550 o ZERA ao entrar no modo, as três funções
+// que o leem — sub_451420, sub_453FA0 e sub_454540 — só leem, e não há uma
+// única escrita em +0x3C em toda a região do modo de mira. Ou seja, o jogo
+// publicado nunca enfileira ponto nenhum: todo comando sai com UM ponto, o do
+// clique. A "fila vazia" do port é o comportamento do original, não uma
+// pendência.)
 static struct {
     int stage = 0;                  // [+4]
     std::vector<uint32_t> pts;      // [+0x12...]
@@ -489,9 +495,9 @@ UiClick uiCommandClick(int cmd, const std::vector<int>& sel) {
         case UC_DETONATE: sendDetonate(sel); return UiClick::DONE;      // sub_457E40 (0x24 no próprio tile)
         case UC_REPAIR: case UC_TAKE_OVER: case UC_DISMANTLE:          // sub_4548B0 etc. (modo 7)
             return UiClick::TARGET;
-        // IDLE (pacote 0x12) / ACTIVATE (0x13). O IDLE do original confirma antes
-        // quando o prédio guarda metal (smelter/armazém: "All metal in storage
-        // will be lost...") — diálogo ainda não portado.
+        // IDLE (pacote 0x12) / ACTIVATE (0x13). Quando desligar o prédio faria
+        // o metal passar do teto de armazenagem, quem pergunta antes é o
+        // GameState (ConfirmPane + structureIdleMetalLoss), como sub_455CB0.
         case UC_IDLE: if (!sel.empty()) structureDoIdle(sel[0]); return UiClick::DONE;
         case UC_ACTIVATE: if (!sel.empty()) structureDoActivate(sel[0]); return UiClick::DONE;
         default: return UiClick::NOT_PORTED;

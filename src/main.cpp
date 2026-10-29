@@ -1712,6 +1712,68 @@ static int runEarthTest(const std::string& mapName, const std::string& prefix) {
     return 0;
 }
 
+// --idletest <DLL>: o aviso de desligar um armazem/fundicao. A regra sai de
+// sub_455CB0 e de sub_471F30: desligar tira a capacidade do predio e o que
+// passar do novo teto e truncado, ou seja perdido -- entao o jogo pergunta
+// antes. O teste poe o estoque nos dois lados da fronteira e confere.
+static int runIdleTest(const std::string& dll) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 idletest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    // A capacidade so existe depois que a colonia conta os predios OPERANDO
+    // (sub_471F30), entao deixa a partida andar um pouco.
+    for (int k = 0; k < 120; ++k) gs.onIdle(renderer, 0.2501f / 4.0f);
+
+    bool ok = true;
+    int testados = 0, pulados = 0;
+    for (size_t i = 1; i < op2::g_units.size(); ++i) {
+        const op2::UnitRecord& r = op2::g_units[i];
+        if (r.id == -1 || (r.flags & op2::UNIT_DEAD)) continue;
+        const int t = r.type;
+        const bool comum = (t == 0x36 || t == 0x19), raro = (t == 0x38 || t == 0x1A);
+        if (!comum && !raro) continue;
+        const int p = r.owner & 0x0F;
+        const op2::StructSheetDesc* d = op2::structSheet(t);
+        if (!d) continue;
+        const int minha = d->player[p].storageCapacity;
+        const int teto = comum ? op2::g_colony[p].oreCapacity : op2::g_colony[p].rareCapacity;
+        // Predio que ainda nao conta para a colonia (parado, sem energia) nao
+        // tem o que perder: a capacidade dele nem esta no teto.
+        if (teto <= 0 || minha <= 0) { ++pulados; continue; }
+        int& estoque = comum ? op2::g_playerData[p].ore : op2::g_playerData[p].rareOre;
+        const int guardado = estoque;
+
+        // Logo abaixo do que caberia sem este predio: nao perde nada.
+        estoque = teto - minha;
+        const int semPerda = op2::structureIdleMetalLoss((int)i);
+        // Um a mais: ja nao cabe, entao perde.
+        estoque = teto - minha + 1;
+        const int comPerda = op2::structureIdleMetalLoss((int)i);
+        estoque = guardado;
+
+        const int esperado = comum ? 1 : 2;
+        std::printf("[IdleTest] %s tipo 0x%02X do jogador %d: teto %d, da %d |"
+                    " estoque %d -> %d (esperado 0), estoque %d -> %d (esperado %d)%c",
+                    comum ? "comum" : "raro", t, p, teto, minha,
+                    teto - minha, semPerda, teto - minha + 1, comPerda, esperado, 10);
+        if (semPerda != 0 || comPerda != esperado) ok = false;
+        ++testados;
+        if (testados >= 4) break;
+    }
+    if (!testados)
+        std::printf("[IdleTest] nenhum armazem/fundicao contando para a colonia"
+                    " (%d pulados) -- tente E05.DLL ou P05.DLL%c", pulados, 10);
+    std::fflush(stdout);
+    renderer.shutdown();
+    SDL_Quit();
+    return (ok && testados) ? 0 : 1;
+}
+
 static int runOreTest(const std::string& mapName, const std::string& prefix) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
     op2::g_ResManager.init(".");
@@ -3598,6 +3660,8 @@ int main(int argc, char* argv[]) {
             return runUnitTest();
         if (std::strcmp(argv[i], "--aitest") == 0 && i + 1 < argc)
             return runAiTest(argv[i + 1], i + 2 < argc ? argv[i + 2] : "");
+        if (std::strcmp(argv[i], "--idletest") == 0 && i + 1 < argc)
+            return runIdleTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--demotest") == 0)
             return runDemoTest(i + 1 < argc ? argv[i + 1] : "");
         if (std::strcmp(argv[i], "--helptest") == 0)

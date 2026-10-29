@@ -984,6 +984,25 @@ int structureFoodOutput(const UnitRecord& r) {
 
 // sub_43AAF0: não pode ociosar em construção/desmontagem/ociosa ou ações
 // 9/0x16/0x17, nem sob EMP (0x40000).
+int structureIdleMetalLoss(int buildingId) {            // o aviso de sub_455CB0
+    if (buildingId <= 0 || buildingId >= (int)g_units.size()) return 0;
+    const UnitRecord& b = g_units[buildingId];
+    const int t = b.type;
+    const bool comum = (t == 0x36 || t == 0x19);
+    const bool raro  = (t == 0x38 || t == 0x1A);
+    if (!comum && !raro) return 0;
+    const int p = b.owner & 0x0F;
+    if (p < 0 || p >= kMaxPlayers) return 0;
+    const StructSheetDesc* d = structSheet(t);
+    if (!d) return 0;
+    // A capacidade que ESTE predio da (building.txt, por faccao).
+    const int minha = d->player[p].storageCapacity;
+    const int teto = comum ? g_colony[p].oreCapacity : g_colony[p].rareCapacity;
+    const int estoque = comum ? g_playerData[p].ore : g_playerData[p].rareOre;
+    if (estoque <= teto - minha) return 0;              // cabe no que sobra
+    return comum ? 1 : 2;
+}
+
 bool structureCanIdle(const UnitRecord& r) {
     switch (r.action) {
         case 9: case 0x12: case 0x16: case 0x17: case ACT_BUILD: case ACT_DISMANTLE: return false;

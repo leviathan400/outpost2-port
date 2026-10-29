@@ -2157,6 +2157,7 @@ void GameState::clickCommand(int cmd) {                  // vt[1] do comando
         const int c = m_confirm.command();
         m_confirm.close();
         if (c == UC_DUMP_CARGO) { if (!m_selected.empty()) sendDumpCargo(m_selected[0]); }   // pacote 0x0E
+        else if (c == UC_IDLE) { if (!m_selected.empty()) structureDoIdle(m_selected[0]); }  // pacote 0x12
         else uiCommandClick(UC_STOP, m_selected);           // pacote 5 (parar)
         return;
     }
@@ -2166,6 +2167,22 @@ void GameState::clickCommand(int cmd) {                  // vt[1] do comando
         return;
     }
     if (cmd == kCmdNo) { m_confirm.close(); return; }
+    // IDLE de armazem/fundicao com metal que nao cabe no teto sem ele:
+    // sub_455CB0 pergunta antes, porque o excedente se perde.
+    if (cmd == UC_IDLE && m_selected.size() == 1) {
+        const int perda = structureIdleMetalLoss(m_selected[0]);
+        if (perda) {
+            closePanes();
+            m_confirm.open(m_selected[0],
+                perda == 1
+                    ? "All metal in storage will be lost if this structure is idled.  "
+                      "Confirm your idle order?"
+                    : "All rare metal in storage will be lost if this structure is idled.  "
+                      "Confirm your idle order?",
+                UC_IDLE);
+            return;
+        }
+    }
     if (cmd == UC_ASSIGN_STUDENTS && m_selected.size() == 1) {      // sub_4564E0 → dword_56AF28
         closePanes();
         m_students.open(m_selected[0]);

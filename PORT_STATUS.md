@@ -171,7 +171,12 @@ Revisado item a item em 2026-10-28, conferindo no código.
 10. Revelação do mapa ao construir (`dword_574C88`) e o som de `sub_42F000`.
 11. Pacote 0x1D (tomar posse) para os grupos de IA.
 12. Modo 3 do pathfinder (`sub_438850`).
-13. Fila de waypoints com Shift.
+13. ~~Fila de waypoints com Shift~~ — **não é pendência**: conferido em
+    2026-10-29, a fila `unk_5471B0`/`dword_5471AC` é código morto no
+    executável. O contador é o campo +0x3C do objeto do modo de mira, que
+    `sub_41B550` zera ao entrar no modo e que ninguém incrementa — as três
+    funções que o leem só leem. O jogo publicado manda sempre UM ponto por
+    comando, que é o que o porte faz.
 14. Dano em paredes nas autodestruições (`sub_4A23F0` no caminho de
     `sub_4A4090`).
 

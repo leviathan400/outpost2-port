@@ -133,7 +133,16 @@ void moralePhdTrained(int player, int n);
 int structurePowerOutput(const UnitRecord& r);
 int structureFoodOutput(const UnitRecord& r);
 // Comandos do botão do painel (CommandPacket 0x12 / 0x13, sub_40E210):
-bool structureCanIdle(const UnitRecord& r);         // sub_43AAF0
+bool structureCanIdle(const UnitRecord& r);
+
+// Desligar um armazem/fundicao tira a capacidade dele da colonia, e o que
+// passar do novo teto e PERDIDO (sub_471F30 trunca: "if (ore > capacity) ore =
+// capacity"). O original avisa antes, em sub_455CB0: para os tipos de metal
+// COMUM (0x36 fundicao, 0x19 armazem) compara a capacidade com o campo +0x18
+// do jogador, que sub_406610 mostra ser a CAPACIDADE de minerio, e para os de
+// metal RARO (0x38, 0x1A) o +0x1C. Devolve 0 = nao perde nada, 1 = perde metal
+// comum, 2 = perde metal raro.
+int structureIdleMetalLoss(int buildingId);         // sub_43AAF0
 void structureDoIdle(int id);                       // case 18
 bool structureDoActivate(int id);                   // case 19 (false se faltar recurso)
 
