@@ -178,7 +178,12 @@ Revisado item a item em 2026-10-28, conferindo no código.
    nem o `OP2Shell.dll` (que importa só três símbolos de dado), nem as DLLs de
    missão alcançam esses campos, e o `MissionResults` não os copia. Portá-los
    seria somar números que ninguém pode observar.
-10. Revelação do mapa ao construir (`dword_574C88`) e o som de `sub_42F000`.
+10. ~~Revelação do mapa ao construir~~ — **não existe**: conferido em
+    2026-10-29. O trecho de `dword_574C88+0x110` converte o retângulo do prédio
+    para a tela e o passa a `sub_46F550`, que é chamada de 36 pontos (entre
+    eles o realce de hover) — é a lista de **retângulos sujos** da vista. O
+    Outpost 2 não tem névoa de guerra. Este porte repinta a tela inteira a cada
+    quadro, então não há o que portar.
 11. Pacote 0x1D (tomar posse) para os grupos de IA.
 12. Modo 3 do pathfinder (`sub_438850`).
 13. ~~Fila de waypoints com Shift~~ — **não é pendência**: conferido em

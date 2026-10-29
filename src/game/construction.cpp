@@ -334,12 +334,25 @@ void conVecBuildStart(int id) {                           // sub_43DE50 case 2
     g_units[bld].cargo = static_cast<uint16_t>(static_cast<int16_t>(static_cast<int8_t>(cv.kitWeapon)));   // arma do kit
     cv.kitWeapon = 0;
     // sub_4030E0: o prédio entra no grupo [+0x6A] (antes da ação 0x21).
-    // (revelação do mapa dword_574C88 — pendente)
+    // (Antes disso, loc_43E17B do original converte o retângulo do prédio para
+    // coordenadas de tela com sub_407FF0 e chama sub_46F550 sobre
+    // dword_574C88+0x110. NÃO é revelação de mapa, como dizia a nota antiga
+    // aqui: o Outpost 2 não tem névoa de guerra, e sub_46F550 é chamada de 36
+    // pontos, entre eles o realce de hover (sub_41B620) — é a LISTA DE
+    // RETÂNGULOS SUJOS da vista, para repintar só o que mudou. Este porte
+    // repinta os 640x480 a cada quadro, então não há o que portar.)
     if (cv.buildGroup != -1) aiTakeUnit(cv.buildGroup, bld);
     structureStartBuild(bld, id);                         // ação 0x21, duração com o [+0x3C] da ConVec
     UnitRecord& c2 = g_units[id];
     c2.field3C = g_units[bld].buildTime;                  // [esi+3Ch] = [edi+5Ch]
-    if (!miner) soundPlayAt(unitOX(g_units[bld]), unitOY(g_units[bld]), 3);   // (sub_42F000 pendente)
+    // (No original, aqui vem `mov ecx, offset dword_547350; call sub_42F000` —
+    // um método do objeto dword_547350 que recebe a unidade e é chamado também
+    // em TethysGame::CreateUnit e em sub_49D280; por dentro usa o preenchimento
+    // de Heckbert sub_4362D0, o mesmo da conectividade. O que ele faz
+    // exatamente NÃO foi identificado. O que o porte precisa dele já acontece
+    // por outro caminho: colonyStructureAdded marca a colônia suja e o tique
+    // seguinte refaz a rede de tubos.)
+    if (!miner) soundPlayAt(unitOX(g_units[bld]), unitOY(g_units[bld]), 3);
     c2.field23 = c2.field22;
     c2.field22 = 0;
 }
