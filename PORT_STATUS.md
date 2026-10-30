@@ -140,11 +140,13 @@ Revisado item a item em 2026-10-28, conferindo no código.
 
 ### Grande
 
-1. **Rede com mais de 2 jogadores.** O lockstep (anel de 16 turnos) e o lobby
-   já tratam a mesa inteira, mas o transporte é ponto a ponto: a contagem está
-   fixa em 2 em `app/shell_state.cpp` e em `main.cpp`. Para 3–6 jogadores são
-   precisas N conexões (ou retransmissão pelo host) e roteamento dos turnos por
-   jogador. Mapas e GAME SETTINGS já suportam 6.
+1. ~~Rede com mais de 2 jogadores~~ — **feito** em 2026-10-30. A topologia é a
+   mesma da camada de mensagens do lobby: **estrela com o host no meio**. O
+   host fala com cada lugar ocupado e **repassa** os turnos de cada cliente aos
+   demais; o cliente fala só com o host, então ninguém precisa alcançar todo
+   mundo (NAT, firewall). A máquina de turnos já era de N jogadores — só o
+   `sendRaw` estava preso a um par. Medido: 3 e 4 jogadores em lockstep, com
+   hash idêntico em todas as máquinas (`--mplan host|join <DLL> <ticks> <N>`).
 
 ### Multijogador, peças soltas
 

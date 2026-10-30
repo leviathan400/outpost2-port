@@ -841,7 +841,11 @@ static void netMatchLoop(const char* teste, const char* lado, op2::GameState& gs
                 break;
             }
         }
-        gs.onIdle(renderer, 0.2501f / 4.0f);
+        // dt MENOR que o periodo do tique (1/(GameSpeed*4), 0,05 s na
+        // velocidade 5): com um dt maior, uma chamada pode avancar DOIS tiques
+        // e um lado para em 201 enquanto o outro para em 200 -- os hashes
+        // entao diferem sem que haja dessincronizacao nenhuma.
+        gs.onIdle(renderer, 0.01f);
         ++giros;
     }
     std::printf("[%s] %s jogador=%d t=%d esperas=%d hash=%016llx%c",
@@ -889,30 +893,40 @@ static int runMpNet(const std::string& mode, const std::string& dll, int ticks,
 // --mplan <host|join> <DLL> <ticks>: a mesma partida de --mpnet, mas com os
 // dois lados se achando pelo LOBBY — o host anuncia e espera, o cliente
 // descobre por broadcast e pede entrada. Nao ha endereco na linha de comando.
-static int runMpLan(const std::string& mode, const std::string& dll, int ticks) {
+static int runMpLan(const std::string& mode, const std::string& dll, int ticks, int jogadores) {
     const bool host = (mode == "host");
+    if (jogadores < 2) jogadores = 2;
+    if (jogadores > 6) jogadores = 6;
     std::string err;
     int jogador = 0;
     uint32_t peerAddr = 0;
     uint16_t peerPort = 0;
 
+    std::vector<op2::NetPeer> pares;
     if (host) {
-        if (!op2::lobbyHostStart("OP2 LAN", 2, "", err)) {
+        if (!op2::lobbyHostStart("OP2 LAN", jogadores, "", err)) {
             std::printf("[MpLan] lobby falhou: %s%c", err.c_str(), 10);
             return 2;
         }
-        std::printf("[MpLan] host no ar, esperando o outro lado%c", 10);
+        std::printf("[MpLan] host no ar, esperando %d jogador(es)%c", jogadores - 1, 10);
         std::fflush(stdout);
         const uint32_t fim = SDL_GetTicks() + 30000;
-        while (SDL_GetTicks() < fim && !op2::lobbyPeer(peerAddr, peerPort)) {
+        // ATENCAO: lobbyHostActiveCount conta o lugar 0, que e o proprio host.
+        while (SDL_GetTicks() < fim && op2::lobbyHostActiveCount() < jogadores) {
             op2::lobbyHostPump();
             SDL_Delay(5);
         }
-        if (!op2::lobbyPeer(peerAddr, peerPort)) {
-            std::printf("[MpLan] ninguem entrou%c", 10);
+        if (op2::lobbyHostActiveCount() < jogadores) {
+            std::printf("[MpLan] so %d na mesa (com o host)%c", op2::lobbyHostActiveCount(), 10);
             op2::lobbyHostStop();
             return 2;
         }
+        // O host fala com CADA lugar ocupado.
+        for (int n = 1; n < 8; ++n) {
+            const op2::LobbyPlayer* lp = op2::lobbyHostPlayer(n);
+            if (lp && lp->state == 2) pares.push_back(op2::NetPeer{lp->addr, lp->port});
+        }
+        if (!pares.empty()) { peerAddr = pares[0].addr; peerPort = pares[0].port; }
         jogador = 0;
     } else {
         std::vector<op2::LobbySession> ses;
@@ -929,6 +943,7 @@ static int runMpLan(const std::string& mode, const std::string& dll, int ticks) 
             std::printf("[MpLan] o lobby nao disse onde esta o host%c", 10);
             return 2;
         }
+        pares.push_back(op2::NetPeer{peerAddr, peerPort});   // o cliente so fala com o host
     }
 
     unsigned char ip[4];
@@ -940,7 +955,8 @@ static int runMpLan(const std::string& mode, const std::string& dll, int ticks) 
 
     const uintptr_t sock = op2::lobbyTakeGameSocket();
     if (host) op2::lobbyHostStop();
-    if (!op2::netStartJoined(sock, peerAddr, peerPort, jogador, 2, err)) {
+    if (!op2::netStartJoined(sock, pares.data(), int(pares.size()), host, jogador,
+                             jogadores, err)) {
         std::printf("[MpLan] rede falhou: %s%c", err.c_str(), 10);
         return 2;
     }
@@ -3777,7 +3793,8 @@ int main(int argc, char* argv[]) {
         if (std::strcmp(argv[i], "--mpui") == 0 && i + 1 < argc)
             return runMpUi(argv[i + 1], i + 2 < argc ? argv[i + 2] : "PLAYER");
         if (std::strcmp(argv[i], "--mplan") == 0 && i + 3 < argc)
-            return runMpLan(argv[i + 1], argv[i + 2], atoi(argv[i + 3]));
+            return runMpLan(argv[i + 1], argv[i + 2], atoi(argv[i + 3]),
+                            i + 4 < argc ? atoi(argv[i + 4]) : 2);
         if (std::strcmp(argv[i], "--mplobby") == 0 && i + 1 < argc)
             return runMpLobby(argc, argv, i);
         if (std::strcmp(argv[i], "--mpnet") == 0 && i + 3 < argc)

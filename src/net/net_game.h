@@ -37,11 +37,23 @@ constexpr int kTurnLead = 2;        // turnos de antecedência do anúncio
 // Abre o socket e faz o aperto de mão (quem hospeda espera). false = falhou.
 bool netStart(const NetConfig& cfg, std::string& error);
 
-// Comeca a partida com o socket e o endereco que o LOBBY ja negociou
-// (lobbyTakeGameSocket / lobbyPeer): nao ha aperto de mao a refazer, porque o
-// do lobby — pedido 0x32, aceitacao 0x26, confirmacao 0x14 — ja colocou os
-// dois lados de acordo sobre quem e quem. `players` conta a mesa inteira.
-bool netStartJoined(uintptr_t sock, uint32_t peerAddr, uint16_t peerPort,
+// Onde fica cada um dos outros, em ordem de rede.
+struct NetPeer {
+    uint32_t addr = 0;    // IP em ordem de rede
+    uint16_t port = 0;    // porta em ordem local
+};
+
+// Comeca a partida com o socket e os enderecos que o LOBBY ja negociou
+// (lobbyTakeGameSocket / lobbyHostPlayer / lobbyPeer): nao ha aperto de mao a
+// refazer, porque o do lobby — pedido 0x32, aceitacao 0x26, confirmacao 0x14 —
+// ja colocou todos de acordo sobre quem e quem. `players` conta a mesa inteira.
+//
+// A TOPOLOGIA e a mesma da camada de mensagens do lobby: ESTRELA com o host no
+// meio. O host recebe `peers` com todos os clientes e `relay = true`; cada
+// cliente recebe so o host e `relay = false`. Com o repasse ligado, todo turno
+// que chega de um cliente e reenviado aos demais, que e o que permite 3 a 6
+// jogadores sem exigir que cada um alcance todos os outros (NAT, firewall).
+bool netStartJoined(uintptr_t sock, const NetPeer* peers, int numPeers, bool relay,
                     int localPlayer, int players, std::string& error);
 void netStop();
 bool netActive();

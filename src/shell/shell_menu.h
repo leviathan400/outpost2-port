@@ -145,6 +145,10 @@ public:
 
     // O START do GAME SETTINGS pediu a partida em rede? Devolve a DLL do
     // cenário; o jogador local e os pares saem do net_lobby.
+    // Quem somos e quantos somos, para quem vai subir a partida em rede.
+    int mpLocalPlayer() const { return m_mpLocalPlayer; }
+    int mpPlayerCount() const { return m_mpPlayerCount; }
+
     bool consumeNetLaunch(std::string& outDll) {
         if (!m_netLaunch) return false;
         m_netLaunch = false;
@@ -352,6 +356,10 @@ private:
     // _Player::Difficulty), bits 5-7 a cor.
     GameStartInfo m_mpGsi;
     bool m_mpIsHost = false;
+    // Nosso numero de jogador na mesa. O host e sempre 0; o cliente recebe o
+    // dele na resposta de entrada do lobby (os 3 bits baixos do id). Antes
+    // disto o porte assumia 1, o que so valia para mesa de dois.
+    int  m_mpLocalPlayer = 0;
     std::string m_mpPlayerName = "PLAYER";   // Edit 1044 / 1035 "Your Name"
     std::string m_mpPassword;                // Edit 1037 "Password"
     std::string m_mpSessionName = "OUTPOST 2";

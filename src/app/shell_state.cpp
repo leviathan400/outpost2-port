@@ -1,6 +1,8 @@
 #include "shell_state.h"
 
 #include <iostream>
+#include <algorithm>
+#include <vector>
 #include <string>
 
 #include "tapp.h"
@@ -40,15 +42,29 @@ void ShellState::onIdle(Renderer& renderer, float dt) {
     // partida comeca direto no lockstep, sem refazer aperto de mao.
     std::string netDll;
     if (m_menu.consumeNetLaunch(netDll)) {
-        uint32_t peerAddr = 0;
-        uint16_t peerPort = 0;
         std::string err;
-        if (!lobbyPeer(peerAddr, peerPort)) {
-            std::cerr << "[Shell] o lobby nao sabe onde esta o outro lado" << std::endl;
+        // A topologia e a mesma da camada de mensagens do lobby: estrela com o
+        // host no meio. O host fala com cada lugar ocupado e REPASSA os turnos
+        // dos clientes aos demais; o cliente fala so com o host.
+        const bool host = lobbyHostActive();
+        std::vector<NetPeer> peers;
+        if (host) {
+            for (int n = 1; n < 8; ++n) {
+                const LobbyPlayer* lp = lobbyHostPlayer(n);
+                if (lp && lp->state == 2) peers.push_back(NetPeer{lp->addr, lp->port});
+            }
+        } else {
+            uint32_t a = 0; uint16_t pt = 0;
+            if (lobbyPeer(a, pt)) peers.push_back(NetPeer{a, pt});
+        }
+        if (peers.empty()) {
+            std::cerr << "[Shell] o lobby nao sabe onde estao os outros" << std::endl;
             return;
         }
-        const int me = lobbyHostActive() ? 0 : 1;
-        if (!netStartJoined(lobbyTakeGameSocket(), peerAddr, peerPort, me, 2, err)) {
+        const int me = host ? 0 : m_menu.mpLocalPlayer();
+        const int players = std::max(2, m_menu.mpPlayerCount());
+        if (!netStartJoined(lobbyTakeGameSocket(), peers.data(), int(peers.size()), host,
+                            me, players, err)) {
             std::cerr << "[Shell] a rede nao subiu: " << err << std::endl;
             return;
         }

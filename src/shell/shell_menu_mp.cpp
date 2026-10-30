@@ -620,6 +620,7 @@ void ShellMenu::mpSyncGsi() {
 }
 
 bool ShellMenu::mpStartHost() {
+    m_mpLocalPlayer = 0;                       // o host ocupa sempre o lugar 0
     mpSyncGsi();
     std::string err;
     if (!lobbyHostStart(m_mpSessionName, m_mpMaxPlayers + 2, m_mpPassword, err,
@@ -666,6 +667,7 @@ bool ShellMenu::mpJoinSelected() {
         return false;
     }
     m_mpIsHost = false;
+    m_mpLocalPlayer = (player >= 0 && player < 6) ? player : 1;
     m_mpStatus = "Entrou como jogador " + std::to_string(player);
     // O host manda os flags da partida no pacote de descoberta (+0x2A), então
     // as opções já aparecem certas antes de a partida começar.
@@ -708,7 +710,7 @@ void ShellMenu::mpTableToUi(const LobbyTable& t) {
     m_mpInitialVehicles = int((t.flags >> 17) & 0xF);
     m_mpScenario = t.scenario;
     int live = 0;
-    const int me = netActive() ? netLocalPlayer() : 1;
+    const int me = netActive() ? netLocalPlayer() : m_mpLocalPlayer;
     for (int i = 0; i < 6; ++i) {
         // O nosso proprio lugar nao e sobrescrito: o que vale para ele e o que
         // esta na nossa tela, e o host ja o recebeu por kLobbyMsgChange.

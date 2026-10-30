@@ -7,6 +7,7 @@
 #include <cstring>
 #include <iostream>
 #include <map>
+#include <vector>
 
 #include "../game/tethys_game.h"
 
@@ -22,7 +23,10 @@ constexpr int kPktHello = 0x01;
 
 bool s_active = false;
 SOCKET s_sock = INVALID_SOCKET;
-sockaddr_in s_peer{};
+// Para quem mandamos: o host tem todos os clientes, o cliente tem so o host.
+std::vector<sockaddr_in> s_peers;
+// So o host repassa: o turno que chega de um cliente vai para os demais.
+bool s_relay = false;
 int s_localPlayer = 0;
 int s_players = 2;
 int s_waits = 0;
@@ -94,10 +98,18 @@ std::vector<uint8_t> buildTurn(int player, int tick, const std::vector<CommandPa
     return b;
 }
 
-void sendRaw(const std::vector<uint8_t>& b) {
+void sendTo(const sockaddr_in& to, const uint8_t* p, int n) {
     if (s_sock == INVALID_SOCKET) return;
-    sendto(s_sock, reinterpret_cast<const char*>(b.data()), int(b.size()), 0,
-           reinterpret_cast<const sockaddr*>(&s_peer), sizeof(s_peer));
+    sendto(s_sock, reinterpret_cast<const char*>(p), n, 0,
+           reinterpret_cast<const sockaddr*>(&to), sizeof(to));
+}
+
+void sendRaw(const std::vector<uint8_t>& b) {
+    for (const sockaddr_in& to : s_peers) sendTo(to, b.data(), int(b.size()));
+}
+
+bool sameAddr(const sockaddr_in& a, const sockaddr_in& b) {
+    return a.sin_addr.s_addr == b.sin_addr.s_addr && a.sin_port == b.sin_port;
 }
 
 // Lê tudo que chegou. Pacotes repetidos são inofensivos: o turno é identificado
@@ -128,7 +140,14 @@ void pump() {
             o += used;
             cmds.push_back(std::move(c));
         }
-        if (ok) s_turns[{tick, player}] = std::move(cmds);
+        if (!ok) continue;
+        s_turns[{tick, player}] = std::move(cmds);
+        // O host e o centro da estrela: o turno que veio de um cliente tem de
+        // chegar aos OUTROS, senao cada um so conheceria os turnos do host.
+        // Reenvia os bytes como chegaram, menos para quem mandou.
+        if (s_relay && player != s_localPlayer)
+            for (const sockaddr_in& to : s_peers)
+                if (!sameAddr(to, from)) sendTo(to, buf, n);
     }
 }
 
@@ -150,12 +169,15 @@ bool netStart(const NetConfig& cfg, std::string& error) {
         error = "bind falhou"; closesocket(s_sock); s_sock = INVALID_SOCKET; return false;
     }
 
-    s_peer.sin_family = AF_INET;
-    s_peer.sin_port = htons(u_short(cfg.host ? cfg.port + 1 : cfg.port));
+    sockaddr_in peer{};
+    peer.sin_family = AF_INET;
+    peer.sin_port = htons(u_short(cfg.host ? cfg.port + 1 : cfg.port));
     const char* h = cfg.peerHost.empty() ? "127.0.0.1" : cfg.peerHost.c_str();
-    if (inet_pton(AF_INET, h, &s_peer.sin_addr) != 1) {
+    if (inet_pton(AF_INET, h, &peer.sin_addr) != 1) {
         error = "endereco invalido"; closesocket(s_sock); s_sock = INVALID_SOCKET; return false;
     }
+    s_peers.assign(1, peer);     // este caminho e sempre de dois
+    s_relay = false;
 
     // Aperto de mão: os dois mandam HELLO até ouvirem o outro.
     u_long nb = 1;
@@ -192,17 +214,23 @@ bool netStart(const NetConfig& cfg, std::string& error) {
     return true;
 }
 
-bool netStartJoined(uintptr_t sock, uint32_t peerAddr, uint16_t peerPort,
+bool netStartJoined(uintptr_t sock, const NetPeer* peers, int numPeers, bool relay,
                     int localPlayer, int players, std::string& error) {
     if (sock == uintptr_t(INVALID_SOCKET)) { error = "socket invalido"; return false; }
+    if (!peers || numPeers <= 0) { error = "sem ninguem do outro lado"; return false; }
     s_sock = SOCKET(sock);
     u_long nb = 1;
     ioctlsocket(s_sock, FIONBIO, &nb);
 
-    s_peer = sockaddr_in{};
-    s_peer.sin_family = AF_INET;
-    s_peer.sin_addr.s_addr = peerAddr;
-    s_peer.sin_port = htons(peerPort);
+    s_peers.clear();
+    for (int i = 0; i < numPeers; ++i) {
+        sockaddr_in to{};
+        to.sin_family = AF_INET;
+        to.sin_addr.s_addr = peers[i].addr;
+        to.sin_port = htons(peers[i].port);
+        s_peers.push_back(to);
+    }
+    s_relay = relay;
 
     s_localPlayer = localPlayer;
     s_players = players;
@@ -210,6 +238,9 @@ bool netStartJoined(uintptr_t sock, uint32_t peerAddr, uint16_t peerPort,
     s_pending.clear(); s_turns.clear(); s_sentTurns.clear();
     s_lastAnnounced = -1;
     s_waits = 0;
+    std::cout << "[Net] partida com " << players << " jogadores; eu sou o "
+              << localPlayer << "; " << numPeers << (relay ? " cliente(s), repassando" : " destino")
+              << std::endl;
     (void)error;
     return true;
 }
@@ -218,6 +249,8 @@ void netStop() {
     if (s_sock != INVALID_SOCKET) { closesocket(s_sock); s_sock = INVALID_SOCKET; }
     if (s_active) WSACleanup();
     s_active = false;
+    s_peers.clear();
+    s_relay = false;
     s_pending.clear(); s_turns.clear(); s_sentTurns.clear();
 }
 
