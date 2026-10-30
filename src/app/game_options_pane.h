@@ -17,7 +17,7 @@ namespace op2 {
 //   MENU       os seis botões de sub_457880, com os rótulos do executável:
 //              "&MISSION OBJECTIVES", "ONLINE MAN&UAL", "PR&EFERENCES",
 //              "L&OAD GAME", "&SAVE GAME" e "E&ND MISSION", mais a versão no
-//              rodapé ("Version ", aVersion).
+//              rodapé (aVersion no original; aqui "Version 1.0 - beta port").
 //   PREFS      as opções do [Game] do OUTPOST2.INI (a lista abaixo), com
 //              L&ESS/&MORE, "&APPLY" ("&Apply new values") e "&GAME OPTIONS"
 //              ("Back to &Game Options"). Como no original, o que se mexe aqui

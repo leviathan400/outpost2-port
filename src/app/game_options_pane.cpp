@@ -123,10 +123,11 @@ void GameOptionsPane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane,
         return;
     }
     // MENU e ENDMISSION são só botões (montados pelo GameState); aqui sobra a
-    // versão no rodapé, que o original escreve com aVersion.
+    // versão no rodapé: o original escreve com aVersion ("Version "); aqui a
+    // linha diz "Version 1.0 - beta port", por ser um porte em andamento.
     if (m_mode == MENU)
         drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.b - 18, pane.r - 0xE, pane.b},
-                       "Version 1.0", 0xFF00FF00u, false, kMarkupLine);
+                       "Version 1.0 - beta port", 0xFF00FF00u, false, kMarkupLine);
 }
 
 bool GameOptionsPane::click(const PaneRect& pane, int x, int y, bool& changed, bool& back) {
