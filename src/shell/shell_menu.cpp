@@ -337,12 +337,16 @@ void ShellMenu::rebuildControls() {
     }
     case MenuState::MissionMenu: {
         // Dialog 219: botões 1091/1090/1005/1095 e 1094 (LEAVE CAMPAIGN).
-        const int x = kMmX + 27, y0 = kMmY + 30;
-        addButton(1091, "MISSION BRIEFING", x, y0, 135, 23);
-        addButton(1090, "SPECIFIC OBJECTIVES", x, y0 + 32, 135, 23);
-        addButton(1005, "STORY", x, y0 + 64, 135, 23);
-        addButton(1095, "START MISSION", x, y0 + 96, 135, 23, true);
-        addButton(1094, "LEAVE CAMPAIGN", x, y0 + 144, 135, 23);
+        // O template manda 90 DLU de largura (= 135 px na conversão do shell),
+        // que bastam para a MS Sans Serif 8 do original mas NÃO para a nossa
+        // fonte de 8 px fixos: "SPECIFIC OBJECTIVES" pede 152 px e vazava do
+        // botão. Alargamos para 160 e recentramos no quadro (190 − 160) / 2.
+        const int bw = 160, x = kMmX + (kMmW - bw) / 2, y0 = kMmY + 30;
+        addButton(1091, "MISSION BRIEFING", x, y0, bw, 23);
+        addButton(1090, "SPECIFIC OBJECTIVES", x, y0 + 32, bw, 23);
+        addButton(1005, "STORY", x, y0 + 64, bw, 23);
+        addButton(1095, "START MISSION", x, y0 + 96, bw, 23, true);
+        addButton(1094, "LEAVE CAMPAIGN", x, y0 + 144, bw, 23);
         break;
     }
     case MenuState::RtfView: {

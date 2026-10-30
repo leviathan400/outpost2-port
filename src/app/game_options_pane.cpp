@@ -36,8 +36,25 @@ void GameOptionsPane::open() {
     clampAll();
     m_list.reset();
     m_list.sel = 0;
+    m_mode = MENU;                 // o original abre no MENU, nao nas opcoes
     m_open = true;
 }
+
+void GameOptionsPane::setMode(Mode m) {
+    // Entrar em PREFS relê o INI: o que foi mexido e abandonado sem APPLY não
+    // pode sobreviver (é o modelo do original, que só grava no "Apply new
+    // values").
+    if (m == PREFS) {
+        Config cfg("OUTPOST2.INI");
+        if (cfg.load()) g_opt.loadFrom(cfg);
+        clampAll();
+        m_list.reset();
+        m_list.sel = 0;
+    }
+    m_mode = m;
+}
+
+void GameOptionsPane::apply() { saveIni(); }
 
 void GameOptionsPane::saveIni() const {
     Config cfg("OUTPOST2.INI");
@@ -90,21 +107,32 @@ void GameOptionsPane::bump(int i, int dir) {
     default: return;
     }
     clampAll();
-    saveIni();
+    // NÃO grava aqui: no original o que se mexe só vale no "&APPLY".
 }
 
 void GameOptionsPane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, int mx, int my) const {
     if (!m_open) return;
     const ListBoxLayout L = layout(pane);
+    // O título é o da tela em que se está (aGameOptions / aGamePreference).
+    const char* titulo = m_mode == PREFS ? "Game Preferences"
+                       : m_mode == ENDMISSION ? "End Mission" : "Game Options";
     drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.t + 2, pane.r - 0xE, L.list.t},
-                   "Game Options", 0xFF00FF00u, true, kMarkupLine);
-    m_list.draw(fb, fbW, fbH, L, pane, items(), mx, my);
+                   titulo, 0xFF00FF00u, true, kMarkupLine);
+    if (m_mode == PREFS) {
+        m_list.draw(fb, fbW, fbH, L, pane, items(), mx, my);
+        return;
+    }
+    // MENU e ENDMISSION são só botões (montados pelo GameState); aqui sobra a
+    // versão no rodapé, que o original escreve com aVersion.
+    if (m_mode == MENU)
+        drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.b - 18, pane.r - 0xE, pane.b},
+                       "Version 1.0", 0xFF00FF00u, false, kMarkupLine);
 }
 
 bool GameOptionsPane::click(const PaneRect& pane, int x, int y, bool& changed, bool& back) {
     changed = false;
     back = false;
-    if (!m_open) return false;
+    if (!m_open || m_mode != PREFS) return false;   // nas outras telas só há botões
     const ListBoxLayout L = layout(pane);
     int item = -1;
     if (m_list.click(L, items(), x, y, item)) {

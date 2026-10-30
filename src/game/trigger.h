@@ -123,5 +123,8 @@ void setGameSpeedValue(int v);         // TethysGame +0x50 (GameStartInfo +0xAE)
 void setDemoGame(bool on);
 bool demoGame();
 void endDemoGame();                 // o codigo 10: o jogador interrompeu
+// O codigo 6 ("MISSION ABORTED"), que o BACK TO MAIN MENU da aba Options pede
+// depois de confirmar (sub_457880 caso 4).
+void endGameAborted();
 
 } // namespace op2

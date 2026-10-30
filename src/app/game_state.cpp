@@ -433,6 +433,32 @@ void GameState::demoCameraTick() {
     clampCamera();
 }
 
+// "E&nd current mission and restart it": o original (sub_457880 caso 8) copia o
+// GameStartInfo guardado, troca a semente e chama TApp::StartSingleGame de
+// novo. Aqui basta reativar a mesma DLL com o mesmo GameStartInfo -- quem
+// zera o mundo e o proprio loadMission.
+void GameState::requestRestartMission() {
+    if (!m_mission) return;
+    const std::string dll = m_mission->dllName;
+    const GameStartInfo gsi = m_gsi;
+    if (!gTApp.activateMission(dll, &gsi))
+        std::cerr << "[GameState] nao consegui reiniciar " << dll << std::endl;
+}
+
+// "&Destroy all vehicles and structures and leave the game": tira do mapa tudo
+// o que e do jogador local e encerra com o codigo 6.
+void GameState::destroyAllAndLeave() {
+    const int me = TethysGame::localPlayer();
+    for (size_t i = 1; i < g_units.size(); ++i) {
+        UnitRecord& r = g_units[i];
+        if (r.id == -1 || (r.flags & UNIT_DEAD)) continue;
+        if ((r.owner & 0x0F) != me) continue;
+        if (!(r.flags & (UNIT_VEHICLE | UNIT_BUILDING))) continue;
+        killUnit(static_cast<int>(i), 0);          // sub_4834B0: mata com o atraso dado
+    }
+    endGameAborted();
+}
+
 void GameState::clampCamera() {
     if (m_camY < 0) m_camY = 0;
     if (m_camY > m_maxY) m_camY = m_maxY;
@@ -1842,22 +1868,56 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
     }
     if (m_tab == 5 && m_mission) {
         if (m_gameOptions.isOpen()) {
-            // Game Options: L&ESS/&MORE no item com valor, e "Back to &Game
-            // Options" vira o BACK que fecha o painel.
+            // Um botao largo da pilha, de cima para baixo.
+            int empilha = kPaneTop + 30;
+            auto larga = [&](int cmd, const char* rotulo, const char* dica, char tecla) {
+                TextButton b{};
+                b.cmd = cmd; b.label = rotulo; b.tip = dica; b.hotkey = tecla;
+                b.wide = true;
+                b.l = kColX + 9; b.t = empilha; b.r = b.l + 175; b.b = b.t + 25;
+                empilha += 29;
+                out.push_back(b);
+            };
+            if (m_gameOptions.mode() == GameOptionsPane::MENU) {
+                // Os seis de sub_457880, com os rotulos do executavel.
+                larga(kCmdOptObjectives, "&MISSION OBJECTIVES", "Show &Mission Objectives", 'M');
+                // (ONLINE MAN&UAL entra no passo seguinte, com o leitor do .HLP
+                //  dentro da partida; botao morto nao entra.)
+                larga(kCmdOptPrefs, "PR&EFERENCES", "Change Game Pr&eferences", 'E');
+                larga(kCmdOptLoad, "L&OAD GAME", "L&oad a Saved Game", 'O');
+                larga(kCmdOptSave, "&SAVE GAME", "&Save this Game", 'S');
+                larga(kCmdOptEnd, "E&ND MISSION", "E&nd Mission Options", 'N');
+                return out;
+            }
+            if (m_gameOptions.mode() == GameOptionsPane::ENDMISSION) {
+                larga(kCmdOptRestart, "RESTART MISSIO&N", "E&nd current mission and restart it", 'N');
+                larga(kCmdOptMainMenu, "&BACK TO MAIN MENU", "Go &Back to Main Menu", 'B');
+                larga(kCmdOptExit, "E&XIT OUTPOST 2", "E&xit Outpost 2 and return to Windows", 'X');
+                larga(kCmdOptDestroy, "SELF-&DESTRUCT", "&Destroy all vehicles and structures", 'D');
+                larga(kCmdOptMenu, "&GAME OPTIONS", "Back to &Game Options", 'G');
+                return out;
+            }
+            // PREFERENCES: L&ESS/&MORE no item com valor, e embaixo &APPLY e a
+            // volta ao menu.
             const int sel = m_gameOptions.selected();
             const int top = kPaneBottom - 2 - 25;
             if (m_gameOptions.valueItem(sel)) {
                 TextButton l{};
                 l.cmd = kCmdOptLess; l.label = "L&ESS"; l.tip = "Turn this option down (L&ess)"; l.hotkey = 'E';
-                l.l = kColX + 9; l.t = top - 27; l.r = l.l + 85; l.b = l.t + 25;
+                l.l = kColX + 9; l.t = top - 56; l.r = l.l + 85; l.b = l.t + 25;
                 out.push_back(l);
                 TextButton m{};
                 m.cmd = kCmdOptMore; m.label = "&MORE"; m.tip = "Turn this option up (&More)"; m.hotkey = 'M';
-                m.l = kColX + 99; m.t = top - 27; m.r = m.l + 85; m.b = m.t + 25;
+                m.l = kColX + 99; m.t = top - 56; m.r = m.l + 85; m.b = m.t + 25;
                 out.push_back(m);
             }
+            TextButton a{};
+            a.cmd = kCmdOptApply; a.label = "&APPLY"; a.tip = "&Apply new values"; a.hotkey = 'A';
+            a.wide = true;
+            a.l = kColX + 9; a.t = top - 28; a.r = a.l + 175; a.b = a.t + 25;
+            out.push_back(a);
             TextButton b{};
-            b.cmd = kCmdOptBack; b.label = "&BACK"; b.tip = "Back to &Objectives"; b.hotkey = 'B';
+            b.cmd = kCmdOptMenu; b.label = "&GAME OPTIONS"; b.tip = "Back to &Game Options"; b.hotkey = 'G';
             b.wide = true;
             b.l = kColX + 9; b.t = top; b.r = b.l + 175; b.b = b.t + 25;
             out.push_back(b);
@@ -2158,6 +2218,10 @@ void GameState::clickCommand(int cmd) {                  // vt[1] do comando
         m_confirm.close();
         if (c == UC_DUMP_CARGO) { if (!m_selected.empty()) sendDumpCargo(m_selected[0]); }   // pacote 0x0E
         else if (c == UC_IDLE) { if (!m_selected.empty()) structureDoIdle(m_selected[0]); }  // pacote 0x12
+        else if (c == kCmdOptRestart)  { m_gameOptions.close(); requestRestartMission(); }
+        else if (c == kCmdOptMainMenu) { m_gameOptions.close(); endGameAborted(); }
+        else if (c == kCmdOptExit)     { SDL_Event q{}; q.type = SDL_QUIT; SDL_PushEvent(&q); }
+        else if (c == kCmdOptDestroy)  { m_gameOptions.close(); destroyAllAndLeave(); }
         else uiCommandClick(UC_STOP, m_selected);           // pacote 5 (parar)
         return;
     }
@@ -2221,6 +2285,28 @@ void GameState::clickCommand(int cmd) {                  // vt[1] do comando
         return;
     }
     if (cmd == kCmdOptBack) { m_gameOptions.close(); return; }                     // "Back to ..."
+    // --- o menu da aba (sub_457880) ---
+    if (cmd == kCmdOptObjectives) { m_gameOptions.close(); return; }               // volta aos objetivos
+    if (cmd == kCmdOptPrefs) { m_gameOptions.setMode(GameOptionsPane::PREFS); return; }
+    if (cmd == kCmdOptEnd) { m_gameOptions.setMode(GameOptionsPane::ENDMISSION); return; }
+    if (cmd == kCmdOptMenu) { m_gameOptions.setMode(GameOptionsPane::MENU); return; }
+    if (cmd == kCmdOptApply) { m_gameOptions.apply(); loadSettings(); return; }     // "&Apply new values"
+    if (cmd == kCmdOptLoad) { m_saveDlg.open(SaveSlotsDialog::kLoad, ""); return; } // caso 1: OnLoadSlot
+    if (cmd == kCmdOptSave) {                                                       // caso 2: OnSaveSlot
+        m_saveDlg.open(SaveSlotsDialog::kSave, m_mission ? m_mission->levelDesc : "");
+        return;
+    }
+    // Cada um destes confirma antes, como os casos 3, 4, 5 e 6 de sub_457880.
+    if (cmd == kCmdOptRestart || cmd == kCmdOptMainMenu || cmd == kCmdOptExit ||
+        cmd == kCmdOptDestroy) {
+        const char* msg = cmd == kCmdOptRestart  ? "Are you sure you want to restart the mission?"
+                        : cmd == kCmdOptMainMenu ? "Are you sure you want to abort the mission?"
+                        : cmd == kCmdOptExit     ? "Are you sure you want to exit to Windows?"
+                        : "Are you sure you want to destroy all your vehicles and structures "
+                          "and leave the game?";
+        m_confirm.open(m_selected.empty() ? 0 : m_selected[0], msg, cmd);
+        return;
+    }
     if (cmd == UC_BUILD) {                                // sub_456250 → painel de produção
         if (m_selected.size() == 1) { closePanes(); m_produce.open(m_selected[0]); }
         m_targetCmd = -1;
@@ -2563,11 +2649,29 @@ void GameState::renderPanel(Renderer& renderer) {
             blitArtFrame(fb, VW, VH, anim, over ? 1 : 0, b.l + d, b.t + d, -1, px0, 0, VW, VH);
         }
         if (over) help = b.tip;
-        std::string t;
-        for (char ch : b.label) if (ch != '&') t += ch;
+        // O rotulo sai centrado, com a letra do '&' em VERMELHO -- e assim que
+        // o original marca o atalho dentro do botao (a mesma convencao da
+        // linha de ajuda, onde ela ainda vem sublinhada).
+        const size_t amp = b.label.find('&');
+        std::string antes, acc, depois;
+        if (amp == std::string::npos || amp + 1 >= b.label.size()) {
+            antes = b.label;
+        } else {
+            antes = b.label.substr(0, amp);
+            acc = b.label.substr(amp + 1, 1);
+            depois = b.label.substr(amp + 2);
+        }
         const int td = over ? 1 : 0;
-        UiFont::drawCentered(fb, VW, VH, t, (b.l + b.r) / 2 + td, UiFont::centeredY(b.t, b.b) + td,
-                             b.disabled ? 0xFF636363 : 0xFFDDFF22, false);
+        const uint32_t cor = b.disabled ? 0xFF636363 : 0xFFDDFF22;
+        const uint32_t corAcc = b.disabled ? 0xFF636363 : 0xFFFF2020;
+        const int largura = UiFont::width(antes) + UiFont::width(acc) + UiFont::width(depois);
+        int tx = (b.l + b.r) / 2 - largura / 2 + td;
+        const int ty = UiFont::centeredY(b.t, b.b) + td;
+        UiFont::draw(fb, VW, VH, antes, tx, ty, cor);
+        tx += UiFont::width(antes);
+        UiFont::draw(fb, VW, VH, acc, tx, ty, corAcc);
+        tx += UiFont::width(acc);
+        UiFont::draw(fb, VW, VH, depois, tx, ty, cor);
     }
 
     // --- Barra de status sob a vista (sub_4998D0 / sub_499A30) ---

@@ -250,6 +250,11 @@ private:
     }
     static constexpr int kCmdGameOptions = -4;
     static constexpr int kCmdOptLess = -20, kCmdOptMore = -21, kCmdOptBack = -22;
+    // Os seis itens do menu da aba (sub_457880) e os da tela END MISSION.
+    static constexpr int kCmdOptObjectives = -30, kCmdOptManual = -31, kCmdOptPrefs = -32;
+    static constexpr int kCmdOptLoad = -33, kCmdOptSave = -34, kCmdOptEnd = -35;
+    static constexpr int kCmdOptRestart = -36, kCmdOptMainMenu = -37, kCmdOptExit = -38;
+    static constexpr int kCmdOptDestroy = -39, kCmdOptApply = -40, kCmdOptMenu = -41;
     static constexpr int kCmdVehicles = -15, kCmdJump = -16;   // &VEHICLES (RCC) / &JUMP da lista
     static constexpr int kCmdMsgJump = -17;                    // &JUMP das mensagens (sub_466A00)
     static constexpr int kCmdDetails = -18;                    // &DETAILS dos relatórios (sub_458CC0)
@@ -272,6 +277,9 @@ private:
     int screenXOf(int worldPixelX) const;
     void drawBeam(Renderer& renderer, const WeaponDrawOp& op);
     void clampCamera();
+    // Itens da tela END MISSION da aba Options, depois da confirmacao.
+    void requestRestartMission();   // recarrega a MESMA missao, do zero
+    void destroyAllAndLeave();      // destroi o que e meu e encerra a partida
     void selectAt(int nx, int ny, bool additive);
     void selectBox(int x0, int y0, int x1, int y1);
     void renderPanel(Renderer& renderer);

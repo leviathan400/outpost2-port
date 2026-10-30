@@ -10,7 +10,23 @@
 namespace op2 {
 
 // Painel "Game Options" (botão "&GAME OPTIONS" da aba de objetivos, sub_465830).
-// A lista tem as opções do [Game] do OUTPOST2.INI, com os mesmos textos do
+//
+// São TRÊS telas, como no original — o porte mostrava direto a do meio, com o
+// título da primeira:
+//
+//   MENU       os seis botões de sub_457880, com os rótulos do executável:
+//              "&MISSION OBJECTIVES", "ONLINE MAN&UAL", "PR&EFERENCES",
+//              "L&OAD GAME", "&SAVE GAME" e "E&ND MISSION", mais a versão no
+//              rodapé ("Version ", aVersion).
+//   PREFS      as opções do [Game] do OUTPOST2.INI (a lista abaixo), com
+//              L&ESS/&MORE, "&APPLY" ("&Apply new values") e "&GAME OPTIONS"
+//              ("Back to &Game Options"). Como no original, o que se mexe aqui
+//              só vale ao APPLY: sair pelo GAME OPTIONS descarta.
+//   ENDMISSION "RESTART MISSIO&N", "&BACK TO MAIN MENU", "E&XIT OUTPOST 2" e
+//              "SELF-&DESTRUCT", cada um com a sua confirmação (os casos 3, 4,
+//              6 e 7 de sub_457880 passam pelo mesmo diálogo do IDLE).
+//
+// A lista de PREFS tem os mesmos textos do
 // original: cinco com valor — "Volume:<R>%i" (música e efeitos), "Game
 // Speed:<R>%i", "Scrolling Speed:<R>%i" e "Graphic Detail Level:<R>%s"
 // (Low/Medium/High) — e oito alternâncias: "Play Music", "Play Sound Effects",
@@ -28,7 +44,11 @@ public:
         OPT_COUNT
     };
 
+    enum Mode { MENU, PREFS, ENDMISSION };
+
     bool isOpen() const { return m_open; }
+    Mode mode() const { return m_mode; }
+    void setMode(Mode m);
     void open();                                         // lê o INI
     void close() { m_open = false; }
     void draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, int mx, int my) const;
@@ -39,6 +59,7 @@ public:
     bool valueItem(int i) const { return i >= OPT_MUSIC_VOL && i <= OPT_DETAIL; }
     int  selected() const { return m_list.sel; }
     void step(int dir) { if (valueItem(m_list.sel)) bump(m_list.sel, dir); }   // L&ESS / &MORE
+    void apply();                                        // "&APPLY": grava o INI
 
 private:
     std::vector<std::string> items() const;
@@ -47,6 +68,7 @@ private:
     void saveIni() const;
 
     bool m_open = false;
+    Mode m_mode = MENU;
     ReportList m_list;
 };
 
