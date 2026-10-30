@@ -3072,7 +3072,18 @@ static int runPaneTest(const std::string& dll, const std::string& prefix) {
         gs.onIdle(renderer, 0.0f);
         std::snprintf(f2, sizeof(f2), "%s_options.bmp", prefix.c_str());
         writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
-        gs.debugGameOptions();                       // painel "Game Options"
+        // As cinco telas da aba: menu, preferencias, fim de missao, manual e
+        // um topico do manual.
+        static const char* kTelas[5] = {"gameopt", "gameprefs", "gameend", "manual", "manualtxt"};
+        for (int q = 1; q < 5; ++q) {
+            gs.debugOptionsScreen(q);
+            gs.onIdle(renderer, 0.0f);
+            char fq[512];
+            std::snprintf(fq, sizeof(fq), "%s_%s.bmp", prefix.c_str(), kTelas[q]);
+            writeBmp32(fq, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH,
+                       op2::Renderer::NATIVE_HEIGHT);
+        }
+        gs.debugOptionsScreen(0);                    // painel "Game Options"
         gs.onIdle(renderer, 0.0f);
         std::snprintf(f2, sizeof(f2), "%s_gameopt.bmp", prefix.c_str());
         writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);

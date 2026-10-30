@@ -6,6 +6,7 @@
 
 #include "info_pane.h"
 #include "report_list.h"
+#include "../res/winhelp.h"
 
 namespace op2 {
 
@@ -44,11 +45,18 @@ public:
         OPT_COUNT
     };
 
-    enum Mode { MENU, PREFS, ENDMISSION };
+    enum Mode { MENU, PREFS, ENDMISSION, MANUAL, MANUALTEXT };
 
     bool isOpen() const { return m_open; }
     Mode mode() const { return m_mode; }
     void setMode(Mode m);
+    // "Open Online Man&ual": abre o OUTPOST2.HLP DENTRO da partida. O leitor é
+    // o mesmo do shell (src/res/winhelp); aqui os 145 tópicos entram na lista
+    // do painel, que já quebra por palavras e rola sozinha.
+    void openManual();
+    bool manualOk() const;
+    // Captura (--panetest): abre um topico direto, sem o clique na lista.
+    void debugOpenTopic(int i) { m_topic = i; m_mode = MANUALTEXT; m_list.reset(); }
     void open();                                         // lê o INI
     void close() { m_open = false; }
     void draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, int mx, int my) const;
@@ -67,9 +75,14 @@ private:
     void bump(int i, int dir);                           // L&ESS / &MORE / TOGGLE
     void saveIni() const;
 
+    std::vector<std::string> manualItems() const;
+
     bool m_open = false;
     Mode m_mode = MENU;
     ReportList m_list;
+    WinHelpFile m_help;
+    bool m_helpTried = false;      // já tentamos ler o .HLP (não insiste a cada clique)
+    int  m_topic = -1;             // tópico aberto em MANUALTEXT
 };
 
 } // namespace op2

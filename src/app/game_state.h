@@ -167,6 +167,17 @@ private:
     int  unitAtView(int vx, int vy) const;   // unidade (qualquer dono) sob o cursor, raio 20
 public:
     void debugGameOptions() { m_gameOptions.open(); }   // só p/ --panetest
+    // Captura (--panetest): entra numa das telas da aba Options. 0 menu,
+    // 1 preferencias, 2 fim de missao, 3 manual, 4 um topico do manual.
+    void debugOptionsScreen(int qual) {
+        m_gameOptions.open();
+        if (qual == 1) m_gameOptions.setMode(GameOptionsPane::PREFS);
+        else if (qual == 2) m_gameOptions.setMode(GameOptionsPane::ENDMISSION);
+        else if (qual >= 3) {
+            m_gameOptions.openManual();
+            if (qual == 4) m_gameOptions.debugOpenTopic(1);
+        }
+    }
     void debugSetHover(int id) { m_hoverUnit = id; m_hoverStartTick = -1000; }  // só p/ --selshot
     void debugArmCommand(int cmd) { m_targetCmd = cmd; }                        // só p/ --placeshot
     void debugMiniZoom(int n) { for (int k = 0; k < n; ++k) m_mini.zoomIn(); }   // só p/ --minishot

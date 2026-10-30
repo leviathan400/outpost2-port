@@ -1881,12 +1881,21 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
             if (m_gameOptions.mode() == GameOptionsPane::MENU) {
                 // Os seis de sub_457880, com os rotulos do executavel.
                 larga(kCmdOptObjectives, "&MISSION OBJECTIVES", "Show &Mission Objectives", 'M');
-                // (ONLINE MAN&UAL entra no passo seguinte, com o leitor do .HLP
-                //  dentro da partida; botao morto nao entra.)
+                larga(kCmdOptManual, "ONLINE MAN&UAL", "Open Online Man&ual", 'U');
                 larga(kCmdOptPrefs, "PR&EFERENCES", "Change Game Pr&eferences", 'E');
                 larga(kCmdOptLoad, "L&OAD GAME", "L&oad a Saved Game", 'O');
                 larga(kCmdOptSave, "&SAVE GAME", "&Save this Game", 'S');
                 larga(kCmdOptEnd, "E&ND MISSION", "E&nd Mission Options", 'N');
+                return out;
+            }
+            // No manual a lista ocupa o painel, entao os botoes vao para o
+            // rodape, como no PREFERENCES.
+            if (m_gameOptions.mode() == GameOptionsPane::MANUAL ||
+                m_gameOptions.mode() == GameOptionsPane::MANUALTEXT) {
+                const bool lendo = m_gameOptions.mode() == GameOptionsPane::MANUALTEXT;
+                empilha = kPaneBottom - 2 - 25 - (lendo ? 29 : 0);
+                if (lendo) larga(kCmdOptManual, "&BACK", "Back to the topic list", 'B');
+                larga(kCmdOptMenu, "&GAME OPTIONS", "Back to &Game Options", 'G');
                 return out;
             }
             if (m_gameOptions.mode() == GameOptionsPane::ENDMISSION) {
@@ -2288,6 +2297,7 @@ void GameState::clickCommand(int cmd) {                  // vt[1] do comando
     // --- o menu da aba (sub_457880) ---
     if (cmd == kCmdOptObjectives) { m_gameOptions.close(); return; }               // volta aos objetivos
     if (cmd == kCmdOptPrefs) { m_gameOptions.setMode(GameOptionsPane::PREFS); return; }
+    if (cmd == kCmdOptManual) { m_gameOptions.openManual(); return; }   // e o BACK da leitura
     if (cmd == kCmdOptEnd) { m_gameOptions.setMode(GameOptionsPane::ENDMISSION); return; }
     if (cmd == kCmdOptMenu) { m_gameOptions.setMode(GameOptionsPane::MENU); return; }
     if (cmd == kCmdOptApply) { m_gameOptions.apply(); loadSettings(); return; }     // "&Apply new values"

@@ -1,6 +1,7 @@
 #include "game_options_pane.h"
 
 #include <cstdio>
+#include <iostream>
 
 #include "../core/config.h"
 #include "../gfx/font.h"
@@ -56,6 +57,64 @@ void GameOptionsPane::setMode(Mode m) {
 
 void GameOptionsPane::apply() { saveIni(); }
 
+bool GameOptionsPane::manualOk() const { return m_help.ok(); }
+
+void GameOptionsPane::openManual() {
+    if (!m_helpTried) {
+        m_helpTried = true;
+        if (!m_help.load("OUTPOST2.HLP"))
+            std::cout << "[Help] OUTPOST2.HLP: " << m_help.error() << std::endl;
+    }
+    m_list.reset();
+    m_topic = -1;
+    m_mode = MANUAL;
+}
+
+// As linhas da tela do manual: em MANUAL, os títulos dos tópicos; em
+// MANUALTEXT, os parágrafos do tópico escolhido. As tabelas de atributos viram
+// "rótulo  valor", como na tela do shell.
+std::vector<std::string> GameOptionsPane::manualItems() const {
+    std::vector<std::string> out;
+    if (!m_help.ok()) {
+        out.push_back("O manual nao pode ser aberto:");
+        out.push_back(m_help.error());
+        out.push_back("Ponha o OUTPOST2.HLP junto do jogo.");
+        return out;
+    }
+    const std::vector<HelpTopic>& tops = m_help.topics();
+    if (m_mode == MANUAL) {
+        for (const HelpTopic& t : tops) out.push_back(t.title);
+        return out;
+    }
+    if (m_topic < 0 || m_topic >= static_cast<int>(tops.size())) return out;
+    auto apara = [](std::string t) {
+        size_t a = 0, b = t.size();
+        while (a < b && static_cast<unsigned char>(t[a]) <= ' ') ++a;
+        while (b > a && static_cast<unsigned char>(t[b - 1]) <= ' ') --b;
+        return t.substr(a, b - a);
+    };
+    for (const HelpPara& par : tops[m_topic].paras) {
+        std::vector<std::string> cel;
+        for (const std::string& c : par.cells) {
+            const std::string t = apara(c);
+            if (!t.empty()) cel.push_back(t);
+        }
+        if (cel.empty()) continue;
+        if (par.table) {
+            for (size_t i = 0; i < cel.size(); i += 2) {
+                std::string t = cel[i];
+                if (i + 1 < cel.size()) t += ":  " + cel[i + 1];
+                out.push_back(t);
+            }
+        } else {
+            std::string t;
+            for (size_t i = 0; i < cel.size(); ++i) { if (i) t += " "; t += cel[i]; }
+            out.push_back(t);
+        }
+    }
+    return out;
+}
+
 void GameOptionsPane::saveIni() const {
     Config cfg("OUTPOST2.INI");
     cfg.load();
@@ -64,6 +123,7 @@ void GameOptionsPane::saveIni() const {
 }
 
 std::vector<std::string> GameOptionsPane::items() const {
+    if (m_mode == MANUAL || m_mode == MANUALTEXT) return manualItems();
     auto onOff = [](int v) { return v ? "On" : "Off"; };
     char b[96];
     std::vector<std::string> out;
@@ -86,7 +146,13 @@ std::vector<std::string> GameOptionsPane::items() const {
 }
 
 ListBoxLayout GameOptionsPane::layout(const PaneRect& pane) const {
-    return listBoxLayout(pane, 0, 0x0A, 0, 0x12);
+    // Nas telas do manual os botoes ficam EMBAIXO (nao ha onde empilha-los em
+    // cima, a lista ocupa o painel), entao a lista encurta para caber: um
+    // botao em MANUAL, dois em MANUALTEXT, 29 px cada.
+    PaneRect r = pane;
+    if (m_mode == MANUAL) r.b -= 29;
+    else if (m_mode == MANUALTEXT) r.b -= 58;
+    return listBoxLayout(r, 0, 0x0A, 0, 0x12);
 }
 
 void GameOptionsPane::bump(int i, int dir) {
@@ -114,11 +180,17 @@ void GameOptionsPane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane,
     if (!m_open) return;
     const ListBoxLayout L = layout(pane);
     // O título é o da tela em que se está (aGameOptions / aGamePreference).
+    std::string tituloStr;
+    if (m_mode == MANUALTEXT && m_help.ok() && m_topic >= 0 &&
+        m_topic < static_cast<int>(m_help.topics().size()))
+        tituloStr = m_help.topics()[m_topic].title;
     const char* titulo = m_mode == PREFS ? "Game Preferences"
-                       : m_mode == ENDMISSION ? "End Mission" : "Game Options";
+                       : m_mode == ENDMISSION ? "End Mission"
+                       : m_mode == MANUAL ? "Outpost 2 Online Manual"
+                       : m_mode == MANUALTEXT ? tituloStr.c_str() : "Game Options";
     drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.t + 2, pane.r - 0xE, L.list.t},
                    titulo, 0xFF00FF00u, true, kMarkupLine);
-    if (m_mode == PREFS) {
+    if (m_mode == PREFS || m_mode == MANUAL || m_mode == MANUALTEXT) {
         m_list.draw(fb, fbW, fbH, L, pane, items(), mx, my);
         return;
     }
@@ -133,9 +205,20 @@ void GameOptionsPane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane,
 bool GameOptionsPane::click(const PaneRect& pane, int x, int y, bool& changed, bool& back) {
     changed = false;
     back = false;
-    if (!m_open || m_mode != PREFS) return false;   // nas outras telas só há botões
+    // MENU e ENDMISSION são só botões; as telas com lista respondem ao clique.
+    if (!m_open || (m_mode != PREFS && m_mode != MANUAL && m_mode != MANUALTEXT)) return false;
     const ListBoxLayout L = layout(pane);
     int item = -1;
+    if (m_mode == MANUAL) {
+        if (!m_list.click(L, items(), x, y, item)) return false;
+        if (item >= 0 && m_help.ok() && item < static_cast<int>(m_help.topics().size())) {
+            m_topic = item;
+            m_mode = MANUALTEXT;
+            m_list.reset();
+        }
+        return true;
+    }
+    if (m_mode == MANUALTEXT) { m_list.click(L, items(), x, y, item); return true; }  // só rola
     if (m_list.click(L, items(), x, y, item)) {
         if (item >= 0 && item < OPT_COUNT) {
             m_list.sel = item;
