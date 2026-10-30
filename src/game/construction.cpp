@@ -1,4 +1,6 @@
 #include "construction.h"
+
+#include "../net/net_game.h"
 #include "../audio/sound.h"
 
 #include "building_sheet.h"
@@ -73,18 +75,15 @@ static void sendBuildPacket(const std::vector<int>& sel, int w, int h, int tileX
     const int me = TethysGame::localPlayer();
     int l, t, r, b;
     kitPlacementRect(w, h, tileX, tileY, l, t, r, b);
-    const uint32_t loc = packLocation(r, b);             // canto inferior direito do anel
     soundPlay(0x56);
-    for (int id : sel) {
-        if (!valid(id)) continue;
-        UnitRecord& u = g_units[id];
-        if (ownerOf(u) != me || !commandable(u)) continue;
-        if (u.type == mapConVec && u.cargo == 0) continue;
-        if (u.field23 == 2) continue;
-        if (u.type != mapConVec && u.type != mapRoboMiner && u.type != mapGeoCon) continue;   // vt[0x84] nulo
-        setBuildOrder(u, loc, l, t, r, b);
-        u.buildGroup = -1;
-    }
+    CommandPacket pkt;
+    pkt.type = CMD_BUILD;
+    pkt.waypoints.push_back(packLocation(r, b));         // canto inferior direito do anel
+    pkt.rectL = l; pkt.rectT = t; pkt.rectR = r; pkt.rectB = b;
+    pkt.arg0 = -1;                                       // [+0x6A]: sem grupo de IA
+    for (int id : sel)
+        if (valid(id) && ownerOf(g_units[id]) == me) pkt.unitIds.push_back(id);
+    if (!pkt.unitIds.empty()) commandSubmit(me, pkt);
 }
 
 bool processBuildPacket(int owner, int id, unsigned int loc, int l, int t, int r, int b, int group) {
@@ -112,18 +111,16 @@ void sendBuildKit(const std::vector<int>& sel, int tileX, int tileY) {   // sub_
     if (!w) return;
     int l, t, r, b;
     kitPlacementRect(w, h, tileX, tileY, l, t, r, b);
-    const uint32_t loc = packLocation(r, b);             // canto inferior direito do anel
     soundPlay(0x56);
-    for (int id : sel) {                                 // case 6
-        if (!valid(id)) continue;
-        UnitRecord& u = g_units[id];
-        if (ownerOf(u) != me || !commandable(u)) continue;
-        if (u.type == mapConVec && u.cargo == 0) continue;
-        if (u.field23 == 2) continue;
-        if (u.type != mapConVec) continue;               // (Robo-Miner/GeoCon usam outra ordem)
-        setBuildOrder(u, loc, l, t, r, b);
-        u.buildGroup = -1;
-    }
+    CommandPacket pkt;                                   // case 6
+    pkt.type = CMD_BUILD;
+    pkt.waypoints.push_back(packLocation(r, b));         // canto inferior direito do anel
+    pkt.rectL = l; pkt.rectT = t; pkt.rectR = r; pkt.rectB = b;
+    pkt.arg0 = -1;
+    for (int id : sel)                                   // (o kit sai só do ConVec)
+        if (valid(id) && ownerOf(g_units[id]) == me && g_units[id].type == mapConVec)
+            pkt.unitIds.push_back(id);
+    if (!pkt.unitIds.empty()) commandSubmit(me, pkt);
 }
 
 // sub_438A70: (x,y) é a doca de algum prédio?

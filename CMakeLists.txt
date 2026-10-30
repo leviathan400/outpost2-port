@@ -40,6 +40,8 @@ add_executable(outpost2_modern
     src/game/game_map.cpp
     src/game/terrain_cost.cpp
     src/game/command.cpp
+    src/game/command_dispatch.cpp
+    src/game/player_cmd.cpp
     src/game/pathfinder.cpp
     src/game/movement.cpp
     src/game/vehicle_anim.cpp

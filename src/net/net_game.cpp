@@ -59,6 +59,14 @@ void putCommand(std::vector<uint8_t>& b, const CommandPacket& c) {
     putU32(b, uint32_t(c.routeSmelterIdx));
     putU32(b, uint32_t(c.routeMine));
     putU32(b, uint32_t(c.routeSmelter));
+    // O corpo dos demais pacotes (alvo, regiao, campos curtos e a linha de
+    // conversa), que e o que permite mandar TODO comando pelo turno.
+    putU32(b, c.target);
+    putU32(b, uint32_t(c.rectL)); putU32(b, uint32_t(c.rectT));
+    putU32(b, uint32_t(c.rectR)); putU32(b, uint32_t(c.rectB));
+    putU32(b, uint32_t(c.arg0)); putU32(b, uint32_t(c.arg1)); putU32(b, uint32_t(c.arg2));
+    putU32(b, uint32_t(c.text.size()));
+    for (char ch : c.text) b.push_back(uint8_t(ch));
 }
 
 // Devolve o nº de bytes consumidos, ou 0 se o pacote está truncado.
@@ -82,6 +90,18 @@ size_t getCommand(const uint8_t* p, size_t n, CommandPacket& c) {
     c.routeSmelterIdx = int(getU32(p + o)); o += 4;
     c.routeMine       = int(getU32(p + o)); o += 4;
     c.routeSmelter    = int(getU32(p + o)); o += 4;
+    if (!need(36)) return 0;
+    c.target = getU32(p + o); o += 4;
+    c.rectL  = int(getU32(p + o)); o += 4;
+    c.rectT  = int(getU32(p + o)); o += 4;
+    c.rectR  = int(getU32(p + o)); o += 4;
+    c.rectB  = int(getU32(p + o)); o += 4;
+    c.arg0   = int(getU32(p + o)); o += 4;
+    c.arg1   = int(getU32(p + o)); o += 4;
+    c.arg2   = int(getU32(p + o)); o += 4;
+    const uint32_t nt = getU32(p + o); o += 4;
+    if (nt > 256 || !need(nt)) return 0;
+    c.text.assign(reinterpret_cast<const char*>(p + o), nt); o += nt;
     return o;
 }
 

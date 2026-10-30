@@ -1,4 +1,6 @@
 #include "research_lab.h"
+
+#include "../net/net_game.h"
 #include "../audio/sound.h"
 
 #include <cstdio>
@@ -75,10 +77,15 @@ bool processStartResearch(int owner, int labId, int topic, int scientists) {   /
     return true;
 }
 
-void sendStartResearch(int labId, int topic, int scientists) {   // sub_457610
+void sendStartResearch(int labId, int topic, int scientists) {   // sub_457610: pacote 0x16
     const int p = TethysGame::localPlayer();
-    if (!researchAvailable(p, topic)) return;            // sub_473300
-    processStartResearch(p, labId, topic, scientists);
+    if (!researchAvailable(p, topic)) return;            // sub_473300 (confere no clique)
+    CommandPacket pkt;
+    pkt.type = CMD_RESEARCH;
+    pkt.unitIds.push_back(labId);
+    pkt.arg0 = topic;
+    pkt.arg1 = scientists;
+    commandSubmit(p, pkt);
 }
 
 void labResearchStart(int labId) {                      // sub_43ACA0 case 22 ([+0x20])
@@ -148,8 +155,12 @@ bool processTrainPacket(int owner, int univId, int students) {   // case 23
     return true;
 }
 
-void sendTrain(int univId, int students) {
-    processTrainPacket(TethysGame::localPlayer(), univId, students);
+void sendTrain(int univId, int students) {                       // pacote 0x17
+    CommandPacket pkt;
+    pkt.type = CMD_TRAIN;
+    pkt.unitIds.push_back(univId);
+    pkt.arg0 = students;
+    commandSubmit(TethysGame::localPlayer(), pkt);
 }
 
 void universityTrainStart(int univId) {                 // sub_43ACA0 case 23 ([+0x20])

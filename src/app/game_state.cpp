@@ -26,6 +26,7 @@
 #include "../game/player.h"
 #include "../game/unit.h"
 #include "../game/command.h"
+#include "../game/command_apply.h"
 #include "../game/pathfinder.h"
 #include "../game/movement.h"
 #include "../game/vehicle_anim.h"
@@ -448,15 +449,10 @@ void GameState::requestRestartMission() {
 // "&Destroy all vehicles and structures and leave the game": tira do mapa tudo
 // o que e do jogador local e encerra com o codigo 6.
 void GameState::destroyAllAndLeave() {
-    const int me = TethysGame::localPlayer();
-    for (size_t i = 1; i < g_units.size(); ++i) {
-        UnitRecord& r = g_units[i];
-        if (r.id == -1 || (r.flags & UNIT_DEAD)) continue;
-        if ((r.owner & 0x0F) != me) continue;
-        if (!(r.flags & (UNIT_VEHICLE | UNIT_BUILDING))) continue;
-        killUnit(static_cast<int>(i), 0);          // sub_4834B0: mata com o atraso dado
-    }
-    endGameAborted();
+    // Nao e uma destruicao feita na mao: o original manda o pacote 0x31 (Quit)
+    // com o metodo SelfDestruct, e e ele que varre as unidades -- em todas as
+    // maquinas, se a partida for em rede.
+    sendQuit(QUIT_SELF_DESTRUCT);
 }
 
 void GameState::clampCamera() {

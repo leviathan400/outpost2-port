@@ -36,7 +36,7 @@ static bool spiralNext(int& outX, int& outY) {
 
 // Reset do estado de movimento antes de aplicar nova ordem (porta sub_43A910,
 // chamado pelo dispatcher antes de sub_4230F0): limpa o progresso/ordem atual.
-static void resetUnitOrder(UnitRecord& u) {
+void resetUnitOrder(UnitRecord& u) {
     u.order.curWaypoint = 0;
     u.field3C = 0;
     u.clearRoute();          // invalida a rota antiga; o tick recomputa
@@ -102,8 +102,11 @@ void processCommandPacket(int owner, const CommandPacket& pkt) {
     // Casos 2-4 e 38-40 (loc_40E2C0): ordem de movimento com a ação = tipo.
     // Portados: 2 (mover), 0x26 (ficar parado), 0x27 (rota de minério) e 0x28 (patrulhar).
     // 3/4: mover e, ao chegar, virar p/ 0x80/0xC0 e atracar (jpt_43B312 casos 2-4).
-    if (pkt.type != CMD_MOVE && pkt.type != 3 && pkt.type != 4 && pkt.type != 0x26 && pkt.type != 0x27 &&
-        pkt.type != 0x28) return;
+    if (pkt.type != CMD_MOVE && pkt.type != CMD_DOCK && pkt.type != CMD_DOCK_EG &&
+        pkt.type != CMD_STAND_GROUND && pkt.type != CMD_CARGO_ROUTE && pkt.type != CMD_PATROL) {
+        dispatchCommandPacket(owner, pkt);
+        return;
+    }
 
     const int numUnits = static_cast<int>(pkt.unitIds.size());
     for (int idx = 0; idx < numUnits; ++idx) {

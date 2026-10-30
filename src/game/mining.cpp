@@ -503,7 +503,23 @@ static int dockedForPacket(int b) {
     return vid;
 }
 
-void storageLoad(int b) {                                      // sub_423F70
+// Os dois botoes do painel STORAGE mandam o pacote; quem carrega e descarrega
+// de verdade e o applyLoadCargo/applyUnloadCargo, ja com o turno.
+void storageLoad(int b) {                                      // sub_457070: pacote 0x0B
+    CommandPacket pkt;
+    pkt.type = CMD_LOAD_CARGO;
+    pkt.unitIds.push_back(b);
+    commandSubmit(TethysGame::localPlayer(), pkt);
+}
+void storageUnload(int b) {                                    // sub_4571E0: pacote 0x0C
+    CommandPacket pkt;
+    pkt.type = CMD_UNLOAD_CARGO;
+    pkt.unitIds.push_back(b);
+    commandSubmit(TethysGame::localPlayer(), pkt);
+}
+
+void applyLoadCargo(int owner, int b) {                        // sub_423F70
+    if (!valid(b) || ownerOf(g_units[b]) != (owner & 0x0F)) return;
     const int vid = dockedForPacket(b);
     if (!vid || g_units[vid].type != mapCargoTruck) return;
     UnitRecord& v = g_units[vid];
@@ -517,16 +533,21 @@ void storageLoad(int b) {                                      // sub_423F70
     }
 }
 
-void storageUnload(int b) {                                    // sub_424120 → vt[0x94](0,0,0)
+void applyUnloadCargo(int owner, int b) {                       // sub_424120 → vt[0x94](0,0,0)
+    if (!valid(b) || ownerOf(g_units[b]) != (owner & 0x0F)) return;
     const int vid = dockedForPacket(b);
     if (!vid || g_units[vid].type != mapCargoTruck) return;
     truckDockBegin(g_units[vid], 0, 0, 0);
 }
 
 // ---- Despejar carga -----------------------------------------------------------
-void sendDumpCargo(int id) {                                   // sub_40E210 case 14
-    if (!valid(id) || ownerOf(g_units[id]) != TethysGame::localPlayer()) return;
-    dumpCargoOrder(id);
+void sendDumpCargo(int id) {                                   // sub_4557B0: pacote 0x0E
+    const int me = TethysGame::localPlayer();
+    if (!valid(id) || ownerOf(g_units[id]) != me) return;
+    CommandPacket pkt;
+    pkt.type = CMD_DUMP_CARGO;
+    pkt.unitIds.push_back(id);
+    commandSubmit(me, pkt);
 }
 void dumpCargoOrder(int id) {
     if (!valid(id)) return;

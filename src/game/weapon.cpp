@@ -1,4 +1,6 @@
 #include "weapon.h"
+
+#include "../net/net_game.h"
 #include "../audio/sound.h"
 
 #include "command.h"
@@ -1135,7 +1137,7 @@ void weaponGuardTick(int id) {                               // sub_43ACA0 jpt_4
     u.field3C = 0x28;
 }
 
-void processGuardTarget(int me, const std::vector<int>& sel, int tileX, int tileY) {   // sub_4534F0
+void sendGuardTarget(int me, const std::vector<int>& sel, int tileX, int tileY) {   // sub_4534F0
     std::vector<int> ids;
     for (int id : sel)
         if ((g_units[id].owner & 0x0F) == me && (g_units[id].flags & UNIT_ARMED)) ids.push_back(id);
@@ -1146,7 +1148,12 @@ void processGuardTarget(int me, const std::vector<int>& sel, int tileX, int tile
         const int ow = ownerOf(g_units[occ]);
         if (ow < kMaxPlayers && (g_playerData[ow].allyMask & (1u << me))) tgt = static_cast<uint32_t>(occ) | 0xFFFF0000u;
     }
-    if (!ids.empty()) processAttackPacket(me, 0x25, ids, {}, tgt);
+    if (ids.empty()) return;
+    CommandPacket pkt;                                        // pacote 0x25
+    pkt.type = CMD_GUARD;
+    pkt.unitIds = ids;
+    pkt.target = tgt;
+    commandSubmit(me, pkt);
 }
 
 void weaponAutoEngage(int id) {                               // sub_485340

@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <set>
+#include <string>
 
 namespace op2 {
 
@@ -31,6 +32,10 @@ struct PlayerData {
     int isHuman     = 1;   // +0x28 (1=humano, 0=IA)
     int isEden      = 1;   // +0x2C (1=Eden, 0=Plymouth)
     int colorNumber = 0;   // +0x30
+    // _Player::GetName (sub_490BA0): o nome que aparece no chat, na tela de
+    // aliancas e nas mensagens de fim de partida. Em jogo solo fica vazio e
+    // playerName() devolve "Player N".
+    std::string name;
     int solarSat    = 0;   // +0x08 bits 4-7 (0..15)
     int rlvCount    = 0;   // +0x08 bits 0-3  (+0x00 é o objeto contador de RLV)
     uint32_t spaceBits = 0;  // +0x08 bits 8..31: EDWARD (0x58) nos bits 9-12; demais
@@ -47,6 +52,9 @@ struct PlayerData {
 };
 
 extern PlayerData g_playerData[kMaxPlayers];
+
+// sub_490BA0: o nome do jogador, com o padrao do original quando nao ha um.
+std::string playerName(int player);
 
 // _Player — wrapper do índice do jogador (porta a classe _Player, asm @191940+;
 // ver [[op2-simulation-core]]). Os métodos têm os nomes reais do original (as DLLs

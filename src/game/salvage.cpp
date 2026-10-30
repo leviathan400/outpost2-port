@@ -1,5 +1,8 @@
 #include "salvage.h"
 
+#include "../net/net_game.h"
+#include "command_apply.h"
+
 #include <cstdlib>
 
 #include "building_sheet.h"
@@ -289,10 +292,19 @@ static bool nearGorf(const UnitRecord& u, int gorf) {
 // Pacote 0x1F (sub_40E210 case 31 → sub_4237B0): grava a região e inicia a ação.
 void sendSalvage(const std::vector<int>& sel, int x1, int y1, int x2, int y2) {
     const int me = TethysGame::localPlayer();
+    CommandPacket pkt;
+    pkt.type = CMD_SALVAGE;
+    pkt.rectL = x1; pkt.rectT = y1; pkt.rectR = x2; pkt.rectB = y2;
+    for (int id : sel)
+        if (valid(id) && ownerOf(g_units[id]) == me) pkt.unitIds.push_back(id);
+    if (!pkt.unitIds.empty()) commandSubmit(me, pkt);
+}
+
+void applySalvage(int owner, const std::vector<int>& sel, int x1, int y1, int x2, int y2) {
     for (int id : sel) {
         if (!valid(id)) continue;
         UnitRecord& u = g_units[id];
-        if (ownerOf(u) != me || u.type != mapCargoTruck || !commandable(u)) continue;
+        if (ownerOf(u) != (owner & 0x0F) || u.type != mapCargoTruck || !commandable(u)) continue;
         u.buildL = static_cast<int16_t>(x1 & tileMask()); u.buildT = static_cast<int16_t>(y1);
         u.buildR = static_cast<int16_t>((x2 - 1) & tileMask()); u.buildB = static_cast<int16_t>(y2 - 1);
         u.action = 0x1F; u.field20 = 1; u.field22 = 0; u.field23 = 0; u.field3C = 0;

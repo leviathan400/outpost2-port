@@ -1,4 +1,7 @@
 #include "earthwork.h"
+
+#include "../net/net_game.h"
+#include "command_apply.h"
 #include "../audio/sound.h"
 
 #include <cstdlib>
@@ -229,10 +232,13 @@ bool sendBuildWall(const std::vector<int>& sel, int x1, int y1, int x2, int y2, 
     }
     if (!any) return false;
     soundPlay(0x56);
-    for (int id : sel) {                                     // case 7 → sub_4234C0
-        if (!valid(id) || ownerOf(g_units[id]) != me) continue;
-        earthworkWallOrder(id, x1, y1, x2, y2, wallType);
-    }
+    CommandPacket pkt;                                       // pacote 7 → sub_4234C0
+    pkt.type = CMD_BUILD_WALL;
+    pkt.rectL = x1; pkt.rectT = y1; pkt.rectR = x2; pkt.rectB = y2;
+    pkt.arg0 = wallType;
+    for (int id : sel)
+        if (valid(id) && ownerOf(g_units[id]) == me) pkt.unitIds.push_back(id);
+    if (!pkt.unitIds.empty()) commandSubmit(me, pkt);
     return true;
 }
 
@@ -264,12 +270,23 @@ bool sendBulldoze(const std::vector<int>& sel, int x1, int y1, int x2, int y2) {
     if (dx && dy) { rx = (x2 - 1) & wmask(); ry = y2 - 1; }
     else { rx = x1; ry = y1; }
     soundPlay(0x56);
-    UnitRecord& u = g_units[sel[0]];                         // case 1: só a 1ª unidade
-    if (ownerOf(u) != TethysGame::localPlayer() || !commandable(u)) return true;
-    u.action = 1; u.field20 = 1; u.field3C = 0;              // sub_423780
+    const int me = TethysGame::localPlayer();
+    if (ownerOf(g_units[sel[0]]) != me) return true;
+    CommandPacket pkt;                                       // pacote 1: só a 1ª unidade
+    pkt.type = CMD_DOZE;
+    pkt.unitIds.push_back(sel[0]);
+    pkt.rectL = x1; pkt.rectT = y1; pkt.rectR = rx; pkt.rectB = ry;
+    commandSubmit(me, pkt);
+    return true;
+}
+
+void applyDoze(int owner, int id, int x1, int y1, int rx, int ry) {   // sub_423780
+    if (!valid(id)) return;
+    UnitRecord& u = g_units[id];
+    if (ownerOf(u) != (owner & 0x0F) || !commandable(u)) return;
+    u.action = 1; u.field20 = 1; u.field3C = 0;
     u.buildL = static_cast<int16_t>(x1 & wmask()); u.buildT = static_cast<int16_t>(y1);
     u.buildR = static_cast<int16_t>(rx); u.buildB = static_cast<int16_t>(ry);
-    return true;
 }
 
 void wallDragConstrain(int sx, int sy, int& ex, int& ey) {   // sub_41C410
@@ -318,16 +335,26 @@ bool sendRemoveWall(const std::vector<int>& sel, int tileX, int tileY) {   // su
     if (!ok) return false;
     soundPlay(0x56);
     const int me = TethysGame::localPlayer();
-    for (int id : sel) {                                     // case 8 → vt[0x94]
+    CommandPacket pkt;                                       // pacote 8 → vt[0x94]
+    pkt.type = CMD_REMOVE_WALL;
+    pkt.rectL = pkt.rectR = tileX;
+    pkt.rectT = pkt.rectB = tileY;
+    for (int id : sel)
+        if (valid(id) && ownerOf(g_units[id]) == me) pkt.unitIds.push_back(id);
+    if (!pkt.unitIds.empty()) commandSubmit(me, pkt);
+    return true;
+}
+
+void applyRemoveWall(int owner, const std::vector<int>& ids, int tileX, int tileY) {   // sub_423500
+    for (int id : ids) {
         if (!valid(id)) continue;
         UnitRecord& u = g_units[id];
-        if (ownerOf(u) != me || !commandable(u) || u.type != mapEarthworker) continue;
-        u.action = 8; u.field20 = 1; u.field3C = 0;         // sub_423500
+        if (ownerOf(u) != (owner & 0x0F) || !commandable(u) || u.type != mapEarthworker) continue;
+        u.action = 8; u.field20 = 1; u.field3C = 0;
         u.hasOrder = false;
         u.buildL = u.buildR = static_cast<int16_t>(tileX);
         u.buildT = u.buildB = static_cast<int16_t>(tileY);
     }
-    return true;
 }
 
 void removeWallTick(int id) {                                // jpt_43B312 case 8

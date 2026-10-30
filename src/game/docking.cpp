@@ -1,4 +1,6 @@
 #include "docking.h"
+
+#include "../net/net_game.h"
 #include "salvage.h"
 #include "garage.h"
 #include "../audio/sound.h"
@@ -106,8 +108,12 @@ bool processBayTransfer(int owner, int buildingId, int bay) {   // sub_40E210 ca
     return true;
 }
 
-void sendBayTransfer(int buildingId, int bay) {           // sub_456D60
-    processBayTransfer(TethysGame::localPlayer(), buildingId, bay);
+void sendBayTransfer(int buildingId, int bay) {                  // pacote 0x0A
+    CommandPacket pkt;
+    pkt.type = CMD_XFER_CARGO;
+    pkt.unitIds.push_back(buildingId);
+    pkt.arg0 = bay;
+    commandSubmit(TethysGame::localPlayer(), pkt);
 }
 
 // sub_411050: acha o prédio cuja doca é a célula do veículo e troca carga ↔ baia.

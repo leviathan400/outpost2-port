@@ -1,4 +1,6 @@
 #include "production.h"
+
+#include "../net/net_game.h"
 #include "../audio/sound.h"
 
 #include <cstdio>
@@ -213,9 +215,14 @@ void gorfRecycle(int gorf, int type) {
     g_playerData[p].rareOre += rare * pct / 100;
 }
 
-void sendProduce(int factoryId, uint32_t item) {            // sub_456B50
-    processProducePacket(TethysGame::localPlayer(), factoryId, static_cast<int>(item & 0xFFFF),
-                         static_cast<int>(item >> 16), -1);
+void sendProduce(int factoryId, uint32_t item) {            // sub_456B50: pacote 9
+    CommandPacket pkt;
+    pkt.type = CMD_PRODUCE;
+    pkt.unitIds.push_back(factoryId);
+    pkt.arg0 = static_cast<int>(item & 0xFFFF);             // item
+    pkt.arg1 = static_cast<int>(item >> 16);                // arma
+    pkt.arg2 = -1;                                          // grupo da IA: nenhum
+    commandSubmit(TethysGame::localPlayer(), pkt);
 }
 
 // vt[0xFC] (sub_4157B0): Production Capacity do prédio (bloco do criador,

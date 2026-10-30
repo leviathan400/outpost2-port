@@ -1,6 +1,8 @@
 #include "../net/net_game.h"
 #include "salvage.h"
 #include "commands.h"
+
+#include "command_apply.h"
 #include "repair.h"
 #include "../audio/sound.h"
 
@@ -359,21 +361,44 @@ void unitPatrolTick(int id) {                                // sub_43ACA0 case 
     u.field20 = 1;
 }
 
-static void sendStop(const std::vector<int>& sel) {         // case 5
+// A conversa daqui para baixo segue sempre o mesmo par: a funcao "send*" roda
+// no CLIQUE -- valida, toca o som e MANDA o pacote --, e a "apply*" roda quando
+// o pacote volta pelo turno, em todas as maquinas. Era assim no original (todo
+// comando passa pelo CommandPacket) e e o que mantem a partida em rede no
+// mesmo passo.
+static void submit(int type, const std::vector<int>& ids, uint32_t target = 0) {
+    CommandPacket pkt;
+    pkt.type = type;
+    pkt.target = target;
     const int me = TethysGame::localPlayer();
-    for (int id : sel) {
+    for (int id : ids)
+        if (id > 0 && id < static_cast<int>(g_units.size()) && (g_units[id].owner & 0x0F) == me)
+            pkt.unitIds.push_back(id);
+    if (!pkt.unitIds.empty()) commandSubmit(me, pkt);
+}
+
+static void sendStop(const std::vector<int>& sel) {         // sub_455540: pacote 5
+    submit(CMD_STOP, sel);
+}
+void applyStop(int owner, const std::vector<int>& ids) {    // case 5
+    for (int id : ids) {
+        if (id <= 0 || id >= static_cast<int>(g_units.size())) continue;
         UnitRecord& r = g_units[id];
-        if ((r.owner & 0x0F) != me || !commandable(r)) continue;
+        if ((r.owner & 0x0F) != (owner & 0x0F) || !commandable(r)) continue;
         r.action = 5;
         r.field20 = 1;
         r.field3C = 0;
         if (r.flags & UNIT_ARMED) unitResetCombat(id);
     }
 }
-static void sendSelfDestruct(const std::vector<int>& sel) { // case 20
-    const int me = TethysGame::localPlayer();
-    for (int id : sel)
-        if ((g_units[id].owner & 0x0F) == me) unitDoSelfDestruct(id);
+static void sendSelfDestruct(const std::vector<int>& sel) { // sub_4555F0: pacote 0x14
+    submit(CMD_SELF_DESTRUCT, sel);
+}
+void applySelfDestruct(int owner, const std::vector<int>& ids) {   // case 20
+    for (int id : ids)
+        if (id > 0 && id < static_cast<int>(g_units.size()) &&
+            (g_units[id].owner & 0x0F) == (owner & 0x0F))
+            unitDoSelfDestruct(id);
 }
 
 // DETONATE (sub_457E40): pacote 0x24 (atacar) com as unidades da seleção que
@@ -386,14 +411,18 @@ static void sendDetonate(const std::vector<int>& sel) {
         if ((g_units[id].owner & 0x0F) == me && (g_units[id].flags & UNIT_TURRET_BLD)) ids.push_back(id);
     const UnitRecord& b = g_units[sel[0]];
     const uint32_t tgt = static_cast<uint32_t>((unitOX(b) >> 5) & 0xFFFF) | (static_cast<uint32_t>(unitOY(b) >> 5) << 16);
-    if (!ids.empty()) processAttackPacket(me, 0x24, ids, {}, tgt);
+    if (!ids.empty()) submit(CMD_ATTACK, ids, tgt);
     soundPlay(0x56);
 }
 
 // sub_4241D0 (pacote 0x15): centro das unidades vivas (x com a volta, a partir
 // da 1ª) e cada uma vai p/ o ponto espelhado: pos + (pos − centro), y preso a
 // [0, (H−1)*32]. Ordem de mover (ação 2) com 1 ponto, [ordem+0x34] &= ~1.
-static void sendScatter(const std::vector<int>& sel) {
+static void sendScatter(const std::vector<int>& sel) {       // sub_4556B0: pacote 0x15
+    submit(CMD_SCATTER, sel);
+}
+void applyScatter(int owner, const std::vector<int>& sel) {
+    (void)owner;
     const int off = g_gameMap.internalXOffset() * 32;
     const int pxW = g_gameMap.internalWidth() * 32, pxMask = pxW - 1;
     auto wrap = [&](int d) {                                 // padrão com dword_54EBBC
@@ -505,8 +534,8 @@ UiClick uiCommandClick(int cmd, const std::vector<int>& sel) {
         // (sub_457880 caso 7), ao lado de salvar, carregar, reiniciar, abortar
         // e destruir tudo. Ver o PORT_STATUS.
         case UC_TRANSFER: return UiClick::DONE;
-        case UC_IDLE: if (!sel.empty()) structureDoIdle(sel[0]); return UiClick::DONE;
-        case UC_ACTIVATE: if (!sel.empty()) structureDoActivate(sel[0]); return UiClick::DONE;
+        case UC_IDLE: if (!sel.empty()) submit(CMD_IDLE, {sel[0]}); return UiClick::DONE;
+        case UC_ACTIVATE: if (!sel.empty()) submit(CMD_UNIDLE, {sel[0]}); return UiClick::DONE;
         default: return UiClick::NOT_PORTED;
     }
 }
@@ -575,7 +604,7 @@ static void sendRepairLike(int cmd, const std::vector<int>& sel) {
         }
     }
     const int type = cmd == UC_REPAIR ? 0x1C : cmd == UC_TAKE_OVER ? 0x1D : 0x1E;
-    processRepairPacket(me, type, sel, {}, static_cast<uint32_t>(tgt) | 0xFFFF0000u);
+    submit(type, sel, static_cast<uint32_t>(tgt) | 0xFFFF0000u);
     soundPlay(0x56);
 }
 
@@ -660,13 +689,13 @@ UiClick uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int til
         if (occ > 0 && occ < static_cast<int>(g_units.size()) && g_units[occ].id != -1 &&
             !(g_units[occ].flags & UNIT_DEAD))
             tgt = static_cast<uint32_t>(occ) | 0xFFFF0000u;
-        if (!ids.empty()) processAttackPacket(me, 0x24, ids, {}, tgt);
+        if (!ids.empty()) submit(CMD_ATTACK, ids, tgt);
         soundPlay(0x56);
         return UiClick::DONE;
     }
     if (cmd == UC_BUILD_KIT) { sendBuildKit(sel, tileX, tileY); return UiClick::DONE; }   // sub_451B30
-    if (cmd == UC_GUARD) {
-        processGuardTarget(TethysGame::localPlayer(), sel, tileX, tileY);
+    if (cmd == UC_GUARD) {                                   // sub_4534F0: pacote 0x25
+        sendGuardTarget(TethysGame::localPlayer(), sel, tileX, tileY);
         soundPlay(0x56);
         return UiClick::DONE;
     }

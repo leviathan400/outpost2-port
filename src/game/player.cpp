@@ -12,6 +12,12 @@ namespace op2 {
 
 PlayerData g_playerData[kMaxPlayers];
 
+std::string playerName(int player) {                        // sub_490BA0
+    if (player < 0 || player >= kMaxPlayers) return "Player";
+    const std::string& n = g_playerData[player].name;
+    return n.empty() ? ("Player " + std::to_string(player + 1)) : n;
+}
+
 // Inicializa o array global de wrappers com os índices 0..6 (como os _Player do
 // original, cada um guardando seu índice).
 _Player Player[kMaxPlayers] = {
