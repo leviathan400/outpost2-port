@@ -498,6 +498,13 @@ UiClick uiCommandClick(int cmd, const std::vector<int>& sel) {
         // IDLE (pacote 0x12) / ACTIVATE (0x13). Quando desligar o prédio faria
         // o metal passar do teto de armazenagem, quem pergunta antes é o
         // GameState (ConfirmPane + structureIdleMetalLoss), como sub_455CB0.
+        // TRANSFER: no original o vt[3] deste comando e **nullsub_84**, ou seja
+        // clicar no botao NAO FAZ NADA (por isso ele so aparece com trapaca ou
+        // Trade Center). A "transferencia de verdade" -- doar os veiculos e
+        // sair da partida -- nao mora aqui: e um item do menu da aba Options
+        // (sub_457880 caso 7), ao lado de salvar, carregar, reiniciar, abortar
+        // e destruir tudo. Ver o PORT_STATUS.
+        case UC_TRANSFER: return UiClick::DONE;
         case UC_IDLE: if (!sel.empty()) structureDoIdle(sel[0]); return UiClick::DONE;
         case UC_ACTIVATE: if (!sel.empty()) structureDoActivate(sel[0]); return UiClick::DONE;
         default: return UiClick::NOT_PORTED;

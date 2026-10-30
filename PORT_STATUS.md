@@ -150,9 +150,18 @@ Revisado item a item em 2026-10-28, conferindo no código.
 
 ### Multijogador, peças soltas
 
-2. **TRANSFER** — doar as unidades e abandonar a partida. É o **único** comando
-   de veículo que ainda cai em `NOT_PORTED`; falta o diálogo de escolha de
-   jogador (`sub_45D020`).
+2. **Ações da aba Options** — o item que estava escrito como "TRANSFER" era
+   outra coisa. Conferido em 2026-10-30: o botão TRANSFER da botoeira tem
+   `nullsub_84` no vt[3], ou seja **não faz nada no original** (o porte agora
+   também não faz, em silêncio). A transferência de verdade — *"transfer your
+   vehicles to another player and leave the game"* — é um item do **menu da aba
+   Options** (`sub_457880`), junto com: carregar (caso 1, `TApp::OnLoadSlot`),
+   salvar (caso 2), **reiniciar a missão** (caso 3), **abortar a missão**
+   (caso 4), destruir tudo (caso 6) e transferir e sair (caso 7). Cada um
+   confirma antes pelo mesmo diálogo do IDLE. O porte mostra os 13 ajustes do
+   INI nessa aba, mas **nenhum desses botões de ação** (`RESTART MISSION`,
+   `ABORT`, `BACK TO MAIN MENU`, `EXIT OUTPOST 2`, `SHOW VIDEO`). É um bloco
+   único, e maior do que "TRANSFER" sugeria.
 3. **Trade Center** — o prédio existe e conta na estatística, mas não há a UI
    de troca de recursos.
 4. **Modo Chat** da aba Communications (`[+0x1C4]` = 1), que só existe em
