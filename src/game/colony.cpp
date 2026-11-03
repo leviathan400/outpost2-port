@@ -982,27 +982,46 @@ int structureFoodOutput(const UnitRecord& r) {
     return cap + ((moraleRow(g_playerData[ownerOf(r)].morale).foodBonus * cap + 0x7F) >> 8);
 }
 
-// sub_43AAF0: não pode ociosar em construção/desmontagem/ociosa ou ações
-// 9/0x16/0x17, nem sob EMP (0x40000).
-int structureIdleMetalLoss(int buildingId) {            // o aviso de sub_455CB0
+// O aviso de sub_455CB0 (vt[1] do botão IDLE, antes de mandar o pacote 0x12).
+//
+// O original compara a capacidade DESTE prédio com a capacidade TOTAL do
+// jogador e pergunta quando são IGUAIS -- ou seja só quando ele é o único
+// armazém daquele metal, e é por isso que o texto diz "All metal in storage
+// will be lost". Com dois armazéns cheios, desligar um perde o excedente EM
+// SILÊNCIO; isso é defeito, não regra, então aqui a conta é o TRANSBORDO (o
+// que não cabe no teto sem este prédio) e o texto diz quanto vai embora.
+//
+// A outra assimetria do original: o ramo do metal raro exige rareOre != 0 e o
+// do comum não, de modo que ele pergunta mesmo com o estoque vazio. A conta do
+// transbordo já cuida disso nos dois ramos.
+int structureIdleMetalLoss(int buildingId, int* perdido) {
+    if (perdido) *perdido = 0;
     if (buildingId <= 0 || buildingId >= (int)g_units.size()) return 0;
     const UnitRecord& b = g_units[buildingId];
     const int t = b.type;
     const bool comum = (t == 0x36 || t == 0x19);
     const bool raro  = (t == 0x38 || t == 0x1A);
     if (!comum && !raro) return 0;
+    // O original lê o estoque e o teto de dword_56DEE8 (o jogador LOCAL), que dá
+    // no mesmo porque só se desliga prédio próprio; aqui vai pelo dono, que é o
+    // mesmo valor e serve para conferir prédio de qualquer jogador.
     const int p = b.owner & 0x0F;
     if (p < 0 || p >= kMaxPlayers) return 0;
     const StructSheetDesc* d = structSheet(t);
     if (!d) return 0;
-    // A capacidade que ESTE predio da (building.txt, por faccao).
-    const int minha = d->player[p].storageCapacity;
+    // A capacidade que ESTE prédio dá. O índice do bloco é o nibble ALTO de
+    // [+0x1D] ("sar al, 4" no original), não o dono -- ver statsOf().
+    const int minha = d->player[(b.owner >> 4) & 0x0F].storageCapacity;
     const int teto = comum ? g_colony[p].oreCapacity : g_colony[p].rareCapacity;
     const int estoque = comum ? g_playerData[p].ore : g_playerData[p].rareOre;
-    if (estoque <= teto - minha) return 0;              // cabe no que sobra
+    const int sobra = teto - minha < 0 ? 0 : teto - minha;
+    if (estoque <= sobra) return 0;                     // cabe no que sobra
+    if (perdido) *perdido = estoque - sobra;
     return comum ? 1 : 2;
 }
 
+// sub_43AAF0: não pode ociosar em construção/desmontagem/ociosa ou ações
+// 9/0x16/0x17, nem sob EMP (0x40000).
 bool structureCanIdle(const UnitRecord& r) {
     switch (r.action) {
         case 9: case 0x12: case 0x16: case 0x17: case ACT_BUILD: case ACT_DISMANTLE: return false;

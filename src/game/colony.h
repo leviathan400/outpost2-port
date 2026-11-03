@@ -141,8 +141,8 @@ bool structureCanIdle(const UnitRecord& r);
 // COMUM (0x36 fundicao, 0x19 armazem) compara a capacidade com o campo +0x18
 // do jogador, que sub_406610 mostra ser a CAPACIDADE de minerio, e para os de
 // metal RARO (0x38, 0x1A) o +0x1C. Devolve 0 = nao perde nada, 1 = perde metal
-// comum, 2 = perde metal raro.
-int structureIdleMetalLoss(int buildingId);         // sub_43AAF0
+// comum, 2 = perde metal raro, e em *perdido QUANTO sai do estoque.
+int structureIdleMetalLoss(int buildingId, int* perdido = nullptr);   // sub_455CB0
 void structureDoIdle(int id);                       // case 18
 bool structureDoActivate(int id);                   // case 19 (false se faltar recurso)
 

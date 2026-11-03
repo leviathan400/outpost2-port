@@ -2356,18 +2356,23 @@ void GameState::clickCommand(int cmd) {                  // vt[1] do comando
         return;
     }
     if (cmd == kCmdNo) { m_confirm.close(); return; }
-    // IDLE de armazem/fundicao com metal que nao cabe no teto sem ele:
-    // sub_455CB0 pergunta antes, porque o excedente se perde.
+    // IDLE de armazém/fundição com metal que não cabe no teto sem ele: sub_455CB0
+    // pergunta antes, porque o excedente se perde. O texto do original ("All
+    // metal in storage will be lost") só vale quando o prédio é o único armazém
+    // daquele metal, que é o único caso em que ele pergunta; quando a perda é
+    // parcial, o número entra no lugar do "All" -- ver structureIdleMetalLoss.
     if (cmd == UC_IDLE && m_selected.size() == 1) {
-        const int perda = structureIdleMetalLoss(m_selected[0]);
+        int perdido = 0;
+        const int perda = structureIdleMetalLoss(m_selected[0], &perdido);
         if (perda) {
+            const int dono = g_units[m_selected[0]].owner & 0x0F;
+            const int estoque = perda == 1 ? g_playerData[dono].ore : g_playerData[dono].rareOre;
+            const std::string quanto = perdido >= estoque ? "All" : std::to_string(perdido);
             closePanes();
             m_confirm.open(m_selected[0],
-                perda == 1
-                    ? "All metal in storage will be lost if this structure is idled.  "
-                      "Confirm your idle order?"
-                    : "All rare metal in storage will be lost if this structure is idled.  "
-                      "Confirm your idle order?",
+                quanto + (perda == 1 ? " metal" : " rare metal") +
+                    " in storage will be lost if this structure is idled.  "
+                    "Confirm your idle order?",
                 UC_IDLE);
             return;
         }

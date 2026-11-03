@@ -1758,28 +1758,60 @@ static int runIdleTest(const std::string& dll) {
         const int p = r.owner & 0x0F;
         const op2::StructSheetDesc* d = op2::structSheet(t);
         if (!d) continue;
-        const int minha = d->player[p].storageCapacity;
+        // O indice do bloco e o nibble ALTO de [+0x1D] (sar al,4 no original).
+        const int minha = d->player[(r.owner >> 4) & 0x0F].storageCapacity;
         const int teto = comum ? op2::g_colony[p].oreCapacity : op2::g_colony[p].rareCapacity;
         // Predio que ainda nao conta para a colonia (parado, sem energia) nao
         // tem o que perder: a capacidade dele nem esta no teto.
         if (teto <= 0 || minha <= 0) { ++pulados; continue; }
         int& estoque = comum ? op2::g_playerData[p].ore : op2::g_playerData[p].rareOre;
         const int guardado = estoque;
+        const int sobra = teto - minha < 0 ? 0 : teto - minha;
 
         // Logo abaixo do que caberia sem este predio: nao perde nada.
-        estoque = teto - minha;
-        const int semPerda = op2::structureIdleMetalLoss((int)i);
-        // Um a mais: ja nao cabe, entao perde.
-        estoque = teto - minha + 1;
-        const int comPerda = op2::structureIdleMetalLoss((int)i);
+        int perdeNada = -1;
+        estoque = sobra;
+        const int semPerda = op2::structureIdleMetalLoss((int)i, &perdeNada);
+        // Um a mais: ja nao cabe, entao perde exatamente esse 1.
+        int perdeUm = -1;
+        estoque = sobra + 1;
+        const int comPerda = op2::structureIdleMetalLoss((int)i, &perdeUm);
+        // Estoque cheio: sai tudo o que este predio sustentava.
+        int perdeCheio = -1;
+        estoque = teto;
+        const int cheio = op2::structureIdleMetalLoss((int)i, &perdeCheio);
+        // E o caso que o ORIGINAL deixa passar em silencio: um SEGUNDO armazem
+        // igual atras deste. O teto dobra, a sobra passa a ser `minha`, e
+        // desligar com o estoque cheio perde so o excedente -- perda PARCIAL,
+        // em que o dialogo poe o numero no lugar do "All".
+        int& tetoCol = comum ? op2::g_colony[p].oreCapacity : op2::g_colony[p].rareCapacity;
+        const int tetoGuardado = tetoCol;
+        tetoCol = teto + minha;
+        estoque = tetoCol;
+        int perdeParcial = -1;
+        const int parcial = op2::structureIdleMetalLoss((int)i, &perdeParcial);
+        tetoCol = tetoGuardado;
         estoque = guardado;
 
         const int esperado = comum ? 1 : 2;
-        std::printf("[IdleTest] %s tipo 0x%02X do jogador %d: teto %d, da %d |"
-                    " estoque %d -> %d (esperado 0), estoque %d -> %d (esperado %d)%c",
-                    comum ? "comum" : "raro", t, p, teto, minha,
-                    teto - minha, semPerda, teto - minha + 1, comPerda, esperado, 10);
-        if (semPerda != 0 || comPerda != esperado) ok = false;
+        // Com o predio sendo o UNICO armazem (sobra 0), perder 1 de 1 e perder
+        // tudo: o dialogo diz "All", como o original. Com outro armazem atras,
+        // a perda e parcial e o numero entra no lugar do "All".
+        const char* texto = (sobra == 0) ? "All" : "numero";
+        std::printf("[IdleTest] %s tipo 0x%02X do jogador %d: teto %d, da %d, sobra %d |"
+                    " %d -> %d/%d (0/0) | %d -> %d/%d (%d/1) | %d -> %d/%d (%d/%d)"
+                    " | 2 armazens: %d -> %d/%d (%d/%d) | texto: %s%c",
+                    comum ? "comum" : "raro", t, p, teto, minha, sobra,
+                    sobra, semPerda, perdeNada,
+                    sobra + 1, comPerda, perdeUm, esperado,
+                    teto, cheio, perdeCheio, esperado, teto - sobra,
+                    teto + minha, parcial, perdeParcial, esperado, minha, texto, 10);
+        if (semPerda != 0 || perdeNada != 0) ok = false;
+        if (comPerda != esperado || perdeUm != 1) ok = false;
+        if (cheio != esperado || perdeCheio != teto - sobra) ok = false;
+        // Perda parcial: sai o excedente (o teto dobrado menos a nova sobra,
+        // que e o proprio `teto` de antes), ou seja `minha`, e NAO o estoque todo.
+        if (parcial != esperado || perdeParcial != minha) ok = false;
         ++testados;
         if (testados >= 4) break;
     }

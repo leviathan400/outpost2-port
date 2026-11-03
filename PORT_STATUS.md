@@ -177,8 +177,20 @@ Todas resolvidas em **2026-11-03**, e duas delas eram leitura errada minha:
 
 ### Miudezas de simulação (todas marcadas no código)
 
-6. Diálogo de confirmação do IDLE quando o prédio guarda metal ("All metal in
-   storage will be lost...").
+6. ~~Diálogo de confirmação do IDLE quando o prédio guarda metal~~ — **feito**,
+   e o original avisa de menos. `sub_455CB0` (o vt[1] do botão IDLE) compara a
+   capacidade **deste** prédio com a capacidade **total** do jogador (+0x18
+   comum, +0x1C raro) e só pergunta quando são **iguais** — isto é, quando ele
+   é o único armazém daquele metal, que é o único caso em que o texto "All
+   metal in storage will be lost" é verdade. Com uma fundição (10000) e um
+   armazém (5000), desligar a fundição com 15000 guardados perde 10000 **em
+   silêncio** (`sub_471F30` trunca). Aqui a conta é o transbordo, então a
+   pergunta cobre qualquer perda e o número entra no lugar do "All". Duas
+   outras correções: o índice do bloco de stats é o nibble **alto** de `[+0x1D]`
+   (`sar al, 4`), não o dono; e o ramo do metal raro do original exige
+   `rareOre != 0` enquanto o do comum não, de modo que ele pergunta com o
+   estoque vazio — o transbordo cuida dos dois. Teste: `--idletest <DLL>`
+   (quatro casos por prédio; E10/E12/P10 cobrem a perda parcial).
 7. ~~O painel STORAGE~~ — **não é pendência**: conferido em 2026-10-28, a
    regra do original (`loc_456560`) habilita o comando para 0x19, 0x1A, 0x27,
    0x29, 0x2F e 0x36–0x38, que são exatamente os oito tipos que o painel
