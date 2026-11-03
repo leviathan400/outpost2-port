@@ -52,7 +52,10 @@ char uiCommandHotkey(const UiCommandDesc& d);
 
 // vt[1]. TARGET = entra no modo de mira (o próximo clique no mapa chama
 // uiCommandTarget); NOT_PORTED = comando ainda não portado (nada acontece).
-enum class UiClick { DONE, TARGET, NOT_PORTED };
+// CHOOSE_PLAYER (sub_455A80): o comando nao mira no mapa -- ele abre o
+// escolhedor de jogador ("Transfer Vehicle(s) to:"), que quem tem painel e o
+// GameState.
+enum class UiClick { DONE, TARGET, NOT_PORTED, CHOOSE_PLAYER };
 UiClick uiCommandClick(int cmd, const std::vector<int>& sel);
 // vt[3]: alvo no tile (x,y do port). DONE = comando enviado; TARGET = segue
 // no modo de mira (Patrulhar pede 2 pontos); NOT_PORTED = não portado.

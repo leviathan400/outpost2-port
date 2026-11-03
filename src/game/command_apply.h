@@ -28,6 +28,10 @@ void applySalvage(int owner, const std::vector<int>& ids, int l, int t, int r, i
 void applyLoadCargo(int owner, int buildingId);
 void applyUnloadCargo(int owner, int buildingId);
 
+// 0x18 Transfer (case 24): as unidades vivas da lista mudam de dono, com o
+// aviso dos dois lados ("Transfer completed to" / "Transfer received from").
+void applyTransfer(int owner, const std::vector<int>& ids, int to);
+
 // 0x30 Chat (case 48): "<nome>: <linha>" no registro, se eu estiver na mascara.
 void applyChat(int from, int dstMask, const std::string& line);
 // 0x32 Ally (case 50): allyMask[alvo] ^= 1 << remetente, com as mensagens dos
@@ -46,6 +50,8 @@ void chatMaskToggle(int player);
 void sendChat(const std::string& line);
 // sub_457D20 com a parte alta 1: manda o pacote 0x32 para alternar a alianca.
 void sendAlly(int to);
+// sub_455950: doa as unidades escolhidas para outro jogador (pacote 0x18).
+void sendTransfer(const std::vector<int>& ids, int to);
 // A tela END MISSION: manda o 0x31 com o metodo escolhido.
 void sendQuit(int method);
 

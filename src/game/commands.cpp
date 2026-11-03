@@ -140,9 +140,10 @@ bool uiCommandAvailable(int cmd, const std::vector<int>& sel) {
         case UC_DISMANTLE:                                  // loc_454F50
             return n == 1 && u->type == mapConVec;
         case UC_TRANSFER:                                   // sub_455A20
-            // trapaça dword_56DE58, ou Trade Center (+0x114 = estatística 0x24) numa
-            // partida multijogador (sub_4027D0 — sem rede no port: falso).
-            return n && TethysGame::cheatFlag(0);
+            // Trapaça dword_56DE58, ou um TRADE CENTER operando ([jogador+0x114]
+            // = estatística 0x24) numa partida multijogador (sub_4027D0).
+            return n && (TethysGame::cheatFlag(0) ||
+                         (multiplayerMission() && g_colony[me].stat(ST_TRADE) != 0));
         case UC_SALVAGE:                                    // sub_453A20: GORF operando (+0x17C)
             return n == 1 && g_colony[me].stat(ST_GORF_GRP + 4) != 0 && u->type == mapCargoTruck && u->cargo == 0;
         case UC_SCATTER:                                    // loc_455650
@@ -527,13 +528,12 @@ UiClick uiCommandClick(int cmd, const std::vector<int>& sel) {
         // IDLE (pacote 0x12) / ACTIVATE (0x13). Quando desligar o prédio faria
         // o metal passar do teto de armazenagem, quem pergunta antes é o
         // GameState (ConfirmPane + structureIdleMetalLoss), como sub_455CB0.
-        // TRANSFER: no original o vt[3] deste comando e **nullsub_84**, ou seja
-        // clicar no botao NAO FAZ NADA (por isso ele so aparece com trapaca ou
-        // Trade Center). A "transferencia de verdade" -- doar os veiculos e
-        // sair da partida -- nao mora aqui: e um item do menu da aba Options
-        // (sub_457880 caso 7), ao lado de salvar, carregar, reiniciar, abortar
-        // e destruir tudo. Ver o PORT_STATUS.
-        case UC_TRANSFER: return UiClick::DONE;
+        // TRANSFER (sub_455A80): o vt[3] e nullsub_84 porque o comando NAO pede
+        // alvo no mapa -- ele abre o ESCOLHEDOR DE JOGADOR ("Transfer
+        // Vehicle(s) to:", sub_46D230), e e a escolha que monta o pacote 0x18
+        // com as unidades e o destino (sub_455950). Quem abre o escolhedor e o
+        // GameState, que e quem tem painel.
+        case UC_TRANSFER: return UiClick::CHOOSE_PLAYER;
         case UC_IDLE: if (!sel.empty()) submit(CMD_IDLE, {sel[0]}); return UiClick::DONE;
         case UC_ACTIVATE: if (!sel.empty()) submit(CMD_UNIDLE, {sel[0]}); return UiClick::DONE;
         default: return UiClick::NOT_PORTED;

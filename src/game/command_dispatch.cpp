@@ -93,6 +93,7 @@ void dispatchCommandPacket(int owner, const CommandPacket& p) {
         case CMD_GUARD:
             processAttackPacket(owner, p.type, p.unitIds, p.waypoints, p.target);
             return;
+        case CMD_TRANSFER: applyTransfer(owner, p.unitIds, p.arg0); return;
         case CMD_CHAT:  applyChat(owner, p.arg0, p.text); return;
         case CMD_ALLY:  applyAlly(owner, p.arg0); return;
         case CMD_QUIT:  applyQuit(owner, p.arg0); return;

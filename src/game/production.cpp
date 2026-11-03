@@ -96,9 +96,11 @@ std::vector<uint32_t> factoryProduceList(int factoryId) {    // sub_468120
     }
     for (const int* e = items; *e != -100; ++e) {
         if (*e > 0) {
-            // Trade Center (0x20) só com o objeto dword_56DC78 (criado em
-            // sub_40C4E0 e afins; não portado → 0, o item fica de fora).
-            if (*e == 0x20) continue;
+            // Trade Center (0x20) só com o objeto dword_56DC78, que é a CAMADA
+            // DE REDE (sub_40D410 a cria com sub_42D5C0). Ou seja: o prédio só
+            // existe em partida em rede -- que é onde o TRANSFER que ele
+            // habilita tem para quem doar.
+            if (*e == 0x20 && !netActive()) continue;
             if (factoryCanProduce(factoryId, *e)) out.push_back(static_cast<uint32_t>(*e));
             continue;
         }

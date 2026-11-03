@@ -44,6 +44,15 @@ void sendAlly(int to) {                                     // sub_457D20 (parte
     commandSubmit(TethysGame::localPlayer(), pkt);
 }
 
+void sendTransfer(const std::vector<int>& ids, int to) {    // sub_455950
+    if (ids.empty()) return;
+    CommandPacket pkt;
+    pkt.type = CMD_TRANSFER;
+    pkt.unitIds = ids;
+    pkt.arg0 = to;
+    commandSubmit(TethysGame::localPlayer(), pkt);
+}
+
 void sendQuit(int method) {                                 // sub_457880 casos 4/7/8
     CommandPacket pkt;
     pkt.type = CMD_QUIT;
@@ -115,6 +124,29 @@ void applyAlly(int from, int to) {
                 resetUnitOrder(u);
             }
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 0x18 Transfer (case 24). Cada unidade viva da lista -- e sem a flag 0x20000,
+// que marca quem esta saindo do mapa -- troca de dono por vt[0x68]. Os avisos
+// vao para os dois lados, com a voz 0xBE+destino para quem doou e 0xC4+origem
+// para quem recebeu.
+void applyTransfer(int owner, const std::vector<int>& ids, int to) {
+    if (to < 0 || to >= kMaxPlayers) return;
+    for (int id : ids) {
+        if (id <= 0 || id >= static_cast<int>(g_units.size())) continue;
+        UnitRecord& u = g_units[id];
+        if (u.id == -1 || (u.flags & 0x20000u)) continue;
+        vehicleTransfer(id, to);
+    }
+    const int me = TethysGame::localPlayer();
+    if ((owner & 0x0F) == me) {
+        const std::string t = "Transfer completed to " + playerName(to);
+        postMessage(-1, -1, t.c_str(), 0xBE + to);
+    } else if (to == me) {
+        const std::string t = "Transfer received from " + playerName(owner & 0x0F);
+        postMessage(-1, -1, t.c_str(), 0xC4 + (owner & 0x0F));
     }
 }
 

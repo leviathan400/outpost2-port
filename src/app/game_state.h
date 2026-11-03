@@ -68,6 +68,9 @@ public:
     void debugResources(int mode, int row) { openReport(2, mode); if (row >= 0) m_resources.select(row); }
     void debugSpace(int mode) { openReport(4, mode); }
     void pressCommand(int cmd) { clickCommand(cmd); }      // testes: botão do painel
+    bool pickingPlayer() const { return m_pickPlayer; }    // testes: o escolhedor abriu?
+    void pickPlayer(int p) { clickCommand(kCmdPickPlayer0 - p); }   // testes: escolhe
+    void pickCancel() { clickCommand(kCmdPickCancel); }             // testes: desiste
     ResearchPane& researchPaneForTest() { return m_research; }
     void setMouse(int nx, int ny) { m_mouseNX = nx; m_mouseNY = ny; }
     void setCamera(int x, int y) { m_camX = x; m_camY = y; }
@@ -271,6 +274,9 @@ private:
     static constexpr int kCmdOptDestroy = -39, kCmdOptApply = -40, kCmdOptMenu = -41;
     // Aba Communications em multijogador (sub_4670A0).
     static constexpr int kCmdAlliesChat = -42, kCmdMessages = -43, kCmdNetStats = -44;
+    // Escolhedor de jogador do TRANSFER (sub_46D230): um botao por jogador,
+    // -50 - i, mais a desistencia.
+    static constexpr int kCmdPickPlayer0 = -50, kCmdPickCancel = -57;
     static constexpr int kCmdVehicles = -15, kCmdJump = -16;   // &VEHICLES (RCC) / &JUMP da lista
     static constexpr int kCmdMsgJump = -17;                    // &JUMP das mensagens (sub_466A00)
     static constexpr int kCmdDetails = -18;                    // &DETAILS dos relatórios (sub_458CC0)
@@ -299,6 +305,11 @@ private:
     // 0x3F caracteres, que e o que cabe no corpo do pacote 0x30.
     bool chatKey(const SDL_Event& e);
     void drawChatLine(uint32_t* fb, int vw, int vh) const;
+
+    // "Transfer Vehicle(s) to:" aberto? Guarda a selecao do momento do clique,
+    // porque o painel toma a frente ate a escolha.
+    bool m_pickPlayer = false;
+    std::vector<int> m_pickUnits;
 
     bool m_chatOpen = false;        // [filtro+0x78]
     std::string m_chatLine;         // [filtro+0x0C], tamanho em [+0x7C]

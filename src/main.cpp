@@ -3056,6 +3056,57 @@ static int runChatTest(const std::string& dll, const char* shot) {
     return 0;
 }
 
+// --transfertest <DLL>: o TRANSFER (sub_455A80 -> escolhedor -> pacote 0x18).
+// O botao so existe com trapaca ou com um Trade Center operando numa partida
+// multijogador; aqui a trapaca abre o caminho. Confere que o escolhedor
+// aparece, que escolher um jogador troca o dono das unidades e que o CANCEL
+// nao mexe em nada.
+static int runTransferTest(const std::string& dll) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 transfertest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    const int me = op2::TethysGame::localPlayer();
+
+    // Dois veiculos meus para doar.
+    std::vector<int> meus;
+    for (size_t i = 1; i < op2::g_units.size() && meus.size() < 2; ++i) {
+        const op2::UnitRecord& r = op2::g_units[i];
+        if (r.id == -1 || (r.owner & 0x0F) != me || !(r.flags & op2::UNIT_VEHICLE)) continue;
+        meus.push_back(static_cast<int>(i));
+    }
+    if (meus.size() < 2) { std::printf("[Transfer] sem veiculos\n"); return 3; }
+
+    op2::TethysGame::setCheatFlag(0, true);          // dword_56DE58
+    gs.setSelection(meus);
+    gs.pressCommand(op2::UC_TRANSFER);
+    std::printf("[Transfer] escolhedor abriu: %s\n", gs.pickingPlayer() ? "ok" : "FALHOU");
+
+    // Desistir nao muda dono nenhum.
+    gs.pickCancel();
+    const bool intacto = (op2::g_units[meus[0]].owner & 0x0F) == me && !gs.pickingPlayer();
+    std::printf("[Transfer] CANCEL nao mexe: %s\n", intacto ? "ok" : "FALHOU");
+
+    // Doar para o jogador 1 (ou 0, se eu for o 1).
+    const int destino = me == 0 ? 1 : 0;
+    gs.setSelection(meus);
+    gs.pressCommand(op2::UC_TRANSFER);
+    gs.pickPlayer(destino);
+    int trocados = 0;
+    for (int id : meus) if ((op2::g_units[id].owner & 0x0F) == destino) ++trocados;
+    std::printf("[Transfer] doados: %d de %d (%s)\n", trocados, static_cast<int>(meus.size()),
+                trocados == static_cast<int>(meus.size()) ? "ok" : "FALHOU");
+    const std::string ultima = op2::messageCount() ? op2::messageAt(op2::messageCount() - 1).text : "";
+    std::printf("[Transfer] aviso: %s\n", ultima.c_str());
+
+    renderer.shutdown();
+    SDL_Quit();
+    return 0;
+}
 static int runPaneTest(const std::string& dll, const std::string& prefix) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
     op2::g_ResManager.init(".");
@@ -3952,6 +4003,8 @@ int main(int argc, char* argv[]) {
             return runQuakeTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--disastertest") == 0 && i + 3 < argc)
             return runDisasterTest(argv[i + 1], argv[i + 2], argv[i + 3]);
+        if (std::strcmp(argv[i], "--transfertest") == 0 && i + 1 < argc)
+            return runTransferTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--chattest") == 0 && i + 1 < argc)
             return runChatTest(argv[i + 1], i + 2 < argc ? argv[i + 2] : nullptr);
         if (std::strcmp(argv[i], "--savetest") == 0 && i + 3 < argc)

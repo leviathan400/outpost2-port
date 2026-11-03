@@ -1851,6 +1851,29 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
             b.b = b.t + H;
         }
     };
+    if (m_pickPlayer) {
+        // sub_46D230: um botao largo por jogador ativo que nao seja eu, com o
+        // nome dele; o titulo "Transfer Vehicle(s) to:" sai no desenho.
+        int empilha = kPaneTop + 30;
+        const int me = TethysGame::localPlayer();
+        for (int i = 0; i < TethysGame::noPlayers() && i < kMaxPlayers; ++i) {
+            if (i == me || !g_playerData[i].isHuman) continue;
+            TextButton b{};
+            b.cmd = kCmdPickPlayer0 - i;
+            b.label = playerName(i);
+            b.tip = "Transfer to another player (&X)";
+            b.wide = true;
+            b.l = kColX + 9; b.t = empilha; b.r = b.l + 175; b.b = b.t + 25;
+            empilha += 29;
+            out.push_back(b);
+        }
+        TextButton c{};
+        c.cmd = kCmdPickCancel; c.label = "&CANCEL"; c.tip = "&Cancel"; c.hotkey = 'C';
+        c.wide = true;
+        c.l = kColX + 9; c.t = kPaneBottom - 2 - 25; c.r = c.l + 175; c.b = c.t + 25;
+        out.push_back(c);
+        return out;
+    }
     if (m_vehicles.isOpen()) {                               // sub_46B2D0: &JUMP / &STATUS
         TextButton b{};
         b.cmd = kCmdJump; b.label = "&JUMP"; b.tip = "&Jump to selected vehicle type"; b.hotkey = 'J';
@@ -2393,6 +2416,13 @@ void GameState::clickCommand(int cmd) {                  // vt[1] do comando
     if (cmd == kCmdOptManual) { m_gameOptions.openManual(); return; }   // e o BACK da leitura
     if (cmd == kCmdOptEnd) { m_gameOptions.setMode(GameOptionsPane::ENDMISSION); return; }
     if (cmd == kCmdOptMenu) { m_gameOptions.setMode(GameOptionsPane::MENU); return; }
+    if (cmd == kCmdPickCancel) { m_pickPlayer = false; m_pickUnits.clear(); return; }
+    if (cmd <= kCmdPickPlayer0 && cmd > kCmdPickPlayer0 - kMaxPlayers) {
+        sendTransfer(m_pickUnits, kCmdPickPlayer0 - cmd);   // sub_455950
+        m_pickPlayer = false;
+        m_pickUnits.clear();
+        return;
+    }
     if (cmd == kCmdAlliesChat) { m_comms.setMode(CommsPane::CHAT); return; }
     if (cmd == kCmdMessages) { m_comms.setMode(CommsPane::MESSAGES); return; }
     if (cmd == kCmdNetStats) { m_comms.setMode(CommsPane::NETSTATS); return; }
@@ -2421,6 +2451,11 @@ void GameState::clickCommand(int cmd) {                  // vt[1] do comando
     switch (uiCommandClick(cmd, m_selected)) {
         case UiClick::TARGET: m_targetCmd = cmd; break;
         case UiClick::DONE: m_targetCmd = -1; break;
+        case UiClick::CHOOSE_PLAYER:                      // sub_455A80
+            m_targetCmd = -1;
+            m_pickUnits = m_selected;
+            m_pickPlayer = !m_pickUnits.empty();
+            break;
         case UiClick::NOT_PORTED:
             postMessage(-1, -1, "Comando ainda nao portado", 0);
             break;
@@ -2678,7 +2713,11 @@ void GameState::renderPanel(Renderer& renderer) {
     m_labs.update();
     m_resources.update();
     m_space.update();
-    if (m_tab == 5 && m_mission && m_gameOptions.isOpen())
+    if (m_pickPlayer) {
+        // sub_46D3B0: o titulo do escolhedor, com a fonte de titulo.
+        drawMarkupText(fb, VW, VH, PaneRect{pane.l + 0xD, pane.t + 2, pane.r - 0xE, pane.t + 0x1A},
+                       "Transfer Vehicle(s) to:", 0xFF00FF00u, true, kMarkupLine);
+    } else if (m_tab == 5 && m_mission && m_gameOptions.isOpen())
         m_gameOptions.draw(fb, VW, VH, pane, m_mouseNX, m_mouseNY);
     else if (m_tab == 5 && m_mission)
         m_objectives.draw(fb, VW, VH, pane, m_mouseNX, m_mouseNY);
