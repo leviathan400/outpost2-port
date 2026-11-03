@@ -293,6 +293,15 @@ private:
     int screenXOf(int worldPixelX) const;
     void drawBeam(Renderer& renderer, const WeaponDrawOp& op);
     void clampCamera();
+    // A linha de conversa do jogo (o filtro de teclado sub_4115F0, instalado no
+    // TFrame por sub_49AE60). Fechada, o Enter a abre; aberta, ela come as
+    // teclas: Enter manda, Esc desiste, Backspace apaga e o resto entra ate
+    // 0x3F caracteres, que e o que cabe no corpo do pacote 0x30.
+    bool chatKey(const SDL_Event& e);
+    void drawChatLine(uint32_t* fb, int vw, int vh) const;
+
+    bool m_chatOpen = false;        // [filtro+0x78]
+    std::string m_chatLine;         // [filtro+0x0C], tamanho em [+0x7C]
     // Itens da tela END MISSION da aba Options, depois da confirmacao.
     void requestRestartMission();   // recarrega a MESMA missao, do zero
     void destroyAllAndLeave();      // destroi o que e meu e encerra a partida

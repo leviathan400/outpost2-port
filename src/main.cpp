@@ -28,6 +28,7 @@
 #include "game/tethys_game.h"
 #include "game/pathfinder.h"
 #include "game/command.h"
+#include "game/command_apply.h"
 #include "game/movement.h"
 #include "game/structure.h"
 #include "game/weapon.h"
@@ -2985,6 +2986,76 @@ static int runSalvageTest(const std::string& mapName) {
 // --panetest <DLL> <prefix>: carrega a missão, roda 300 ticks e grava o quadro
 // com o painel de informações de uma unidade de cada tipo do jogador 0
 // (<prefix>_<tipo>.bmp).
+// --chattest <DLL>: a linha de conversa do jogo (sub_4115F0) e o pacote 0x30.
+// Abre com Enter, digita, manda com Enter e confere que a mensagem entrou no
+// registro; depois confere que o Esc desiste e que a mascara de destinatarios
+// (as caixas da tela ALLIES/CHAT) cala quem foi desmarcado.
+static int runChatTest(const std::string& dll, const char* shot) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 chattest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    op2::g_playerData[op2::TethysGame::localPlayer()].name = "Marcelo";
+
+    auto tecla = [&](SDL_Keycode k) {
+        SDL_Event e{};
+        e.type = SDL_KEYDOWN;
+        e.key.keysym.sym = k;
+        gs.handleEvent(renderer, e);
+    };
+    auto escreve = [&](const char* t) {
+        SDL_Event e{};
+        e.type = SDL_TEXTINPUT;
+        std::snprintf(e.text.text, sizeof(e.text.text), "%s", t);
+        gs.handleEvent(renderer, e);
+    };
+
+    const int antes = op2::messageCount();
+    tecla(SDLK_RETURN);
+    escreve("bom dia");
+    tecla(SDLK_BACKSPACE);
+    tecla(SDLK_RETURN);
+    // postMessage poe a marca de tempo "<N>%d: " na frente (sub_438F70), entao
+    // o que se confere e o fim da linha.
+    const std::string ultima = op2::messageCount() ? op2::messageAt(op2::messageCount() - 1).text : "";
+    const std::string esperado = "Marcelo: bom di";
+    const bool entrou = op2::messageCount() == antes + 1 &&
+                        ultima.size() >= esperado.size() &&
+                        ultima.compare(ultima.size() - esperado.size(), esperado.size(), esperado) == 0 &&
+                        op2::messageAt(op2::messageCount() - 1).x == -2;
+    std::printf("[ChatTest] mandar: %s (%s)\n", entrou ? "ok" : "FALHOU",
+                ultima.c_str());
+
+    const int meio = op2::messageCount();
+    tecla(SDLK_RETURN);
+    escreve("nao vai");
+    if (shot) {                                   // a linha aberta, para conferir o desenho
+        gs.onIdle(renderer, 0.0f);
+        writeBmp32(shot, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH,
+                   op2::Renderer::NATIVE_HEIGHT);
+        std::printf("[ChatTest] tela -> %s\n", shot);
+    }
+    tecla(SDLK_ESCAPE);
+    std::printf("[ChatTest] Esc desiste: %s\n", op2::messageCount() == meio ? "ok" : "FALHOU");
+
+    // Tirar-me da mascara cala a minha propria copia da linha.
+    op2::chatMaskToggle(op2::TethysGame::localPlayer());
+    const int depois = op2::messageCount();
+    tecla(SDLK_RETURN);
+    escreve("silencio");
+    tecla(SDLK_RETURN);
+    std::printf("[ChatTest] fora da mascara: %s\n",
+                op2::messageCount() == depois ? "ok" : "FALHOU");
+
+    renderer.shutdown();
+    SDL_Quit();
+    return 0;
+}
+
 static int runPaneTest(const std::string& dll, const std::string& prefix) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
     op2::g_ResManager.init(".");
@@ -3881,6 +3952,8 @@ int main(int argc, char* argv[]) {
             return runQuakeTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--disastertest") == 0 && i + 3 < argc)
             return runDisasterTest(argv[i + 1], argv[i + 2], argv[i + 3]);
+        if (std::strcmp(argv[i], "--chattest") == 0 && i + 1 < argc)
+            return runChatTest(argv[i + 1], i + 2 < argc ? argv[i + 2] : nullptr);
         if (std::strcmp(argv[i], "--savetest") == 0 && i + 3 < argc)
             return runSaveTest(argv[i + 1], atoi(argv[i + 2]), atoi(argv[i + 3]));
         if (std::strcmp(argv[i], "--campaigntest") == 0 && i + 3 < argc)

@@ -455,6 +455,73 @@ void GameState::destroyAllAndLeave() {
     sendQuit(QUIT_SELF_DESTRUCT);
 }
 
+// sub_4115F0. Devolve true quando a tecla foi consumida pela linha.
+bool GameState::chatKey(const SDL_Event& e) {
+    if (e.type == SDL_TEXTINPUT) {
+        if (!m_chatOpen) return false;
+        for (const char* c = e.text.text; *c; ++c)
+            if (static_cast<unsigned char>(*c) >= 0x20 && m_chatLine.size() < 0x3F)
+                m_chatLine += *c;
+        return true;
+    }
+    if (e.type != SDL_KEYDOWN) return false;
+    const SDL_Keycode k = e.key.keysym.sym;
+    if (!m_chatOpen) {
+        // Fechada, so o Enter interessa -- e so em partida com mais gente. (No
+        // original o filtro esta sempre instalado, porque e por ele que se
+        // digitam os cheats "Dan's"; esses nao estao portados, entao em jogo
+        // solo a linha nao teria para quem falar.)
+        if ((k != SDLK_RETURN && k != SDLK_KP_ENTER) || !multiplayerMission()) return false;
+        if (m_saveDlg.active() || m_endPhase) return false;
+        m_chatOpen = true;
+        m_chatLine.clear();
+        return true;
+    }
+    if (k == SDLK_RETURN || k == SDLK_KP_ENTER) {     // loc_41188B: manda e fecha
+        if (!m_chatLine.empty()) sendChat(m_chatLine);
+        m_chatOpen = false;
+        m_chatLine.clear();
+        return true;
+    }
+    if (k == SDLK_ESCAPE) {                           // desiste sem mandar
+        m_chatOpen = false;
+        m_chatLine.clear();
+        return true;
+    }
+    if (k == SDLK_BACKSPACE) {
+        if (!m_chatLine.empty()) m_chatLine.pop_back();
+        return true;
+    }
+    return true;                                      // aberta, come o resto
+}
+
+// A linha fica rente ao pe da vista, com o fundo preto e o cursor em vermelho
+// -- as cores sao as que sub_411530 cria (texto 0xFFFFFF, pincel 0x0000FF).
+//
+// O RETANGULO do original nao saiu do disassembly: o filtro le [+0x80..+0x8C]
+// mas nenhum trecho que achamos escreve esses campos (quem os calcula nao
+// aparece nas referencias a dword_546B70). O pe da vista e escolha nossa, e o
+// rotulo "Say:" tambem; o resto do comportamento e o de sub_4115F0.
+void GameState::drawChatLine(uint32_t* fb, int vw, int vh) const {
+    if (!m_chatOpen) return;
+    (void)vh;
+    const int h = UiFont::lineHeight() + 4;
+    const int t = kClientY + kViewH - h, l = kClientX, r = kClientX + kViewW;
+    for (int y = t; y < t + h; ++y)
+        for (int x = l; x < r; ++x)
+            if (y >= 0 && y < vh && x >= 0 && x < vw) fb[y * vw + x] = 0xFF000000u;
+    const std::string texto = "Say: " + m_chatLine;
+    const int tx = l + 4, ty = t + 2;
+    UiFont::draw(fb, vw, vh, texto, tx, ty, 0xFFFFFFFFu);
+    // O cursor pisca duas vezes por segundo.
+    if ((SDL_GetTicks() / 250) & 1) {
+        const int cx = tx + UiFont::width(texto);
+        for (int y = ty; y < ty + UiFont::lineHeight(); ++y)
+            for (int x = cx; x < cx + 2; ++x)
+                if (y >= 0 && y < vh && x >= 0 && x < vw) fb[y * vw + x] = 0xFFFF0000u;
+    }
+}
+
 void GameState::clampCamera() {
     if (m_camY < 0) m_camY = 0;
     if (m_camY > m_maxY) m_camY = m_maxY;
@@ -1123,6 +1190,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
             std::memmove(&fb[(y + kViewY) * VW + kViewX], &fb[y * VW], sizeof(uint32_t) * kViewW);
     }
     renderPanel(renderer);
+    drawChatLine(renderer.getFramebuffer(), Renderer::NATIVE_WIDTH, Renderer::NATIVE_HEIGHT);
 
     // Overlay: relógio (Tick/Time) + uma amostra do RNG — prova visível de que o
     // núcleo de simulação está rodando determinístico.
@@ -1439,6 +1507,9 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
         }
         return;
     }
+    // A linha de conversa vem ANTES de tudo: aberta, ela e quem fica com as
+    // teclas (e o que o filtro do original faz, por estar no topo da cadeia).
+    if (chatKey(e)) return;
     if (e.type == SDL_KEYDOWN) {
         // Aceleradores 130 do OUT2RES: Ctrl+S = 40017 (OnSaveSlot), Ctrl+L = 40018.
         if ((SDL_GetModState() & KMOD_CTRL) && e.key.keysym.sym == SDLK_s && m_mission) {
