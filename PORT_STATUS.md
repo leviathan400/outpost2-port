@@ -32,7 +32,7 @@ próprio com pontes de ABI para a API que elas importam do `OUTPOST2.EXE`.
 | Rede (`src/net`) | 1.400 linhas |
 | DLLs de missão que carregam e rodam | **94 de 94** |
 | Símbolos da API do EXE implementados | **222 de 222** (os que as 94 DLLs importam) |
-| Modos de linha de comando (testes e telas) | 91 |
+| Modos de linha de comando (testes e telas) | 93 |
 
 As duas linhas de missões são a medida honesta de cobertura: toda DLL de
 missão do disco carrega, cria as unidades e roda, e nenhuma importa um símbolo
@@ -221,15 +221,21 @@ Todas resolvidas em **2026-11-03**, e duas delas eram leitura errada minha:
     chamado do caso 4 do `classHandler`. A Spider do computador toma veículos
     inimigos **paralisados por EMP** a até 256 px (`sub_427CC0`). Teste:
     `--takeovertest <map>`.
-12. Modo 3 do pathfinder (`sub_438850`).
+12. ~~Modo 3 do pathfinder~~ — **não é pendência**: conferido em 2026-11-03,
+    `sub_438850` está portado em `pfMoveCost` — parede/tubo bloqueia sem
+    exceção e o objetivo é ficar ao lado do alvo (quatro vizinhos). O
+    comentário em `pathfinder.h` é que dizia "pendente".
 13. ~~Fila de waypoints com Shift~~ — **não é pendência**: conferido em
     2026-10-29, a fila `unk_5471B0`/`dword_5471AC` é código morto no
     executável. O contador é o campo +0x3C do objeto do modo de mira, que
     `sub_41B550` zera ao entrar no modo e que ninguém incrementa — as três
     funções que o leem só leem. O jogo publicado manda sempre UM ponto por
     comando, que é o que o porte faz.
-14. Dano em paredes nas autodestruições (`sub_4A23F0` no caminho de
-    `sub_4A4090`).
+14. ~~Dano em paredes nas autodestruições~~ — **não é pendência**: conferido
+    em 2026-11-03, `explodeDestruct` chama `damageWall` com
+    (raio − d) * (Concussion + Penetration) / raio, que é exatamente a conta
+    de `sub_4A4090`. Dois comentários (em `weapon.cpp` e `disaster.h`) é que
+    anunciavam a pendência.
 
 ### Encontradas no inventário de 2026-11-03
 
@@ -237,7 +243,13 @@ Varredura dos marcadores do próprio código contra o disassembly. Cinco
 "pendências" que os comentários anunciavam **não existiam** (a garagem, o
 micróbio, o áudio das mensagens, a fase B da economia e a serialização de rede
 do `CommandPacket` estão todos portados — os comentários é que tinham ficado
-para trás). Seis eram reais; a 16 já foi fechada no mesmo dia.
+para trás).
+
+**Segunda passada, no mesmo dia**, agora conferindo cada item no código em vez
+de ler o comentário que o anunciava: **outras três eram falsas** (as 12, 14 e
+17 — modo 3 do pathfinder, dano em paredes nas autodestruições e animações de
+ambiente — estavam portadas, com o comentário atrasado). Das seis reais,
+16, 18, 19 e 20 foram fechadas no mesmo dia; **sobra a 21**.
 
 16. ~~Veículo guardado em garagem não conta em lugar nenhum~~ — **feito**. Era
     o único item que podia quebrar um objetivo de missão: a garagem foi portada
@@ -262,17 +274,46 @@ para trás). Seis eram reais; a 16 já foi fechada no mesmo dia.
     original, conferido, e marcado no código para ninguém "unificar".
     Teste: `--garagecounttest <DLL>`, dez casos; neutralizando a correção, oito
     reprovam e os dois controles negativos continuam passando.
-17. **Animações de ambiente dos prédios** — estados 5..9 de `[+0x34]`
-    (`sub_4835C0`). Os estados 0..3 (construção, dano, destruição) estão
-    portados; faltam as animações ociosas.
-18. **Auto-engajamento: "atacado nos últimos 12 ticks"** (`sub_44DE10` dentro
-    de `sub_485340`). Sem isso a unidade não considera quem a feriu há pouco ao
-    escolher alvo sozinha.
-19. **`vt[35]` na morte do veículo** — a descarga/limpeza por classe (é
-    `nullsub` no Lynx, mas não em todas).
-20. **Grupo de IA com prazo vencido** — o original manda os membros se
-    autodestruírem (0x14) ou **saírem do mapa** (0x2A); o porte só não apaga o
-    grupo.
+17. ~~Animações de ambiente dos prédios~~ — **não é pendência**: conferido em
+    2026-11-03, `structureAmbientTick` é `sub_4835C0` inteiro, com a tabela
+    `byte_4E4138` (11 registros) e a variante por tipo (`desc+0x2A6/+0x2A7`),
+    o gate de 100 ticks defasado por y e id, e a opção `Ambient` do INI. O
+    comentário em `structure.h` é que dizia "ainda não portado".
+18. ~~Auto-engajamento: "atacado nos últimos 12 ticks"~~ — **feito**. Era a
+    única pendência deste inventário que mudava o que se vê jogando, e o que
+    `sub_44DE10` faz não é escolher alvo: é **alertar a vizinhança**. A unidade
+    atingida nos últimos 12 ticks passa o próprio agressor para todo veículo
+    armado do próprio lado a menos de 96 px (3 tiles) em x e y que esteja
+    parado (`[+0x21]` = 0) e ainda sem agressor (`[+0x26]` = 0), datando o
+    alerta de 25 ticks atrás — sobram 125 dos 150 ticks da janela de revide.
+    Resultado: o esquadrão reage junto em vez de só quem levou o tiro. Cada
+    alerta soma uma referência (`inc byte [+0x32]`) no agressor.
+    **Só vale para dono humano**: o gate do topo de `sub_44DE10` é
+    `dword_56E304[dono]`, que é `isHuman` (`[jogador+0x28]`); a IA tem o
+    caminho dela, `ScGroup::HasBeenAttacked`. Teste: `--alerttest <DLL>`, onze
+    casos, inclusive a borda exata dos 96 px (o asm compara com `<` estrito) e
+    o gate do dono do PC; neutralizando a correção, cinco reprovam e os sete
+    controles negativos continuam passando.
+
+    A caixa de busca é por células em vez da lista de unidades ordenada por
+    `[+0x18]` que o original percorre nos dois sentidos — o conjunto é o mesmo
+    (veículo ocupa uma célula) e o teste de pixel ficou idêntico.
+19. ~~`vt[35]` na morte do veículo~~ — **feito**, e não era "descarga por
+    classe": extraí as 40 vtables de unidade do asm e em todas, menos
+    `off_4D1788`, a entrada 35 é a **mesma** função, `sub_483850` — que põe
+    `dword_56E37C[dono] = 1`, o `colonyMarkDirty` do porte. `loc_43D8B3` só a
+    chama com o bit 1 de `[+0x44]`, ou seja só em veículo. Uma linha em
+    `vehicleDeath`: veículo morto obriga a economia do dono a recalcular.
+20. ~~Grupo de IA com prazo vencido~~ — **feito** (`sub_42B360`). A ordem dos
+    dois comandos importa e é esta: vencido o prazo, **nos primeiros 400 ticks**
+    cada membro leva a autodestruição (0x14) e, **de 400 ticks em diante**, quem
+    ainda estiver na lista leva a de sair do mapa (0x2A). Na prática o segundo
+    ramo só alcança quem a autodestruição recusa — `unitDoSelfDestruct` exige
+    comandável, então um veículo sob EMP sobra para o 0x2A. Quem não é veículo
+    (sem o bit 1 de `[+0x44]`) sai do grupo antes, pelo `vt[11]`, e leva a
+    ordem do mesmo jeito. O grupo não é apagado aí: cai no passe em que a
+    lista chega a zero. Teste: `--deletetest <DLL>`, oito casos cobrindo os
+    três ramos; neutralizando a correção, três reprovam.
 21. **Três miudezas de apresentação**: os sons 0x80/0x7F da plataforma do
     Spaceport; o ícone do veículo com a carga no painel STORAGE (`sub_458EF0`,
     hoje a animação fica parada); e o anel anti-duplicata `[jogador+0xBD8]`,
@@ -572,7 +613,7 @@ missão e os recursos originais do diretório de trabalho).
 
 ### Testes por linha de comando
 
-São 91 modos. Os que cobrem regressão de verdade:
+São 93 modos. Os que cobrem regressão de verdade:
 
 | Modo | O que prova |
 |---|---|
@@ -585,6 +626,8 @@ São 91 modos. Os que cobrem regressão de verdade:
 | `--transfertest <DLL>` | o TRANSFER: escolhedor, desistência e a troca de dono |
 | `--idletest <DLL>` | o aviso de perder metal ao desligar armazém/fundição, nos dois lados da fronteira |
 | `--garagecounttest <DLL>` | os seis pontos em que um veículo guardado em garagem tem de contar |
+| `--alerttest <DLL>` | a unidade atacada alerta os vizinhos armados do próprio lado (`sub_44DE10`) |
+| `--deletetest <DLL>` | grupo de IA com prazo vencido: autodestruição e, 400 ticks depois, sair do mapa |
 | `--missiontest <DLL> <saida> <ticks>` | carrega e roda qualquer missão |
 | `--aitest <DLL campanha> <DLL multi>` | o `AILevel` chega ao jogador 0 e o multijogador fica intacto |
 | `--helptest [tópico]` | o leitor do `.HLP` e a navegação da tela do manual |
@@ -604,7 +647,7 @@ São 91 modos. Os que cobrem regressão de verdade:
 | Unidades, movimento, pathfinder | Completo |
 | Estruturas e construção | Completo |
 | Economia, comida, população, moral | Completo |
-| Combate | Completo (faltam o dano em paredes nas autodestruições e dois ganchos de vtable) |
+| Combate | Completo |
 | Pesquisa | Completo |
 | Desastres, lava e praga | Completo |
 | Triggers, objetivos, vitória/derrota | Completo |

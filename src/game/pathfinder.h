@@ -24,7 +24,8 @@ struct PfContext {
     int radius2  = 0;                // dword_54F044 (raio²)
     // Objetivo da busca ([mov+0xCC], sub_4401F0 escolhe a função de custo):
     // 0 tile exato (sub_438390); 1 até o raio de target2 (sub_4384D0);
-    // 2 até o raio e com linha de visada (sub_438660); 3 (sub_438850, pendente).
+    // 2 até o raio e com linha de visada (sub_438660); 3 ao lado do alvo, com
+    // parede/tubo sempre bloqueando (sub_438850 — ver pfMoveCost).
     int goalMode = 0;
 };
 

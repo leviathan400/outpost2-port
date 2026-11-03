@@ -20,7 +20,7 @@ namespace op2 {
 //   ERUPÇÃO 0x4F  off_4D7428: vt[20] sub_4A81A0 → lava (dword_54E3A0, sub_432890)
 //   METEORO 0x50  vt[20] sub_44A210, vt[32] sub_44ACB0, vt[6] sub_44A9A0
 //
-// Pendente: dano em paredes (sub_4A23F0, usa o RNG). O micróbio
+// O dano em paredes (sub_4A23F0 — damageWall, usa o RNG), o micróbio
 // (dword_57AB98) e os sons estão portados.
 
 // Coordenadas em tiles do port. endX/endY = -1 → destino sorteado.

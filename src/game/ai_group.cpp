@@ -1460,11 +1460,32 @@ void tubeFill(int player, int x0, int y0, std::vector<std::pair<int, int>>& out,
     }
 }
 
+// sub_42B360 (DeleteWhenEmpty): sem prazo, não faz nada; lista vazia, o grupo
+// morre; prazo no futuro, espera. Vencido o prazo, loc_42B3B9 varre os membros:
+// nos primeiros 400 ticks manda cada um se AUTODESTRUIR (pacote 0x14) e, de 400
+// ticks em diante, SAIR DO MAPA (0x2A) — nessa ordem, porque a autodestruição é
+// a saída que o original tenta primeiro, e quem ainda estiver vivo depois disso
+// é mandado andando. Quem não é veículo (sem o bit 1 de [+0x44]) sai do grupo
+// antes (vt[0x2C] = vt[11]) e leva a ordem do mesmo jeito. O grupo não é apagado
+// aqui: ele só cai no passe em que a lista chega a zero.
+//
+// O original monta os pacotes e chama sub_40E210; aqui vale a convenção que o
+// porte já usa para os grupos de IA (ver aiTakeUnit, que chama unitExitMap
+// direto): a ordem é aplicada sem passar pela fila de comandos.
 bool deleteCheck(Group& g) {
     if (g.deleteAt == 0x7FFFFFFF) return false;
     if (g.nodes.empty()) return true;
-    // (o original, vencido o prazo, ordena aos membros que se autodestruam (0x14)
-    // ou saiam do mapa (0x2A) — não portado.)
+    if (g.deleteAt > tick()) return false;
+    const bool sair = tick() - g.deleteAt >= 0x190;
+    for (const Node& n : std::vector<Node>(g.nodes)) {       // a lista muda no laço
+        const int u = n.unit;
+        if (!valid(u)) continue;
+        if (!(g_units[u].flags & UNIT_VEHICLE) && g_units[u].groupStub != 0xFF)
+            aiRemoveUnit(g_units[u].groupStub, u);
+        for (Node& live : g.nodes) if (live.unit == u) live.tick = tick();  // [+0x0C]
+        if (sair) unitExitMap(u);                            // pacote 0x2A
+        else unitDoSelfDestruct(u);                          // pacote 0x14
+    }
     return false;
 }
 

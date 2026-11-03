@@ -3504,6 +3504,190 @@ static int runGarageCountTest(const std::string& dll) {
     return ok ? 0 : 1;
 }
 
+// --alerttest <DLL>: o item 18 -- sub_44DE10. Uma unidade atacada nos ultimos
+// 12 ticks ALERTA a vizinhanca: todo veiculo armado do proprio lado a menos de
+// 96 px em x e y, parado e sem agressor, fica com o MESMO agressor datado de 25
+// ticks atras. Monta um pelotao em volta da vitima com um caso de cada regra
+// (inclusive a borda exata dos 96 px) e confere quem foi alertado e quem nao.
+static int runAlertTest(const std::string& dll) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 alerttest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    op2::resetUnits();
+    const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
+    for (int y = 0; y < H; ++y)
+        for (int x = 0; x < W; ++x) op2::g_gameMap.clearUnitOccupancy(x, y);
+    op2::g_playerData[0].isHuman = 1;
+    op2::g_playerData[1].isHuman = 0;
+
+    auto lynx = [&](int tx, int ty, int dono) {
+        op2::Unit v;
+        op2::TethysGame::CreateUnit(v, op2::mapLynx, op2::LOCATION{tx, ty}, dono, 0x3D);
+        return v.id();
+    };
+    // A vitima e o agressor (longe, so para ter um id valido com dono inimigo).
+    const int vitima = lynx(20, 20, 0);
+    const int agressor = lynx(30, 30, 1);
+    // Vizinhos: 32 px, 64 px em x, 64 px em y -> alertados.
+    const int perto    = lynx(21, 20, 0);
+    const int meio     = lynx(22, 20, 0);
+    const int abaixo   = lynx(20, 22, 0);
+    // Borda EXATA dos 96 px (3 tiles): o asm usa "<" estrito -> FORA.
+    const int borda    = lynx(23, 20, 0);
+    // Inimigo ao lado: a mascara de alianca nao bate -> fora.
+    const int inimigo  = lynx(21, 21, 1);
+    // Ja tem agressor proprio: nao e sobrescrito.
+    const int ocupado  = lynx(20, 19, 0);
+    // Sem arma: o bit 0x10 de [+0x44] nao esta la -> fora.
+    op2::Unit truck;
+    op2::TethysGame::CreateUnit(truck, op2::mapCargoTruck, op2::LOCATION{19, 20}, 0);
+    const int caminhao = truck.id();
+    for (int id : {vitima, agressor, perto, meio, abaixo, borda, inimigo, ocupado, caminhao})
+        if (!id) { std::printf("[Alerta] falhou criar o pelotao\n"); renderer.shutdown(); SDL_Quit(); return 3; }
+
+    const int t = op2::TethysGame::tick();
+    op2::g_units[ocupado].lastAttacker = static_cast<int16_t>(vitima);
+    op2::g_units[ocupado].lastAttackTick = t;
+    op2::g_units[vitima].lastAttacker = static_cast<int16_t>(agressor);
+    op2::g_units[vitima].lastAttackTick = t;
+    const int refAntes = op2::g_units[agressor].refCount;
+    std::printf("[Alerta] vitima px=%d py=%d; borda px=%d (esperado px+96=%d)\n",
+                op2::g_units[vitima].pixelX, op2::g_units[vitima].pixelY,
+                op2::g_units[borda].pixelX, op2::g_units[vitima].pixelX + 96);
+
+    op2::weaponAutoEngage(vitima);
+
+    struct Caso { const char* nome; int obtido; int esperado; };
+    auto alertado = [&](int id) { return op2::g_units[id].lastAttacker == agressor ? 1 : 0; };
+    auto datado = [&](int id) {
+        return op2::g_units[id].lastAttacker == agressor &&
+               op2::g_units[id].lastAttackTick == t - 0x19 ? 1 : 0;
+    };
+    std::vector<Caso> casos = {
+        {"vizinho a 32 px alertado",        alertado(perto), 1},
+        {"vizinho a 64 px em x alertado",   alertado(meio), 1},
+        {"vizinho a 64 px em y alertado",   alertado(abaixo), 1},
+        {"o alerta data de 25 ticks atras", datado(perto), 1},
+        {"borda exata de 96 px NAO entra",  alertado(borda), 0},
+        {"inimigo ao lado NAO entra",       alertado(inimigo), 0},
+        {"caminhao (sem arma) NAO entra",   alertado(caminhao), 0},
+        {"quem ja tinha agressor mantem",   op2::g_units[ocupado].lastAttacker == vitima ? 1 : 0, 1},
+        // Quatro referencias e o certo: tres dos alertas (inc byte [+0x32] em
+        // sub_44DE10) mais uma da ordem de revide que a propria vitima emite.
+        {"quatro referencias no agressor",  op2::g_units[agressor].refCount - refAntes, 4},
+        // A quarta e da ordem de revide: acao 0x24 com o agressor no alvo da ordem.
+        {"a vitima revidou (ordem 0x24 no agressor)",
+         op2::g_units[vitima].action == 0x24 &&
+         op2::g_units[vitima].orderTarget() == (0xFFFF0000u | static_cast<uint32_t>(agressor)) ? 1 : 0, 1},
+    };
+
+    // Dono do PC: o gate [jogador+0x28] (isHuman) corta tudo.
+    for (int id : {perto, meio, abaixo}) {
+        op2::g_units[id].lastAttacker = 0;
+        op2::g_units[id].lastAttackTick = 0;
+    }
+    op2::g_playerData[0].isHuman = 0;
+    op2::g_units[vitima].lastAttacker = static_cast<int16_t>(agressor);
+    op2::g_units[vitima].lastAttackTick = op2::TethysGame::tick();
+    op2::weaponAutoEngage(vitima);
+    casos.push_back({"dono do PC nao alerta ninguem",
+                     alertado(perto) + alertado(meio) + alertado(abaixo), 0});
+
+    bool ok = true;
+    for (const Caso& c : casos) {
+        const bool bom = c.obtido == c.esperado;
+        if (!bom) ok = false;
+        std::printf("[Alerta] %-38s %d (esperado %d) %s\n", c.nome, c.obtido, c.esperado,
+                    bom ? "ok" : "FALHOU");
+    }
+    std::fflush(stdout);
+    renderer.shutdown(); SDL_Quit();
+    return ok ? 0 : 1;
+}
+
+// --deletetest <DLL>: o item 20 -- sub_42B360 (DeleteWhenEmpty). Vencido o prazo
+// do grupo, cada membro leva a ordem de AUTODESTRUICAO (0x14) e, 400 ticks
+// depois, quem ainda estiver na lista leva a de SAIR DO MAPA (0x2A). Monta um
+// grupo com os tres casos: um Lynx comum (a autodestruicao pega), um Lynx sob
+// EMP (sub_40E210 recusa o 0x14, entao sobra para o 0x2A) e um predio (sem o
+// bit 1 de [+0x44]: sai do grupo pelo vt[11]).
+static int runDeleteTest(const std::string& dll) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 deletetest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    op2::resetUnits();
+    const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
+    for (int y = 0; y < H; ++y)
+        for (int x = 0; x < W; ++x) op2::g_gameMap.clearUnitOccupancy(x, y);
+
+    op2::Unit a, b;
+    op2::TethysGame::CreateUnit(a, op2::mapLynx, op2::LOCATION{20, 20}, 1, 0x3D);
+    op2::TethysGame::CreateUnit(b, op2::mapLynx, op2::LOCATION{22, 20}, 1, 0x3D);
+    const int comum = a.id(), sobEmp = b.id();
+    const int predio = op2::placeBuilding(0x27, 24, 20, 1);   // Agridome
+    if (!comum || !sobEmp || !predio) {
+        std::printf("[Delete] falhou montar o grupo\n"); renderer.shutdown(); SDL_Quit(); return 3;
+    }
+    op2::g_units[sobEmp].flags |= op2::UNIT_EMP;          // o 0x14 vai recusar este
+
+    const int stub = op2::aiCreateGroup(op2::GK_FIGHT, 1);
+    if (stub == 0xFF) { std::printf("[Delete] sem grupo\n"); renderer.shutdown(); SDL_Quit(); return 4; }
+    for (int id : {comum, sobEmp, predio}) op2::aiTakeUnit(stub, id);
+
+    auto passo = [&](int n) {
+        for (int k = 0; k < n; ++k) { op2::TethysGame::advanceTick(); op2::aiGroupsTick(); }
+    };
+    auto vivo = [&](int id) { return op2::g_units[id].id != -1 && !(op2::g_units[id].flags & op2::UNIT_DEAD) ? 1 : 0; };
+
+    struct Caso { const char* nome; int obtido; int esperado; };
+    std::vector<Caso> casos;
+
+    // Sem prazo o grupo nao mexe em ninguem.
+    passo(50);
+    casos.push_back({"sem prazo: ninguem mexido", vivo(comum) + vivo(sobEmp) + vivo(predio), 3});
+
+    op2::aiSetDeleteWhenEmpty(stub, 1);                   // deleteAt = tick + 10000
+    passo(9990);
+    casos.push_back({"prazo no futuro: nada ainda", vivo(comum) + vivo(sobEmp) + vivo(predio), 3});
+    casos.push_back({"predio ainda no grupo", op2::g_units[predio].groupStub == stub ? 1 : 0, 1});
+
+    // Cruza o prazo: a autodestruicao e emitida para os tres.
+    passo(20);
+    casos.push_back({"vencido: Lynx comum autodestruido", vivo(comum) ? 0 : 1, 1});
+    casos.push_back({"vencido: Lynx sob EMP recusou o 0x14", vivo(sobEmp), 1});
+    casos.push_back({"vencido: predio saiu do grupo (vt[11])",
+                     op2::g_units[predio].groupStub == 0xFF ? 1 : 0, 1});
+    casos.push_back({"vencido: o Lynx sob EMP nao saiu do mapa",
+                     op2::g_units[sobEmp].action == 0x2A ? 1 : 0, 0});
+
+    // 400 ticks depois do prazo, quem sobrou na lista sai do mapa.
+    passo(400);
+    casos.push_back({"+400: o Lynx sob EMP saiu do mapa (0x2A)",
+                     op2::g_units[sobEmp].action == 0x2A &&
+                     (op2::g_units[sobEmp].flags & op2::UNIT_DEAD) ? 1 : 0, 1});
+
+    bool ok = true;
+    for (const Caso& c : casos) {
+        const bool bom = c.obtido == c.esperado;
+        if (!bom) ok = false;
+        std::printf("[Delete] %-42s %d (esperado %d) %s\n", c.nome, c.obtido, c.esperado,
+                    bom ? "ok" : "FALHOU");
+    }
+    std::fflush(stdout);
+    renderer.shutdown(); SDL_Quit();
+    return ok ? 0 : 1;
+}
+
 // --walltest <map>: parede comum, de lava, de micróbio e um tubo lado a lado;
 // sub_4A23F0 (damageWall) com dano 1000 e depois 20, 6x cada, imprimindo o tile
 // e o tipo da célula — a parede comum passa pelos estágios +0x54/+0x74/+0x94.
@@ -4143,6 +4327,10 @@ int main(int argc, char* argv[]) {
             return runPaneTest(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--musictest") == 0 && i + 1 < argc)
             return runMusicTest(argv[i + 1]);
+        if (std::strcmp(argv[i], "--deletetest") == 0 && i + 1 < argc)
+            return runDeleteTest(argv[i + 1]);
+        if (std::strcmp(argv[i], "--alerttest") == 0 && i + 1 < argc)
+            return runAlertTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--garagecounttest") == 0 && i + 1 < argc)
             return runGarageCountTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--garagetest") == 0 && i + 1 < argc)

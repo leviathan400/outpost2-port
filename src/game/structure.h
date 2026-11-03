@@ -17,7 +17,7 @@ namespace op2 {
 //   0 intacto/construção — frame = progresso; contador 0 = último frame
 //   1 dano >= 30% do HP máx, 2 dano >= 60%   (sub_408930, frame 0)
 //   3 destruição — frame = (nF-1) - contador, contador desce 1 por tick
-//   5..9 animações ambiente (sub_4835C0 — ainda não portado)
+//   5..9 animações ambiente (sub_4835C0 — structureAmbientTick)
 
 // Kill (sub_43A890): [+0x21]=0x2F, [+0x20]=1, [+0x3C]=delay. É o que
 // Unit::DoDeath chama com delay 1.

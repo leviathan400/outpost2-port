@@ -1156,11 +1156,55 @@ void sendGuardTarget(int me, const std::vector<int>& sel, int tileX, int tileY) 
     commandSubmit(me, pkt);
 }
 
+// sub_44DE10: a unidade atacada AGORA MESMO alerta a vizinhança. Todo veículo
+// armado do próprio lado a menos de 96 px (3 tiles) em x e y que esteja parado
+// e ainda sem agressor recebe o MESMO agressor, datado de 25 ticks atrás —
+// sobram 125 dos 150 da janela de revide, ou seja o esquadrão reage junto em
+// vez de só quem levou o tiro. Cada alerta soma uma referência ([+0x32]) no
+// agressor, como o original.
+//
+// Só vale para dono HUMANO: o gate do topo é dword_56E304[dono] = isHuman
+// ([jogador+0x28]). A IA tem o caminho dela, ScGroup::HasBeenAttacked.
+static void alertNearbyAllies(int id) {
+    const UnitRecord& me = g_units[id];
+    const int owner = ownerOf(me);
+    if (owner >= kMaxPlayers || !g_playerData[owner].isHuman) return;
+    const int attacker = me.lastAttacker;
+    if (attacker <= 0 || attacker >= static_cast<int>(g_units.size())) return;
+    const uint32_t bit = 1u << owner;
+    const int px = me.pixelX, py = me.pixelY;
+    // O original anda na lista de unidades ordenada por [+0x18] (pixelY) nos dois
+    // sentidos; a caixa de tiles dá o mesmo conjunto (veículo ocupa uma célula) e
+    // o teste de pixel é o mesmo: px−96 < [+0x14] < px+96 (estrito, sem volta do
+    // mapa, como no asm) e py−96 <= [+0x18] <= py+96.
+    for (int ty = (py - 96) >> 5; ty <= (py + 96) >> 5; ++ty) {
+        if (ty < 0 || ty >= g_gameMap.height()) continue;
+        for (int tx = (px - 96) >> 5; tx <= (px + 96) >> 5; ++tx) {
+            const int o = g_gameMap.cellOccupant(tx & tileMask(), ty);
+            if (o <= 0 || o >= static_cast<int>(g_units.size()) || o == id) continue;
+            UnitRecord& n = g_units[o];
+            if (!alive(o)) continue;
+            if (n.pixelX <= px - 96 || n.pixelX >= px + 96) continue;
+            if (n.pixelY < py - 96 || n.pixelY > py + 96) continue;
+            if (!(n.flags & UNIT_ARMED)) continue;                 // [+0x44] & 0x10
+            const int no = ownerOf(n);
+            if (no >= kMaxPlayers || !(g_playerData[no].allyMask & bit)) continue;
+            if (n.flags & UNIT_EMP) continue;                     // [+0x44] & 0x80000
+            if (n.action != 0 || n.lastAttacker != 0) continue;    // [+0x21] e [+0x26]
+            n.lastAttacker = static_cast<int16_t>(attacker);
+            n.lastAttackTick = TethysGame::tick() - 0x19;
+            ++g_units[attacker].refCount;
+        }
+    }
+}
+
 void weaponAutoEngage(int id) {                               // sub_485340
     UnitRecord& u = g_units[id];
+    // Antes de tudo (topo de sub_485340): atacada nos últimos 12 ticks → alerta.
+    if (u.lastAttacker && TethysGame::tick() - u.lastAttackTick < 0x0C)
+        alertNearbyAllies(id);
     const WeaponClass* c = classOf(static_cast<int16_t>(u.cargo));
     if (!c) return;
-    // (atacado nos últimos 12 ticks → sub_44DE10 — pendente.)
     if (!u.hasTarget() && (u.flags & UNIT_AUTO_TARGET)) {
         const int16_t wpn = static_cast<int16_t>(u.cargo);
         if (wpn == 0x41 || wpn == 0x42) return;              // autodestruição: nunca procura
@@ -1707,8 +1751,8 @@ void unitApplyFoam(int id, int ticks) {                       // vt[0x60] sub_44
 
 // vt[34] das autodestruições (sub_4A4090): o dano em área de sub_4A35C0 sem
 // crédito ao atirador, sem o x1.5 de prédio-torre e sem som — fere todos,
-// inclusive o próprio atirador. (Paredes/tubos 0x17..0x19: sub_4A23F0 com
-// (raio − d) * (Concussion + Penetration) / raio — pendente com o dano em paredes.)
+// inclusive o próprio atirador. Paredes/tubos 0x17..0x19 levam sub_4A23F0 com
+// (raio − d) * (Concussion + Penetration) / raio.
 static void explodeDestruct(int pid) {
     const UnitRecord& p = g_units[pid];
     const WeaponSheetDesc* d = weaponSheet(p.type);
@@ -1948,7 +1992,11 @@ int mapLineOfSight(int x0, int y0, int x1, int y1) { return lineOfSight(x0, y0, 
 
 void vehicleDeath(int id) {
     UnitRecord& r = g_units[id];
-    // vt[35] (sub_..., ex. nullsub no Lynx): descarga/limpeza da classe — pendente.
+    // vt[35] (loc_43D8B3 chama só com o bit 1 de [+0x44], ou seja só em veículo):
+    // em toda classe de veículo é sub_483850, que põe dword_56E37C[dono] = 1 — a
+    // economia do dono recalcula no próximo passe. (Conferido nas vtables: das 40
+    // tabelas de unidade, só off_4D1788 tem nullsub ali.)
+    colonyMarkDirty(ownerOf(r));
     const int hp = maxHPOf(r);
     if (hp == r.damage) {
         // Explosão: AMBIENT_ANIM 0x87D (Spider/Scorpion: 0x87C com a cor do dono).
