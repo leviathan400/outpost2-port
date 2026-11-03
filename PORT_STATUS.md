@@ -150,24 +150,30 @@ Revisado item a item em 2026-10-28, conferindo no código.
 
 ### Multijogador, peças soltas
 
-2. **Ações da aba Options** — o item que estava escrito como "TRANSFER" era
-   outra coisa. Conferido em 2026-10-30: o botão TRANSFER da botoeira tem
-   `nullsub_84` no vt[3], ou seja **não faz nada no original** (o porte agora
-   também não faz, em silêncio). A transferência de verdade — *"transfer your
-   vehicles to another player and leave the game"* — é um item do **menu da aba
-   Options** (`sub_457880`), junto com: carregar (caso 1, `TApp::OnLoadSlot`),
-   salvar (caso 2), **reiniciar a missão** (caso 3), **abortar a missão**
-   (caso 4), destruir tudo (caso 6) e transferir e sair (caso 7). Cada um
-   confirma antes pelo mesmo diálogo do IDLE. O porte mostra os 13 ajustes do
-   INI nessa aba, mas **nenhum desses botões de ação** (`RESTART MISSION`,
-   `ABORT`, `BACK TO MAIN MENU`, `EXIT OUTPOST 2`, `SHOW VIDEO`). É um bloco
-   único, e maior do que "TRANSFER" sugeria.
-3. **Trade Center** — o prédio existe e conta na estatística, mas não há a UI
-   de troca de recursos.
-4. **Modo Chat** da aba Communications (`[+0x1C4]` = 1), que só existe em
-   multijogador.
-5. **Estatísticas de fim de partida** multijogador (motivos 7..9 da mensagem
-   0x73e) e as matrizes de baixas por par de jogadores.
+Todas resolvidas em **2026-11-03**, e duas delas eram leitura errada minha:
+
+2. ~~Ações da aba Options~~ e ~~TRANSFER~~ — **feitos**. A aba virou as três
+   telas do original (menu, `PREFERENCES`, `END MISSION`) com os seis botões de
+   `sub_457880`. E o TRANSFER da botoeira **faz** algo: o `nullsub_84` é o
+   vt[3], o clique no MAPA, que ele não usa. O vt[1] (`sub_455A80`) abre o
+   escolhedor de jogador *"Transfer Vehicle(s) to:"* (`sub_46D230`), e a
+   escolha monta o pacote **0x18** com as unidades selecionadas e o destino
+   (`sub_455950`); o case 24 troca o dono de cada uma e avisa os dois lados.
+   O botão aparece com a trapaça `dword_56DE58` ou com um **Trade Center
+   operando** numa partida multijogador.
+3. ~~Trade Center~~ — **feito**: não havia "UI de troca de recursos"; o que o
+   prédio faz é habilitar o TRANSFER. Ele voltou à lista de produção, porque
+   `sub_468120` só deixa o 0x20 passar com `dword_56DC78 != 0` — e esse
+   ponteiro é a **camada de rede**, ou seja o prédio só existe em partida em
+   rede.
+4. ~~Modo Chat da aba Communications~~ — **feito**, e também não era o que o
+   nome sugeria: o modo 1 é a tela *"Set Up Allies and Chat Partners"*, com as
+   duas listas de jogadores e as caixas de chat (máscara local) e de aliança
+   (pacote **0x32**). O botão `&NET STATS` abre a terceira tela
+   (`sub_467760`), com os seis campos do original. A conversa em si é a
+   **linha do jogo** (`sub_4115F0`): Enter abre, Enter manda o pacote **0x30**,
+   Esc desiste.
+5. ~~Estatísticas de fim de partida~~ — **feitas**, ver a correção do item 9.
 
 ### Miudezas de simulação (todas marcadas no código)
 
@@ -182,13 +188,16 @@ Revisado item a item em 2026-10-28, conferindo no código.
    uma unidade **do computador** armada de Laser (0x3D) ou Microwave (0x3E)
    esbarra num tubo/parede sem ter alvo — é assim que a IA abre caminho. Não
    existe comando do jogador para isso.
-9. ~~Estatísticas de baixas por jogador~~ — **não serão portadas**: conferido
-   em 2026-10-29, os quatro contadores (`Player+0x1C4` prédios perdidos,
-   `+0x1C8` veículos perdidos, `+0x1CC` prédios destruídos, `+0x1D0` veículos
-   destruídos) são incrementados em três pontos e **nunca lidos**. Nem o EXE,
-   nem o `OP2Shell.dll` (que importa só três símbolos de dado), nem as DLLs de
-   missão alcançam esses campos, e o `MissionResults` não os copia. Portá-los
-   seria somar números que ninguém pode observar.
+9. ~~Estatísticas de baixas por jogador~~ — **feitas em 2026-11-03**, e a
+   conclusão anterior ("nunca lidos") estava **errada**: o `MissionResults`
+   **copia sim**. O fim de `sub_489A30` (`loc_489CF3`) leva SETE dwords de
+   `[jogador+0x1BC]` para `MissionResults+0xC2 + jogador*28`, e o `OP2Shell`
+   lê de lá — os motivos 7, 8 e 9 da mensagem 0x73a mandam todos `0x727`, que
+   abre o **Dialog 155 "MULTIPLAYER GAME STATISTICS"**. São seis contadores
+   (`+0x1BC` prédios construídos, `+0x1C0` veículos construídos, `+0x1C4`
+   prédios perdidos, `+0x1C8` veículos perdidos, `+0x1CC` prédios destruídos,
+   `+0x1D0` veículos destruídos); o sétimo dword é a soma dos minérios, que o
+   original escreve por cima.
 10. ~~Revelação do mapa ao construir~~ — **não existe**: conferido em
     2026-10-29. O trecho de `dword_574C88+0x110` converte o retângulo do prédio
     para a tela e o passa a `sub_46F550`, que é chamada de 36 pontos (entre
@@ -504,7 +513,7 @@ missão e os recursos originais do diretório de trabalho).
 
 ### Testes por linha de comando
 
-São 81 modos. Os que cobrem regressão de verdade:
+São 83 modos. Os que cobrem regressão de verdade:
 
 | Modo | O que prova |
 |---|---|
@@ -513,6 +522,8 @@ São 81 modos. Os que cobrem regressão de verdade:
 | `--mptest <DLL>` | missão multijogador local |
 | `--mpui host\|join` | o fluxo das telas de rede, pelo despacho de verdade dos botões |
 | `--uitest` | combos e barras de rolagem, pelo caminho do mouse e do teclado |
+| `--chattest <DLL> [tela]` | a linha de conversa: mandar, desistir e a máscara de destinatários |
+| `--transfertest <DLL>` | o TRANSFER: escolhedor, desistência e a troca de dono |
 | `--missiontest <DLL> <saida> <ticks>` | carrega e roda qualquer missão |
 | `--aitest <DLL campanha> <DLL multi>` | o `AILevel` chega ao jogador 0 e o multijogador fica intacto |
 | `--helptest [tópico]` | o leitor do `.HLP` e a navegação da tela do manual |
@@ -543,7 +554,7 @@ São 81 modos. Os que cobrem regressão de verdade:
 | HUD, abas, minimapa, globo | Completo |
 | Áudio e música | Completo |
 | Salvar/carregar | Completo |
-| Multijogador em rede | Joga, **mas só a dois**; faltam chat in-game, troca e estatísticas |
+| Multijogador em rede | Completo: até 6 jogadores, conversa, aliança, troca e estatísticas |
 | Filmes | Não aplicável (arquivos não existem) |
 
 ---
