@@ -625,7 +625,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         TethysGame::noteTick();                  // p/ "Actual Game Speed"
         netApplyTurn(static_cast<int>(TethysGame::tick()));
         TethysGame::advanceDaylight(g_gameMap.internalWidth());   // início do turno (sub_489DD0)
-        lavaTick();                              // sub_49DC20 da lava (micróbio: pendente)
+        lavaTick();                              // sub_49DC20 (lava e micróbio)
         m_lastRand = TethysGame::getRand(100);  // 1 consumo determinístico por tick
         tickColony();                            // economia de cada jogador (sub_471F30)
         missionTriggerTick(currentMission());    // triggers, AIProc, vitória/derrota (sub_403110)

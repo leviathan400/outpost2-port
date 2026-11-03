@@ -558,7 +558,9 @@ void unitDoSelfDestruct(int id) {                            // ?DoSelfDestruct
 
 int unitHasOccupiedBay(int id) {                             // ?HasOccupiedBay
     const UnitRecord& r = g_units[id];
-    if (r.type == 0x29) return 0;                            // garagem: vt[63] — não portada (vazia)
+    // PENDENTE (item 16): a garagem está portada (garageSlot), mas aqui ainda
+    // devolve 0 — o original chama vt[63] (sub_41C9E0) e conta as baias cheias.
+    if (r.type == 0x29) return 0;
     if (!(r.flags & UNIT_FACTORY)) return 0;
     for (int i = 0; i < 6; ++i)                              // vt[65] = movsx [+0x61+baia]
         if (static_cast<int8_t>(r.bayType[i]) != 0) return 1;

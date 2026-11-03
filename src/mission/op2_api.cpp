@@ -279,7 +279,8 @@ void __fastcall T_AddMessageUnit(char* msg, int toPlayer, int unit, int sound) {
     if (unit <= 0 || unit >= static_cast<int>(g_units.size())) return;
     postMessage(unitOX(g_units[unit]), unitOY(g_units[unit]), msg, sound);
 }
-// ?SetMusicPlayList (sub_451090): a música vem de op2.clm (ausente) — não portada.
+// ?SetMusicPlayList (sub_451090): repassa a lista ao tocador; a música sai do
+// op2.clm, que pode não existir nesta instalação (aí o jogo roda sem música).
 void __fastcall T_SetMusicPlayList(int n, int repeat, int* ids) { if (ids) musicSetPlayList(n, repeat, ids); }   // sub_451090
 
 // ---- GameMap ------------------------------------------------------------------------

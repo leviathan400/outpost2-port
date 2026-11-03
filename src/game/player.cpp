@@ -112,7 +112,7 @@ bool playerHasVehicle(int player, int type, int cargo) {    // ?hasVehicle
         const UnitRecord& r = g_units[v];
         if (r.type == type && (cargo == -1 || static_cast<int16_t>(r.cargo) == cargo)) return true;
     }
-    return false;                                            // (+ baias das garagens 0x29)
+    return false;             // PENDENTE (item 16): + as baias das garagens 0x29
 }
 
 static bool playerHasBuilding(int player, int type) {

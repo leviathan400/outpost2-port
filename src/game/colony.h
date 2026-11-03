@@ -12,9 +12,9 @@ namespace op2 {
 //
 // FASE A (este módulo): lista de prédios por jogador, rede de tubos até o CC e
 // alocação de ENERGIA / TRABALHADORES / CIENTISTAS (liga e desliga as flags
-// 0x2000/0x4000/0x8000 dos prédios). FASE B (pendente): comida, população,
-// moral, armazenamento e mensagens ("Power Levels: ...", "%i Structures
-// Disabled") — trechos marcados no colony.cpp.
+// 0x2000/0x4000/0x8000 dos prédios). FASE B (feita depois, neste mesmo
+// módulo): comida, população, moral, armazenamento e as mensagens
+// ("Power Levels: ...", "%i Structures Disabled").
 
 // Campos +0xA0.. do registro do jogador (stride 0xC24 a partir de 0x56E2DC).
 struct ColonyState {

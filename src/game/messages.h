@@ -8,8 +8,7 @@ namespace op2 {
 // Mensagens do jogo — porta sub_438F70 (objeto de log @dword_54F0B0):
 //   - id de som: 0 → som padrão 0x5B; 0x5E..0xE3 (vozes) passam pelo filtro
 //     anti-repetição sub_439490 (tempo REAL, ms) e, se barradas, a mensagem
-//     nem é registrada; os demais só tocam o som. (Áudio ainda não portado:
-//     o id fica registrado.)
+//     nem é registrada; os demais só tocam o som (soundPlay, src/audio).
 //   - log circular de 64 entradas {x, y, "<N>%i: %s" com tick/100, som};
 //     <N> desliga as tags no resto do texto (sub_416650).
 //   - texto vai p/ a barra de status (sub_49BF10: 80 chars, MAIÚSCULAS).

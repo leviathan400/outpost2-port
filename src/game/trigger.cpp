@@ -507,8 +507,8 @@ static bool compareCount(int mode, int target, int n) {
 
 // sub_493AF0, jogador específico: prédios pelo tipo (PlayerBuildingEnum),
 // unidades espaciais (+0x08 do jogador) ou veículos (PlayerUnitEnum) com o filtro
-// de carga. As garagens (0x29) também contam os veículos das baias — garagem
-// ainda não portada (baias sempre vazias).
+// de carga. As garagens (0x29) também contam os veículos das baias (vt[63] no
+// original) — PENDENTE (item 16): a garagem está portada, falta somar aqui.
 static int countForPlayer(int p, int type, int cargo) {
     int n = 0;
     if (type >= 0x15 && type <= 0x3A) {
@@ -639,7 +639,8 @@ static bool hasFired(Trigger& t) {
             int kits = 0;
             for (int b : colonyStructures(t.f38)) {
                 const UnitRecord& r = g_units[b];
-                // Garagem (0x29): ConVecs com o kit nas baias — garagem não portada.
+                // PENDENTE (item 16): garagem (0x29) com ConVecs carregando o kit
+                // nas baias — sub_494280 varre [+0x60]; aqui ainda não.
                 if (r.type == 0x2F) {                         // fábrica: vt[65] = tipo da baia
                     const StructSheetDesc* d = structSheet(r.type);
                     const int bays = d ? d->player[(r.owner >> 4) & 0x0F].storageBays : 0;
@@ -662,7 +663,8 @@ static bool hasFired(Trigger& t) {
         case TK_VEHICLE_COUNT: {                              // sub_494E70
             t.playerMask = 0;
             if (t.f34 < 0 || t.f34 >= kMaxPlayers) return false;
-            // Lista de veículos + vt[63] das garagens (veículos guardados; não portado).
+            // PENDENTE (item 16): sub_494E70 soma vt[63] das garagens aos
+            // veículos da lista; aqui só a lista.
             const int cnt = static_cast<int>(colonyVehicles(t.f34).size());
             if (!compareCount(t.f38, t.f30, cnt)) return false;
             t.playerMask = 0x3F;
@@ -729,7 +731,9 @@ static bool hasFired(Trigger& t) {
             if (t.f30 < 0 || t.f30 >= kMaxPlayers) return false;
             const PlayerData& d = g_playerData[t.f30];
             const int colonists = d.workers + d.scientists + d.kids;
-            int transports = 0;                               // + baias das garagens (não portada)
+            // PENDENTE (item 16): sub_494600 varre [+0x60] das garagens atrás de
+            // transportes guardados; aqui só os que estão no mapa.
+            int transports = 0;
             for (int v : colonyVehicles(t.f30)) if (g_units[v].type == 0x0D) ++transports;
             const uint8_t* blk = unitStatBlock(0x0D, t.f30);  // capacidade (bloco +0x38)
             int cap = 0;

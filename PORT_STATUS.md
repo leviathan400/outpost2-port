@@ -25,14 +25,14 @@ próprio com pontes de ABI para a API que elas importam do `OUTPOST2.EXE`.
 
 | | |
 |---|---|
-| Código do porte | **41.500 linhas** de C++17 em `src/` |
-| Simulação (`src/game`, 38 .cpp) | 20.500 linhas |
-| UI in-game (`src/app`, 20 .cpp) | 7.300 linhas |
-| Shell/menus (`src/shell`) | 3.300 linhas |
+| Código do porte | **44.700 linhas** de C++17 em `src/` |
+| Simulação (`src/game`, 40 .cpp) | 21.300 linhas |
+| UI in-game (`src/app`, 20 .cpp) | 8.100 linhas |
+| Shell/menus (`src/shell`) | 3.900 linhas |
 | Rede (`src/net`) | 1.400 linhas |
 | DLLs de missão que carregam e rodam | **94 de 94** |
 | Símbolos da API do EXE implementados | **222 de 222** (os que as 94 DLLs importam) |
-| Modos de teste por linha de comando | 81 |
+| Modos de linha de comando (testes e telas) | 90 |
 
 As duas linhas de missões são a medida honesta de cobertura: toda DLL de
 missão do disco carrega, cria as unidades e roda, e nenhuma importa um símbolo
@@ -230,6 +230,40 @@ Todas resolvidas em **2026-11-03**, e duas delas eram leitura errada minha:
     comando, que é o que o porte faz.
 14. Dano em paredes nas autodestruições (`sub_4A23F0` no caminho de
     `sub_4A4090`).
+
+### Encontradas no inventário de 2026-11-03
+
+Varredura dos marcadores do próprio código contra o disassembly. Cinco
+"pendências" que os comentários anunciavam **não existiam** (a garagem, o
+micróbio, o áudio das mensagens, a fase B da economia e a serialização de rede
+do `CommandPacket` estão todos portados — os comentários é que tinham ficado
+para trás). Estas seis são reais:
+
+16. **Veículo guardado em garagem não conta em lugar nenhum.** A garagem foi
+    portada em 2026-10-14 (`garageSlot[6]`, `garageCount`), mas seis pontos de
+    contagem continuam ignorando quem está dentro dela, e no original **todos**
+    tratam o 0x29 — por `vt[63]` (`sub_41C9E0`, conta as baias ocupadas) ou
+    varrendo `[+0x60]` direto: `sub_493AF0` (contagem por jogador),
+    `sub_494280` (gatilho KIT: ConVec com o kit guardado), `sub_494E70`
+    (gatilho de contagem de veículos), `sub_494600` (gatilho EVAC: transportes),
+    `?HasOccupiedBay` e `?hasVehicle`. **É o único item desta lista que pode
+    quebrar um objetivo de missão**: guardar veículos na garagem some com eles
+    da conta. É a próxima coisa a fazer.
+17. **Animações de ambiente dos prédios** — estados 5..9 de `[+0x34]`
+    (`sub_4835C0`). Os estados 0..3 (construção, dano, destruição) estão
+    portados; faltam as animações ociosas.
+18. **Auto-engajamento: "atacado nos últimos 12 ticks"** (`sub_44DE10` dentro
+    de `sub_485340`). Sem isso a unidade não considera quem a feriu há pouco ao
+    escolher alvo sozinha.
+19. **`vt[35]` na morte do veículo** — a descarga/limpeza por classe (é
+    `nullsub` no Lynx, mas não em todas).
+20. **Grupo de IA com prazo vencido** — o original manda os membros se
+    autodestruírem (0x14) ou **saírem do mapa** (0x2A); o porte só não apaga o
+    grupo.
+21. **Três miudezas de apresentação**: os sons 0x80/0x7F da plataforma do
+    Spaceport; o ícone do veículo com a carga no painel STORAGE (`sub_458EF0`,
+    hoje a animação fica parada); e o anel anti-duplicata `[jogador+0xBD8]`,
+    que é proteção de rede contra comando repetido.
 
 ### Não aplicável nesta instalação
 
@@ -555,10 +589,10 @@ São 83 modos. Os que cobrem regressão de verdade:
 | Unidades, movimento, pathfinder | Completo |
 | Estruturas e construção | Completo |
 | Economia, comida, população, moral | Completo |
-| Combate | Completo (falta só o dano em paredes nas autodestruições) |
+| Combate | Completo (faltam o dano em paredes nas autodestruições e dois ganchos de vtable) |
 | Pesquisa | Completo |
 | Desastres, lava e praga | Completo |
-| Triggers, objetivos, vitória/derrota | Completo |
+| Triggers, objetivos, vitória/derrota | Completo, **menos a contagem de veículo guardado em garagem** (item 16) |
 | IA (grupos, computador padrão, Pinwheel) | Completo |
 | Campanha, colônia, tutoriais | Completo |
 | Shell e telas | Completo |

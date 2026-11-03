@@ -9,7 +9,7 @@
 namespace op2 {
 
 // Painel STORAGE das baias — porta dword_5650F0 (vtable off_4D54B8) no modo
-// [+0x6C0] = 1 (Structure Factory 0x2F, Spaceport 0x37; Garage 0x29 pendente):
+// [+0x6C0] = 1 (Structure Factory 0x2F, Spaceport 0x37, Garage 0x29):
 //   sub_463170  botões de ícone 44x44 das baias em 2 colunas (x = 7 / 0x61) e
 //               3 linhas (y = 0x39 + 0x3A*k, coordenadas da janela do quadro),
 //               teclas 1..6; comando = troca com o veículo na doca (dword_564A50:

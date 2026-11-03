@@ -12,9 +12,10 @@ namespace op2 {
 // No original todo comando (jogador/IA/rede) é serializado num CommandPacket
 // (header 0x0E + dados) e despachado por sub_40E210 sobre o objeto de comando
 // do jogador (dword_56E2DC + owner*777*4). Aqui o packet é uma struct com os
-// MESMOS campos (o formato de bits do LOCATION é idêntico ao do asm); a
-// serialização em bytes de rede/replay (sub_490840/490880/410210) é um detalhe
-// de transporte, fora do mecanismo de movimento — documentado, não portado ainda.
+// MESMOS campos (o formato de bits do LOCATION é idêntico ao do asm). A
+// serialização em bytes (sub_490840/490880/410210) é detalhe de transporte e
+// não precisa ser byte a byte a do original: está em src/net/net_game.cpp, no
+// formato deste porte, e é o que leva TODO comando pelo turno em rede.
 
 // --- Empacotamento de LOCATION (idêntico a Unit::DoMove @190538) -------------
 // loc = (x<<5 & 0x7FFF) | (y<<20 & 0x1FFF8000), campo de 29 bits (& 0x1FFFFFFF).
