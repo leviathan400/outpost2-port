@@ -1,3 +1,4 @@
+#include "../game/player.h"
 #include "shell_state.h"
 
 #include <iostream>
@@ -72,6 +73,9 @@ void ShellState::onIdle(Renderer& renderer, float dt) {
         GameStartInfo gsi;
         const bool hasGsi = m_menu.launchStartInfo(gsi);
         TethysGame::setLocalPlayer(me);
+        // Os nomes do lobby viram os nomes do jogo (sub_490BA0), que e o que a
+        // linha de conversa e a tela de aliancas mostram.
+        for (int i = 0; i < players && i < kMaxPlayers; ++i) setPlayerName(i, m_menu.mpName(i));
         if (!gTApp.activateMission(netDll, hasGsi ? &gsi : nullptr))
             std::cerr << "[Shell] nao foi possivel iniciar a missao em rede ("
                       << netDll << ")" << std::endl;

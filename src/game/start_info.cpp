@@ -46,6 +46,19 @@ void startInfoCollectResults(GameStartInfo& gsi, const AIModDesc* desc, int endC
     gsi.endTick = TethysGame::tick();                        // +0x18B
     const int p = TethysGame::localPlayer();
     gsi.localPlayer = p;                                     // +0x18A
+    // loc_489CF3: os sete dwords de cada jogador, com o ultimo trocado pela
+    // soma dos minerios. Isto vem ANTES do desvio da campanha, como no
+    // original -- o laco e a ultima coisa que sub_489A30 faz.
+    for (int i = 0; i < 6; ++i) {
+        const PlayerData& q = g_playerData[i];
+        gsi.stats[i][0] = q.structuresBuilt;
+        gsi.stats[i][1] = q.unitsBuilt;
+        gsi.stats[i][2] = q.structuresLost;
+        gsi.stats[i][3] = q.unitsLost;
+        gsi.stats[i][4] = q.enemyStructuresDestroyed;
+        gsi.stats[i][5] = q.enemyUnitsDestroyed;
+        gsi.stats[i][6] = q.ore + q.rareOre;
+    }
     if (gsi.campaign() && endCode != 3) return;
     PlayerData& d = g_playerData[p];
     gsi.food = d.foodStored;

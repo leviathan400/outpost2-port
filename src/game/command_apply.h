@@ -39,7 +39,7 @@ void applyChat(int from, int dstMask, const std::string& line);
 void applyAlly(int from, int to);
 // 0x31 Quit (case 49): como o jogador sai -- destruindo tudo, doando ou
 // virando IA.
-void applyQuit(int owner, int method);
+void applyQuit(int owner, int method, int delay);
 
 // --- o lado do CLIQUE desses tres ------------------------------------------
 // A mascara dos "chat partners" (dword_56DEEC): com quem a minha linha fala.

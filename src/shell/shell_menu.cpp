@@ -78,6 +78,13 @@ namespace {
     constexpr int kCgBtnY = kCgY + 258;
 
     // Dialog 224 "ENTER YOUR NAME" (224x100 DLU → x·1,5 / y·1,6), centrado.
+    // Dialog 155 "MULTIPLAYER GAME STATISTICS": 298x82 DLU. A largura do
+    // template (298 DLU = 447 px) basta para a MS Sans Serif 8 do original mas
+    // NAO para a nossa fonte: "Enemy Structures Destroyed:" mais o numero
+    // passa da borda e os valores caem por cima dos rotulos. A caixa vai a 560
+    // e as colunas de numero sao calculadas pela maior largura de rotulo.
+    constexpr int kMsW = 560, kMsH = 82 * 8 / 5;
+    constexpr int kMsX = (640 - kMsW) / 2, kMsY = (480 - kMsH) / 2;
     constexpr int kEnW = 336, kEnH = 160;
     constexpr int kEnX = (640 - kEnW) / 2, kEnY = (480 - kEnH) / 2;
     constexpr int kEnEditX = kEnX + 150, kEnEditY = kEnY + 22 + 78;   // Edit 1093 (100,49)
@@ -305,6 +312,11 @@ void ShellMenu::rebuildControls() {
     // o botão &OK (60,79,103,14).
     case MenuState::EnterName: {
         addButton(1, "OK", kEnX + 90, kEnY + 22 + 79 * kEnH / 100, 154, 24, true);
+        break;
+    }
+    // Dialog 155: so o &OK (104,61,90,14).
+    case MenuState::MpStats: {
+        addButton(1, "OK", kMsX + (kMsW - 135) / 2, kMsY + 22 + 61 * 8 / 5, 135, 24, true);
         break;
     }
     // Dialog 223 "COLONY GAME SCORES" (376x170): ListBox 1092 (7,7,362,133),
@@ -639,6 +651,9 @@ void ShellMenu::dispatchButton(int id) {
             }
         } else if (id == 11) openScores();               // SCORES (Dialog 223)
         else if (id == 12) setState(MenuState::MainMenu);
+        break;
+    case MenuState::MpStats:
+        if (id == 1) setState(MenuState::MainMenu);
         break;
     case MenuState::EnterName:
         if (id == 1) {                                   // OK: grava a entrada e mostra o placar
@@ -1416,6 +1431,7 @@ void ShellMenu::render(Renderer& renderer) {
     case MenuState::NewCampaign: renderNewCampaignDialog(renderer); break;
     case MenuState::ColonyGames: renderColonyGamesDialog(renderer); break;
     case MenuState::EnterName: renderEnterName(renderer); break;
+    case MenuState::MpStats: renderMpStats(renderer); break;
     case MenuState::Scores: renderScores(renderer); break;
     case MenuState::Tutorials:   renderTutorialsDialog(renderer); break;
     case MenuState::Help:        renderHelp(renderer); break;
@@ -1972,8 +1988,13 @@ void ShellMenu::afterGame(int reason, const GameStartInfo* results) {
         setState(MenuState::MissionMenu);
         return;
     }
+    // 7, 8 e 9 vao todos para a mesma tela (0x13008CE0/CF8/D10 mandam 0x727, que
+    // abre o Dialog 155): as estatisticas da partida multijogador.
+    if (reason >= 7 && reason <= 9) {
+        setState(MenuState::MpStats);
+        return;
+    }
     // Fora da campanha, vitória (3) num jogo de colônia → 0x73e ENTER YOUR NAME.
-    // (7..9 = estatísticas de multijogador: tela ainda não portada.)
     if (reason == 3 && !m_lastColonyDesc.empty()) {
         m_scoreMarks = static_cast<int>(TethysGame::tick()) / 100;   // [0x13015bbf]/100
         m_scoreName.clear();
@@ -2007,6 +2028,51 @@ void ShellMenu::renderEnterName(Renderer& renderer) {
     std::string t = m_scoreName + ((SDL_GetTicks() / 400) & 1 ? "_" : "");
     while (!t.empty() && Font::getTextWidth(t) > kEnEditW - 8) t.erase(0, 1);
     Font::drawText(fb, 640, 480, t, kEnEditX + 4, kEnEditY + 7, 0xFFFFFFFF);
+}
+
+// Dialog 155 (motivos 7..9 da mensagem 0x73a): os seis contadores do jogador
+// local, que o jogo deixou no MissionResults+0xC2 + jogador*28. A coluna da
+// esquerda e o que ele fez e perdeu; a da direita, o que ele destruiu.
+void ShellMenu::renderMpStats(Renderer& renderer) {
+    renderer.dimRect(0, 0, 640, 480, 0x88);
+    renderer.drawDialogFrame(kMsX, kMsY, kMsW, kMsH, "MULTIPLAYER GAME STATISTICS");
+    uint32_t* fb = renderer.getFramebuffer();
+    const int p = (m_gsi.localPlayer >= 0 && m_gsi.localPlayer < 6) ? m_gsi.localPlayer : 0;
+    const int* v = m_gsi.stats[p];
+    // (rotulo, coluna 0/1, linha, valor) -- os mesmos Statics do dialogo, nas
+    // mesmas posicoes relativas: quatro linhas a esquerda, duas a direita.
+    struct Linha { const char* rot; int col, lin, valor; };
+    const Linha linhas[] = {
+        {"Units Built:",                0, 0, v[1]},
+        {"Structures Built:",           0, 1, v[0]},
+        {"Units Lost:",                 0, 2, v[3]},
+        {"Structures Lost:",            0, 3, v[2]},
+        {"Enemy Units Destroyed:",      1, 2, v[5]},
+        {"Enemy Structures Destroyed:", 1, 3, v[4]},
+    };
+    // A coluna do numero fica depois do rotulo mais largo da sua coluna.
+    int fim[2] = {0, 0};
+    for (const Linha& l : linhas) {
+        const int w = Font::getTextWidth(l.rot);
+        if (w > fim[l.col]) fim[l.col] = w;
+    }
+    // A coluna da direita so comeca depois do NUMERO da esquerda, senao os dois
+    // se encostam quando o valor tem dois digitos.
+    int larguraVal = 0;
+    for (const Linha& l : linhas)
+        if (l.col == 0) {
+            const int w = Font::getTextWidth(std::to_string(l.valor));
+            if (w > larguraVal) larguraVal = w;
+        }
+    const int colX0 = kMsX + 10;
+    const int valX0 = colX0 + fim[0] + 10;
+    const int colX[2] = {colX0, valX0 + larguraVal + 24};
+    const int valX[2] = {valX0, colX[1] + fim[1] + 10};
+    for (const Linha& l : linhas) {
+        const int y = kMsY + 22 + 8 + l.lin * 21;
+        Font::drawText(fb, 640, 480, l.rot, colX[l.col], y, 0xFFCCD6E8);
+        Font::drawText(fb, 640, 480, std::to_string(l.valor), valX[l.col], y, 0xFFFFFFFF);
+    }
 }
 
 // Dialog 223: a listbox com uma linha por entrada (scoreLine).

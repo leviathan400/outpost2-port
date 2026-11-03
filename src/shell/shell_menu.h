@@ -31,6 +31,7 @@ enum class MenuState {
     EnterName,     // Dialog 224 (0x73e): nome do vencedor de um jogo de colônia
     Scores,        // Dialog 223: COLONY GAME SCORES (botão SCORES do Dialog 222)
     Help,          // o manual do OUTPOST2.HLP (no original, WinHelp)
+    MpStats,       // Dialog 155 "MULTIPLAYER GAME STATISTICS" (motivos 7..9)
     // --- multijogador: as telas vêm do OUT2RES.DLL, não do shell, porque no
     // original o botão MULTIPLAYER chama TApp::DoNetGame no executável.
     // O Dialog 259 "PICK CONNECTION METHOD" (sub_411E30) nao existe aqui: dos
@@ -148,6 +149,8 @@ public:
     // Quem somos e quantos somos, para quem vai subir a partida em rede.
     int mpLocalPlayer() const { return m_mpLocalPlayer; }
     int mpPlayerCount() const { return m_mpPlayerCount; }
+    // Os nomes do lobby, para o jogo saber quem e quem no chat e nas aliancas.
+    const std::string& mpName(int i) const { return m_mpNames[i >= 0 && i < 6 ? i : 0]; }
 
     bool consumeNetLaunch(std::string& outDll) {
         if (!m_netLaunch) return false;
@@ -193,6 +196,13 @@ public:
     // Teste por linha de comando (--mpui): percorre o fluxo das telas como se
     // os botoes tivessem sido clicados, e devolve o relato de cada passo.
     bool mpFlowTest(bool host, const std::string& name, std::string& report);
+    // Captura: a tela de estatisticas com numeros de exemplo.
+    void showMpStats() {
+        static const int exemplo[GameStartInfo::kStatCount] = {12, 34, 5, 7, 9, 21, 0};
+        m_gsi.localPlayer = 0;
+        for (int k = 0; k < GameStartInfo::kStatCount; ++k) m_gsi.stats[0][k] = exemplo[k];
+        setState(MenuState::MpStats);
+    }
     void showEnterName(const char* game) { m_lastColonyDesc = game ? game : ""; m_scoreMarks = 1234; m_scoreName = "COMMANDER"; setState(MenuState::EnterName); }
     // Depuração (--screenshot): campanha na missão n (concluídas), tela 0 menu,
     // 1 briefing, 2 objetivos, 3 capítulos, 4 história (capítulo n+1).
@@ -347,6 +357,9 @@ private:
     void renderEnterName(Renderer& renderer);
     void renderScores(Renderer& renderer);
     void openScores();
+    // A tela do fim de uma partida multijogador: os seis numeros do jogador
+    // local, lidos do MissionResults.
+    void renderMpStats(Renderer& renderer);
 
     // --- multijogador -------------------------------------------------------
     // O GameStartInfo que o GAME SETTINGS monta. Os campos seguem os bits do

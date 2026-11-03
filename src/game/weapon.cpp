@@ -1630,14 +1630,10 @@ static void acidPeriodic(int pid) {
                 t.damage = static_cast<int16_t>(hp);
                 t.flags |= UNIT_DEAD;
                 killUnit(occ, 5);
-                // (Os quatro contadores de baixas do original -- [Player+0x1C4] predios
-                // perdidos, +0x1C8 veiculos perdidos, +0x1CC predios destruidos e +0x1D0
-                // veiculos destruidos -- NAO sao portados de proposito: conferido em
-                // 2026-10-29, sao incrementados em tres pontos (sub_401050, sub_43ACA0,
-                // sub_481170) e NUNCA LIDOS. Nem o EXE, nem o OP2Shell.dll (que importa
-                // so 3 simbolos de dado: g_ResManager, gConfigFile e gTApp), nem as DLLs
-                // de missao conseguem le-los, e nao ha exportacao que os devolva nem copia
-                // deles no MissionResults de sub_489A30.)
+                // (Quem conta a baixa e o ponto da morte -- a remocao do predio
+                // em structure.cpp e a explosao do veiculo mais abaixo --, como
+                // nos tres pontos do original: sub_401050, sub_43ACA0 e
+                // sub_481170.)
             }
         }
     }
@@ -1971,8 +1967,11 @@ void vehicleDeath(int id) {
     UnitRecord& v = g_units[id];
     if (v.lastAttacker > 0 && v.lastAttacker < static_cast<int>(g_units.size()) &&
         ((g_units[v.lastAttacker].owner ^ v.owner) & 0x0F)) {
-        moraleEnemyVehicleKilled(ownerOf(g_units[v.lastAttacker]));   // sub_44FD40
-        // (Contadores de baixas: ver a nota acima -- dados mortos no original.)
+        const int quem = ownerOf(g_units[v.lastAttacker]);
+        moraleEnemyVehicleKilled(quem);                               // sub_44FD40
+        // sub_481170: os dois contadores da tela de estatisticas.
+        if (quem < kMaxPlayers) ++g_playerData[quem].enemyUnitsDestroyed;
+        ++g_playerData[ownerOf(v)].unitsLost;
     }
     // Som da morte (sub_43ACA0): com atacante 0x4D; senão pela carga — Starflare
     // (0x41) 0x4F / Tiger 0x4B, Supernova (0x42) 0x4B / Tiger 0x4A, outros 0x4E.

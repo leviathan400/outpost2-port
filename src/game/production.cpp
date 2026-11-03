@@ -297,7 +297,8 @@ void factoryProduceFinish(int factoryId) {                   // jpt_43B312 case 
             v.flags |= UNIT_LIGHTS;
             if (v.flags & UNIT_ARMED) v.cargo = fr.kitWeapon; // [+0x24] = arma
             fr.action = 0;
-            // sub_4030E0: grupo de IA [+0x6C] (estatística [jogador+0x1C0]++ — pendente).
+            // sub_4030E0: grupo de IA [+0x6C].
+            ++g_playerData[ownerLo(f)].unitsBuilt;           // [jogador+0x1C0]
             if (fr.produceGroup != -1) aiTakeUnit(fr.produceGroup, u.id());
             if (ownerLo(fr) == me && i == 0) {
                 const int snd = type == 3 ? 0x65 : type == 4 ? 0x66 : 0x62;

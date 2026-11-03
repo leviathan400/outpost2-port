@@ -154,7 +154,7 @@ void applyTransfer(int owner, const std::vector<int>& ids, int to) {
 // 0x31 Quit (case 49). O corpo tem so o METODO de saida: 0 destroi tudo que e
 // seu, 1 doa as unidades e 2 entrega a colonia a IA. Os tres sao itens da tela
 // END MISSION (sub_457880 casos 4, 7 e 8).
-void applyQuit(int owner, int method) {
+void applyQuit(int owner, int method, int delay) {
     const int me = TethysGame::localPlayer();
     if (method == QUIT_SELF_DESTRUCT) {
         for (size_t i = 1; i < g_units.size(); ++i) {
@@ -184,7 +184,8 @@ void applyQuit(int owner, int method) {
     }
     const std::string t = playerName(owner) + " has left the game";
     postMessage(-1, -1, t.c_str(), 0);
-    if ((owner & 0x0F) == me && method != QUIT_GO_AI) endGameAborted();
+    // loc_40FD54: so quem saiu encerra, e em multijogador com o codigo 9.
+    if ((owner & 0x0F) == me && method != QUIT_GO_AI) endGamePlayerQuit(delay);
 }
 
 } // namespace op2

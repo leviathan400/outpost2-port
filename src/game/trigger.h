@@ -126,5 +126,8 @@ void endDemoGame();                 // o codigo 10: o jogador interrompeu
 // O codigo 6 ("MISSION ABORTED"), que o BACK TO MAIN MENU da aba Options pede
 // depois de confirmar (sub_457880 caso 4).
 void endGameAborted();
+// O pacote 0x31 (case 49) para quem SAIU: em multijogador o codigo e 9, que
+// leva o shell a tela "MULTIPLAYER GAME STATISTICS"; fora dela, 6.
+void endGamePlayerQuit(int delay);
 
 } // namespace op2

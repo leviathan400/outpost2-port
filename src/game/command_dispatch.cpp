@@ -96,7 +96,7 @@ void dispatchCommandPacket(int owner, const CommandPacket& p) {
         case CMD_TRANSFER: applyTransfer(owner, p.unitIds, p.arg0); return;
         case CMD_CHAT:  applyChat(owner, p.arg0, p.text); return;
         case CMD_ALLY:  applyAlly(owner, p.arg0); return;
-        case CMD_QUIT:  applyQuit(owner, p.arg0); return;
+        case CMD_QUIT:  applyQuit(owner, p.arg0, p.arg1); return;
         default: return;                       // Nop e os que o porte nao usa
     }
 }

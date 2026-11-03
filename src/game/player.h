@@ -35,7 +35,11 @@ struct PlayerData {
     // _Player::GetName (sub_490BA0): o nome que aparece no chat, na tela de
     // aliancas e nas mensagens de fim de partida. Em jogo solo fica vazio e
     // playerName() devolve "Player N".
-    std::string name;
+    //
+    // BUFFER FIXO de proposito: playersSerialize grava a struct inteira byte a
+    // byte, entao um std::string aqui gravaria o ponteiro interno e corromperia
+    // o heap ao carregar um nome maior que o SSO.
+    char name[32] = {0};
     int solarSat    = 0;   // +0x08 bits 4-7 (0..15)
     int rlvCount    = 0;   // +0x08 bits 0-3  (+0x00 é o objeto contador de RLV)
     uint32_t spaceBits = 0;  // +0x08 bits 8..31: EDWARD (0x58) nos bits 9-12; demais
@@ -45,6 +49,17 @@ struct PlayerData {
     int kids        = 0;   // +0x9C
     int canAccumulateOre = 0;      // +0x188 (_Player::canAccumulateOre; liga c/ pesquisa)
     int canAccumulateRareOre = 0;  // +0x198 (_Player::canAccumulateRareOre)
+    // Os seis contadores da tela "MULTIPLAYER GAME STATISTICS" (Dialog 155 do
+    // OP2SHRES). Ao contrario do que esta sessao de 2026-10-29 concluiu, eles
+    // NAO sao dados mortos: sub_489A30 copia os sete dwords de [jogador+0x1BC]
+    // para MissionResults+0xC2 + jogador*28, e o shell le de la (o setimo e a
+    // soma minerio comum + raro, posta por cima).
+    int structuresBuilt = 0;    // +0x1BC
+    int unitsBuilt = 0;         // +0x1C0
+    int structuresLost = 0;     // +0x1C4
+    int unitsLost = 0;          // +0x1C8
+    int enemyStructuresDestroyed = 0;   // +0x1CC
+    int enemyUnitsDestroyed = 0;        // +0x1D0
     int pathRefine  = 1;   // +0x1B8 refinamento de rota (sub_440660/sub_440C50);
                            // sub_490190 = 1, sub_471F30 recalcula
     int techLevel   = 0;   // gerido pelo subsistema de pesquisa (dword_56B5F0)
@@ -55,6 +70,7 @@ extern PlayerData g_playerData[kMaxPlayers];
 
 // sub_490BA0: o nome do jogador, com o padrao do original quando nao ha um.
 std::string playerName(int player);
+void setPlayerName(int player, const std::string& name);
 
 // _Player — wrapper do índice do jogador (porta a classe _Player, asm @191940+;
 // ver [[op2-simulation-core]]). Os métodos têm os nomes reais do original (as DLLs

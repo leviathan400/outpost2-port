@@ -894,6 +894,7 @@ void setDemoGame(bool on) { s_demo = on; }
 bool demoGame() { return s_demo; }
 void endDemoGame() { if (s_demo) endGame(10, 0); }   // sub_49C720: 10, sem atraso
 void endGameAborted() { endGame(6, 0); }            // "MISSION ABORTED"
+void endGamePlayerQuit(int delay) { endGame(multiplayerMission() ? 9 : 6, delay); }
 
 std::vector<std::string> missionObjectives() {
     std::vector<std::string> v;

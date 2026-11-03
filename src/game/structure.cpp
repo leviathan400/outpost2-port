@@ -467,8 +467,7 @@ static void actionTickBody(int id) {
                 r.field3C = 4;
             } else {
                 // Pronto: [+0x21]=0 e vt+0x8C (sub_483850: marca a economia do dono
-                // p/ recálculo). Estatísticas e a mensagem "%s completed"
-                // (sub_438F70) — ainda não portadas.
+                // p/ recálculo) e a mensagem "%s completed" (sub_438F70).
                 r.action = 0;
                 colonyMarkDirty(r.owner & 0x0F);
                 if ((r.owner & 0x0F) == TethysGame::localPlayer()) {     // "%s completed"
@@ -477,6 +476,7 @@ static void actionTickBody(int id) {
                     postMessage(unitOX(r), unitOY(r), msg, 0x5E);
                 }
                 moraleStructureBuilt(r.owner & 0x0F, r.type);   // sub_44F790 (CC_BORN)
+                ++g_playerData[r.owner & 0x0F].structuresBuilt;  // [jogador+0x1BC]
             }
             break;
         }
@@ -492,11 +492,15 @@ static void actionTickBody(int id) {
                     r.field22 = SUB_REMOVE;
                     structureRemoveFromMap(r, true);            // vt+0x80(1)
                     // loc_43D764: crédito ao atacante de outro dono ([+0x26],
-                    // sub_44FBE0). Os contadores de baixas 0x1C4..0x1D0 do original
-                    // sao dados mortos -- ver a nota em weapon.cpp.
+                    // sub_44FBE0), com os dois contadores da tela de
+                    // estatisticas no mesmo ponto.
                     if (r.lastAttacker > 0 && r.lastAttacker < static_cast<int>(g_units.size()) &&
-                        ((g_units[r.lastAttacker].owner ^ r.owner) & 0x0F))
-                        moraleEnemyStructureKilled(g_units[r.lastAttacker].owner & 0x0F, r.type);
+                        ((g_units[r.lastAttacker].owner ^ r.owner) & 0x0F)) {
+                        const int quem = g_units[r.lastAttacker].owner & 0x0F;
+                        moraleEnemyStructureKilled(quem, r.type);
+                        if (quem < kMaxPlayers) ++g_playerData[quem].enemyStructuresDestroyed;
+                        ++g_playerData[r.owner & 0x0F].structuresLost;
+                    }
                     // loc_43D81C: moral do dono (sub_44F6C0).
                     moraleStructureLost(r.owner & 0x0F, r.type);
                     if ((r.owner & 0x0F) == TethysGame::localPlayer()) { // "%s destroyed"

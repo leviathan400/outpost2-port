@@ -1,5 +1,7 @@
 #include "player.h"
 
+#include <cstring>
+
 #include "ai_group.h"
 #include "colony.h"
 #include "research.h"
@@ -14,8 +16,17 @@ PlayerData g_playerData[kMaxPlayers];
 
 std::string playerName(int player) {                        // sub_490BA0
     if (player < 0 || player >= kMaxPlayers) return "Player";
-    const std::string& n = g_playerData[player].name;
-    return n.empty() ? ("Player " + std::to_string(player + 1)) : n;
+    const char* n = g_playerData[player].name;
+    return *n ? std::string(n) : ("Player " + std::to_string(player + 1));
+}
+
+void setPlayerName(int player, const std::string& name) {
+    if (player < 0 || player >= kMaxPlayers) return;
+    char* dst = g_playerData[player].name;
+    const size_t n = name.size() < sizeof(g_playerData[player].name) - 1
+                         ? name.size() : sizeof(g_playerData[player].name) - 1;
+    std::memcpy(dst, name.c_str(), n);
+    dst[n] = 0;
 }
 
 // Inicializa o array global de wrappers com os índices 0..6 (como os _Player do

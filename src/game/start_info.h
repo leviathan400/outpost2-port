@@ -22,6 +22,12 @@ struct GameStartInfo {
     std::string dll;               // +0x10 nome da DLL da missão
     uint32_t playerWord[6] = {};   // +0x30: bit 2 Eden, bits 3-4 dificuldade, 5-7 cor
     int endCode = 0;               // +0xBA (TethysGame+0x9C)
+    // +0xC2: SETE dwords por jogador (6 jogadores, 28 bytes cada), copiados de
+    // [jogador+0x1BC] no fim de sub_489A30. E daqui que a tela "MULTIPLAYER
+    // GAME STATISTICS" do shell (Dialog 155) tira os seis numeros; o setimo e
+    // a soma minerio comum + raro, que o original escreve por cima.
+    enum { kStatCount = 7 };
+    int stats[6][kStatCount] = {};
     int missionNumber = 0;         // +0x16A campanha: missões concluídas; senão o tipo
     int food = 0, ore = 0, rareOre = 0;            // +0x16E/+0x172/+0x176
     int workers = 0, scientists = 0, kids = 0;     // +0x17A/+0x17E/+0x182

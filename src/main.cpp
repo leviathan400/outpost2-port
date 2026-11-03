@@ -278,6 +278,7 @@ static int runScreenshot(int argc, char* argv[], const std::string& outPath) {
         }
         else if (a == "--scores") shellMenu.showScores();
         else if (a == "--ename") shellMenu.showEnterName("Colony: Eden Starship");
+        else if (a == "--mpstats") shellMenu.showMpStats();
         else if (a == "--mpopts")  shellMenu.showMpScreen(0, true, 1);
         else if (a == "--mpnew")   shellMenu.showMpScreen(1, true, 1);
         else if (a == "--mpfind")  shellMenu.showMpScreen(2, false, 1);
@@ -2999,7 +3000,7 @@ static int runChatTest(const std::string& dll, const char* shot) {
     op2::GameState gs;
     if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
     gs.onActivate();
-    op2::g_playerData[op2::TethysGame::localPlayer()].name = "Marcelo";
+    op2::setPlayerName(op2::TethysGame::localPlayer(), "Marcelo");
 
     auto tecla = [&](SDL_Keycode k) {
         SDL_Event e{};
