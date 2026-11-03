@@ -21,6 +21,13 @@ public:
     static int tick()        { return static_cast<int>(s_tick); }
     static int time()        { return static_cast<int>(s_tick >> 2); }
     static int noPlayers()   { return s_numPlayers; }
+
+    // As duas taxas que a tela "Network Statistics" mostra: quantos TIQUES de
+    // simulacao e quantos QUADROS saem por segundo de verdade. O original as
+    // mede com QueryPerformanceCounter; aqui a janela e de um segundo.
+    static void noteFrame();
+    static void noteTick();
+    static void rates(float& gameSpeed, float& updateRate);
     static int localPlayer() { return s_localPlayer; }
     // dword_56DEE8: em rede quem define e o lobby (sub_4893A0 acha o indice
     // comparando os ids dos jogadores com o da conexao local).

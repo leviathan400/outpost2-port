@@ -85,6 +85,11 @@ public:
     void decode(int i, std::vector<uint32_t>& out, bool transparent = true,
                 int palOverride = -1, int playerColor = -1) const;
 
+    // A cor do jogador para TEXTO (o que sub_490B00 devolve do original). A
+    // fonte e a mesma rampa de color.bmp usada no remap dos sprites: a entrada
+    // 4 e a viva, que e a que se le bem no fundo preto dos paineis.
+    uint32_t playerRampColor(int colorNumber, int k = 4) const;
+
     // sub_404E30: o ponto (x, y) — relativo ao canto do bbox (header[1]/[2]) da
     // animação `clipAnim` (−1 = a própria) — cai num pixel transparente de todas
     // as pictures do frame? (true = nenhum pixel opaco.) Índices reais.

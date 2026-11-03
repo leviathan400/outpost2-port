@@ -75,4 +75,8 @@ void netApplyTurn(int tick);
 // Diagnóstico: quantos turnos esperamos e por quanto tempo.
 int netWaitCount();
 
+// O trafego acumulado desde o inicio da partida, que e o que a tela
+// "Network Statistics" da aba Communications mostra.
+void netTraffic(int& pktSent, int& byteSent, int& pktRecv, int& byteRecv);
+
 } // namespace op2

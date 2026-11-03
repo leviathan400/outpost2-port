@@ -3040,6 +3040,20 @@ static int runPaneTest(const std::string& dll, const std::string& prefix) {
         char f2[256]; std::snprintf(f2, sizeof(f2), "%s_comms.bmp", prefix.c_str());
         writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
         std::printf("[Pane] Communications -> %s\n", f2);
+        // A tela "Set Up Allies and Chat Partners": precisa de outros
+        // jogadores HUMANOS na mesa, entao a captura liga os que houver.
+        for (int q = 1; q < op2::TethysGame::noPlayers() && q < op2::kMaxPlayers; ++q)
+            op2::g_playerData[q].isHuman = 1;
+        gs.debugAlliesChat();
+        gs.onIdle(renderer, 0.0f);
+        std::snprintf(f2, sizeof(f2), "%s_allies.bmp", prefix.c_str());
+        writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        std::printf("[Pane] Allies/Chat -> %s\n", f2);
+        gs.debugNetStats();
+        gs.onIdle(renderer, 0.0f);
+        std::snprintf(f2, sizeof(f2), "%s_netstats.bmp", prefix.c_str());
+        writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        std::printf("[Pane] Network Statistics -> %s\n", f2);
         gs.debugTab(0, 0);
         gs.onIdle(renderer, 0.0f);
         std::snprintf(f2, sizeof(f2), "%s_factories.bmp", prefix.c_str());

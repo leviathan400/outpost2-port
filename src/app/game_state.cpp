@@ -538,6 +538,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     m_shakeX = m_shakeY = 0;
     clampCamera();
 
+    TethysGame::noteFrame();                     // p/ "Actual Update Rate"
     // Avança o relógio de simulação na cadência do GameSpeed (m_tickPeriod).
     const float kTickPeriod = m_tickPeriod;
     m_tickAccum += dt;
@@ -554,6 +555,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
             break;
         }
         TethysGame::advanceTick();
+        TethysGame::noteTick();                  // p/ "Actual Game Speed"
         netApplyTurn(static_cast<int>(TethysGame::tick()));
         TethysGame::advanceDaylight(g_gameMap.internalWidth());   // início do turno (sub_489DD0)
         lavaTick();                              // sub_49DC20 da lava (micróbio: pendente)
@@ -1604,8 +1606,10 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
                 if (tabRect(k, r) && nx >= r.l && nx < r.r && ny >= r.t && ny < r.b) { openTab(k); paneHit = true; }
             }
         }
-        if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_tab == 3 && m_comms.isOpen())
+        if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_tab == 3 && m_comms.isOpen()) {
             paneHit = m_comms.click(infoPaneRect(), nx, ny);
+            if (!paneHit) paneHit = m_comms.clickChat(kColX, kPaneWinY, nx, ny);
+        }
         if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_tab == 4 && m_space.isOpen())
             paneHit = m_space.click(infoPaneRect(), nx, ny);
         if (e.button.button == SDL_BUTTON_LEFT && !inView && !paneHit && m_tab == 2 && m_resources.isOpen()) {
@@ -1853,12 +1857,34 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
         return out;
     }
     if (m_tab == 3) {
-        // sub_4670A0 (modo 0, jogo solo): só "&JUMP", largo; habilitado quando a
-        // mensagem escolhida tem posição (sub_466970).
+        // sub_4670A0. Modo 0: em jogo solo so "&JUMP" (largo), habilitado
+        // quando a mensagem escolhida tem posicao (sub_466970); em
+        // multijogador ele divide a linha com "&ALLIES/CHAT". Modo 1: a volta
+        // ("&MESSAGES") e as estatisticas de rede.
         TextButton b{};
+        if (m_comms.mode() != CommsPane::MESSAGES) {
+            b.cmd = kCmdMessages; b.label = "&MESSAGES"; b.tip = "Display Past &Messages"; b.hotkey = 'M';
+            out.push_back(b);
+            b = TextButton{};
+            if (m_comms.mode() == CommsPane::CHAT) {
+                b.cmd = kCmdNetStats; b.label = "&NET STATS"; b.tip = "Show &network statistics."; b.hotkey = 'N';
+            } else {
+                b.cmd = kCmdAlliesChat; b.label = "&ALLIES/CHAT";
+                b.tip = "Set Up &Allies and Chat Partners"; b.hotkey = 'A';
+            }
+            out.push_back(b);
+            layoutButtons();
+            return out;
+        }
         b.cmd = kCmdMsgJump; b.label = "&JUMP"; b.tip = "&Jump to the message's location"; b.hotkey = 'J';
         b.disabled = !m_comms.jumpEnabled();
         out.push_back(b);
+        if (multiplayerMission()) {                          // sub_4027D0
+            b = TextButton{};
+            b.cmd = kCmdAlliesChat; b.label = "&ALLIES/CHAT";
+            b.tip = "Set Up &Allies and Chat Partners"; b.hotkey = 'A';
+            out.push_back(b);
+        }
         layoutButtons();
         return out;
     }
@@ -2296,6 +2322,9 @@ void GameState::clickCommand(int cmd) {                  // vt[1] do comando
     if (cmd == kCmdOptManual) { m_gameOptions.openManual(); return; }   // e o BACK da leitura
     if (cmd == kCmdOptEnd) { m_gameOptions.setMode(GameOptionsPane::ENDMISSION); return; }
     if (cmd == kCmdOptMenu) { m_gameOptions.setMode(GameOptionsPane::MENU); return; }
+    if (cmd == kCmdAlliesChat) { m_comms.setMode(CommsPane::CHAT); return; }
+    if (cmd == kCmdMessages) { m_comms.setMode(CommsPane::MESSAGES); return; }
+    if (cmd == kCmdNetStats) { m_comms.setMode(CommsPane::NETSTATS); return; }
     if (cmd == kCmdOptApply) { m_gameOptions.apply(); loadSettings(); return; }     // "&Apply new values"
     if (cmd == kCmdOptLoad) { m_saveDlg.open(SaveSlotsDialog::kLoad, ""); return; } // caso 1: OnLoadSlot
     if (cmd == kCmdOptSave) {                                                       // caso 2: OnSaveSlot

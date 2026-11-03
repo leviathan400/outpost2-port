@@ -118,10 +118,16 @@ std::vector<uint8_t> buildTurn(int player, int tick, const std::vector<CommandPa
     return b;
 }
 
+// O que a tela "Network Statistics" (sub_467760) mostra: quantos pacotes e
+// bytes passaram em cada sentido desde que a partida comecou.
+int s_pktSent = 0, s_byteSent = 0, s_pktRecv = 0, s_byteRecv = 0;
+
 void sendTo(const sockaddr_in& to, const uint8_t* p, int n) {
     if (s_sock == INVALID_SOCKET) return;
     sendto(s_sock, reinterpret_cast<const char*>(p), n, 0,
            reinterpret_cast<const sockaddr*>(&to), sizeof(to));
+    ++s_pktSent;
+    s_byteSent += n;
 }
 
 void sendRaw(const std::vector<uint8_t>& b) {
@@ -143,6 +149,8 @@ void pump() {
         const int n = recvfrom(s_sock, reinterpret_cast<char*>(buf), sizeof(buf), 0,
                                reinterpret_cast<sockaddr*>(&from), &flen);
         if (n <= 0) return;
+        ++s_pktRecv;
+        s_byteRecv += n;
         if (n < 20 || getU32(buf) != kMagic) continue;
         const uint32_t type = getU32(buf + 4);
         if (type != uint32_t(kPktTurn)) continue;
@@ -278,6 +286,11 @@ bool netActive() { return s_active; }
 int  netLocalPlayer() { return s_localPlayer; }
 int  netPlayerCount() { return s_players; }
 int  netWaitCount() { return s_waits; }
+
+void netTraffic(int& pktSent, int& byteSent, int& pktRecv, int& byteRecv) {
+    pktSent = s_pktSent; byteSent = s_byteSent;
+    pktRecv = s_pktRecv; byteRecv = s_byteRecv;
+}
 
 void commandSubmit(int owner, const CommandPacket& pkt) {
     if (!s_active || owner != s_localPlayer) { processCommandPacket(owner, pkt); return; }

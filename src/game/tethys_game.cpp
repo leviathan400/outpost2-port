@@ -1,9 +1,41 @@
 #include "tethys_game.h"
+
+#include <SDL.h>
 #include "colony.h"
 #include "save_game.h"
 #include "save_stream.h"
 
 namespace op2 {
+
+// --- as taxas de sub_467760 -------------------------------------------------
+// Dois contadores e uma janela de um segundo; `s_speed`/`s_update` guardam a
+// ultima janela fechada, para o numero nao tremer na tela.
+namespace {
+int   s_frameCount = 0, s_tickCount = 0;
+float s_window = 0.0f, s_speed = 0.0f, s_update = 0.0f;
+unsigned s_lastMs = 0;
+}  // namespace
+
+void TethysGame::noteFrame() {
+    ++s_frameCount;
+    const unsigned agora = SDL_GetTicks();
+    if (s_lastMs == 0) { s_lastMs = agora; return; }
+    s_window += (agora - s_lastMs) / 1000.0f;
+    s_lastMs = agora;
+    if (s_window < 1.0f) return;
+    s_update = s_frameCount / s_window;
+    s_speed = s_tickCount / s_window;
+    s_frameCount = s_tickCount = 0;
+    s_window = 0.0f;
+}
+
+void TethysGame::noteTick() { ++s_tickCount; }
+
+void TethysGame::rates(float& gameSpeed, float& updateRate) {
+    gameSpeed = s_speed;
+    updateRate = s_update;
+}
+
 
 uint32_t TethysGame::s_tick = 0;
 int TethysGame::s_daylightPhase = 0;

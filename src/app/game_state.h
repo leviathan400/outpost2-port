@@ -167,6 +167,9 @@ private:
     int  unitAtView(int vx, int vy) const;   // unidade (qualquer dono) sob o cursor, raio 20
 public:
     void debugGameOptions() { m_gameOptions.open(); }   // só p/ --panetest
+    // Captura (--panetest): a tela ALLIES/CHAT da aba Communications.
+    void debugAlliesChat() { m_comms.setMode(CommsPane::CHAT); }
+    void debugNetStats() { m_comms.setMode(CommsPane::NETSTATS); }
     // Captura (--panetest): entra numa das telas da aba Options. 0 menu,
     // 1 preferencias, 2 fim de missao, 3 manual, 4 um topico do manual.
     void debugOptionsScreen(int qual) {
@@ -266,6 +269,8 @@ private:
     static constexpr int kCmdOptLoad = -33, kCmdOptSave = -34, kCmdOptEnd = -35;
     static constexpr int kCmdOptRestart = -36, kCmdOptMainMenu = -37, kCmdOptExit = -38;
     static constexpr int kCmdOptDestroy = -39, kCmdOptApply = -40, kCmdOptMenu = -41;
+    // Aba Communications em multijogador (sub_4670A0).
+    static constexpr int kCmdAlliesChat = -42, kCmdMessages = -43, kCmdNetStats = -44;
     static constexpr int kCmdVehicles = -15, kCmdJump = -16;   // &VEHICLES (RCC) / &JUMP da lista
     static constexpr int kCmdMsgJump = -17;                    // &JUMP das mensagens (sub_466A00)
     static constexpr int kCmdDetails = -18;                    // &DETAILS dos relatórios (sub_458CC0)

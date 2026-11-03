@@ -24,15 +24,35 @@ namespace op2 {
 //     refeita e a escolha desce 1 (sub_430F30: some se passar do fim);
 //   vt[11] sub_466970: escolher habilita "&JUMP" se a mensagem tem y != −1;
 //   vt[10] sub_466A00 → sub_438EC0: centraliza a vista em (x, y);
-//   vt[9] sub_4670A0: em jogo solo só "&JUMP" (largo), começando desabilitado.
+//   vt[9] sub_4670A0: em jogo solo só "&JUMP" (largo), começando desabilitado;
+//     em multijogador entra "&ALLIES/CHAT" ao lado dele.
+//
+// O MODO 1 ("Communications: Chat", sub_466A40 a partir de loc_466B67) nao e
+// uma janela de conversa: e a tela "Set Up Allies and Chat Partners". Ela tem
+// duas listas dos outros jogadores humanos, cada nome na cor do dono e com
+// "A-" na frente de quem ME declarou aliado:
+//   "Send Chat Messages To:"      caixa que liga/desliga o jogador na minha
+//                                 mascara de destinatarios (local, dword_56DEEC)
+//   "Players You're Allied With:" caixa que manda o pacote 0x32 (alternar a
+//                                 alianca com ele)
+// e embaixo a nota "A- preceding a name indicates that player is allied with
+// you". As caixas sao a animacao 0x743 do op2_art (12x12; quadro 1 = marcada).
 class CommsPane {
 public:
+    // O modo 2 e a tela "Network Statistics" (dword_567100, vtable off_4D5758),
+    // que o botao "&NET STATS" da tela de aliancas abre.
+    enum Mode { MESSAGES = 0, CHAT = 1, NETSTATS = 2 };
+
     bool isOpen() const { return m_open; }
+    Mode mode() const { return m_mode; }
+    void setMode(Mode m);
     void open();                                         // vt[1] sub_466920
     void close() { m_open = false; }
     void update();                                       // vt[0] sub_4668C0
     void draw(uint32_t* fb, int fbW, int fbH, int winX, int winY, const PaneRect& pane, int mx, int my) const;
     bool click(const PaneRect& pane, int x, int y);
+    // O clique nas caixas do modo 1 (coordenadas da janela do quadro).
+    bool clickChat(int winX, int winY, int x, int y);
     bool jumpEnabled() const;                            // sub_466970
     bool jump(int& px, int& py) const;                   // sub_466A00
     int selected() const { return m_list.sel; }
@@ -41,8 +61,12 @@ public:
 private:
     std::vector<std::string> items() const;
     ListBoxLayout layout(const PaneRect& pane) const;
+    // Os jogadores que entram nas duas listas: humanos, menos eu (sub_4670A0 e
+    // sub_466A40 usam a mesma regra).
+    std::vector<int> chatPlayers() const;
 
     bool m_open = false;
+    Mode m_mode = MESSAGES;                              // [+0x1C4]
     ReportList m_list;                                   // escolha = [+0xBE0] (0 = mais nova)
     int m_seen = 0;                                      // [+0x1C8]: nº de série da última mensagem vista
 };

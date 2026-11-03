@@ -200,6 +200,14 @@ uint32_t ArtFile::palColor(int p, int c) const {
                        |  static_cast<uint32_t>(m_pal[p][c][2]);
 }
 
+uint32_t ArtFile::playerRampColor(int colorNumber, int k) const {
+    if (!m_hasColorPal) return 0xFFDDFF22u;                  // sem color.bmp: o verde da UI
+    const int c = (colorNumber * kPlayerRamp + k) & 0xFF;
+    return 0xFF000000u | (static_cast<uint32_t>(m_colorPal[c][0]) << 16)
+                       | (static_cast<uint32_t>(m_colorPal[c][1]) << 8)
+                       |  static_cast<uint32_t>(m_colorPal[c][2]);
+}
+
 void ArtFile::decode(int i, std::vector<uint32_t>& out, bool transparent, int palOverride,
                      int playerColor) const {
     out.clear();
