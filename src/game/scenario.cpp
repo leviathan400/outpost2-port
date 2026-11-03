@@ -7,6 +7,7 @@
 #include "building_sheet.h"
 #include "colony.h"
 #include "game_map.h"
+#include "garage.h"
 #include "player.h"
 #include "structure.h"
 #include "salvage.h"
@@ -558,9 +559,9 @@ void unitDoSelfDestruct(int id) {                            // ?DoSelfDestruct
 
 int unitHasOccupiedBay(int id) {                             // ?HasOccupiedBay
     const UnitRecord& r = g_units[id];
-    // PENDENTE (item 16): a garagem está portada (garageSlot), mas aqui ainda
-    // devolve 0 — o original chama vt[63] (sub_41C9E0) e conta as baias cheias.
-    if (r.type == 0x29) return 0;
+    // loc_475FEE: na garagem o original devolve o vt[63] (sub_41C9E0), ou seja
+    // o NÚMERO de veículos guardados — não um 0/1 como no ramo da fábrica.
+    if (r.type == 0x29) return garageCount(id);
     if (!(r.flags & UNIT_FACTORY)) return 0;
     for (int i = 0; i < 6; ++i)                              // vt[65] = movsx [+0x61+baia]
         if (static_cast<int8_t>(r.bayType[i]) != 0) return 1;

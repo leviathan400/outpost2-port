@@ -137,8 +137,8 @@ void resetPlayers(int numPlayers);
 uint32_t playerSpaceWord(int player);
 
 // _Player::hasVehicle(tipo, carga): veículo da lista (+0xC1C) do tipo com a
-// carga (−1 = qualquer). PENDENTE (item 16): os veículos guardados em garagem
-// também contam no original, e aqui ainda não.
+// carga (−1 = qualquer); conta também os guardados nas garagens 0x29, como
+// loc_4775BD.
 bool playerHasVehicle(int player, int type, int cargo);
 // _Player::can* — cache[0..7] = bytes +4..+11 do _Player da DLL (0xFF = não
 // calculado; resetChecks zera tudo p/ 0xFF): [0] canBuildBuilding, [1]

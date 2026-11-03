@@ -93,6 +93,10 @@ int createOnePlayerLeftTrigger(int bEnabled, int bOneShot, const char* func);
 int createMidasTrigger(int bEnabled, int bOneShot, int time, const char* func);
 // ?HasFired@Trigger: bit do jogador em [+0x20].
 bool triggerHasFired(int stub, int player);
+// O "check" do gatilho (o virtual que missionTriggerTick chama por turno):
+// avalia AGORA e devolve se disparou, atualizando o [+0x20]. Separado para que
+// se possa testar um gatilho sem rodar o turno e sem chamar o callback.
+bool triggerCheck(int stub);
 
 // ScStub (Enable/Disable/IsEnabled/Destroy) pelo stubIndex.
 void stubEnable(int stub, bool on);

@@ -4,6 +4,7 @@
 
 #include "ai_group.h"
 #include "colony.h"
+#include "garage.h"
 #include "research.h"
 #include "tethys_game.h"
 #include "save_game.h"
@@ -112,7 +113,20 @@ bool playerHasVehicle(int player, int type, int cargo) {    // ?hasVehicle
         const UnitRecord& r = g_units[v];
         if (r.type == type && (cargo == -1 || static_cast<int16_t>(r.cargo) == cargo)) return true;
     }
-    return false;             // PENDENTE (item 16): + as baias das garagens 0x29
+    // loc_4775BD: depois da lista, as SEIS baias de cada garagem do jogador.
+    // Aqui a carga é sempre a palavra inteira (sem o caso do nibble do tipo 1).
+    for (int b : colonyStructures(player)) {
+        const UnitRecord& g = g_units[b];
+        if (g.type != 0x29) continue;
+        for (int i = 0; i < 6; ++i) {
+            const int v = g.garageSlot[i];
+            if (!v) continue;
+            const UnitRecord& r = g_units[v];
+            if (r.type == type && (cargo == -1 || static_cast<int16_t>(r.cargo) == cargo))
+                return true;
+        }
+    }
+    return false;
 }
 
 static bool playerHasBuilding(int player, int type) {

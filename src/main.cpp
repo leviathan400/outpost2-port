@@ -3389,6 +3389,121 @@ static int runGarageTest(const std::string& mapName) {
     return 0;
 }
 
+// --garagecounttest <DLL>: o item 16 -- veiculo GUARDADO em garagem tem de
+// contar. Carrega uma missao (so com ela os gatilhos resolvem o callback),
+// limpa o mapa, levanta CC + Tokamak + Garagem e guarda tres veiculos: um Lynx
+// com Laser, um ConVec com o kit de Agridome e um Evacuation Transport. Depois
+// cobra os SEIS pontos que o original trata com o 0x29 -- se algum ignorar a
+// garagem, ele conta zero e o caso falha.
+static int runGarageCountTest(const std::string& dll) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 garagecounttest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    // Fora as unidades da missao: a conta tem de ser so o que este teste pos.
+    op2::resetUnits();
+    const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
+    for (int y = 0; y < H; ++y)
+        for (int x = 0; x < W; ++x) op2::g_gameMap.clearUnitOccupancy(x, y);
+    op2::g_playerData[0].workers = 1;          // um colono, p/ o gatilho EVAC valer algo
+    op2::g_playerData[0].scientists = 0;
+    op2::g_playerData[0].kids = 0;
+    op2::g_playerData[0].ore = 5000;
+
+    op2::Unit cc, tok;
+    op2::TethysGame::CreateUnit(cc, op2::mapCommandCenter, op2::LOCATION{12, 12}, 0);
+    op2::TethysGame::CreateUnit(tok, op2::mapTokamak, op2::LOCATION{15, 12}, 0);
+    op2::Unit gar(op2::placeBuilding(0x29, 12, 14, 0));
+    op2::colonyMarkDirty(0);
+    auto tick = [&](int n) {
+        for (int k = 0; k < n; ++k) {
+            op2::TethysGame::advanceTick();
+            op2::tickColony();
+            op2::tickMovement();
+            op2::tickUnits();
+        }
+    };
+    tick(20);
+    const int g = gar.id();
+    int dx, dy;
+    if (!op2::dockCell(g, dx, dy)) { std::printf("[GarCount] sem doca\n"); return 3; }
+    std::printf("[GarCount] garagem %d operando=%d baias=%d doca (%d,%d)\n", g,
+                op2::structureOperational(op2::g_units[g]), op2::garageBays(op2::g_units[g]), dx, dy);
+
+    // Guarda um veiculo por baia. O slot so e preenchido depois do tempo da
+    // porta (vt[0xC4]), entao cada um leva seus tiques.
+    const int kit = 0x27;                      // Agridome (o kit que o ConVec leva)
+    struct Posto { op2::map_id tipo; int carga; int baia; };
+    const Posto postos[] = {
+        {op2::mapLynx, 0x3D, 0},                  // Laser Lynx
+        {op2::mapConVec, kit, 1},                 // ConVec com o kit de Agridome
+        {op2::mapEvacuationTransport, 0, 2},      // transporte de evacuacao
+    };
+    int guardados = 0;
+    for (const Posto& p : postos) {
+        op2::Unit v;
+        op2::TethysGame::CreateUnit(v, p.tipo, op2::LOCATION{dx, dy}, 0, p.carga);
+        if (!op2::processBayTransfer(0, g, p.baia)) {
+            std::printf("[GarCount] baia %d recusou o tipo 0x%02X\n", p.baia, (int)p.tipo);
+            continue;
+        }
+        tick(120);
+        const int dentro = op2::garageVehicle(g, p.baia);
+        std::printf("[GarCount] baia %d: guardado=%d (esperado %d) carga=0x%X\n", p.baia, dentro, v.id(),
+                    dentro ? (int)(int16_t)op2::g_units[dentro].cargo : 0);
+        if (dentro == v.id()) ++guardados;
+    }
+    if (guardados != 3) {
+        std::printf("[GarCount] FALHOU o arranjo: %d de 3 guardados\n", guardados);
+        renderer.shutdown(); SDL_Quit(); return 4;
+    }
+    // Premissa do teste: guardado = fora da lista de veiculos do jogador.
+    const int naLista = (int)op2::colonyVehicles(0).size();
+    std::printf("[GarCount] veiculos na lista do jogador=%d (esperado 0, estao todos dentro)\n", naLista);
+
+    struct Caso { const char* nome; int obtido; int esperado; };
+    std::vector<Caso> casos;
+    auto gatilho = [&](int stub) { return (stub != 0xFF && op2::triggerCheck(stub)) ? 1 : 0; };
+
+    // 1-3. ?hasVehicle (loc_4775BD): seis baias, carga = palavra inteira.
+    casos.push_back({"hasVehicle(Lynx, qualquer carga)", op2::playerHasVehicle(0, op2::mapLynx, -1), 1});
+    casos.push_back({"hasVehicle(Lynx, Laser 0x3D)",     op2::playerHasVehicle(0, op2::mapLynx, 0x3D), 1});
+    casos.push_back({"hasVehicle(Lynx, Microwave 0x3E)", op2::playerHasVehicle(0, op2::mapLynx, 0x3E), 0});
+    // 4. ?HasOccupiedBay (loc_475FEE): devolve a CONTAGEM, nao um 0/1.
+    casos.push_back({"HasOccupiedBay(garagem) = contagem", op2::unitHasOccupiedBay(g), 3});
+    // 5-7. CountTrigger (sub_493AF0, loc_493CC9): tipo + filtro de carga.
+    casos.push_back({"CountTrigger Lynx/Laser == 1",
+                     gatilho(op2::createCountTrigger(1, 0, 0, op2::mapLynx, 0x3D, 1, 0, "AIProc")), 1});
+    casos.push_back({"CountTrigger Lynx/Microwave == 0",
+                     gatilho(op2::createCountTrigger(1, 0, 0, op2::mapLynx, 0x3E, 0, 0, "AIProc")), 1});
+    casos.push_back({"CountTrigger ConVec/qualquer == 1",
+                     gatilho(op2::createCountTrigger(1, 0, 0, op2::mapConVec, -1, 1, 0, "AIProc")), 1});
+    // 8. KitTrigger (sub_494280, loc_4942D8): ConVec guardado carregando o kit.
+    casos.push_back({"KitTrigger Agridome >= 1",
+                     gatilho(op2::createKitTrigger(1, 0, 0, kit, 1, "AIProc")), 1});
+    // 9. VehicleCountTrigger (sub_494E70, loc_494EAB): lista + vt[63].
+    casos.push_back({"VehicleCountTrigger == 3",
+                     gatilho(op2::createVehicleCountTrigger(1, 0, 0, 3, 0, "AIProc")), 1});
+    // 10. EvacTrigger (sub_494600, loc_49469F): transporte guardado evacua.
+    casos.push_back({"EvacTrigger com 1 colono",
+                     gatilho(op2::createEvacTrigger(1, 0, 0, "AIProc")), 1});
+
+    bool ok = true;
+    for (const Caso& c : casos) {
+        const bool bom = c.obtido == c.esperado;
+        if (!bom) ok = false;
+        std::printf("[GarCount] %-38s %d (esperado %d) %s\n", c.nome, c.obtido, c.esperado,
+                    bom ? "ok" : "FALHOU");
+    }
+    std::fflush(stdout);
+    renderer.shutdown(); SDL_Quit();
+    return ok ? 0 : 1;
+}
+
 // --walltest <map>: parede comum, de lava, de micróbio e um tubo lado a lado;
 // sub_4A23F0 (damageWall) com dano 1000 e depois 20, 6x cada, imprimindo o tile
 // e o tipo da célula — a parede comum passa pelos estágios +0x54/+0x74/+0x94.
@@ -4028,6 +4143,8 @@ int main(int argc, char* argv[]) {
             return runPaneTest(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--musictest") == 0 && i + 1 < argc)
             return runMusicTest(argv[i + 1]);
+        if (std::strcmp(argv[i], "--garagecounttest") == 0 && i + 1 < argc)
+            return runGarageCountTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--garagetest") == 0 && i + 1 < argc)
             return runGarageTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--walltest") == 0 && i + 1 < argc)

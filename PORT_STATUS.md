@@ -32,7 +32,7 @@ próprio com pontes de ABI para a API que elas importam do `OUTPOST2.EXE`.
 | Rede (`src/net`) | 1.400 linhas |
 | DLLs de missão que carregam e rodam | **94 de 94** |
 | Símbolos da API do EXE implementados | **222 de 222** (os que as 94 DLLs importam) |
-| Modos de linha de comando (testes e telas) | 90 |
+| Modos de linha de comando (testes e telas) | 91 |
 
 As duas linhas de missões são a medida honesta de cobertura: toda DLL de
 missão do disco carrega, cria as unidades e roda, e nenhuma importa um símbolo
@@ -237,18 +237,31 @@ Varredura dos marcadores do próprio código contra o disassembly. Cinco
 "pendências" que os comentários anunciavam **não existiam** (a garagem, o
 micróbio, o áudio das mensagens, a fase B da economia e a serialização de rede
 do `CommandPacket` estão todos portados — os comentários é que tinham ficado
-para trás). Estas seis são reais:
+para trás). Seis eram reais; a 16 já foi fechada no mesmo dia.
 
-16. **Veículo guardado em garagem não conta em lugar nenhum.** A garagem foi
-    portada em 2026-10-14 (`garageSlot[6]`, `garageCount`), mas seis pontos de
-    contagem continuam ignorando quem está dentro dela, e no original **todos**
-    tratam o 0x29 — por `vt[63]` (`sub_41C9E0`, conta as baias ocupadas) ou
-    varrendo `[+0x60]` direto: `sub_493AF0` (contagem por jogador),
-    `sub_494280` (gatilho KIT: ConVec com o kit guardado), `sub_494E70`
-    (gatilho de contagem de veículos), `sub_494600` (gatilho EVAC: transportes),
-    `?HasOccupiedBay` e `?hasVehicle`. **É o único item desta lista que pode
-    quebrar um objetivo de missão**: guardar veículos na garagem some com eles
-    da conta. É a próxima coisa a fazer.
+16. ~~Veículo guardado em garagem não conta em lugar nenhum~~ — **feito**. Era
+    o único item que podia quebrar um objetivo de missão: a garagem foi portada
+    em 2026-10-14 (`garageSlot[6]`, `garageCount`), mas seis pontos de contagem
+    ignoravam quem estava dentro dela, e no original **todos** tratam o 0x29.
+    Os seis, com a regra de cada um lida no disassembly:
+
+    | Ponto | Baias que varre | Regra |
+    |---|---|---|
+    | `sub_493AF0` (contagem por jogador) | **6, fixo** (`loc_493D0E`) | tipo + filtro de carga de `byte_493FD4` |
+    | `sub_494280` (gatilho KIT) | **Storage Bays** | ConVec (tipo 2) carregando o kit |
+    | `sub_494E70` (contagem de veículos) | `vt[63]` | soma a contagem à lista |
+    | `sub_494600` (gatilho EVAC) | **6, fixo** | transportes 0x0D guardados |
+    | `?HasOccupiedBay` | `vt[63]` | devolve a **contagem**, não 0/1 |
+    | `?hasVehicle` | **6, fixo** | tipo + carga (sempre a palavra inteira) |
+
+    A inconsistência das baias (uns laços fixam 6, outros vão até a Storage
+    Bays) é **do original**, e foi mantida. A regra de carga também difere entre
+    as duas metades de `sub_493AF0`: o ramo de **um** jogador aceita os tipos 1,
+    2, 5, 6, 7 e 0x0D (tabela `byte_493FD4`) e varre as garagens; o de **todos**
+    (`loc_493DE2`) só 1, 2 e 0x0D, e **não** olha garagem nenhuma — também do
+    original, conferido, e marcado no código para ninguém "unificar".
+    Teste: `--garagecounttest <DLL>`, dez casos; neutralizando a correção, oito
+    reprovam e os dois controles negativos continuam passando.
 17. **Animações de ambiente dos prédios** — estados 5..9 de `[+0x34]`
     (`sub_4835C0`). Os estados 0..3 (construção, dano, destruição) estão
     portados; faltam as animações ociosas.
@@ -559,7 +572,7 @@ missão e os recursos originais do diretório de trabalho).
 
 ### Testes por linha de comando
 
-São 83 modos. Os que cobrem regressão de verdade:
+São 91 modos. Os que cobrem regressão de verdade:
 
 | Modo | O que prova |
 |---|---|
@@ -570,6 +583,8 @@ São 83 modos. Os que cobrem regressão de verdade:
 | `--uitest` | combos e barras de rolagem, pelo caminho do mouse e do teclado |
 | `--chattest <DLL> [tela]` | a linha de conversa: mandar, desistir e a máscara de destinatários |
 | `--transfertest <DLL>` | o TRANSFER: escolhedor, desistência e a troca de dono |
+| `--idletest <DLL>` | o aviso de perder metal ao desligar armazém/fundição, nos dois lados da fronteira |
+| `--garagecounttest <DLL>` | os seis pontos em que um veículo guardado em garagem tem de contar |
 | `--missiontest <DLL> <saida> <ticks>` | carrega e roda qualquer missão |
 | `--aitest <DLL campanha> <DLL multi>` | o `AILevel` chega ao jogador 0 e o multijogador fica intacto |
 | `--helptest [tópico]` | o leitor do `.HLP` e a navegação da tela do manual |
@@ -592,7 +607,7 @@ São 83 modos. Os que cobrem regressão de verdade:
 | Combate | Completo (faltam o dano em paredes nas autodestruições e dois ganchos de vtable) |
 | Pesquisa | Completo |
 | Desastres, lava e praga | Completo |
-| Triggers, objetivos, vitória/derrota | Completo, **menos a contagem de veículo guardado em garagem** (item 16) |
+| Triggers, objetivos, vitória/derrota | Completo |
 | IA (grupos, computador padrão, Pinwheel) | Completo |
 | Campanha, colônia, tutoriais | Completo |
 | Shell e telas | Completo |
