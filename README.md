@@ -33,55 +33,134 @@ jogar é preciso ter uma cópia legítima do jogo instalada.
 
 ## Requisitos
 
-| | |
-|---|---|
-| Jogo original | **obrigatório**, instalado (os assets são lidos do disco) |
-| Compilador | MSVC com C++17 (Visual Studio 2019 ou mais novo) |
-| Arquitetura | **Win32 (x86) obrigatório** — veja abaixo |
-| SDL2 | pacote de desenvolvimento **2.30.9** para VC |
+| | | |
+|---|---|---|
+| Sistema | **Windows** 10 ou 11 | o porte usa a API do Windows (carregador PE, Winsock, GDI) |
+| Arquitetura | **Win32 / x86 — obrigatório** | nem preferência nem padrão: veja o porquê abaixo |
+| Compilador | MSVC com C++17 (Visual Studio **2019 ou mais novo**) | o código usa `__fastcall` e o ABI da Microsoft; MinGW/Clang não foram testados |
+| CMake | **3.15 ou mais novo** | testado também com o CMake 4.x |
+| SDL2 | pacote de desenvolvimento **2.30.9 para VC** | a única dependência externa do executável |
+| Jogo original | **obrigatório**, instalado | os assets de 1997 são lidos do disco |
+| Python 3 | opcional | só para os scripts de `tools/` |
 
-### O build x86 não é preferência, é requisito
+Não há vcpkg, Conan nem submódulos. `ws2_32` e `ole32` (rede) e `gdi32`
+(fontes) são resolvidos pelo próprio MSVC — nada a instalar por eles.
 
-O porte executa o código de 32 bits das DLLs de missão originais dentro do
-próprio processo (`src/mission/pe_loader.cpp`), e as pontes de API usam a
-convenção `__fastcall` do x86 (`src/mission/op2_api.cpp`). Em um processo de 64
-bits isso é impossível. Um build x64 compila e depois falha ao abrir qualquer
-missão — por isso o CMake agora recusa gerar fora de Win32.
+### Por que o build x86 é requisito
 
-### SDL2
+O porte carrega as DLLs de missão originais e **executa o código de 32 bits
+delas dentro do próprio processo** (`src/mission/pe_loader.cpp`), com pontes de
+API na convenção `__fastcall` do x86 (`src/mission/op2_api.cpp`). Em um
+processo de 64 bits isso é impossível: um build x64 **compila** e só falha ao
+abrir a primeira missão. Para a armadilha não chegar até lá, o `CMakeLists.txt`
+para na configuração se a arquitetura não for 32 bits.
 
-Baixe `SDL2-devel-2.30.9-VC.zip` em
-<https://github.com/libsdl-org/SDL/releases/tag/release-2.30.9> e extraia de
-modo que o caminho fique:
+---
+
+## Instalando as dependências
+
+### 1. Compilador (MSVC)
+
+Instale o **Visual Studio Community** (gratuito, 2022 ou mais novo) —
+<https://visualstudio.microsoft.com/downloads/> — e, no instalador, marque o
+workload **"Desenvolvimento para desktop com C++"** (*Desktop development with
+C++*). Ele já traz tudo o que o porte precisa: o compilador MSVC, o Windows
+SDK e o **suporte a x86**, que é o alvo usado aqui.
+
+Quem não quer a IDE pode instalar só as ferramentas de linha de comando
+(*Build Tools for Visual Studio*, mesma página). Pelo winget:
+
+```powershell
+winget install --id Microsoft.VisualStudio.2022.BuildTools --override "--quiet --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+```
+
+### 2. CMake
+
+O workload de C++ do Visual Studio inclui um CMake. Para ter o comando `cmake`
+disponível em qualquer terminal, instale a versão avulsa:
+
+```powershell
+winget install --id Kitware.CMake
+```
+
+Ou baixe de <https://cmake.org/download/> marcando *"Add CMake to the system
+PATH"*. Confira com `cmake --version` (precisa ser 3.15+).
+
+### 3. SDL2
+
+Baixe **`SDL2-devel-2.30.9-VC.zip`** — o pacote *de desenvolvimento* para
+Visual C++, não o de runtime — em
+<https://github.com/libsdl-org/SDL/releases/tag/release-2.30.9>.
+
+Extraia dentro do repositório de modo que a árvore fique **exatamente** assim:
 
 ```
-third_party/SDL2-2.30.9/
-  include/
-  lib/x86/
+third_party/
+  SDL2-2.30.9/
+    include/          SDL.h, SDL_render.h, ...
+    lib/
+      x86/            SDL2.lib, SDL2main.lib, SDL2.dll   <- as que o build usa
+      x64/            (vem no pacote; não é usada)
 ```
 
-É o caminho que o `CMakeLists.txt` espera (`SDL2_ROOT`). A pasta
-`third_party/` não é versionada.
+Esse caminho é o `SDL2_ROOT` do `CMakeLists.txt`. Se preferir o SDL2 em outro
+lugar, mude essa variável lá. A pasta `third_party/` não é versionada — é por
+isso que este passo é manual.
+
+No PowerShell, do diretório do repositório:
+
+```powershell
+mkdir third_party
+Expand-Archive -Path "$HOME/Downloads/SDL2-devel-2.30.9-VC.zip" -DestinationPath third_party
+```
+
+### 4. Python, só se for usar os `tools/`
+
+Os 20 scripts de engenharia reversa em `tools/` pedem **Python 3**. A maioria
+usa só a biblioteca padrão; nove deles precisam de dois pacotes:
+
+```powershell
+pip install pefile capstone
+```
+
+`pefile` (ler recursos e exports de PE) é usado por `analyze_shell.py`,
+`check_dialog_fmt.py`, `disasm_menu.py`, `dump_dialogs.py`, `extract_bmps.py`,
+`extract_menu.py`, `inspect_bmps.py`, `inspect_table.py` e `parse_dlg.py`;
+`capstone` (desassemblador) pelos dois primeiros. **Nada disso é necessário
+para compilar ou jogar.**
 
 ---
 
 ## Build
+
+Com as dependências no lugar, do diretório do repositório:
 
 ```powershell
 cmake -B build -S . -A Win32
 cmake --build build --config Release
 ```
 
+O `-A Win32` não é opcional. Se for omitido em uma máquina de 64 bits, a
+configuração para com uma mensagem dizendo o que fazer.
+
 O passo de pós-build copia `outpost2_modern.exe` e `SDL2.dll` para a raiz do
 projeto. **O executável tem de rodar no diretório de instalação do jogo** — é
 de lá que ele lê os `.VOL`, as DLLs de missão e os recursos originais. O jeito
-mais simples é clonar o repositório dentro da pasta do jogo: o `.gitignore` é
-uma lista branca, feita exatamente para isso, e ignora todo o material original
-que convive com os fontes.
+mais simples é clonar o repositório **dentro da pasta do jogo**: o `.gitignore`
+é uma lista branca, feita exatamente para isso, e ignora todo o material
+original que convive com os fontes.
 
-> Se a cópia do pós-build falhar com *"Permission denied"*, o jogo está aberto.
-> Feche e refaça. Filtrar a saída do build só por `"error C"` **esconde** essa
-> falha; filtre por `error|denied`.
+### Se der errado
+
+| Sintoma | Causa |
+|---|---|
+| `Outpost2Port precisa ser gerado para Win32 (x86)` | faltou o `-A Win32` |
+| `SDL.h` não encontrado, ou `SDL2.lib` inexistente | o SDL2 não está em `third_party/SDL2-2.30.9/` (confira o nome da pasta) |
+| `MSB3073` / *"Permission denied"* ao copiar o exe | o jogo está aberto; feche e refaça o build |
+| compila, mas toda missão falha ao abrir | o build saiu x64 — apague `build/` e configure de novo com `-A Win32` |
+
+> Filtrar a saída do build só por `"error C"` **esconde** a falha de cópia do
+> pós-build. Filtre por `error|denied`.
 
 ---
 
