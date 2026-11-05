@@ -8,12 +8,17 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # SDL2 from third_party (pre-built development package)
 set(SDL2_ROOT "${CMAKE_SOURCE_DIR}/third_party/SDL2-2.30.9")
 
-# Detect architecture for correct lib subdir
+# O build de 32 bits nao e preferencia, e requisito: o porte executa o codigo
+# i386 das DLLs de missao originais dentro do proprio processo (pe_loader.cpp) e
+# as pontes de API usam a convencao __fastcall do x86 (op2_api.cpp). Em 64 bits
+# isso nao tem como funcionar -- compilaria e falharia ao abrir qualquer missao.
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-    set(SDL2_ARCH "x64")
-else()
-    set(SDL2_ARCH "x86")
+    message(FATAL_ERROR
+        "Outpost2Port precisa ser gerado para Win32 (x86): use 'cmake -B build -S . -A Win32'. "
+        "O carregador PE executa as DLLs de missao de 32 bits no proprio processo, "
+        "o que e impossivel em um processo de 64 bits.")
 endif()
+set(SDL2_ARCH "x86")
 
 set(SDL2_INCLUDE_DIR "${SDL2_ROOT}/include")
 set(SDL2_LIBRARY "${SDL2_ROOT}/lib/${SDL2_ARCH}/SDL2.lib")

@@ -1,6 +1,6 @@
 # Outpost 2: Divided Destiny — Port Moderno (C++17/SDL2)
 
-> Estado do port. Última revisão: **2026-10-28** (163 commits), feita lendo o
+> Estado do port. Última revisão: **2026-11-05** (199 commits), feita lendo o
 > código e rodando os testes, não a documentação anterior — que estava de
 > 2026-09-29 e dizia que o port "ainda não reimplementa o jogo em si".
 
@@ -25,8 +25,8 @@ próprio com pontes de ABI para a API que elas importam do `OUTPOST2.EXE`.
 
 | | |
 |---|---|
-| Código do porte | **44.700 linhas** de C++17 em `src/` |
-| Simulação (`src/game`, 40 .cpp) | 21.300 linhas |
+| Código do porte | **45.200 linhas** de C++17 em `src/` |
+| Simulação (`src/game`, 40 .cpp) | 21.400 linhas |
 | UI in-game (`src/app`, 20 .cpp) | 8.100 linhas |
 | Shell/menus (`src/shell`) | 3.900 linhas |
 | Rede (`src/net`) | 1.400 linhas |
@@ -46,7 +46,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 81 modos de teste/captura
+  main.cpp        entrada + os 93 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
