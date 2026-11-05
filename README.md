@@ -127,6 +127,15 @@ cursores `.ANI`.
 
 ---
 
+## Licença
+
+O código deste porte está sob a licença **MIT** (veja [`LICENSE`](LICENSE)).
+
+A licença cobre **só o código do porte**. Ela não alcança nada de *Outpost 2:
+Divided Destiny* — nem o executável, nem as DLLs, nem os `.VOL`, a arte, os
+sons, os mapas ou o disassembly usado como referência. Nada disso está neste
+repositório, e uma cópia legítima do jogo continua sendo requisito para rodar.
+
 ## Créditos
 
 *Outpost 2: Divided Destiny* é de Sierra On-Line / Dynamix. Este é um trabalho
