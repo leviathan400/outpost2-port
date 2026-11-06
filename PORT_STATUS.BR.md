@@ -1,3 +1,5 @@
+[English](PORT_STATUS.EN.md) · **Português (BR)**
+
 # Outpost 2: Divided Destiny — Port Moderno (C++17/SDL2)
 
 > Estado do port. Última revisão: **2026-11-05** (199 commits), feita lendo o
