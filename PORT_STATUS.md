@@ -32,7 +32,7 @@ próprio com pontes de ABI para a API que elas importam do `OUTPOST2.EXE`.
 | Rede (`src/net`) | 1.400 linhas |
 | DLLs de missão que carregam e rodam | **94 de 94** |
 | Símbolos da API do EXE implementados | **222 de 222** (os que as 94 DLLs importam) |
-| Modos de linha de comando (testes e telas) | 93 |
+| Modos de linha de comando (testes e telas) | 94 |
 
 As duas linhas de missões são a medida honesta de cobertura: toda DLL de
 missão do disco carrega, cria as unidades e roda, e nenhuma importa um símbolo
@@ -46,7 +46,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 93 modos de teste/captura
+  main.cpp        entrada + os 94 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -592,6 +592,127 @@ a paleta própria de cada imagem. Uso: `python tools/artanim.py`.
 
 ---
 
+## 5.6. Cheats digitados no chat — DECODIFICADOS ✅ (2026-11-06)
+
+Os cheats de *Outpost 2* não são teclas: são **frases escritas na linha de
+conversa**. O jogador digita, aperta Enter, e o pacote de chat (0x30) passa pelo
+reconhecedor `sub_58642A` — que fica no segmento **DSEG** do `OUTPOST2.EXE`,
+escrito à mão em assembly, fora do código gerado pelo compilador.
+
+**As frases não existem no binário.** Só ficam guardados quatro **hashes** de
+32 bits (VA 0x5863B8), e os quatro handlers são instalados em tempo de execução
+por `sub_58650C` (um `rep movsd` de 4 dwords para 0x5863C8). É por isso que
+procurar "Dan" ou "cheat" no executável não acha nada: o que achou o caminho foi
+o literal `"Woof"`, que o código monta com imediatos (`mov eax, 666F6F57h`).
+
+### O reconhecedor
+
+`sub_58642A(texto, remetente)` anda no texto em grupos de 4 bytes. Por grupo o
+hash é rodado à esquerda por `cl` — o nibble alto do byte baixo do grupo
+**anterior** — e XORado com esse grupo anterior, uma vez por byte, parando no
+primeiro zero; fechado o grupo, o byte baixo do hash leva um XOR com o 4º byte.
+Ao achar o zero devolve na hora, **então os bytes depois do fim da frase nunca
+entram na conta**: o hash depende só do texto.
+
+Casando, o efeito é aplicado e o texto do chat é **substituído por "Woof Woof!"**
+— que é o que todos leem, e a confirmação de que o cheat pegou.
+
+Dois detalhes que importam:
+
+- O remetente vem de `[pacote+0x0E]`, que `sub_4115F0` preenche com
+  `dword_56DEE8` (o jogador local). **O cheat vale para quem digitou.**
+- O reconhecedor roda **antes** do teste da máscara de destinatários
+  (`loc_40FC96`), logo ele roda em **todas as máquinas**. O efeito é idêntico em
+  todas e o lockstep da rede continua de pé — não é um buraco de sincronia.
+- Não há porteiro: `TethysGame::CanAllowCheats` existe, mas **nunca é chamada
+  dentro do executável** — é só exportada para as DLLs de missão. Os cheats
+  funcionam em qualquer partida.
+- A quinta entrada da tabela é zero e o `jcxz` depois do `repne scasd` a torna
+  inalcançável **de propósito**: é o "nenhum casou" do laço, não um bug.
+
+### As quatro frases e o que cada uma faz
+
+| # | Hash | Frase | Efeito, lido do código |
+|---|---|---|---|
+| 0 | `FF27BC04` | `Dan's dog could make more ore.` | `sub_49E030`: os dois estoques vão para a capacidade (`ore = oreCapacity`, `rareOre = rareCapacity`) |
+| 1 | `48D60158` | `Dan's car could hold more people.` | `sub_49E070`: trabalhadores **e** cientistas ganham **25%** (`v + v/4`, divisão truncada) |
+| 2 | `AC0FF0E5` | `Dan's bike could backfire more often` | `sub_49E0D0`: a recarga (bloco +0x30) das **16** armas 0x3B..0x4A vira `min(recarga − 2, 20)` |
+| 3 | `ABE0CC11` | **desconhecida** | `sub_49E120`: a penetração (bloco +0x2C) das **14** armas 0x3D..0x4A vira `max(pen × 33/32, 500)` |
+
+**A pontuação faz parte do hash.** As duas primeiras exigem o ponto final; a
+terceira **não pode** ter ponto. Errar a pontuação não faz nada — a frase vai
+para o chat como conversa comum.
+
+As duas últimas escrevem no mesmo bloco de 0x44 bytes que as melhorias de
+pesquisa usam, então entram no jogo salvo e `reloadSheets()` as desfaz no começo
+da partida seguinte. Repetir o cheat empilha o efeito.
+
+As duas também põem `dword_4E0BD0 = 1`. Esse sinalizador tem **um** leitor no
+original — `sub_431EB0`, um caminho de criação de unidade tipo 4 onde ele limpa
+a flag 0x400 (danificável) da unidade criada. Não identifiquei essa classe, e
+por isso o porte **não** tem o sinalizador: ele não teria leitor nenhum, e
+inventar um consumidor seria pior que registrar a lacuna aqui.
+
+### A quarta frase, e o extra do porte
+
+A frase do índice 3 nunca foi publicada e **não dá para recuperá-la do hash**:
+tentei 66 mil candidatas no molde `Dan's <algo> could <verbo> <algo>` e nenhuma
+casou. O hash `ABE0CC11` fica na tabela do porte: se alguém descobrir a frase,
+ela funciona, sem mudar uma linha.
+
+Para que o quarto efeito tenha uma frase utilizável, o porte acrescenta **uma
+entrada extra que o original não tem**, apontando para o mesmo handler:
+
+| Hash | Frase | |
+|---|---|---|
+| `D97B9638` | `Dan's guns could die more people.` | **extra do porte** |
+
+### O que NÃO existe (alegações conferidas e descartadas)
+
+Listas de cheats que circulam na internet trazem coisas que o código desmente.
+Conferido em 2026-11-06:
+
+- **`Dan's dog could make more ore` sem o ponto** não "adiciona sete
+  trabalhadores e três cientistas": o hash dela é `86352271`, que **não está na
+  tabela**. Ela não faz nada.
+- **`Ctrl+F4` não aumenta a população.** Os únicos escritores de trabalhadores
+  (`dword_56E370`) e cientistas (`dword_56E374`) no executável inteiro são o
+  handler de `GameOpt` (`sub_4229F0`), a API exportada
+  `_Player::SetWorkers`/`SetScientists`, e o cheat 1. Não há atalho de teclado.
+- A descrição "aumenta a capacidade do carro do Dan" para o cheat 1 é leitura
+  literal da piada: o que ele faz é somar 25% à população.
+
+### A outra via: a API de cheat das missões (ainda não portada)
+
+Separado das frases, o `OUTPOST2.EXE` exporta uma API de cheat para as DLLs de
+missão, por cima do pacote **0x2B** (`GameOpt`) via
+`TethysGame::sIssueOptPacket(indice, valor)`. Os oito primeiros índices caem no
+caso padrão de `sub_4229F0` e viram dwords no objeto `dword_56DE58`:
+
+| Índice | Variável | Função exportada | O que faz |
+|---|---|---|---|
+| 0 | `56DE58` | `SetCheatUnlimitedResources` | não desconta recursos |
+| 1 | `56DE5C` | `SetCheatProduceAll` | produção ignora a pesquisa (`sub_472C50`) |
+| 2 | `56DE60` | — | overlay de depuração ("Srpls") |
+| 3 | `56DE64` | — | dano × 4 no cálculo de `sub_433...` |
+| 4 | `56DE68` | `SetCheatFastUnits` | pula o custo de terreno do movimento |
+| 5 | `56DE6C` | `SetCheatFastProduction` | timer de produção = 1 tique |
+| 6 | `56DE70` | — | não identificado |
+| 7 | `56DE74` | — | desliga `sub_43A330` em `sub_44CD10` |
+
+**Nenhuma das 94 DLLs de missão originais importa essas funções** — é por isso
+que elas nunca fizeram falta para a conta de "222 de 222 símbolos". Os outros
+índices do mesmo pacote (morál forçada, luz do dia) **estão** portados, em
+`colonyForceMorale` e `TethysGame::SetDaylight*`. Portar as cinco de cheat é
+trabalho em aberto, útil só para quem escrever missões novas.
+
+Teste: `--cheattest <DLL>`, dezenove casos — os quatro hashes contra os valores
+gravados no executável, o efeito de cada cheat (inclusive o teto de 20, o piso
+de 500 e a EMP ficando de fora da faixa) e cinco controles negativos de
+pontuação.
+
+---
+
 ## 6. Build e execução
 
 **Toolchain:** CMake >= 3.15 + MSVC, C++17, SDL2 2.30.9 (em `third_party/`).
@@ -613,7 +734,7 @@ missão e os recursos originais do diretório de trabalho).
 
 ### Testes por linha de comando
 
-São 93 modos. Os que cobrem regressão de verdade:
+São 94 modos. Os que cobrem regressão de verdade:
 
 | Modo | O que prova |
 |---|---|
@@ -628,6 +749,7 @@ São 93 modos. Os que cobrem regressão de verdade:
 | `--garagecounttest <DLL>` | os seis pontos em que um veículo guardado em garagem tem de contar |
 | `--alerttest <DLL>` | a unidade atacada alerta os vizinhos armados do próprio lado (`sub_44DE10`) |
 | `--deletetest <DLL>` | grupo de IA com prazo vencido: autodestruição e, 400 ticks depois, sair do mapa |
+| `--cheattest <DLL>` | os cheats do chat: os quatro hashes do executável e o efeito de cada um |
 | `--missiontest <DLL> <saida> <ticks>` | carrega e roda qualquer missão |
 | `--aitest <DLL campanha> <DLL multi>` | o `AILevel` chega ao jogador 0 e o multijogador fica intacto |
 | `--helptest [tópico]` | o leitor do `.HLP` e a navegação da tela do manual |

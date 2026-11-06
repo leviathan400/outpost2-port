@@ -43,6 +43,7 @@
 #include "game/save_game.h"
 #include "game/building_sheet.h"
 #include "game/colony.h"
+#include "game/cheat.h"
 #include "game/missile.h"
 #include "game/repair.h"
 #include "game/structure_anim.h"
@@ -3688,6 +3689,106 @@ static int runDeleteTest(const std::string& dll) {
     return ok ? 0 : 1;
 }
 
+// --cheattest <DLL>: os cheats digitados na linha de conversa (sub_58642A).
+// Confere o hash contra os quatro valores que estao gravados no OUTPOST2.EXE
+// (VA 0x5863B8) e depois o efeito de cada um, lido do disassembly. Os controles
+// negativos sao as frases com a pontuacao errada: no original a pontuacao faz
+// parte do hash, entao elas nao podem fazer nada.
+static int runCheatTest(const std::string& dll) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 cheattest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    op2::resetUnits();
+
+    struct Caso { const char* nome; long long obtido; long long esperado; };
+    std::vector<Caso> casos;
+
+    // --- 1. o hash bate com a tabela do executavel ---------------------------
+    casos.push_back({"hash 'dog ... ore.'      = 0xFF27BC04",
+                     op2::cheatHash("Dan's dog could make more ore."), 0xFF27BC04LL});
+    casos.push_back({"hash 'car ... people.'   = 0x48D60158",
+                     op2::cheatHash("Dan's car could hold more people."), 0x48D60158LL});
+    casos.push_back({"hash 'bike ... often'    = 0xAC0FF0E5",
+                     op2::cheatHash("Dan's bike could backfire more often"), 0xAC0FF0E5LL});
+    casos.push_back({"hash da frase extra      = 0xD97B9638",
+                     op2::cheatHash("Dan's guns could die more people."), 0xD97B9638LL});
+
+    auto digita = [&](const char* frase) {
+        std::string linha = frase;
+        const bool bateu = op2::cheatCheckChat(0, linha);
+        return std::make_pair(bateu, linha);
+    };
+
+    // --- 2. cheat 0: estoques vao para a capacidade --------------------------
+    op2::g_colony[0].oreCapacity = 9000;
+    op2::g_colony[0].rareCapacity = 4000;
+    op2::g_playerData[0].ore = 10;
+    op2::g_playerData[0].rareOre = 20;
+    auto r0 = digita("Dan's dog could make more ore.");
+    casos.push_back({"cheat 0: minerio comum = capacidade", op2::g_playerData[0].ore, 9000});
+    casos.push_back({"cheat 0: minerio raro  = capacidade", op2::g_playerData[0].rareOre, 4000});
+    casos.push_back({"cheat 0: o chat virou 'Woof Woof!'", r0.second == "Woof Woof!" ? 1 : 0, 1});
+
+    // --- 3. cheat 1: trabalhadores e cientistas +25% -------------------------
+    op2::g_playerData[0].workers = 100;
+    op2::g_playerData[0].scientists = 41;      // 41 + 41/4 = 51 (divisao truncada)
+    digita("Dan's car could hold more people.");
+    casos.push_back({"cheat 1: trabalhadores 100 -> 125", op2::g_playerData[0].workers, 125});
+    casos.push_back({"cheat 1: cientistas 41 -> 51", op2::g_playerData[0].scientists, 51});
+
+    // --- 4. cheat 2: recarga = min(v-2, 20) nas armas 0x3B..0x4A ------------
+    auto bloco = [&](int t, int off) {
+        int v = 0;
+        if (const uint8_t* b = op2::unitStatBlock(t, 0)) std::memcpy(&v, b + off, 4);
+        return v;
+    };
+    auto poeBloco = [&](int t, int off, int v) {
+        if (uint8_t* b = op2::unitStatBlock(t, 0)) std::memcpy(b + off, &v, 4);
+    };
+    poeBloco(0x3D, 0x30, 100);                 // recarga alta: o teto de 20 tem de pegar
+    poeBloco(0x3B, 0x30, 15);                  // recarga baixa: cai 2, sem teto
+    digita("Dan's bike could backfire more often");
+    casos.push_back({"cheat 2: recarga 100 -> 20 (teto)", bloco(0x3D, 0x30), 20});
+    casos.push_back({"cheat 2: recarga 15 -> 13 (sem teto)", bloco(0x3B, 0x30), 13});
+
+    // --- 5. cheat 3 (frase do porte): penetracao = max(v*33/32, 500) --------
+    poeBloco(0x3D, 0x2C, 64);                  // 64*33/32 = 66 -> piso de 500 vence
+    poeBloco(0x4A, 0x2C, 1024);                // 1024*33/32 = 1056 -> passa do piso
+    poeBloco(0x3C, 0x2C, 77);                  // EMP: FORA da faixa, nao pode mudar
+    digita("Dan's guns could die more people.");
+    casos.push_back({"cheat 3: penetracao 64 -> 500 (piso)", bloco(0x3D, 0x2C), 500});
+    casos.push_back({"cheat 3: penetracao 1024 -> 1056", bloco(0x4A, 0x2C), 1056});
+    casos.push_back({"cheat 3: EMP (0x3C) intocada", bloco(0x3C, 0x2C), 77});
+
+    // --- 6. controles negativos: pontuacao errada nao faz nada --------------
+    op2::g_playerData[0].ore = 7;
+    auto n1 = digita("Dan's dog could make more ore");          // falta o ponto
+    casos.push_back({"sem ponto: nao e cheat", n1.first ? 1 : 0, 0});
+    casos.push_back({"sem ponto: estoque intacto", op2::g_playerData[0].ore, 7});
+    casos.push_back({"sem ponto: chat preservado",
+                     n1.second == "Dan's dog could make more ore" ? 1 : 0, 1});
+    auto n2 = digita("Dan's bike could backfire more often.");  // ponto a mais
+    casos.push_back({"ponto a mais: nao e cheat", n2.first ? 1 : 0, 0});
+    auto n3 = digita("ola pessoal");
+    casos.push_back({"conversa normal: nao e cheat", n3.first ? 1 : 0, 0});
+
+    bool ok = true;
+    for (const Caso& c : casos) {
+        const bool bom = c.obtido == c.esperado;
+        if (!bom) ok = false;
+        std::printf("[Cheat] %-40s %lld (esperado %lld) %s\n", c.nome, c.obtido, c.esperado,
+                    bom ? "ok" : "FALHOU");
+    }
+    std::fflush(stdout);
+    renderer.shutdown(); SDL_Quit();
+    return ok ? 0 : 1;
+}
+
 // --walltest <map>: parede comum, de lava, de micróbio e um tubo lado a lado;
 // sub_4A23F0 (damageWall) com dano 1000 e depois 20, 6x cada, imprimindo o tile
 // e o tipo da célula — a parede comum passa pelos estágios +0x54/+0x74/+0x94.
@@ -4327,6 +4428,8 @@ int main(int argc, char* argv[]) {
             return runPaneTest(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--musictest") == 0 && i + 1 < argc)
             return runMusicTest(argv[i + 1]);
+        if (std::strcmp(argv[i], "--cheattest") == 0 && i + 1 < argc)
+            return runCheatTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--deletetest") == 0 && i + 1 < argc)
             return runDeleteTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--alerttest") == 0 && i + 1 < argc)

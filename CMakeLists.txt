@@ -100,6 +100,7 @@ add_executable(outpost2_modern
     src/mission/op2_api.cpp
     src/game/building_sheet.cpp
     src/game/colony.cpp
+    src/game/cheat.cpp
     src/game/messages.cpp
     src/game/terrain_renderer.cpp
     src/game/game_rng.cpp

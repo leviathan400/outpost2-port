@@ -13,6 +13,7 @@
 #include "unit.h"
 #include "weapon.h"
 #include "colony.h"
+#include "cheat.h"
 
 namespace op2 {
 
@@ -94,7 +95,15 @@ void dispatchCommandPacket(int owner, const CommandPacket& p) {
             processAttackPacket(owner, p.type, p.unitIds, p.waypoints, p.target);
             return;
         case CMD_TRANSFER: applyTransfer(owner, p.unitIds, p.arg0); return;
-        case CMD_CHAT:  applyChat(owner, p.arg0, p.text); return;
+        case CMD_CHAT: {
+            // loc_40FC96: sub_58642A roda ANTES do teste da máscara de
+            // destinatários, então o cheat vale em TODAS as máquinas (o
+            // lockstep continua de pé) e o texto exibido virou "Woof Woof!".
+            std::string linha = p.text;
+            cheatCheckChat(owner, linha);
+            applyChat(owner, p.arg0, linha);
+            return;
+        }
         case CMD_ALLY:  applyAlly(owner, p.arg0); return;
         case CMD_QUIT:  applyQuit(owner, p.arg0, p.arg1); return;
         default: return;                       // Nop e os que o porte nao usa

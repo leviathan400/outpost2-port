@@ -175,9 +175,31 @@ O arquivo `OUTPOST2.INI` do jogo é respeitado. O porte acrescenta cinco chaves
 que o original não tem — nível da IA, escuridão da noite, volume, câmera do
 demo e tela cheia; estão documentadas no `PORT_STATUS.md`.
 
-Há **93 modos de linha de comando** para testes e capturas, entre eles uma
+Há **94 modos de linha de comando** para testes e capturas, entre eles uma
 bateria de regressão (`--savetest` prova o determinismo de salvar/recarregar).
 A lista está no `PORT_STATUS.md`.
+
+---
+
+### Cheats
+
+Os cheats do original não são teclas: são frases escritas na **linha de
+conversa** (Enter). Acertando, o texto vira `Woof Woof!` e o efeito vale para
+quem digitou — em todas as máquinas, sem quebrar o lockstep da rede.
+**A pontuação faz parte da senha:**
+
+| Frase | Efeito |
+|---|---|
+| `Dan's dog could make more ore.` | enche os dois estoques até a capacidade |
+| `Dan's car could hold more people.` | trabalhadores e cientistas +25% |
+| `Dan's bike could backfire more often` | armas recarregam mais rápido |
+| `Dan's guns could die more people.` | armas com muito mais penetração |
+
+As três primeiras são do jogo de 1997. A quarta é um **extra do porte**: o
+efeito existe no original, mas a frase dele nunca foi publicada e o
+executável só guarda o hash — então esta frase foi criada para alcançá-lo. O
+`PORT_STATUS.md` traz o reconhecedor inteiro, os hashes e o que foi conferido
+e descartado das listas de cheat que circulam por aí.
 
 ---
 
