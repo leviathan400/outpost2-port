@@ -79,6 +79,14 @@ public:
     }
     void debugSelect(int i) { m_list.sel = i; }
     void debugScroll(int linha) { m_list.top = linha; }   // 1a linha visivel
+    // Geometria da lista e quantas linhas ela tem ao todo, para o teste das
+    // setas de rolagem.
+    ListBoxLayout debugLayout(const PaneRect& pane) const { return layout(pane); }
+    int debugTop() const { return m_list.top; }
+    int debugLineCount(const PaneRect& pane) const {
+        const ListBoxLayout L = layout(pane);
+        return static_cast<int>(reportLines(items(), L.list.r - L.list.l - 8).size());
+    }
     void open();                                         // lê o INI
     void close() { m_open = false; }
     void draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, int mx, int my) const;

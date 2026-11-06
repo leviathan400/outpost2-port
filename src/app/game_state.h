@@ -221,6 +221,38 @@ public:
     }
     void debugOptSelect(int i) { m_gameOptions.debugSelect(i); }
     void debugOptScroll(int linha) { m_gameOptions.debugScroll(linha); }
+    // As setas de rolagem NAO podem cair debaixo de um botao: era isso que
+    // tornava o fim da lista do PREFERENCES inalcancavel.
+    bool debugOptArrowsClear() const {
+        const PaneRect p = infoPaneRect();
+        const ListBoxLayout L = m_gameOptions.debugLayout(p);
+        for (const TextButton& b : structureButtons())
+            for (const PaneRect& s : {L.up, L.down})
+                if (s.l < b.r && s.r > b.l && s.t < b.b && s.b > b.t) return false;
+        return true;
+    }
+    // Clica na seta de baixo, onde ela esta, e devolve a 1a linha visivel.
+    int debugOptPageDown() {
+        const PaneRect p = infoPaneRect();
+        const ListBoxLayout L = m_gameOptions.debugLayout(p);
+        bool mudou = false, voltou = false;
+        m_gameOptions.click(p, (L.down.l + L.down.r) / 2, (L.down.t + L.down.b) / 2,
+                            mudou, voltou);
+        return m_gameOptions.debugTop();
+    }
+    // O clique vai ao PAINEL antes dos botoes (ver handleEvent): se a lista
+    // alcanca o lugar do botao, ela come o clique e o botao nunca responde.
+    bool debugOptPaneEats(const std::string& rotulo) {
+        for (const TextButton& b : structureButtons())
+            if (b.label == rotulo) {
+                bool mudou = false, voltou = false;
+                return m_gameOptions.click(infoPaneRect(), (b.l + b.r) / 2, (b.t + b.b) / 2,
+                                           mudou, voltou);
+            }
+        return false;
+    }
+    int debugOptLines() const { return m_gameOptions.debugLineCount(infoPaneRect()); }
+    int debugOptRows() const { return m_gameOptions.debugLayout(infoPaneRect()).rows; }
     std::string debugOptItem(int i) const { return m_gameOptions.debugItemText(i); }
     std::string debugOptTitle() const { return m_gameOptions.paneTitle(); }
     // O radio "Screen Mode": o clique na linha e o modo escolhido. Quem

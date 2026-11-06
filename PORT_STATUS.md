@@ -922,6 +922,25 @@ mais mapa de uma vez (o outro pedido do fórum) é outra conversa — exige tira
 fórmula do `sub_4998D0` e decidir o que fazer com o shell, que é arte de 640×480
 de tamanho fixo.
 
+### A lista não dava para rolar (consertado junto)
+
+O rádio não aparecia para quem jogava, e a culpa não era dele: a lista do
+`PREFERENCES` ia até o **pé do painel**, e os três botões são desenhados por
+cima. Com isso as **setas de rolagem nasciam debaixo dos botões** — invisíveis
+e, pior, o clique vai ao painel **antes** dos botões (`handleEvent`), então a
+lista ainda comia o clique do `L&ESS`. Nada depois da primeira página era
+alcançável: o `Skip Frames` já não era, antes de existir rádio nenhum.
+
+A lista agora recua (`layout()`, como já fazia nas telas do manual) e as setas
+ficam acima dos botões. Quatro casos novos, dois deles medindo o que o jogador
+sente: a seta não cai debaixo de botão nenhum, e o painel não come o clique do
+`L&ESS`. Neutralizando o recuo: **2 falhas**.
+
+**A mesma geometria vale para qualquer painel com 3 ou mais botões**: o
+`layoutButtons` põe a primeira fileira em `kPaneBottom-2-50` (416..441), e as
+setas caem em ~414..434. O `Labs`, com cinco botões, é o caso óbvio. Não
+varrido ainda.
+
 ### O teste
 
 Os 12 casos novos do `--optmenutest` passam pelo `onIdle` de verdade (não por um

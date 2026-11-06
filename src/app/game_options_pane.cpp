@@ -193,6 +193,14 @@ ListBoxLayout GameOptionsPane::layout(const PaneRect& pane) const {
     PaneRect r = pane;
     if (m_mode == MANUAL) r.b -= 29;
     else if (m_mode == MANUALTEXT) r.b -= 58;
+    // PREFERENCES: os botoes (L&ESS/&MORE, &APPLY e &GAME OPTIONS) sao
+    // desenhados POR CIMA do pe da lista. Sem recuar, as SETAS DE ROLAGEM
+    // nascem debaixo deles e nao ha como descer -- tudo que passa da primeira
+    // pagina fica inalcancavel (o "Skip Frames" ja ficava, antes de existir o
+    // radio do modo de tela). 53 = do pe do painel ate o topo do primeiro
+    // botao (kPaneBottom-2-25-56 = 385), descontado o que o listBoxLayout ja
+    // reserva para as setas.
+    else if (m_mode == PREFS) r.b -= 53;
     return listBoxLayout(r, 0, 0x0A, 0, 0x12);
 }
 

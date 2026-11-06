@@ -3884,6 +3884,30 @@ static int runOptMenuTest(const std::string& dll) {
         texto(nome, gs.debugOptTip("&MORE"), kDicas[i][1]);
     }
 
+    // As setas de rolagem: os botoes sao desenhados por cima do pe da lista,
+    // entao a lista TEM de recuar -- senao a seta nasce debaixo do botao e o
+    // fim da lista (onde mora o radio, e antes dele o "Skip Frames") fica
+    // inalcancavel.
+    gs.debugOptSelect(0);                            // item com L&ESS/&MORE: 3 botoes
+    casos.push_back({"as setas nao ficam debaixo dos botoes",
+                     gs.debugOptArrowsClear() ? 1 : 0, 1});
+    gs.debugOptScroll(0);
+    const int linhas = gs.debugOptLines(), cabem = gs.debugOptRows();
+    casos.push_back({"a lista nao cabe inteira (senao o resto nao mede nada)",
+                     linhas > cabem ? 1 : 0, 1});
+    int topo = 0, voltas = 0;
+    while (topo + cabem < linhas && voltas < 10) { topo = gs.debugOptPageDown(); ++voltas; }
+    casos.push_back({"clicando na seta chega-se a ultima linha",
+                     topo + cabem >= linhas ? 1 : 0, 1});
+    casos.push_back({"... e foi a seta que rolou, nao o acaso", topo > 0 ? 1 : 0, 1});
+    // O clique vai ao painel ANTES dos botoes: com a lista chegando ate la, ela
+    // comia o clique do L&ESS e o botao nao respondia.
+    gs.debugOptSelect(0);
+    casos.push_back({"a lista nao come o clique do L&ESS",
+                     gs.debugOptPaneEats("L&ESS") ? 1 : 0, 0});
+    casos.push_back({"nem o do &APPLY", gs.debugOptPaneEats("&APPLY") ? 1 : 0, 0});
+    gs.debugOptScroll(0);
+
     // ---- extra do porte: o radio "Screen Mode" --------------------------
     // A janela deste teste e JANELA (init com fullscreen=false). Entrar no
     // PREFERENCES tem de acertar o radio com ELA, e nao com o INI -- o
