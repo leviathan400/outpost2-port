@@ -3789,6 +3789,136 @@ static int runCheatTest(const std::string& dll) {
     return ok ? 0 : 1;
 }
 
+// --item21test <DLL>: as tres pecas do item 21.
+//   21a as vozes da plataforma do Spaceport (sub_47F600);
+//   21b o icone do veiculo no painel STORAGE, agora com a arma (sub_458EF0);
+//   21c o anel anti-duplicata de comandos ([_Player+0xBD8], sub_40E210).
+static int runItem21Test(const std::string& dll) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 item21test", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    op2::resetUnits();
+    const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
+    for (int y = 0; y < H; ++y)
+        for (int x = 0; x < W; ++x) op2::g_gameMap.clearUnitOccupancy(x, y);
+
+    struct Caso { const char* nome; long long obtido; long long esperado; };
+    std::vector<Caso> casos;
+
+    // ================= 21a: as vozes da plataforma =======================
+    const int sp = op2::placeBuilding(0x37, 20, 20, 0);          // Spaceport
+    if (!sp) { std::printf("[21] sem Spaceport\n"); renderer.shutdown(); SDL_Quit(); return 3; }
+    struct Voz { int tipo; int voz; const char* nome; };
+    const Voz vozes[] = {
+        {0x69, 0x80, "21a: SULV anuncia com a voz 0x80"},
+        {0x6A, 0x7F, "21a: RLV anuncia com a voz 0x7F"},
+        {0x6B, 0x80, "21a: missil anuncia com a voz 0x80"},
+    };
+    for (const Voz& v : vozes) {
+        op2::soundClearVoiceRequest();
+        op2::g_units[sp].produceType = v.tipo;
+        op2::g_units[sp].padCargo = 0;
+        op2::factoryProduceFinish(sp);
+        casos.push_back({v.nome, op2::soundLastVoiceRequest(), v.voz});
+        casos.push_back({"21a:   ... e a carga foi para a plataforma",
+                         op2::g_units[sp].padCargo, v.tipo});
+    }
+    // Dono que nao e o jogador local nao ouve nada (cmp eax, dword_56DEE8).
+    op2::g_units[sp].owner = static_cast<uint8_t>((op2::g_units[sp].owner & 0xF0) | 1);
+    op2::soundClearVoiceRequest();
+    op2::g_units[sp].produceType = 0x69;
+    op2::g_units[sp].padCargo = 0;
+    op2::factoryProduceFinish(sp);
+    casos.push_back({"21a: dono alheio nao ouve", op2::soundLastVoiceRequest(), -1});
+
+    // ================= 21b: o icone do STORAGE mostra a arma ==============
+    // Duas renderizacoes do MESMO Lynx trocando so a arma. Com o codigo antigo
+    // (quadro 0 do corpo) as duas sairiam identicas.
+    const int gar = op2::placeBuilding(0x29, 24, 20, 0);          // Garagem
+    int dx = 0, dy = 0;
+    if (!gar || !op2::dockCell(gar, dx, dy)) {
+        std::printf("[21] sem garagem/doca\n"); renderer.shutdown(); SDL_Quit(); return 4;
+    }
+    op2::Unit ly;
+    op2::TethysGame::CreateUnit(ly, op2::mapLynx, op2::LOCATION{dx, dy}, 0, 0x3D);
+    casos.push_back({"21b: o Lynx esta na doca", op2::dockedVehicle(gar) == ly.id() ? 1 : 0, 1});
+
+    op2::StoragePane painel;
+    painel.open(gar, false);
+    const int FW = 640, FH = 480, winL = 0, statusTop = 0x60;
+    const int bx = winL + 0xD, by = statusTop - 0x33;             // a caixa da doca
+    std::vector<uint32_t> fb1(static_cast<size_t>(FW) * FH, 0), fb2(fb1.size(), 0);
+    const op2::PaneRect pane{0, 0, FW, FH};
+    auto desenha = [&](std::vector<uint32_t>& fb, int arma) {
+        op2::g_units[ly.id()].cargo = static_cast<int16_t>(arma);
+        std::fill(fb.begin(), fb.end(), 0u);
+        painel.draw(fb.data(), FW, FH, winL, 0, pane, statusTop, -1, -1);
+    };
+    desenha(fb1, 0x3D);                                           // Laser
+    desenha(fb2, 0x3E);                                           // Microwave
+    int difer = 0, pintados = 0;
+    for (int y = by; y < by + 0x2C; ++y)
+        for (int x = bx; x < bx + 0x2C; ++x) {
+            const size_t k = static_cast<size_t>(y) * FW + x;
+            if (fb1[k] != fb2[k]) ++difer;
+            if (fb1[k] != 0u) ++pintados;
+        }
+    std::printf("[21] caixa do STORAGE: %d pixels pintados, %d diferentes entre as armas\n",
+                pintados, difer);
+    casos.push_back({"21b: a caixa foi pintada", pintados > 0 ? 1 : 0, 1});
+    casos.push_back({"21b: trocar a arma muda o icone", difer > 0 ? 1 : 0, 1});
+
+    // ================= 21c: o anel anti-duplicata ========================
+    const int ag = op2::placeBuilding(0x27, 28, 20, 0);           // Agridome
+    if (!ag) { std::printf("[21] sem Agridome\n"); renderer.shutdown(); SDL_Quit(); return 5; }
+    op2::g_playerData[0].isHuman = 1;
+    auto mandaIdle = [&](int id) {
+        op2::CommandPacket pk;
+        pk.type = op2::CMD_IDLE;
+        pk.unitIds = {id};
+        op2::dispatchCommandPacket(0, pk);
+    };
+    auto ocioso = [&](int id) { return op2::g_units[id].action == 0x12 ? 1 : 0; };
+    auto andaTurnos = [&](int n) {
+        for (int k = 0; k < n * op2::kTurnPeriod; ++k) op2::TethysGame::advanceTick();
+    };
+
+    mandaIdle(ag);
+    casos.push_back({"21c: o 1o IDLE foi aplicado", ocioso(ag), 1});
+    // Desliga a marca na mao: structureDoActivate exige trabalhadores, energia e
+    // ligação ao CC, que este arranjo não tem, e devolveria false deixando o
+    // prédio ocioso -- o observável ficaria cego e o caso passaria sozinho.
+    op2::g_units[ag].action = 0;
+    casos.push_back({"21c: a marca foi desligada p/ o próximo caso", ocioso(ag), 0});
+    andaTurnos(2);                                   // entra na janela de conferencia
+    mandaIdle(ag);
+    casos.push_back({"21c: repetido 2 turnos depois, DESCARTADO", ocioso(ag), 0});
+    andaTurnos(4);                                   // a janela passou do slot
+    mandaIdle(ag);
+    casos.push_back({"21c: fora da janela, aplicado de novo", ocioso(ag), 1});
+    op2::g_units[ag].action = 0;
+    op2::g_playerData[0].isHuman = 0;                // o PC nao passa pelo anel
+    andaTurnos(2);
+    mandaIdle(ag);
+    casos.push_back({"21c: jogador do PC ignora o anel", ocioso(ag), 1});
+
+    bool ok = true;
+    for (const Caso& c : casos) {
+        const bool bom = c.obtido == c.esperado;
+        if (!bom) ok = false;
+        std::printf("[21] %-44s %lld (esperado %lld) %s\n", c.nome, c.obtido, c.esperado,
+                    bom ? "ok" : "FALHOU");
+    }
+    std::fflush(stdout);
+    renderer.shutdown(); SDL_Quit();
+    return ok ? 0 : 1;
+}
+
 // --walltest <map>: parede comum, de lava, de micróbio e um tubo lado a lado;
 // sub_4A23F0 (damageWall) com dano 1000 e depois 20, 6x cada, imprimindo o tile
 // e o tipo da célula — a parede comum passa pelos estágios +0x54/+0x74/+0x94.
@@ -4428,6 +4558,8 @@ int main(int argc, char* argv[]) {
             return runPaneTest(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--musictest") == 0 && i + 1 < argc)
             return runMusicTest(argv[i + 1]);
+        if (std::strcmp(argv[i], "--item21test") == 0 && i + 1 < argc)
+            return runItem21Test(argv[i + 1]);
         if (std::strcmp(argv[i], "--cheattest") == 0 && i + 1 < argc)
             return runCheatTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--deletetest") == 0 && i + 1 < argc)

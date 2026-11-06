@@ -32,7 +32,7 @@ próprio com pontes de ABI para a API que elas importam do `OUTPOST2.EXE`.
 | Rede (`src/net`) | 1.400 linhas |
 | DLLs de missão que carregam e rodam | **94 de 94** |
 | Símbolos da API do EXE implementados | **222 de 222** (os que as 94 DLLs importam) |
-| Modos de linha de comando (testes e telas) | 94 |
+| Modos de linha de comando (testes e telas) | 95 |
 
 As duas linhas de missões são a medida honesta de cobertura: toda DLL de
 missão do disco carrega, cria as unidades e roda, e nenhuma importa um símbolo
@@ -46,7 +46,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 94 modos de teste/captura
+  main.cpp        entrada + os 95 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -136,7 +136,17 @@ preferências; o original ignora chaves que não conhece.
 
 ## 4. O que FALTA portar
 
-Revisado item a item em 2026-10-28, conferindo no código.
+**Nada.** Em 2026-11-06 a última pendência (o item 21) foi fechada. O que
+sobrou abaixo é o histórico: cada item com o que era, como foi resolvido e,
+nos oito casos em que a "pendência" não existia, por que o comentário mentia.
+
+Duas coisas seguem **registradas como lacuna consciente**, e nenhuma muda o
+jogo: o sinalizador `dword_4E0BD0` dos cheats (um único leitor, `sub_431EB0`,
+num caminho que não identifiquei — ver 5.6) e a **API de cheat das missões**
+sobre o pacote 0x2B, com os oito índices mapeados mas nenhuma das 94 missões
+originais a importando.
+
+Revisado item a item em 2026-10-28 e em 2026-11-03/06, conferindo no código.
 
 ### Grande
 
@@ -314,10 +324,52 @@ ambiente — estavam portadas, com o comentário atrasado). Das seis reais,
     ordem do mesmo jeito. O grupo não é apagado aí: cai no passe em que a
     lista chega a zero. Teste: `--deletetest <DLL>`, oito casos cobrindo os
     três ramos; neutralizando a correção, três reprovam.
-21. **Três miudezas de apresentação**: os sons 0x80/0x7F da plataforma do
-    Spaceport; o ícone do veículo com a carga no painel STORAGE (`sub_458EF0`,
-    hoje a animação fica parada); e o anel anti-duplicata `[jogador+0xBD8]`,
-    que é proteção de rede contra comando repetido.
+21. ~~Três miudezas de apresentação~~ — **feito** em 2026-11-06. As três, e o
+    que cada uma era de verdade:
+
+    **(a) A plataforma do Spaceport não anunciava.** `sub_47F600` não toca um
+    som posicional: chama `sub_47F060`, que é a **fila de vozes do Savant**. A
+    SULV (0x69) e o míssil (0x6B) anunciam com a voz **0x80**; a RLV (0x6A), com
+    a **0x7F**. E só o **dono** ouve (`cmp eax, dword_56DEE8`).
+
+    **(b) O ícone do painel STORAGE ignorava a arma.** `sub_458EF0` já estava
+    portado — é o `drawVehicleIcon` que o quadro da unidade usa, com o corpo na
+    cor do dono e a torre da arma por cima. O painel STORAGE é que não o
+    chamava: desenhava o quadro 0 do corpo e pronto. Agora chama, e um Laser
+    Lynx e um Microwave Lynx aparecem diferentes na caixa da doca.
+
+    **(c) O anel anti-duplicata `[_Player+0xBD8]`** — 16 posições, uma por
+    turno. **Dez** comandos passam por ele (os `case` de `sub_40E210` que tocam
+    `[ebp+eax*4+0BD8h]`): 0x09 produzir, 0x0A..0x0D as cargas, 0x12 e 0x13
+    ociosar e religar, 0x16 pesquisar, 0x17 treinar e 0x19 lançar. Antes de
+    aplicar, o original vê se a **mesma unidade** já foi assunto de um desses
+    comandos na janela recente; se foi, o comando é **descartado**
+    (`loc_40E93C` devolve 1 e o despachante sai sem aplicar). É a proteção
+    contra comando repetido — o clique duplo, ou o pacote que chegou duas vezes.
+    Vale **só para jogador humano** (`[_Player+0x28]`).
+
+    A janela não é a óbvia, e foi conferida instrução por instrução: com
+    `turno = tique >> log2(período)`, ele confere os slots de `turno−4` a
+    `turno−2` — três, porque `dword_56DED8` é o mesmo **kTurnLead** do porte —
+    e **grava** no slot do `turno`. O turno corrente e o anterior ficam de fora
+    da conferência, o que casa com o lockstep: o comando aplicado no turno T foi
+    emitido em T−kTurnLead, logo a janela cobre o turno da emissão e os dois
+    anteriores. O anel mora no próprio `PlayerData`, como no original, e por
+    isso zera em `resetPlayers` e entra no jogo salvo por `playersSerialize`.
+
+    Uma diferença **proposital**: o índice do original sai de um `%` **com
+    sinal**, então nos primeiros turnos ele lê alguns dwords *antes* do anel —
+    campos vizinhos do jogador. Aqui o índice é normalizado para 0..15; na
+    prática dá no mesmo (os slots começam zerados e nada casa), sem ler fora do
+    vetor.
+
+    O único dos dez que o porte não guarda é o **0x0D**, que o despachante do
+    porte não trata (o enum vai de 0x0C a 0x0E); a entrada está em `usaAnel`
+    para quando ele existir.
+
+    Teste: `--item21test <DLL>`, quinze casos. Neutralizando as três peças,
+    cinco reprovam — ao menos um por peça — e os dez restantes, controles
+    incluídos, continuam passando.
 
 ### Não aplicável nesta instalação
 
@@ -734,7 +786,7 @@ missão e os recursos originais do diretório de trabalho).
 
 ### Testes por linha de comando
 
-São 94 modos. Os que cobrem regressão de verdade:
+São 95 modos. Os que cobrem regressão de verdade:
 
 | Modo | O que prova |
 |---|---|
@@ -750,6 +802,7 @@ São 94 modos. Os que cobrem regressão de verdade:
 | `--alerttest <DLL>` | a unidade atacada alerta os vizinhos armados do próprio lado (`sub_44DE10`) |
 | `--deletetest <DLL>` | grupo de IA com prazo vencido: autodestruição e, 400 ticks depois, sair do mapa |
 | `--cheattest <DLL>` | os cheats do chat: os quatro hashes do executável e o efeito de cada um |
+| `--item21test <DLL>` | as vozes da plataforma, a arma no ícone do STORAGE e o anel anti-duplicata |
 | `--missiontest <DLL> <saida> <ticks>` | carrega e roda qualquer missão |
 | `--aitest <DLL campanha> <DLL multi>` | o `AILevel` chega ao jogador 0 e o multijogador fica intacto |
 | `--helptest [tópico]` | o leitor do `.HLP` e a navegação da tela do manual |

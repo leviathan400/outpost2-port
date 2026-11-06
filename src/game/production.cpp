@@ -259,7 +259,12 @@ void factoryProduceCountdown(int factoryId) {                // sub_43DE50 case 
 // a plataforma (+0x6E); o resto (sub_4156B0) p/ a 1ª baia vazia, com a arma.
 static bool factoryStoreProduct(UnitRecord& f, int type) {
     if (f.type == 0x37 && type >= 0x69 && type <= 0x6B) {
-        f.padCargo = type;            // (sons 0x80/0x7F p/ o jogador local — áudio não portado)
+        f.padCargo = type;            // [+0x6E]
+        // sub_47F600: só o DONO ouve (`cmp eax, dword_56DEE8`), e o original usa
+        // sub_47F060 — a FILA DE VOZES do Savant, não um som posicional. A SULV
+        // (0x69) e o míssil (0x6B) anunciam com a 0x80; a RLV (0x6A), com a 0x7F.
+        if ((f.owner & 0x0F) == TethysGame::localPlayer())
+            soundVoice(type == 0x6A ? 0x7F : 0x80, f.pixelX, f.pixelY);
         return true;
     }
     const StructSheetDesc* d = structSheet(f.type);

@@ -44,6 +44,13 @@ void soundStopAll();
 // o soundStopAll de fato calou).
 int soundActiveChannels();
 
+// Tambem so para os testes: o ultimo id que soundVoice RECEBEU, mesmo com o
+// audio desligado (os modos de teste sobem sem SDL_INIT_AUDIO, e a fila de
+// vozes nem chega a existir). -1 = nenhum desde a ultima limpeza. Nao existe
+// no original.
+int  soundLastVoiceRequest();
+void soundClearVoiceRequest();
+
 // Trava/destrava o callback do mixer (a música altera o estado dele).
 void soundLockAudio(bool lock);
 

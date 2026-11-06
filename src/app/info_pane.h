@@ -27,6 +27,12 @@ int drawMarkupText(uint32_t* fb, int fbW, int fbH, const PaneRect& rc,
 int markupLineHeight();
 constexpr int kMarkupLine = 0x0C;
 // Barra (sub_45C260): moldura 0x3DEF, parte feita em c1 e o resto em c2 (RGB555).
+// sub_458EF0: o ícone de um veículo numa caixa — corpo na cor do dono e, nos
+// chassis armados, a torre da arma por cima. `colorPlayer` é o ÍNDICE do
+// jogador (a função busca o colorNumber), não o número da cor.
+void drawVehicleIcon(uint32_t* fb, int fbW, int fbH, bool eden, int type, int weapon,
+                     int l, int t, int r, int b, const PaneRect& clip, int colorPlayer);
+
 void drawProgressBar(uint32_t* fb, int fbW, int fbH, int l, int t, int r, int b, int cur, int max,
                      uint16_t c1, uint16_t c2);
 

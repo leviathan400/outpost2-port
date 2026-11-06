@@ -18,6 +18,7 @@
 #include "../game/structure_anim.h"
 #include "../game/unit.h"
 #include "../game/vehicle_anim.h"
+#include "info_pane.h"
 
 namespace op2 {
 
@@ -175,11 +176,12 @@ void StoragePane::draw(uint32_t* fb, int fbW, int fbH, int winL, int winT, const
     } else if (v) {
         const UnitRecord& u = g_units[v];
         const bool eden = (u.owner & 0x0F) < kMaxPlayers && g_playerData[u.owner & 0x0F].isEden;
-        const int anim = vehicleAnimIndex(u.type, u.rotation, eden);
-        // (sub_458EF0 — ícone do veículo com a carga — não portado: a animação parada.)
-        if (g_art.ok() && anim >= 0)
-            blitArtFrame(fb, fbW, fbH, anim, 0, bx + 0x16, by + 0x16, (u.owner & 0x0F) < kMaxPlayers
-                         ? g_playerData[u.owner & 0x0F].colorNumber : 0, bx, by, bx + 0x2C, by + 0x2C);
+        // sub_458EF0: o mesmo ícone do quadro da unidade — a caixa na cor da
+        // facção, o corpo virado como o veículo está e, nos chassis armados, a
+        // torre da arma por cima. Antes aqui só se desenhava o quadro 0 do corpo.
+        drawVehicleIcon(fb, fbW, fbH, eden, u.type, static_cast<int16_t>(u.cargo),
+                        bx, by, bx + 0x2C, by + 0x2C,
+                        PaneRect{bx, by, bx + 0x2C, by + 0x2C}, u.owner & 0x0F);
         const std::string vname = unitTitle(u);
         const int cargo = static_cast<int16_t>(u.cargo);
         if (resourceMode()) {                                // loc_46425A

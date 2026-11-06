@@ -246,7 +246,12 @@ void soundSetListener(int cx, int cy) {
 void soundPlay(int id) { startSound(id, -1, -1, false); }
 void soundPlayAt(int x, int y, int id) { startSound(id, x, y, y != -1); }   // y = −1 → global
 
+static int s_lastVoiceReq = -1;                           // so para os testes
+int  soundLastVoiceRequest() { return s_lastVoiceReq; }
+void soundClearVoiceRequest() { s_lastVoiceReq = -1; }
+
 void soundVoice(int id, int x, int y) {                   // sub_47F060 -> sub_47F0A0
+    s_lastVoiceReq = id;                                  // antes do porteiro do audio
     if (!s_enabled) return;
     if (id == 0x87 || id == 0x86 || id == 0xAD) {        // fim de jogo: cala tudo e zera a fila
         SDL_LockAudioDevice(s_dev);

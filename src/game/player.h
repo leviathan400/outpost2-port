@@ -60,6 +60,10 @@ struct PlayerData {
     int unitsLost = 0;          // +0x1C8
     int enemyStructuresDestroyed = 0;   // +0x1CC
     int enemyUnitsDestroyed = 0;        // +0x1D0
+    // +0xBD8: o anel anti-duplicata de comandos, 16 turnos (sub_40E210, ver
+    // command_dispatch.cpp). Mora aqui pelo mesmo motivo do original: zera
+    // com o jogador em resetPlayers e entra no jogo salvo por playersSerialize.
+    int cmdRing[16] = {};
     int pathRefine  = 1;   // +0x1B8 refinamento de rota (sub_440660/sub_440C50);
                            // sub_490190 = 1, sub_471F30 recalcula
     int techLevel   = 0;   // gerido pelo subsistema de pesquisa (dword_56B5F0)
