@@ -81,6 +81,29 @@ void GameState::loadSettings() {
     setNightDarkness(gs.nightDarkness);                // "NightDarkness" (idem)
     soundSetMasterVolume(gs.audioVolume);              // "AudioVolume" (idem)
     m_demoCam = gs.demoCamera != 0;                    // "DemoCamera" (idem)
+    // "Fullscreen" NAO entra aqui: a janela nao pode pular de modo a cada
+    // loadSettings (o Alt+Enter troca a tela sem gravar o INI, e o valor do
+    // arquivo estaria velho). Quem aplica e o APPLY, por applyScreenMode.
+}
+
+// Entrar no PREFERENCES. O espelho do painel vem do INI; como o Alt+Enter nao
+// grava nada lá, o radio do modo de tela e acertado com a janela de verdade no
+// quadro seguinte.
+void GameState::enterPrefs() {
+    m_gameOptions.setMode(GameOptionsPane::PREFS);
+    m_screenModeSync = true;
+}
+
+// O pedido deixado pelo painel (ver applyScreenMode em game_state.h).
+void GameState::applyScreenMode(Renderer& renderer) {
+    if (m_screenModeSync) {
+        m_screenModeSync = false;
+        m_gameOptions.syncScreenMode(renderer.fullscreen());
+    }
+    if (m_screenModeWanted < 0) return;
+    const bool cheia = m_screenModeWanted != 0;
+    m_screenModeWanted = -1;
+    if (renderer.fullscreen() != cheia) renderer.setFullscreen(cheia);
 }
 
 bool GameState::loadMap(const std::string& mapName) {
@@ -596,6 +619,7 @@ void GameState::drawSuccessDialog(Renderer& renderer) {
 }
 
 void GameState::onIdle(Renderer& renderer, float dt) {
+    applyScreenMode(renderer);               // extra do porte: o radio "Screen Mode"
     if (!m_pendingLoad.empty()) {                            // TFrame::PostDelayedLoadMessage
         const std::string path = m_pendingLoad;
         m_pendingLoad.clear();
@@ -2454,7 +2478,7 @@ void GameState::clickCommand(int cmd) {                  // vt[1] do comando
     if (cmd == kCmdOptBack) { m_gameOptions.close(); return; }                     // "Back to ..."
     // --- o menu da aba (sub_457880) ---
     if (cmd == kCmdOptObjectives) { m_gameOptions.close(); return; }               // volta aos objetivos
-    if (cmd == kCmdOptPrefs) { m_gameOptions.setMode(GameOptionsPane::PREFS); return; }
+    if (cmd == kCmdOptPrefs) { enterPrefs(); return; }
     if (cmd == kCmdOptManual) { m_gameOptions.openManual(); return; }   // e o BACK da leitura
     if (cmd == kCmdOptEnd) { m_gameOptions.setMode(GameOptionsPane::ENDMISSION); return; }
     if (cmd == kCmdOptMenu) { m_gameOptions.setMode(GameOptionsPane::MENU); return; }
@@ -2468,7 +2492,14 @@ void GameState::clickCommand(int cmd) {                  // vt[1] do comando
     if (cmd == kCmdAlliesChat) { m_comms.setMode(CommsPane::CHAT); return; }
     if (cmd == kCmdMessages) { m_comms.setMode(CommsPane::MESSAGES); return; }
     if (cmd == kCmdNetStats) { m_comms.setMode(CommsPane::NETSTATS); return; }
-    if (cmd == kCmdOptApply) { m_gameOptions.apply(); loadSettings(); return; }     // "&Apply new values"
+    if (cmd == kCmdOptApply) {                                                     // "&Apply new values"
+        m_gameOptions.apply();                 // grava o INI, "Fullscreen" incluso
+        loadSettings();
+        // Extra do porte: so aqui o modo de tela vale, como todo o resto desta
+        // tela. O onIdle e que tem o Renderer para aplicar.
+        m_screenModeWanted = m_gameOptions.wantFullscreen() ? 1 : 0;
+        return;
+    }
     if (cmd == kCmdOptLoad) { m_saveDlg.open(SaveSlotsDialog::kLoad, ""); return; } // caso 1: OnLoadSlot
     if (cmd == kCmdOptSave) {                                                       // caso 2: OnSaveSlot
         m_saveDlg.open(SaveSlotsDialog::kSave, m_mission ? m_mission->levelDesc : "");

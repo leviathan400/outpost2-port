@@ -19,7 +19,8 @@ namespace op2 {
 //              "&MISSION OBJECTIVES", "ONLINE MAN&UAL", "PR&EFERENCES",
 //              "L&OAD GAME", "&SAVE GAME" e "E&ND MISSION", mais a versão no
 //              rodapé (aVersion no original; aqui "Version 1.0 - beta port").
-//   PREFS      as opções do [Game] do OUTPOST2.INI (a lista abaixo), com
+//   PREFS      as opções do [Game] do OUTPOST2.INI (a lista abaixo) mais o
+//              par de radio do modo de tela (extra do porte), com
 //              L&ESS/&MORE, "&APPLY" ("&Apply new values") e "&GAME OPTIONS"
 //              ("Back to &Game Options"). Como no original, o que se mexe aqui
 //              só vale ao APPLY: sair pelo GAME OPTIONS descarta.
@@ -42,11 +43,18 @@ namespace op2 {
 // valores ("Turn ... down/up") e TOGGLE nos liga/desliga ("Toggle ...").
 class GameOptionsPane {
 public:
-    // Os 13 itens, na ordem em que o original os lista.
+    // Os 13 itens na ordem em que o original os lista, e no fim o par de
+    // radio do modo de tela, que e extra deste porte.
     enum Opt {
         OPT_MUSIC_VOL, OPT_SOUND_VOL, OPT_GAME_SPEED, OPT_SCROLL_RATE, OPT_DETAIL,
         OPT_MUSIC, OPT_SOUND, OPT_AMBIENT, OPT_OVERLAY,
         OPT_STRUCT_SHADOW, OPT_VEH_SHADOW, OPT_DONE_OBJECTIVES, OPT_FRAME_SKIP,
+        // Extra deste porte, que o original nao tem: o modo de tela, como um
+        // PAR DE RADIO -- "(o) Full Screen" / "( ) Window". Sao DUAS linhas, e
+        // nao uma alternancia so, para o grupo se comportar como os radios dos
+        // dialogos do shell: o clique escolhe a linha em que se clicou, em vez
+        // de inverter o que estava.
+        OPT_SCREEN_FULL, OPT_SCREEN_WINDOW,
         OPT_COUNT
     };
 
@@ -70,6 +78,7 @@ public:
         return i >= 0 && i < static_cast<int>(v.size()) ? v[i] : std::string();
     }
     void debugSelect(int i) { m_list.sel = i; }
+    void debugScroll(int linha) { m_list.top = linha; }   // 1a linha visivel
     void open();                                         // lê o INI
     void close() { m_open = false; }
     void draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, int mx, int my) const;
@@ -81,6 +90,18 @@ public:
     int  selected() const { return m_list.sel; }
     void step(int dir) { if (valueItem(m_list.sel)) bump(m_list.sel, dir); }   // L&ESS / &MORE
     void apply();                                        // "&APPLY": grava o INI
+
+    // --- extra do porte: o modo de tela ---
+    // O radio nao mexe na janela na hora: como todo o resto desta tela, so
+    // vale no "&APPLY" -- e o APPLY grava "[Game] Fullscreen" no INI junto com
+    // o resto, porque saveIni manda o espelho inteiro para o arquivo.
+    void syncScreenMode(bool full);   // acerta o espelho com a janela de verdade
+    bool wantFullscreen() const;      // o que o APPLY tem de aplicar
+    // Testes (--optmenutest): o clique numa linha, igual ao do painel.
+    void debugRowClick(int i) {
+        m_list.sel = i;
+        if (i >= 0 && i < OPT_COUNT && !valueItem(i)) bump(i, 0);
+    }
 
 private:
     std::vector<std::string> items() const;

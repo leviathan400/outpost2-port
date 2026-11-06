@@ -130,7 +130,7 @@ preferências; o original ignora chaves que não conhece.
 | `NightDarkness` | 0..100 | 75 | Quanto da curva de escurecimento noturno se aplica (100 = o original, que leva a noite plena a ~15% do brilho e faz as unidades, que nunca escurecem, recortarem contra o preto). |
 | `AudioVolume` | 0..100 | 50 | Volume mestre sobre a mistura final (sons e música). O original só tem `MusicVol`/`SoundVol`, por canal e em 6 degraus. |
 | `DemoCamera` | 0/1 | 1 | No demo de atração a câmera passeia pelos pontos de ação (desastre, combate, unidades). 0 devolve a câmera parada do original. |
-| `Fullscreen` | 0/1 | 1 | Abre em tela cheia (sem troca de modo de vídeo; a vista de 640×480 escalada com a proporção mantida). Alt+Enter alterna a qualquer momento. |
+| `Fullscreen` | 0/1 | 1 | Abre em tela cheia (sem troca de modo de vídeo; a vista de 640×480 escalada com a proporção mantida). Alt+Enter alterna a qualquer momento, e dentro do jogo há o par de rádio **Screen Mode** no fim da lista do `PREFERENCES` (ver 5.8). |
 
 ---
 
@@ -857,7 +857,7 @@ jogo solo e 9 em rede.
 
 ### O teste
 
-`--optmenutest <DLL>`: 27 casos em jogo solo e 29 em multijogador (roda com
+`--optmenutest <DLL>`: 40 casos em jogo solo e 42 em multijogador (roda com
 `E04.DLL` e `MF2_01.DLL`). Cobre os dois botões do `PREFERENCES` separadamente,
 a composição e o título das duas telas de fim, a confirmação sobrevivendo ao
 quadro seguinte, a troca dos botões por `&YES`/`&NO`, o `&NO` devolvendo a
@@ -869,6 +869,65 @@ botão), auto-fecho da confirmação **7/6**, sem `&YES`/`&NO` **6/5**, tela de
 fim sem o par solo/rede **0/10** (o esperado: em jogo solo a lista antiga já
 era a certa), título **1/1**, `GoAI` sem encerrar **4/3** e atraso fixo
 **0/1**.
+
+---
+
+## 5.8. Extra do porte: o modo de tela no `PREFERENCES` (2026-11-06)
+
+Pedido no fórum do outpost2.net depois da publicação: **modo janela escolhido
+dentro do jogo**. A janela já abria dos dois jeitos (`[Game] Fullscreen` e
+Alt+Enter), mas só pelo arquivo — não havia como escolher jogando.
+
+No fim da lista do `PREFERENCES` entrou um **par de rádio**, que o original não
+tem:
+
+```
+Screen Mode
+  ( ) Full Screen
+  (o) Window
+```
+
+São **duas linhas**, e não uma alternância como as outras oito opções de
+liga/desliga, para o grupo se comportar como os rádios dos diálogos do shell: o
+clique escolhe a linha em que se clicou, em vez de inverter o que estava
+(clicar duas vezes na mesma linha não faz nada). O desenho `"(o) "`/`"( ) "` é o
+mesmo de `shell_menu.cpp`, e o arranjo de duas linhas (nome do grupo em cima,
+valor indentado embaixo) é o que os itens com valor já usam nesta lista. As
+linhas ficam abaixo da dobra: uma página da seta de rolagem chega lá.
+
+Três detalhes que fazem a coisa funcionar de verdade:
+
+- **Só vale no `&APPLY`**, como todo o resto desta tela — e o APPLY grava
+  `[Game] Fullscreen` no INI junto com o resto, porque `saveIni` manda o
+  espelho inteiro para o arquivo.
+- **O espelho é acertado com a janela de verdade ao entrar no `PREFERENCES`**
+  (`GameState::enterPrefs`): o Alt+Enter troca a tela sem gravar nada no INI,
+  então o valor do arquivo pode estar velho e o rádio mostraria um modo
+  enquanto a tela é outra.
+- `clickCommand` recebe só o id do comando, **sem o `Renderer`**: o clique e o
+  APPLY deixam o pedido marcado e quem resolve é o `onIdle`, que tem
+  (`GameState::applyScreenMode`). Por isso `loadSettings` **não** aplica o
+  `Fullscreen` — se aplicasse, qualquer `loadSettings` jogaria a janela de volta
+  para o valor (velho) do arquivo.
+
+O que **não** mudou: a resolução continua sendo a vista de 640×480 escalada. Ver
+mais mapa de uma vez (o outro pedido do fórum) é outra conversa — exige tirar
+`NATIVE_WIDTH`/`NATIVE_HEIGHT` de `constexpr`, recalcular o layout do HUD pela
+fórmula do `sub_4998D0` e decidir o que fazer com o shell, que é arte de 640×480
+de tamanho fixo.
+
+### O teste
+
+Os 12 casos novos do `--optmenutest` passam pelo `onIdle` de verdade (não por um
+atalho): o rádio nascer no modo da **janela** e não no do INI, o texto das duas
+linhas com a bolinha no lugar certo, o clique escolhendo em vez de inverter, o
+clique **não** mexendo na tela, o `&APPLY` mexendo, e o INI ficando com 1 e com
+0 — com o arquivo posto no valor **oposto** antes de cada medida, senão o caso
+passa de graça. O INI do usuário é guardado em bytes e devolvido no fim.
+
+Neutralizando cada peça: sem `applyScreenMode` no `onIdle` **4** falhas, sem
+acertar o espelho **3**, APPLY que não aplica **1**, rádio virando alternância
+**5**, INI que não guarda o `Fullscreen` **2** — com a base em 0 antes e depois.
 
 ---
 
@@ -910,7 +969,7 @@ São 96 modos. Os que cobrem regressão de verdade:
 | `--deletetest <DLL>` | grupo de IA com prazo vencido: autodestruição e, 400 ticks depois, sair do mapa |
 | `--cheattest <DLL>` | os cheats do chat: os quatro hashes do executável e o efeito de cada um |
 | `--item21test <DLL>` | as vozes da plataforma, a arma no ícone do STORAGE e o anel anti-duplicata |
-| `--optmenutest <DLL>` | a aba Options: os botões do PREFERENCES e a tela de fim de missão inteira |
+| `--optmenutest <DLL>` | a aba Options: os botões do PREFERENCES, o rádio do modo de tela e a tela de fim de missão inteira |
 | `--missiontest <DLL> <saida> <ticks>` | carrega e roda qualquer missão |
 | `--aitest <DLL campanha> <DLL multi>` | o `AILevel` chega ao jogador 0 e o multijogador fica intacto |
 | `--helptest [tópico]` | o leitor do `.HLP` e a navegação da tela do manual |

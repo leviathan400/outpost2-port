@@ -3277,6 +3277,13 @@ static int runPaneTest(const std::string& dll, const std::string& prefix) {
             writeBmp32(fq, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH,
                        op2::Renderer::NATIVE_HEIGHT);
         }
+        // O fim da lista do PREFERENCES: e la que fica o radio do modo de
+        // tela, que nao cabe na primeira pagina.
+        gs.debugOptionsScreen(1);
+        gs.debugOptScroll(13);
+        gs.onIdle(renderer, 0.0f);
+        std::snprintf(f2, sizeof(f2), "%s_gameprefs2.bmp", prefix.c_str());
+        writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
         gs.debugOptionsScreen(0);                    // painel "Game Options"
         gs.onIdle(renderer, 0.0f);
         std::snprintf(f2, sizeof(f2), "%s_gameopt.bmp", prefix.c_str());
@@ -3858,6 +3865,81 @@ static int runOptMenuTest(const std::string& dll) {
     gs.debugOptSelect(5);                            // "Play Music"
     casos.push_back({"controle: alternancia nao tem &MORE",
                      gs.debugOptClick("&MORE") ? 1 : 0, 0});
+
+    // ---- extra do porte: o radio "Screen Mode" --------------------------
+    // A janela deste teste e JANELA (init com fullscreen=false). Entrar no
+    // PREFERENCES tem de acertar o radio com ELA, e nao com o INI -- o
+    // Alt+Enter troca a tela sem gravar nada no arquivo.
+    gs.onIdle(renderer, 0.0f);                       // o quadro de verdade
+    casos.push_back({"o radio nasce no modo da janela de verdade",
+                     gs.debugWantFullscreen() ? 1 : 0, 0});
+    const int kCheia = op2::GameOptionsPane::OPT_SCREEN_FULL;
+    const int kJanela = op2::GameOptionsPane::OPT_SCREEN_WINDOW;
+    texto("a 1a linha do radio", gs.debugOptItem(kCheia),
+          "Screen Mode\n\t( ) Full Screen");
+    texto("a 2a linha do radio", gs.debugOptItem(kJanela), "\t(o) Window");
+    gs.debugOptRow(kCheia);                          // clique em "Full Screen"
+    casos.push_back({"clicar em Full Screen escolhe tela cheia",
+                     gs.debugWantFullscreen() ? 1 : 0, 1});
+    texto("... e a bolinha troca de linha", gs.debugOptItem(kCheia),
+          "Screen Mode\n\t(o) Full Screen");
+    texto("... saindo da outra", gs.debugOptItem(kJanela), "\t( ) Window");
+    gs.debugOptRow(kJanela);                         // clique em "Window"
+    casos.push_back({"clicar em Window escolhe janela",
+                     gs.debugWantFullscreen() ? 1 : 0, 0});
+    // Radio, nao alternancia: bater de novo na MESMA linha nao inverte nada.
+    gs.debugOptRow(kJanela);
+    casos.push_back({"clicar duas vezes na mesma linha nao inverte",
+                     gs.debugWantFullscreen() ? 1 : 0, 0});
+
+    // O clique nao mexe na janela nem no INI: quem faz isso e o &APPLY, como
+    // em todo o resto desta tela. Guardo o INI em bytes e devolvo no fim.
+    std::string iniAntes;
+    {
+        std::ifstream f("OUTPOST2.INI", std::ios::binary);
+        if (f) iniAntes.assign(std::istreambuf_iterator<char>(f),
+                               std::istreambuf_iterator<char>());
+    }
+    {   // o arquivo no valor OPOSTO do que o APPLY vai gravar: sem isto o caso
+        // de baixo passa de graca quando o INI do usuario ja tem Fullscreen=1.
+        op2::Config pre("OUTPOST2.INI");
+        pre.load();
+        pre.setInt("Game", "Fullscreen", 0);
+        pre.save();
+    }
+    gs.debugOptRow(kCheia);
+    gs.onIdle(renderer, 0.0f);
+    casos.push_back({"o clique sozinho NAO troca a tela",
+                     renderer.fullscreen() ? 1 : 0, 0});
+    gs.debugOptClick("&APPLY");
+    gs.onIdle(renderer, 0.0f);
+    casos.push_back({"o &APPLY troca a tela", renderer.fullscreen() ? 1 : 0, 1});
+    {
+        op2::Config lido("OUTPOST2.INI");
+        casos.push_back({"... e grava Fullscreen=1 no INI",
+                         lido.load() ? lido.getInt("Game", "Fullscreen", -1) : -1, 1});
+    }
+    {   // idem, agora ao contrario, para o caso de baixo tambem medir algo.
+        op2::Config pre("OUTPOST2.INI");
+        pre.load();
+        pre.setInt("Game", "Fullscreen", 1);
+        pre.save();
+    }
+    gs.debugOptRow(kJanela);
+    gs.debugOptClick("&APPLY");
+    gs.onIdle(renderer, 0.0f);
+    casos.push_back({"o &APPLY devolve a janela", renderer.fullscreen() ? 1 : 0, 0});
+    {
+        op2::Config lido("OUTPOST2.INI");
+        casos.push_back({"... e grava Fullscreen=0 no INI",
+                         lido.load() ? lido.getInt("Game", "Fullscreen", -1) : -1, 0});
+    }
+    if (!iniAntes.empty()) {                         // o INI como estava, byte a byte
+        std::ofstream f("OUTPOST2.INI", std::ios::binary | std::ios::trunc);
+        f.write(iniAntes.data(), static_cast<std::streamsize>(iniAntes.size()));
+    }
+    renderer.setFullscreen(false);
+    gs.debugOptionsScreen(1);                        // volta ao PREFERENCES limpo
 
     // ---- a tela de fim de missao ----------------------------------------
     gs.debugOptionsScreen(0);                        // o menu

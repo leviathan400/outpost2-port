@@ -58,6 +58,12 @@ void GameOptionsPane::setMode(Mode m) {
 
 void GameOptionsPane::apply() { saveIni(); }
 
+// O Alt+Enter troca a tela sem gravar o INI, entao o valor lido do arquivo pode
+// estar velho: ao entrar no PREFERENCES o GameState acerta o espelho com a
+// janela de verdade, senao o radio mostraria um modo e a tela seria outra.
+void GameOptionsPane::syncScreenMode(bool full) { g_opt.fullscreen = full ? 1 : 0; }
+bool GameOptionsPane::wantFullscreen() const { return g_opt.fullscreen != 0; }
+
 bool GameOptionsPane::manualOk() const { return m_help.ok(); }
 
 void GameOptionsPane::openManual() {
@@ -143,6 +149,13 @@ std::vector<std::string> GameOptionsPane::items() const {
     add("Display Vehicle Shadows<R>%s", onOff(g_opt.mobileShadows));
     add("Display Completed Objectives<R>%s", onOff(objectivesShowCompleted() ? 1 : 0));
     add("Skip Frames<R>%s", onOff(g_opt.frameSkip > 1));
+    // Extra deste porte: o modo de tela, em duas linhas de radio com o mesmo
+    // desenho dos dialogos do shell ("(o) " escolhido, "( ) " nao -- ver
+    // shell_menu.cpp). O nome do grupo vai na primeira linha, que e o arranjo
+    // de duas linhas que os itens com valor ja usam aqui.
+    const bool cheia = g_opt.fullscreen != 0;
+    out.push_back(std::string("Screen Mode\n\t") + (cheia ? "(o) " : "( ) ") + "Full Screen");
+    out.push_back(std::string("\t") + (cheia ? "( ) " : "(o) ") + "Window");
     return out;
 }
 
@@ -171,6 +184,10 @@ void GameOptionsPane::bump(int i, int dir) {
     case OPT_VEH_SHADOW:    g_opt.mobileShadows = !g_opt.mobileShadows; break;
     case OPT_DONE_OBJECTIVES: objectivesSetShowCompleted(!objectivesShowCompleted()); return;   // dword_57563C
     case OPT_FRAME_SKIP: g_opt.frameSkip = g_opt.frameSkip > 1 ? 1 : 2; break;
+    // Radio, nao alternancia: cada linha escolhe o SEU modo. Quem aplica na
+    // janela e o GameState no quadro seguinte -- o painel nao tem o Renderer.
+    case OPT_SCREEN_FULL:   g_opt.fullscreen = 1; break;
+    case OPT_SCREEN_WINDOW: g_opt.fullscreen = 0; break;
     default: return;
     }
     clampAll();

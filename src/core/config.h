@@ -101,6 +101,9 @@ struct GameSettings {
     // (FULLSCREEN_DESKTOP: sem troca de modo de video, a vista de 640x480
     // escalada mantendo a proporcao); 0 = janela. Alt+Enter alterna em
     // qualquer um dos dois, e o botao de maximizar da barra de titulo tambem.
+    // Tambem da para escolher pelo jogo: o par de radio "Screen Mode" no fim
+    // da lista do PREFERENCES (Options > PREFERENCES), que grava aqui no
+    // "&APPLY" -- ver GameOptionsPane e GameState::applyScreenMode.
     int fullscreen = 1;
 
     // [WindowInfo]

@@ -98,6 +98,13 @@ public:
 
 private:
     void loadSettings();
+    void enterPrefs();                          // PREFERENCES (sub_465830 modo 2)
+    // Extra do porte (o radio "Screen Mode"): o clique nao tem o Renderer na
+    // mao -- clickCommand recebe so o id do comando --, entao o pedido fica
+    // marcado aqui e o onIdle, que tem, resolve no quadro seguinte.
+    void applyScreenMode(Renderer& renderer);
+    int  m_screenModeWanted = -1;               // 0/1 pedidos pelo APPLY; -1 = nada
+    bool m_screenModeSync = false;              // acertar o espelho com a janela real
     bool loadMap(const std::string& mapName);
     std::unique_ptr<MissionScript> m_mission;   // dword_4EFCD8
     // GameStartInfo copiada em TethysGame+0xA4 (sub_4893A0) e o fim da partida
@@ -177,7 +184,7 @@ public:
     // 1 preferencias, 2 fim de missao, 3 manual, 4 um topico do manual.
     void debugOptionsScreen(int qual) {
         m_gameOptions.open();
-        if (qual == 1) m_gameOptions.setMode(GameOptionsPane::PREFS);
+        if (qual == 1) enterPrefs();
         else if (qual == 2) m_gameOptions.setMode(GameOptionsPane::ENDMISSION);
         else if (qual >= 3) {
             m_gameOptions.openManual();
@@ -207,8 +214,13 @@ public:
         return false;
     }
     void debugOptSelect(int i) { m_gameOptions.debugSelect(i); }
+    void debugOptScroll(int linha) { m_gameOptions.debugScroll(linha); }
     std::string debugOptItem(int i) const { return m_gameOptions.debugItemText(i); }
     std::string debugOptTitle() const { return m_gameOptions.paneTitle(); }
+    // O radio "Screen Mode": o clique na linha e o modo escolhido. Quem
+    // aplica na janela e o onIdle, e o teste chama o onIdle de verdade.
+    void debugOptRow(int i) { m_gameOptions.debugRowClick(i); }
+    bool debugWantFullscreen() const { return m_gameOptions.wantFullscreen(); }
     bool debugConfirmOpen() const { return m_confirm.isOpen(); }
     // O quadro seguinte: é aqui que a confirmação se fechava sozinha.
     void debugPaneFrame() { m_confirm.update(m_selected); }
