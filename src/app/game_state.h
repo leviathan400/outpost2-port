@@ -203,6 +203,12 @@ public:
             }
         return false;
     }
+    // A dica do botao de rotulo `rotulo` (vazia se nao existe).
+    std::string debugOptTip(const std::string& rotulo) const {
+        for (const TextButton& b : const_cast<GameState*>(this)->structureButtons())
+            if (b.label == rotulo) return b.tip;
+        return std::string();
+    }
     std::vector<std::string> debugOptLabels() const {
         std::vector<std::string> out;
         for (const TextButton& b : structureButtons()) out.push_back(b.label);

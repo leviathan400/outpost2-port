@@ -2088,11 +2088,11 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
             const int top = kPaneBottom - 2 - 25;
             if (m_gameOptions.valueItem(sel)) {
                 TextButton l{};
-                l.cmd = kCmdOptLess; l.label = "L&ESS"; l.tip = "Turn this option down (L&ess)"; l.hotkey = 'E';
+                l.cmd = kCmdOptLess; l.label = "L&ESS"; l.tip = m_gameOptions.tipLess(sel); l.hotkey = 'E';
                 l.l = kColX + 9; l.t = top - 56; l.r = l.l + 85; l.b = l.t + 25;
                 out.push_back(l);
                 TextButton m{};
-                m.cmd = kCmdOptMore; m.label = "&MORE"; m.tip = "Turn this option up (&More)"; m.hotkey = 'M';
+                m.cmd = kCmdOptMore; m.label = "&MORE"; m.tip = m_gameOptions.tipMore(sel); m.hotkey = 'M';
                 m.l = kColX + 99; m.t = top - 56; m.r = m.l + 85; m.b = m.t + 25;
                 out.push_back(m);
             }

@@ -87,6 +87,12 @@ public:
     bool click(const PaneRect& pane, int x, int y, bool& changed, bool& back);
 
     bool valueItem(int i) const { return i >= OPT_MUSIC_VOL && i <= OPT_DETAIL; }
+    // As dicas dos botoes L&ESS e &MORE sao POR ITEM no original -- cada item
+    // tem as suas na tabela de 7 dwords que comeca em 0x4E3118 (campos "dica
+    // do botao esq./dir."). Fora dos itens com valor nao ha botao, e nao ha
+    // dica.
+    const char* tipLess(int i) const;
+    const char* tipMore(int i) const;
     int  selected() const { return m_list.sel; }
     void step(int dir) { if (valueItem(m_list.sel)) bump(m_list.sel, dir); }   // L&ESS / &MORE
     void apply();                                        // "&APPLY": grava o INI

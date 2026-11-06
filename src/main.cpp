@@ -3866,6 +3866,24 @@ static int runOptMenuTest(const std::string& dll) {
     casos.push_back({"controle: alternancia nao tem &MORE",
                      gs.debugOptClick("&MORE") ? 1 : 0, 0});
 
+    // As dicas dos dois botoes sao POR ITEM (tabela de 7 dwords em 0x4E3118),
+    // e nao uma frase generica: a do item escolhido diz de QUE opcao se trata.
+    static const char* kDicas[5][2] = {
+        {"Turn music volume down (L&ess)",         "Turn music volume up (&More)"},
+        {"Turn sound effects volume down (L&ess)", "Turn sound effects volume up (&More)"},
+        {"Turn game speed down (L&ess)",           "Turn game speed up (&More)"},
+        {"Turn scroll speed down (L&ess)",         "Turn scroll speed up (&More)"},
+        {"Turn detail level down (L&ess)",         "Turn detail level up (&More)"},
+    };
+    for (int i = 0; i < 5; ++i) {
+        gs.debugOptSelect(i);
+        char nome[96];
+        std::snprintf(nome, sizeof(nome), "a dica do L&ESS do item %d", i);
+        texto(nome, gs.debugOptTip("L&ESS"), kDicas[i][0]);
+        std::snprintf(nome, sizeof(nome), "a dica do &MORE do item %d", i);
+        texto(nome, gs.debugOptTip("&MORE"), kDicas[i][1]);
+    }
+
     // ---- extra do porte: o radio "Screen Mode" --------------------------
     // A janela deste teste e JANELA (init com fullscreen=false). Entrar no
     // PREFERENCES tem de acertar o radio com ELA, e nao com o INI -- o

@@ -153,6 +153,12 @@ que já está: em 2026-11-06, depois do inventário, a aba Options apareceu com
 dois (os itens da tela de fim de missão não faziam nada) e foi consertada —
 ver 5.7.
 
+**Uma divergência de estrutura segue ABERTA** (achada em 2026-11-06, ver 5.9):
+a tela `PREFERENCES` de dentro do jogo tem no original **10 itens** com um
+botão de estado por item e uma área de detalhe embaixo da lista, e o porte
+mostra 13 linhas com o valor embutido. As dicas dos botões já foram
+corrigidas; o resto depende de uma decisão.
+
 ### Grande
 
 1. ~~Rede com mais de 2 jogadores~~ — **feito** em 2026-10-30. A topologia é a
@@ -857,7 +863,7 @@ jogo solo e 9 em rede.
 
 ### O teste
 
-`--optmenutest <DLL>`: 40 casos em jogo solo e 42 em multijogador (roda com
+`--optmenutest <DLL>`: 50 casos em jogo solo e 52 em multijogador (roda com
 `E04.DLL` e `MF2_01.DLL`). Cobre os dois botões do `PREFERENCES` separadamente,
 a composição e o título das duas telas de fim, a confirmação sobrevivendo ao
 quadro seguinte, a troca dos botões por `&YES`/`&NO`, o `&NO` devolvendo a
@@ -928,6 +934,66 @@ passa de graça. O INI do usuário é guardado em bytes e devolvido no fim.
 Neutralizando cada peça: sem `applyScreenMode` no `onIdle` **4** falhas, sem
 acertar o espelho **3**, APPLY que não aplica **1**, rádio virando alternância
 **5**, INI que não guarda o `Fullscreen` **2** — com a base em 0 antes e depois.
+
+---
+
+## 5.9. As dicas do `PREFERENCES` são por item — e a tela toda é outra (2026-11-06)
+
+Investigando a dica genérica dos botões `L&ESS`/`&MORE`, o `sub_465DA0` levou a
+uma **tabela de 7 dwords por item** em `0x4E3118`, indexada a partir de **1**
+(`[esi+250h]` é o item escolhido). Cada campo é um índice no vetor `Format`
+(`0x4E8xxx`, entrada 0 = `" ENGLISH"`):
+
+| campo | o que é |
+|---|---|
+| 0 | dica do controle de estado — `"Toggle music"` |
+| 1 | rótulo do controle de estado — `"Play Music"` |
+| 2 | id do comando (0x0E, 0x0F, 0x11…) |
+| 3 / 4 | dica e rótulo do botão da direita — `"Turn music volume up (&More)"` / `"&MORE"` |
+| 5 / 6 | dica e rótulo do botão da esquerda — `"Turn music volume down (L&ess)"` / `"L&ESS"` |
+
+Resolvida, a tabela dá a tela inteira:
+
+| item | controle de estado | L&ESS/&MORE |
+|---|---|---|
+| 1 | `Play Music` (cmd 0x0E) | volume da música |
+| 2 | `Play Sound Effects` (0x0F) | volume dos efeitos |
+| 3 | — | `Game Speed` |
+| 4 | — | `Scrolling Speed` |
+| 5 | `Display Computer Overlay` (0x11) | — |
+| 6 | `Display Ambient Animations` (0x10) | — |
+| 7 | `Display Structure Shadows` (0x12) | — |
+| 8 | `Display Vehicle Shadows` (0x13) | — |
+| 9 | `Display Completed Objectives` (0x14) | — |
+| 10 | `Skip Frames` (0x15) | — |
+
+### O que foi corrigido
+
+As **dicas por item**. O porte dizia `"Turn this option down (L&ess)"` para
+qualquer item; agora cada um diz o seu (`GameOptionsPane::tipLess/tipMore`).
+Dez casos novos no `--optmenutest`; voltando à dica genérica, **10 falhas**.
+
+### O que ficou ABERTO (decisão, não esquecimento)
+
+A tela do original **não é a que o porte mostra**:
+
+- são **10 itens**, não 13. Música e som são UM item cada, com a alternância
+  **e** o volume juntos; o porte parte cada um em duas linhas;
+- a lista mostra só o **nome curto** do item (`"Music"`, `"Sound Effects"`,
+  `"Game Speed"`…, que é o que o `sub_4663A0` devolve), e não o valor;
+- embaixo da lista há uma **área de detalhe** do item escolhido
+  (`sub_465DA0`): em `[ebx+18h]+0x1E` o controle de estado com o nome do item
+  (`"Play Music"`) e a marca de ligado, em `+0x14` abaixo o valor
+  (`"Volume:<R>%i"`) e em `+0x46` os dois botões;
+- **o botão de alternância existe** — era o que faltava achar. Não há string
+  `"TOGGLE"` no executável porque o rótulo dele é **o nome do próprio item**; a
+  dica é que é `"Toggle music"`. No porte a alternância é o clique na linha;
+- `Graphic Detail Level` **não tem registro** nesta tabela: a linha existe no
+  porte, mas no original o item não está na lista de dentro do jogo (as duas
+  dicas dele existem no executável e foram usadas assim mesmo).
+
+Refazer a tela é trabalho de uma sessão e mexe numa coisa que hoje funciona,
+então fica para quando for decidido.
 
 ---
 

@@ -159,6 +159,33 @@ std::vector<std::string> GameOptionsPane::items() const {
     return out;
 }
 
+// Tabela de 0x4E3118, um registro de 7 dwords por item: {dica do estado,
+// rotulo do estado, id do comando, dica do &MORE, rotulo, dica do L&ESS,
+// rotulo}. Os textos abaixo sao os de la, resolvidos pelo vetor Format.
+// O "Graphic Detail Level" nao tem registro na lista de dentro do jogo, mas as
+// duas dicas dele existem no executavel e sao estas.
+const char* GameOptionsPane::tipLess(int i) const {
+    switch (i) {
+    case OPT_MUSIC_VOL:   return "Turn music volume down (L&ess)";
+    case OPT_SOUND_VOL:   return "Turn sound effects volume down (L&ess)";
+    case OPT_GAME_SPEED:  return "Turn game speed down (L&ess)";
+    case OPT_SCROLL_RATE: return "Turn scroll speed down (L&ess)";
+    case OPT_DETAIL:      return "Turn detail level down (L&ess)";
+    default:              return "";
+    }
+}
+
+const char* GameOptionsPane::tipMore(int i) const {
+    switch (i) {
+    case OPT_MUSIC_VOL:   return "Turn music volume up (&More)";
+    case OPT_SOUND_VOL:   return "Turn sound effects volume up (&More)";
+    case OPT_GAME_SPEED:  return "Turn game speed up (&More)";
+    case OPT_SCROLL_RATE: return "Turn scroll speed up (&More)";
+    case OPT_DETAIL:      return "Turn detail level up (&More)";
+    default:              return "";
+    }
+}
+
 ListBoxLayout GameOptionsPane::layout(const PaneRect& pane) const {
     // Nas telas do manual os botoes ficam EMBAIXO (nao ha onde empilha-los em
     // cima, a lista ocupa o painel), entao a lista encurta para caber: um
