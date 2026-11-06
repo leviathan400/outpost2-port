@@ -446,6 +446,19 @@ void GameState::requestRestartMission() {
         std::cerr << "[GameState] nao consegui reiniciar " << dll << std::endl;
 }
 
+// "Go &Back to Main Menu" (sub_457880 caso 9): o original NAO encerra na mao --
+// manda o mesmo pacote 0x31, com o metodo GoAI. A colonia fica de pe nas maos
+// da IA e quem saiu e que encerra, com o codigo 6 em jogo solo e 9 em rede.
+void GameState::leaveToMainMenu() {
+    sendQuit(QUIT_GO_AI);
+}
+
+// "&Transfer vehicles/destroy structures" (caso 0xC): doa os veiculos ao
+// aliado e sai. Quem varre o mapa e o proprio pacote 0x31.
+void GameState::transferAndLeave() {
+    sendQuit(QUIT_TRANSFER);
+}
+
 // "&Destroy all vehicles and structures and leave the game": tira do mapa tudo
 // o que e do jogador local e encerra com o codigo 6.
 void GameState::destroyAllAndLeave() {
@@ -467,11 +480,12 @@ bool GameState::chatKey(const SDL_Event& e) {
     if (e.type != SDL_KEYDOWN) return false;
     const SDL_Keycode k = e.key.keysym.sym;
     if (!m_chatOpen) {
-        // Fechada, so o Enter interessa -- e so em partida com mais gente. (No
-        // original o filtro esta sempre instalado, porque e por ele que se
-        // digitam os cheats "Dan's"; esses nao estao portados, entao em jogo
-        // solo a linha nao teria para quem falar.)
-        if ((k != SDLK_RETURN && k != SDLK_KP_ENTER) || !multiplayerMission()) return false;
+        // Fechada, so o Enter interessa. E em QUALQUER partida: sub_4115F0 nao
+        // testa o tipo de jogo, e com razao -- e por esta linha que se digitam
+        // os cheats "Dan's" (ver cheat.cpp), que em jogo solo e justamente
+        // onde fazem sentido. O porte exigia multijogador aqui, e com isso os
+        // cheats ficavam inalcancaveis fora da rede.
+        if (k != SDLK_RETURN && k != SDLK_KP_ENTER) return false;
         if (m_saveDlg.active() || m_endPhase) return false;
         m_chatOpen = true;
         m_chatLine.clear();
@@ -1983,6 +1997,20 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
         return out;
     }
     if (m_tab == 5 && m_mission) {
+        // sub_45C200: com a confirmacao no ar ela TOMA o painel (sub_45D020
+        // troca o painel do contentor), entao os botoes sao os dela -- sem
+        // isto a tela END MISSION ficava com os proprios botoes e o &YES nao
+        // existia em lugar nenhum.
+        if (m_confirm.isOpen()) {
+            TextButton y{};
+            y.cmd = kCmdYes; y.label = "&YES"; y.tip = "&YES: Confirm command"; y.hotkey = 'Y';
+            out.push_back(y);
+            TextButton n{};
+            n.cmd = kCmdNo; n.label = "&NO"; n.tip = "&NO: Abort command"; n.hotkey = 'N';
+            out.push_back(n);
+            layoutButtons();
+            return out;
+        }
         if (m_gameOptions.isOpen()) {
             // Um botao largo da pilha, de cima para baixo.
             int empilha = kPaneTop + 30;
@@ -2015,10 +2043,18 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
                 return out;
             }
             if (m_gameOptions.mode() == GameOptionsPane::ENDMISSION) {
-                larga(kCmdOptRestart, "RESTART MISSIO&N", "E&nd current mission and restart it", 'N');
-                larga(kCmdOptMainMenu, "&BACK TO MAIN MENU", "Go &Back to Main Menu", 'B');
-                larga(kCmdOptExit, "E&XIT OUTPOST 2", "E&xit Outpost 2 and return to Windows", 'X');
-                larga(kCmdOptDestroy, "SELF-&DESTRUCT", "&Destroy all vehicles and structures", 'D');
+                // sub_465830: sao DUAS telas. Em multijogador (modo 4) nao se
+                // reinicia nem se volta ao menu -- so se entrega a colonia; em
+                // jogo solo (modo 3) nao existe autodestruicao.
+                if (multiplayerMission()) {
+                    larga(kCmdOptDestroy, "SELF-&DESTRUCT", "&Destroy all vehicles and structures", 'D');
+                    larga(kCmdOptTransfer, "&TRANSFER", "&Transfer vehicles/destroy structures", 'T');
+                    out.back().disabled = !quitTransferAvailable();   // sub_4909F0
+                } else {
+                    larga(kCmdOptRestart, "RESTART MISSIO&N", "E&nd current mission and restart it", 'N');
+                    larga(kCmdOptMainMenu, "&BACK TO MAIN MENU", "Go &Back to Main Menu", 'B');
+                    larga(kCmdOptExit, "E&XIT OUTPOST 2", "E&xit Outpost 2 and return to Windows", 'X');
+                }
                 larga(kCmdOptMenu, "&GAME OPTIONS", "Back to &Game Options", 'G');
                 return out;
             }
@@ -2344,9 +2380,10 @@ void GameState::clickCommand(int cmd) {                  // vt[1] do comando
         if (c == UC_DUMP_CARGO) { if (!m_selected.empty()) sendDumpCargo(m_selected[0]); }   // pacote 0x0E
         else if (c == UC_IDLE) { if (!m_selected.empty()) structureDoIdle(m_selected[0]); }  // pacote 0x12
         else if (c == kCmdOptRestart)  { m_gameOptions.close(); requestRestartMission(); }
-        else if (c == kCmdOptMainMenu) { m_gameOptions.close(); endGameAborted(); }
+        else if (c == kCmdOptMainMenu) { m_gameOptions.close(); leaveToMainMenu(); }
         else if (c == kCmdOptExit)     { SDL_Event q{}; q.type = SDL_QUIT; SDL_PushEvent(&q); }
         else if (c == kCmdOptDestroy)  { m_gameOptions.close(); destroyAllAndLeave(); }
+        else if (c == kCmdOptTransfer) { m_gameOptions.close(); transferAndLeave(); }
         else uiCommandClick(UC_STOP, m_selected);           // pacote 5 (parar)
         return;
     }
@@ -2437,15 +2474,19 @@ void GameState::clickCommand(int cmd) {                  // vt[1] do comando
         m_saveDlg.open(SaveSlotsDialog::kSave, m_mission ? m_mission->levelDesc : "");
         return;
     }
-    // Cada um destes confirma antes, como os casos 3, 4, 5 e 6 de sub_457880.
+    // Cada um destes confirma antes (casos 3 a 7 de sub_457880), e o YES e que
+    // executa o caso 8..0xC. A confirmacao nasce marcada como "do painel de
+    // opcoes", senao ela se fecha sozinha por falta de selecao.
     if (cmd == kCmdOptRestart || cmd == kCmdOptMainMenu || cmd == kCmdOptExit ||
-        cmd == kCmdOptDestroy) {
+        cmd == kCmdOptDestroy || cmd == kCmdOptTransfer) {
         const char* msg = cmd == kCmdOptRestart  ? "Are you sure you want to restart the mission?"
                         : cmd == kCmdOptMainMenu ? "Are you sure you want to abort the mission?"
                         : cmd == kCmdOptExit     ? "Are you sure you want to exit to Windows?"
-                        : "Are you sure you want to destroy all your vehicles and structures "
+                        : cmd == kCmdOptDestroy  ? "Are you sure you want to destroy all your vehicles "
+                                                   "and structures and leave the game?"
+                        : "Are you sure you want to transfer your vehicles to another player "
                           "and leave the game?";
-        m_confirm.open(m_selected.empty() ? 0 : m_selected[0], msg, cmd);
+        m_confirm.open(m_selected.empty() ? 0 : m_selected[0], msg, cmd, true);
         return;
     }
     if (cmd == UC_BUILD) {                                // sub_456250 → painel de produção
@@ -2722,7 +2763,9 @@ void GameState::renderPanel(Renderer& renderer) {
         // sub_46D3B0: o titulo do escolhedor, com a fonte de titulo.
         drawMarkupText(fb, VW, VH, PaneRect{pane.l + 0xD, pane.t + 2, pane.r - 0xE, pane.t + 0x1A},
                        "Transfer Vehicle(s) to:", 0xFF00FF00u, true, kMarkupLine);
-    } else if (m_tab == 5 && m_mission && m_gameOptions.isOpen())
+    } else if (m_tab == 5 && m_mission && m_confirm.isOpen())
+        m_confirm.draw(fb, VW, VH, pane);                // sub_45C0B0 no lugar do painel
+    else if (m_tab == 5 && m_mission && m_gameOptions.isOpen())
         m_gameOptions.draw(fb, VW, VH, pane, m_mouseNX, m_mouseNY);
     else if (m_tab == 5 && m_mission)
         m_objectives.draw(fb, VW, VH, pane, m_mouseNX, m_mouseNY);

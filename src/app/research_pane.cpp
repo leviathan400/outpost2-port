@@ -232,8 +232,14 @@ bool StudentsPane::click(int winL, int winT, int x, int y) {
 
 // ---- Confirmação -------------------------------------------------------------
 
+// sub_45C1A0: a confirmacao se fecha sozinha quando a selecao deixa de ser a
+// unidade que a abriu -- MENOS quando quem a abriu foi o painel de Game
+// Options (`cmp eax, offset unk_565AC8`), porque a tela END MISSION nao
+// depende de selecao. Era por isso que, sem nada selecionado, os itens dessa
+// tela nao faziam NADA: a confirmacao fechava no quadro seguinte.
 void ConfirmPane::update(const std::vector<int>& sel) {
-    if (m_open && (sel.size() != 1 || sel[0] != m_unit)) m_open = false;
+    if (!m_open || m_fromOptions) return;
+    if (sel.size() != 1 || sel[0] != m_unit) m_open = false;
 }
 
 void ConfirmPane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane) const {   // sub_45C0B0

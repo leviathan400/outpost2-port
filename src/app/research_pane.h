@@ -82,7 +82,13 @@ class ConfirmPane {
 public:
     bool isOpen() const { return m_open; }
     // cmd = comando executado no YES (dword_56500C: STOP de pesquisa/treino, despejo...).
-    void open(int unitId, const std::string& msg, int cmd = -1) { m_open = true; m_unit = unitId; m_msg = msg; m_cmd = cmd; }
+    // `fromOptions` e o [+0x15C] == unk_565AC8 do original: quem abriu foi o
+    // painel de Game Options, e nao uma unidade -- a confirmacao entao nao
+    // depende de selecao nenhuma para continuar no ar.
+    void open(int unitId, const std::string& msg, int cmd = -1, bool fromOptions = false) {
+        m_open = true; m_unit = unitId; m_msg = msg; m_cmd = cmd; m_fromOptions = fromOptions;
+    }
+    bool fromOptions() const { return m_fromOptions; }
     int command() const { return m_cmd; }
     void close() { m_open = false; }
     void update(const std::vector<int>& sel);
@@ -91,6 +97,7 @@ private:
     bool m_open = false;
     int m_unit = 0;
     int m_cmd = -1;
+    bool m_fromOptions = false;    // [+0x15C] == unk_565AC8
     std::string m_msg;
 };
 

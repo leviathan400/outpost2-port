@@ -54,5 +54,8 @@ void sendAlly(int to);
 void sendTransfer(const std::vector<int>& ids, int to);
 // A tela END MISSION: manda o 0x31 com o metodo escolhido.
 void sendQuit(int method);
+// sub_4909F0: o "&TRANSFER" dessa tela so vale se algum OUTRO jogador humano
+// estiver aliado a mim -- e para ele que as unidades vao.
+bool quitTransferAvailable();
 
 } // namespace op2

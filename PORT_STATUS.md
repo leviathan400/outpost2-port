@@ -32,7 +32,7 @@ próprio com pontes de ABI para a API que elas importam do `OUTPOST2.EXE`.
 | Rede (`src/net`) | 1.400 linhas |
 | DLLs de missão que carregam e rodam | **94 de 94** |
 | Símbolos da API do EXE implementados | **222 de 222** (os que as 94 DLLs importam) |
-| Modos de linha de comando (testes e telas) | 95 |
+| Modos de linha de comando (testes e telas) | 96 |
 
 As duas linhas de missões são a medida honesta de cobertura: toda DLL de
 missão do disco carrega, cria as unidades e roda, e nenhuma importa um símbolo
@@ -46,7 +46,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 95 modos de teste/captura
+  main.cpp        entrada + os 96 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -147,6 +147,11 @@ sobre o pacote 0x2B, com os oito índices mapeados mas nenhuma das 94 missões
 originais a importando.
 
 Revisado item a item em 2026-10-28 e em 2026-11-03/06, conferindo no código.
+
+Isso vale para o que **falta portar**, e não quer dizer que não haja defeito no
+que já está: em 2026-11-06, depois do inventário, a aba Options apareceu com
+dois (os itens da tela de fim de missão não faziam nada) e foi consertada —
+ver 5.7.
 
 ### Grande
 
@@ -734,6 +739,20 @@ Conferido em 2026-11-06:
 - A descrição "aumenta a capacidade do carro do Dan" para o cheat 1 é leitura
   literal da piada: o que ele faz é somar 25% à população.
 
+### A linha de conversa abre em jogo solo (consertado em 2026-11-06)
+
+Achado logo depois, conferindo o caminho até aqui: o porte só abria a linha de
+conversa com o Enter **em partida multijogador**, e com isso os cheats ficavam
+inalcançáveis justamente onde servem. O filtro do original (`sub_4115F0`) não
+testa o tipo de jogo: trata o `WM_CHAR` 0x0D com a linha fechada e abre, ponto.
+O porteiro saiu.
+
+O `--chattest` **devolvia 0 sempre**, mesmo imprimindo `FALHOU` — foi por isso
+que a regressão parecia limpa com a linha morta em jogo solo. Agora devolve o
+código certo e tem um caso novo: digitar `Dan's dog could make more ore.` na
+linha, em jogo solo, e ver o estoque encher — o caminho inteiro, da tecla ao
+`sub_58642A`, e não só o hash.
+
 ### A outra via: a API de cheat das missões (ainda não portada)
 
 Separado das frases, o `OUTPOST2.EXE` exporta uma API de cheat para as DLLs de
@@ -765,6 +784,94 @@ pontuação.
 
 ---
 
+## 5.7. A aba Options (`GAME OPTIONS`) — CONSERTADA ✅ (2026-11-06)
+
+Relatado pelo usuário: *"todos os menus do game options: Restart Mission, End
+Mission, Exit Game, etc estão sem função"*. Estava certo, e eram **dois
+defeitos independentes** — mais três divergências de fidelidade que apareceram
+ao conferir `sub_465830` e `sub_457880` no disassembly.
+
+### Defeito 1: `L&ESS` e `&MORE` com o id de outro comando
+
+Os três ids `kCmdOptLess`, `kCmdOptMore` e `kCmdOptBack` valiam −20, −21 e −22
+— exatamente os de `kCmdLabsCurrent`, `kCmdResStructures` e `kCmdResSummary`.
+Em `clickCommand` os tratadores dos relatórios vêm **antes** e saem com
+`return` incondicional (`if (cmd == kCmdResStructures) { if (m_tab == 2) ...;
+return; }`), então na aba Options o clique morria ali. Os dois botões do
+`PREFERENCES` não faziam nada. Agora são −70, −71 e −72.
+
+As alternâncias ("Play Music", "Display Vehicle Shadows", ...) sempre
+funcionaram, porque mudam no clique da **lista**, não nesses botões — foi por
+isso que o defeito passou batido.
+
+### Defeito 2: a confirmação se fechava sozinha
+
+Cada item da tela de fim de missão abre a confirmação `dword_564EA8` (os casos
+3 a 7 de `sub_457880`), e é o `&YES` que executa o caso 8..0xC
+correspondente. No porte ela abria e **morria no quadro seguinte**, por três
+motivos somados:
+
+- `ConfirmPane::update` fechava a confirmação sempre que a seleção não fosse
+  exatamente a unidade que a abriu. Em `sub_45C1A0` esse auto-fecho tem uma
+  exceção que faltava: `cmp eax, offset unk_565AC8` — **se quem a abriu foi o
+  painel de Game Options, ela não depende de seleção nenhuma**. Sem nada
+  selecionado (o caso normal nessa tela), ela fechava no quadro seguinte.
+- os botões `&YES`/`&NO` (`sub_45C200`) nunca eram montados, porque o ramo da
+  aba 5 devolvia os botões da própria tela e saía antes;
+- e o desenho mostrava o painel de opções em vez da mensagem (`sub_45C0B0`).
+
+No original a confirmação **toma** o painel (`sub_45D020` troca o painel do
+contentor) e o `&NO` devolve o painel que a abriu. É assim agora: a tela de fim
+reaparece inteira ao desistir.
+
+### Divergência A: a tela de fim de missão é UMA DE DUAS
+
+`sub_465830` tem cinco modos, e o botão `E&ND MISSION` escolhe entre o 3 e o 4
+pelo mesmo teste de `sub_4027D0`. O porte juntava os quatro itens numa tela só:
+
+| | jogo solo (modo 3) | multijogador (modo 4) |
+|---|---|---|
+| itens | `RESTART MISSIO&N` (caso 8), `&BACK TO MAIN MENU` (9), `E&XIT OUTPOST 2` (0xA) | `SELF-&DESTRUCT` (0xB), `&TRANSFER` (0xC) |
+| título | `Game End: Single Player` | `Game End: Multiplayer` |
+
+Ou seja: **não se reinicia nem se volta ao menu numa partida em rede**, e **não
+existe autodestruição em jogo solo**. O `&TRANSFER` ("&Transfer
+vehicles/destroy structures") faltava por inteiro; ele nasce desabilitado a
+menos que `sub_4909F0` ache outro jogador **humano** com o meu bit na máscara
+de aliança — é para ele que os veículos vão.
+
+### Divergência B: o título não é "End Mission"
+
+São cinco, um por modo (`off_4E8B28`..`off_4E8B38`): "Game Options", "Mission
+Objectives (Alt+O)", "Game Preferences", "Game End: Single Player" e "Game End:
+Multiplayer". O porte escrevia "End Mission", que não existe no executável.
+
+### Divergência C: o `BACK TO MAIN MENU` manda pacote
+
+O original não encerra na mão: os casos 9, 0xB e 0xC chamam `sub_48A5D0`, que
+monta o **pacote 0x31** com o método (`GoAI`, `SelfDestruct`, `Transfer`) e um
+atraso — **4 na autodestruição e 2 nos outros dois**, detalhe que o porte
+tratava como constante. E `applyQuit` tinha um `method != QUIT_GO_AI` a mais:
+em `loc_40FD54` quem saiu encerra em **qualquer** método, com o código 6 em
+jogo solo e 9 em rede.
+
+### O teste
+
+`--optmenutest <DLL>`: 27 casos em jogo solo e 29 em multijogador (roda com
+`E04.DLL` e `MF2_01.DLL`). Cobre os dois botões do `PREFERENCES` separadamente,
+a composição e o título das duas telas de fim, a confirmação sobrevivendo ao
+quadro seguinte, a troca dos botões por `&YES`/`&NO`, o `&NO` devolvendo a
+tela, o `&YES` do `E&XIT` pedindo o fim do programa, o `sub_4909F0` nos três
+estados e o caminho inteiro do clique até o pacote 0x31, medindo o atraso.
+
+Neutralizando cada peça, uma por vez: ids de volta **2** falhas (uma por
+botão), auto-fecho da confirmação **7/6**, sem `&YES`/`&NO` **6/5**, tela de
+fim sem o par solo/rede **0/10** (o esperado: em jogo solo a lista antiga já
+era a certa), título **1/1**, `GoAI` sem encerrar **4/3** e atraso fixo
+**0/1**.
+
+---
+
 ## 6. Build e execução
 
 **Toolchain:** CMake >= 3.15 + MSVC, C++17, SDL2 2.30.9 (em `third_party/`).
@@ -786,7 +893,7 @@ missão e os recursos originais do diretório de trabalho).
 
 ### Testes por linha de comando
 
-São 95 modos. Os que cobrem regressão de verdade:
+São 96 modos. Os que cobrem regressão de verdade:
 
 | Modo | O que prova |
 |---|---|
@@ -795,7 +902,7 @@ São 95 modos. Os que cobrem regressão de verdade:
 | `--mptest <DLL>` | missão multijogador local |
 | `--mpui host\|join` | o fluxo das telas de rede, pelo despacho de verdade dos botões |
 | `--uitest` | combos e barras de rolagem, pelo caminho do mouse e do teclado |
-| `--chattest <DLL> [tela]` | a linha de conversa: mandar, desistir e a máscara de destinatários |
+| `--chattest <DLL> [tela]` | a linha de conversa: mandar, desistir, a máscara de destinatários e um cheat digitado |
 | `--transfertest <DLL>` | o TRANSFER: escolhedor, desistência e a troca de dono |
 | `--idletest <DLL>` | o aviso de perder metal ao desligar armazém/fundição, nos dois lados da fronteira |
 | `--garagecounttest <DLL>` | os seis pontos em que um veículo guardado em garagem tem de contar |
@@ -803,6 +910,7 @@ São 95 modos. Os que cobrem regressão de verdade:
 | `--deletetest <DLL>` | grupo de IA com prazo vencido: autodestruição e, 400 ticks depois, sair do mapa |
 | `--cheattest <DLL>` | os cheats do chat: os quatro hashes do executável e o efeito de cada um |
 | `--item21test <DLL>` | as vozes da plataforma, a arma no ícone do STORAGE e o anel anti-duplicata |
+| `--optmenutest <DLL>` | a aba Options: os botões do PREFERENCES e a tela de fim de missão inteira |
 | `--missiontest <DLL> <saida> <ticks>` | carrega e roda qualquer missão |
 | `--aitest <DLL campanha> <DLL multi>` | o `AILevel` chega ao jogador 0 e o multijogador fica intacto |
 | `--helptest [tópico]` | o leitor do `.HLP` e a navegação da tela do manual |

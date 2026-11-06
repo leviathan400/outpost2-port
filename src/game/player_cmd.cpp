@@ -53,12 +53,26 @@ void sendTransfer(const std::vector<int>& ids, int to) {    // sub_455950
     commandSubmit(TethysGame::localPlayer(), pkt);
 }
 
-void sendQuit(int method) {                                 // sub_457880 casos 4/7/8
+void sendQuit(int method) {                                 // sub_457880 casos 9/0xB/0xC
     CommandPacket pkt;
     pkt.type = CMD_QUIT;
     pkt.arg0 = method;
-    pkt.arg1 = 2;                                           // o atraso que o original usa
+    // sub_48A5D0 recebe o atraso junto do metodo, e ele NAO e o mesmo nos
+    // tres: a autodestruicao usa 4 (caso 0xB) e os outros dois, 2.
+    pkt.arg1 = method == QUIT_SELF_DESTRUCT ? 4 : 2;
     commandSubmit(TethysGame::localPlayer(), pkt);
+}
+
+// sub_4909F0: varre os jogadores e devolve true se algum OUTRO humano tem o
+// meu bit na mascara de aliancas. Sem aliado nao ha para quem transferir, e o
+// botao "&TRANSFER" nasce desabilitado.
+bool quitTransferAvailable() {
+    const int me = TethysGame::localPlayer();
+    for (int i = 0; i < TethysGame::noPlayers() && i < kMaxPlayers; ++i) {
+        if (i == me || !g_playerData[i].isHuman) continue;
+        if (g_playerData[i].allyMask & (1u << me)) return true;
+    }
+    return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -184,8 +198,10 @@ void applyQuit(int owner, int method, int delay) {
     }
     const std::string t = playerName(owner) + " has left the game";
     postMessage(-1, -1, t.c_str(), 0);
-    // loc_40FD54: so quem saiu encerra, e em multijogador com o codigo 9.
-    if ((owner & 0x0F) == me && method != QUIT_GO_AI) endGamePlayerQuit(delay);
+    // loc_40FD54: quem saiu encerra -- em QUALQUER metodo, o GoAI do "BACK TO
+    // MAIN MENU" inclusive (o original nao testa o metodo aqui) -- e em
+    // multijogador com o codigo 9 em vez do 6.
+    if ((owner & 0x0F) == me) endGamePlayerQuit(delay);
 }
 
 } // namespace op2

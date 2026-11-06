@@ -184,6 +184,34 @@ public:
             if (qual == 4) m_gameOptions.debugOpenTopic(1);
         }
     }
+    // --optmenutest: a aba Options pela mesma porta do jogador. Acha o botão
+    // pelo rótulo e clica nele; um botão desabilitado não responde, como no
+    // clique de verdade.
+    bool debugOptClick(const std::string& rotulo) {
+        for (const TextButton& b : structureButtons())
+            if (b.label == rotulo) {
+                if (b.disabled) return false;
+                clickCommand(b.cmd);
+                return true;
+            }
+        return false;
+    }
+    std::vector<std::string> debugOptLabels() const {
+        std::vector<std::string> out;
+        for (const TextButton& b : structureButtons()) out.push_back(b.label);
+        return out;
+    }
+    bool debugOptDisabled(const std::string& rotulo) const {
+        for (const TextButton& b : structureButtons())
+            if (b.label == rotulo) return b.disabled;
+        return false;
+    }
+    void debugOptSelect(int i) { m_gameOptions.debugSelect(i); }
+    std::string debugOptItem(int i) const { return m_gameOptions.debugItemText(i); }
+    std::string debugOptTitle() const { return m_gameOptions.paneTitle(); }
+    bool debugConfirmOpen() const { return m_confirm.isOpen(); }
+    // O quadro seguinte: é aqui que a confirmação se fechava sozinha.
+    void debugPaneFrame() { m_confirm.update(m_selected); }
     void debugSetHover(int id) { m_hoverUnit = id; m_hoverStartTick = -1000; }  // só p/ --selshot
     void debugArmCommand(int cmd) { m_targetCmd = cmd; }                        // só p/ --placeshot
     void debugMiniZoom(int n) { for (int k = 0; k < n; ++k) m_mini.zoomIn(); }   // só p/ --minishot
@@ -266,12 +294,17 @@ private:
                m_vehicles.isOpen();
     }
     static constexpr int kCmdGameOptions = -4;
-    static constexpr int kCmdOptLess = -20, kCmdOptMore = -21, kCmdOptBack = -22;
+    // -70..-72 e NAO -20..-22: nesses tres os ids colidiam com
+    // kCmdLabsCurrent, kCmdResStructures e kCmdResSummary, cujos tratadores
+    // vem antes em clickCommand e saem com `return` em QUALQUER aba -- o
+    // L&ESS e o &MORE do PREFERENCES nao faziam nada.
+    static constexpr int kCmdOptLess = -70, kCmdOptMore = -71, kCmdOptBack = -72;
     // Os seis itens do menu da aba (sub_457880) e os da tela END MISSION.
     static constexpr int kCmdOptObjectives = -30, kCmdOptManual = -31, kCmdOptPrefs = -32;
     static constexpr int kCmdOptLoad = -33, kCmdOptSave = -34, kCmdOptEnd = -35;
     static constexpr int kCmdOptRestart = -36, kCmdOptMainMenu = -37, kCmdOptExit = -38;
     static constexpr int kCmdOptDestroy = -39, kCmdOptApply = -40, kCmdOptMenu = -41;
+    static constexpr int kCmdOptTransfer = -73;   // "&TRANSFER" (so em multijogador)
     // Aba Communications em multijogador (sub_4670A0).
     static constexpr int kCmdAlliesChat = -42, kCmdMessages = -43, kCmdNetStats = -44;
     // Escolhedor de jogador do TRANSFER (sub_46D230): um botao por jogador,
@@ -316,6 +349,8 @@ private:
     // Itens da tela END MISSION da aba Options, depois da confirmacao.
     void requestRestartMission();   // recarrega a MESMA missao, do zero
     void destroyAllAndLeave();      // destroi o que e meu e encerra a partida
+    void leaveToMainMenu();         // entrega a colonia a IA e sai (pacote 0x31)
+    void transferAndLeave();        // doa as unidades ao aliado e sai
     void selectAt(int nx, int ny, bool additive);
     void selectBox(int x0, int y0, int x1, int y1);
     void renderPanel(Renderer& renderer);

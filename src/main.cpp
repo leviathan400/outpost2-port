@@ -3063,6 +3063,27 @@ static int runChatTest(const std::string& dll, const char* shot) {
                         op2::messageAt(op2::messageCount() - 1).x == -2;
     std::printf("[ChatTest] mandar: %s (%s)\n", entrou ? "ok" : "FALHOU",
                 ultima.c_str());
+    bool tudoOk = entrou;
+
+    // A linha e a porta dos cheats, e e em jogo solo que eles servem: digita o
+    // primeiro e ve o estoque encher. (O hash e o efeito tem o seu proprio
+    // teste no --cheattest; aqui o que se prova e o CAMINHO: tecla -> linha ->
+    // pacote 0x30 -> sub_58642A.)
+    const int eu = op2::TethysGame::localPlayer();
+    // A missao comeca com a colonia ainda nao contada; o teto do estoque aqui
+    // e so o que torna o efeito observavel.
+    if (op2::g_colony[eu].oreCapacity <= 0) op2::g_colony[eu].oreCapacity = 9000;
+    {
+        op2::g_playerData[eu].ore = 0;
+        tecla(SDLK_RETURN);
+        escreve("Dan's dog could make more ore.");
+        tecla(SDLK_RETURN);
+        const bool cheatOk = op2::g_playerData[eu].ore == op2::g_colony[eu].oreCapacity;
+        std::printf("[ChatTest] cheat pela linha: %s (minerio %d de %d)\n",
+                    cheatOk ? "ok" : "FALHOU", op2::g_playerData[eu].ore,
+                    op2::g_colony[eu].oreCapacity);
+        tudoOk = tudoOk && cheatOk;
+    }
 
     const int meio = op2::messageCount();
     tecla(SDLK_RETURN);
@@ -3074,7 +3095,9 @@ static int runChatTest(const std::string& dll, const char* shot) {
         std::printf("[ChatTest] tela -> %s\n", shot);
     }
     tecla(SDLK_ESCAPE);
-    std::printf("[ChatTest] Esc desiste: %s\n", op2::messageCount() == meio ? "ok" : "FALHOU");
+    const bool esc = op2::messageCount() == meio;
+    std::printf("[ChatTest] Esc desiste: %s\n", esc ? "ok" : "FALHOU");
+    tudoOk = tudoOk && esc;
 
     // Tirar-me da mascara cala a minha propria copia da linha.
     op2::chatMaskToggle(op2::TethysGame::localPlayer());
@@ -3082,12 +3105,13 @@ static int runChatTest(const std::string& dll, const char* shot) {
     tecla(SDLK_RETURN);
     escreve("silencio");
     tecla(SDLK_RETURN);
-    std::printf("[ChatTest] fora da mascara: %s\n",
-                op2::messageCount() == depois ? "ok" : "FALHOU");
+    const bool calado = op2::messageCount() == depois;
+    std::printf("[ChatTest] fora da mascara: %s\n", calado ? "ok" : "FALHOU");
+    tudoOk = tudoOk && calado;
 
     renderer.shutdown();
     SDL_Quit();
-    return 0;
+    return tudoOk ? 0 : 1;        // antes devolvia 0 sempre, e a falha passava
 }
 
 // --transfertest <DLL>: o TRANSFER (sub_455A80 -> escolhedor -> pacote 0x18).
@@ -3783,6 +3807,164 @@ static int runCheatTest(const std::string& dll) {
         if (!bom) ok = false;
         std::printf("[Cheat] %-40s %lld (esperado %lld) %s\n", c.nome, c.obtido, c.esperado,
                     bom ? "ok" : "FALHOU");
+    }
+    std::fflush(stdout);
+    renderer.shutdown(); SDL_Quit();
+    return ok ? 0 : 1;
+}
+
+// --optmenutest <DLL>: a aba Options de ponta a ponta. Dois bugs moravam aqui:
+//   o L&ESS e o &MORE do PREFERENCES tinham o id de OUTRO comando (kCmdLabsCurrent
+//   e kCmdResStructures), cujo tratador vem antes e sai com `return`; e a tela de
+//   fim de missao abria a confirmacao, que se fechava sozinha no quadro seguinte
+//   por falta de selecao -- nenhum dos itens fazia nada.
+static int runOptMenuTest(const std::string& dll) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 optmenutest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+
+    const bool rede = op2::multiplayerMission();
+    std::printf("[opt] %s: %s\n", dll.c_str(), rede ? "multijogador" : "jogo solo");
+
+    struct Caso { std::string nome; long long obtido; long long esperado; };
+    std::vector<Caso> casos;
+    auto texto = [&](const char* nome, const std::string& a, const std::string& b) {
+        casos.push_back({nome, a == b ? 1 : 0, 1});
+        if (a != b) std::printf("[opt]   \"%s\" != \"%s\"\n", a.c_str(), b.c_str());
+    };
+
+    // ---- PREFERENCES: os botoes L&ESS e &MORE ---------------------------
+    gs.debugTab(5);
+    gs.debugOptionsScreen(1);                        // PREFERENCES
+    texto("o titulo do PREFERENCES", gs.debugOptTitle(), "Game Preferences");
+    gs.debugOptSelect(2);                            // "Game Speed"
+    const std::string antes = gs.debugOptItem(2);
+    casos.push_back({"o &MORE existe e responde", gs.debugOptClick("&MORE") ? 1 : 0, 1});
+    casos.push_back({"... e o valor do item mudou", gs.debugOptItem(2) != antes ? 1 : 0, 1});
+    casos.push_back({"o L&ESS responde", gs.debugOptClick("L&ESS") ? 1 : 0, 1});
+    texto("... e devolve o valor", gs.debugOptItem(2), antes);
+    // De novo, agora para BAIXO: sem isto, com os dois botoes mortos o caso de
+    // cima passaria sozinho -- nada mudou, logo "voltou ao valor de antes".
+    gs.debugOptClick("L&ESS");
+    casos.push_back({"o L&ESS sozinho tambem mexe no valor",
+                     gs.debugOptItem(2) != antes ? 1 : 0, 1});
+    gs.debugOptClick("&MORE");
+    // Controle: em item de liga/desliga o original nao monta L&ESS/&MORE.
+    gs.debugOptSelect(5);                            // "Play Music"
+    casos.push_back({"controle: alternancia nao tem &MORE",
+                     gs.debugOptClick("&MORE") ? 1 : 0, 0});
+
+    // ---- a tela de fim de missao ----------------------------------------
+    gs.debugOptionsScreen(0);                        // o menu
+    texto("o titulo do menu", gs.debugOptTitle(), "Game Options");
+    casos.push_back({"E&ND MISSION abre a tela", gs.debugOptClick("E&ND MISSION") ? 1 : 0, 1});
+    texto("o titulo da tela de fim", gs.debugOptTitle(),
+          rede ? "Game End: Multiplayer" : "Game End: Single Player");
+    const std::vector<std::string> esperados = rede
+        ? std::vector<std::string>{"SELF-&DESTRUCT", "&TRANSFER", "&GAME OPTIONS"}
+        : std::vector<std::string>{"RESTART MISSIO&N", "&BACK TO MAIN MENU",
+                                   "E&XIT OUTPOST 2", "&GAME OPTIONS"};
+    const std::vector<std::string> itens = gs.debugOptLabels();
+    for (const std::string& r : itens) std::printf("[opt]   item: %s\n", r.c_str());
+    casos.push_back({"os itens certos para o tipo de partida", itens == esperados ? 1 : 0, 1});
+    if (rede)
+        casos.push_back({"&TRANSFER acompanha o sub_4909F0",
+                         gs.debugOptDisabled("&TRANSFER") == !op2::quitTransferAvailable() ? 1 : 0, 1});
+
+    // A confirmacao: abre, SOBREVIVE ao quadro seguinte sem selecao nenhuma,
+    // troca os botoes por &YES/&NO, e o &NO devolve a tela de fim.
+    casos.push_back({"o item abre a confirmacao",
+                     gs.debugOptClick(esperados[0]) && gs.debugConfirmOpen() ? 1 : 0, 1});
+    gs.debugPaneFrame();
+    casos.push_back({"e ela continua no ar no quadro seguinte",
+                     gs.debugConfirmOpen() ? 1 : 0, 1});
+    const std::vector<std::string> yn = gs.debugOptLabels();
+    casos.push_back({"os botoes viraram &YES/&NO",
+                     (yn.size() == 2 && yn[0] == "&YES" && yn[1] == "&NO") ? 1 : 0, 1});
+    casos.push_back({"o &NO fecha a confirmacao",
+                     gs.debugOptClick("&NO") || gs.debugConfirmOpen() ? 1 : 0, 1});
+    casos.push_back({"... sem fechar a confirmacao de vez", gs.debugConfirmOpen() ? 1 : 0, 0});
+    casos.push_back({"... e a tela de fim volta", gs.debugOptLabels() == esperados ? 1 : 0, 1});
+
+    // O E&XIT e o unico cujo efeito da para observar sem desmontar o jogo:
+    // o original posta WM_QUIT, e aqui um SDL_QUIT.
+    if (!rede) {
+        SDL_FlushEvent(SDL_QUIT);
+        gs.debugOptClick("E&XIT OUTPOST 2");
+        gs.debugPaneFrame();
+        gs.debugOptClick("&YES");
+        casos.push_back({"&YES no E&XIT pede o fim do programa",
+                         SDL_HasEvent(SDL_QUIT) ? 1 : 0, 1});
+        SDL_FlushEvent(SDL_QUIT);
+        gs.debugPaneFrame();
+    }
+
+    // ---- quem pode transferir (sub_4909F0) ------------------------------
+    const int me = op2::TethysGame::localPlayer();
+    if (op2::TethysGame::noPlayers() > 1) {
+        const int outro = me == 0 ? 1 : 0;
+        const uint32_t alianca = op2::g_playerData[outro].allyMask;
+        const int humano = op2::g_playerData[outro].isHuman;
+        op2::g_playerData[outro].allyMask = alianca | (1u << me);
+        op2::g_playerData[outro].isHuman = 0;
+        casos.push_back({"aliado que nao e humano nao conta",
+                         op2::quitTransferAvailable() ? 1 : 0, 0});
+        if (rede) casos.push_back({"... e o botao nasce desabilitado",
+                                   gs.debugOptDisabled("&TRANSFER") ? 1 : 0, 1});
+        op2::g_playerData[outro].isHuman = 1;
+        casos.push_back({"aliado humano habilita o &TRANSFER",
+                         op2::quitTransferAvailable() ? 1 : 0, 1});
+        if (rede) casos.push_back({"... e o botao fica clicavel",
+                                   gs.debugOptDisabled("&TRANSFER") ? 1 : 0, 0});
+        op2::g_playerData[outro].allyMask = alianca & ~(1u << me);
+        casos.push_back({"humano sem alianca, nao",
+                         op2::quitTransferAvailable() ? 1 : 0, 0});
+        op2::g_playerData[outro].allyMask = alianca;
+        op2::g_playerData[outro].isHuman = humano;
+    } else {
+        std::printf("[opt] (so um jogador: pulei o grupo do &TRANSFER)\n");
+    }
+
+    // ---- o pacote 0x31: quem saiu encerra, em QUALQUER metodo ------------
+    op2::resetTriggers();
+    op2::applyQuit(me, op2::QUIT_GO_AI, 2);
+    casos.push_back({"GoAI entrega a colonia a IA", op2::g_playerData[me].isHuman, 0});
+    casos.push_back({"... e encerra a partida de quem saiu",
+                     op2::gameEndCode(), rede ? 9 : 6});
+    const long long fim2 = op2::gameEndTick();
+    op2::resetTriggers();
+    op2::applyQuit(me, op2::QUIT_SELF_DESTRUCT, 4);
+    casos.push_back({"o atraso da autodestruicao e o dobro",
+                     op2::gameEndTick() - op2::TethysGame::tick() ==
+                         2 * (fim2 - op2::TethysGame::tick()) ? 1 : 0, 1});
+
+    // ---- do clique ao pacote 0x31 ---------------------------------------
+    // Fora da rede o commandSubmit aplica na hora, entao o fim de jogo -- e o
+    // atraso que sub_48A5D0 manda junto do metodo -- da para medir aqui.
+    const long long agora = op2::TethysGame::tick();
+    const long long velocidade = (fim2 - agora) / 2;        // o caso acima usou atraso 2
+    gs.debugOptionsScreen(0);
+    gs.debugOptClick("E&ND MISSION");
+    op2::resetTriggers();
+    casos.push_back({"o &YES executa o item",
+                     gs.debugOptClick(rede ? "SELF-&DESTRUCT" : "&BACK TO MAIN MENU") &&
+                         (gs.debugPaneFrame(), gs.debugOptClick("&YES")) ? 1 : 0, 1});
+    casos.push_back({"... e o pacote 0x31 encerrou a partida",
+                     op2::gameEndCode(), rede ? 9 : 6});
+    casos.push_back({"... com o atraso do metodo (4 na autodestruicao, 2 nos outros)",
+                     op2::gameEndTick() - agora, (rede ? 4 : 2) * velocidade});
+
+    bool ok = true;
+    for (const Caso& c : casos) {
+        const bool bom = c.obtido == c.esperado;
+        if (!bom) ok = false;
+        std::printf("[opt] %-56s %lld (esperado %lld) %s\n", c.nome.c_str(), c.obtido,
+                    c.esperado, bom ? "ok" : "FALHOU");
     }
     std::fflush(stdout);
     renderer.shutdown(); SDL_Quit();
@@ -4558,6 +4740,8 @@ int main(int argc, char* argv[]) {
             return runPaneTest(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--musictest") == 0 && i + 1 < argc)
             return runMusicTest(argv[i + 1]);
+        if (std::strcmp(argv[i], "--optmenutest") == 0 && i + 1 < argc)
+            return runOptMenuTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--item21test") == 0 && i + 1 < argc)
             return runItem21Test(argv[i + 1]);
         if (std::strcmp(argv[i], "--cheattest") == 0 && i + 1 < argc)

@@ -175,7 +175,7 @@ O arquivo `OUTPOST2.INI` do jogo é respeitado. O porte acrescenta cinco chaves
 que o original não tem — nível da IA, escuridão da noite, volume, câmera do
 demo e tela cheia; estão documentadas no `PORT_STATUS.md`.
 
-Há **95 modos de linha de comando** para testes e capturas, entre eles uma
+Há **96 modos de linha de comando** para testes e capturas, entre eles uma
 bateria de regressão (`--savetest` prova o determinismo de salvar/recarregar).
 A lista está no `PORT_STATUS.md`.
 

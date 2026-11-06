@@ -23,9 +23,14 @@ namespace op2 {
 //              L&ESS/&MORE, "&APPLY" ("&Apply new values") e "&GAME OPTIONS"
 //              ("Back to &Game Options"). Como no original, o que se mexe aqui
 //              só vale ao APPLY: sair pelo GAME OPTIONS descarta.
-//   ENDMISSION "RESTART MISSIO&N", "&BACK TO MAIN MENU", "E&XIT OUTPOST 2" e
-//              "SELF-&DESTRUCT", cada um com a sua confirmação (os casos 3, 4,
-//              6 e 7 de sub_457880 passam pelo mesmo diálogo do IDLE).
+//   ENDMISSION a tela de fim de missão, que no original é UMA DE DUAS
+//              (sub_465830 modos 3 e 4) e com títulos próprios: em jogo solo
+//              "Game End: Single Player" com "RESTART MISSIO&N", "&BACK TO
+//              MAIN MENU" e "E&XIT OUTPOST 2"; em multijogador "Game End:
+//              Multiplayer" com "SELF-&DESTRUCT" e "&TRANSFER" (este só
+//              habilitado se algum outro humano estiver aliado a mim,
+//              sub_4909F0). Cada item passa pela confirmação (casos 3 a 7 de
+//              sub_457880), que executa o caso 8..0xC correspondente.
 //
 // A lista de PREFS tem os mesmos textos do
 // original: cinco com valor — "Volume:<R>%i" (música e efeitos), "Game
@@ -57,6 +62,14 @@ public:
     bool manualOk() const;
     // Captura (--panetest): abre um topico direto, sem o clique na lista.
     void debugOpenTopic(int i) { m_topic = i; m_mode = MANUALTEXT; m_list.reset(); }
+    // O título da tela em que se está (off_4E8B28..off_4E8B38).
+    std::string paneTitle() const;
+    // Testes (--optmenutest): o texto de um item e a linha escolhida.
+    std::string debugItemText(int i) const {
+        const std::vector<std::string> v = items();
+        return i >= 0 && i < static_cast<int>(v.size()) ? v[i] : std::string();
+    }
+    void debugSelect(int i) { m_list.sel = i; }
     void open();                                         // lê o INI
     void close() { m_open = false; }
     void draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, int mx, int my) const;

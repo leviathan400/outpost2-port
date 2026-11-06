@@ -4,6 +4,7 @@
 #include <iostream>
 
 #include "../core/config.h"
+#include "../game/scenario.h"
 #include "../gfx/font.h"
 #include "objectives_pane.h"
 #include "produce_pane.h"
@@ -176,18 +177,29 @@ void GameOptionsPane::bump(int i, int dir) {
     // NÃO grava aqui: no original o que se mexe só vale no "&APPLY".
 }
 
+// O título da tela em que se está. São cinco, um por modo de sub_465830:
+// off_4E8B28 "Game Options", off_4E8B2C (objetivos), off_4E8B30 "Game
+// Preferences", off_4E8B34 "Game End: Single Player" e off_4E8B38 "Game End:
+// Multiplayer" -- a tela de fim de missão diz de que partida se trata, e não
+// "End Mission".
+std::string GameOptionsPane::paneTitle() const {
+    switch (m_mode) {
+    case PREFS:      return "Game Preferences";
+    case ENDMISSION: return multiplayerMission() ? "Game End: Multiplayer"
+                                                 : "Game End: Single Player";
+    case MANUAL:     return "Outpost 2 Online Manual";
+    case MANUALTEXT:
+        if (m_help.ok() && m_topic >= 0 && m_topic < static_cast<int>(m_help.topics().size()))
+            return m_help.topics()[m_topic].title;
+        return std::string();
+    default:         return "Game Options";
+    }
+}
+
 void GameOptionsPane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, int mx, int my) const {
     if (!m_open) return;
     const ListBoxLayout L = layout(pane);
-    // O título é o da tela em que se está (aGameOptions / aGamePreference).
-    std::string tituloStr;
-    if (m_mode == MANUALTEXT && m_help.ok() && m_topic >= 0 &&
-        m_topic < static_cast<int>(m_help.topics().size()))
-        tituloStr = m_help.topics()[m_topic].title;
-    const char* titulo = m_mode == PREFS ? "Game Preferences"
-                       : m_mode == ENDMISSION ? "End Mission"
-                       : m_mode == MANUAL ? "Outpost 2 Online Manual"
-                       : m_mode == MANUALTEXT ? tituloStr.c_str() : "Game Options";
+    const std::string titulo = paneTitle();
     drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.t + 2, pane.r - 0xE, L.list.t},
                    titulo, 0xFF00FF00u, true, kMarkupLine);
     if (m_mode == PREFS || m_mode == MANUAL || m_mode == MANUALTEXT) {
