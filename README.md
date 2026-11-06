@@ -1,3 +1,5 @@
+For those who wish to make donations to help support the project, here is the PayPal address: marcelomgoncalves@hotmail.com
+
 # Outpost 2: Divided Destiny — Port Moderno (C++17 + SDL2)
 
 Reimplementação de *Outpost 2: Divided Destiny* (Sierra On-Line / Dynamix, 1997)
