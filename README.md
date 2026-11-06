@@ -193,7 +193,7 @@ quem digitou — em todas as máquinas, sem quebrar o lockstep da rede.
 | `Dan's dog could make more ore.` | enche os dois estoques até a capacidade |
 | `Dan's car could hold more people.` | trabalhadores e cientistas +25% |
 | `Dan's bike could backfire more often` | armas recarregam mais rápido |
-| `Dan's guns could die more people.` | armas com muito mais penetração |
+| `Dan's gun could die more people.` | armas com muito mais penetração |
 
 As três primeiras são do jogo de 1997. A quarta é um **extra do porte**: o
 efeito existe no original, mas a frase dele nunca foi publicada e o

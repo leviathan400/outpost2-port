@@ -98,7 +98,7 @@ const Entrada kTabela[] = {
     { 0x48D60158u, &cheatMorePeople,       "Dan's car could hold more people." },
     { 0xAC0FF0E5u, &cheatFasterFire,       "Dan's bike could backfire more often" },
     { 0xABE0CC11u, &cheatStrongerWeapons,  "(a frase original, desconhecida)" },
-    { 0xD97B9638u, &cheatStrongerWeapons,  "Dan's guns could die more people. (extra do porte)" },
+    { 0x9AC1C27Eu, &cheatStrongerWeapons,  "Dan's gun could die more people. (extra do porte)" },
 };
 
 } // namespace

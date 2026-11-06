@@ -665,7 +665,7 @@ entrada extra que o original não tem**, apontando para o mesmo handler:
 
 | Hash | Frase | |
 |---|---|---|
-| `D97B9638` | `Dan's guns could die more people.` | **extra do porte** |
+| `9AC1C27E` | `Dan's gun could die more people.` | **extra do porte** |
 
 ### O que NÃO existe (alegações conferidas e descartadas)
 

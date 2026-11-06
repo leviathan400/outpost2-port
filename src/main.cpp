@@ -3715,8 +3715,8 @@ static int runCheatTest(const std::string& dll) {
                      op2::cheatHash("Dan's car could hold more people."), 0x48D60158LL});
     casos.push_back({"hash 'bike ... often'    = 0xAC0FF0E5",
                      op2::cheatHash("Dan's bike could backfire more often"), 0xAC0FF0E5LL});
-    casos.push_back({"hash da frase extra      = 0xD97B9638",
-                     op2::cheatHash("Dan's guns could die more people."), 0xD97B9638LL});
+    casos.push_back({"hash da frase extra      = 0x9AC1C27E",
+                     op2::cheatHash("Dan's gun could die more people."), 0x9AC1C27ELL});
 
     auto digita = [&](const char* frase) {
         std::string linha = frase;
@@ -3760,7 +3760,7 @@ static int runCheatTest(const std::string& dll) {
     poeBloco(0x3D, 0x2C, 64);                  // 64*33/32 = 66 -> piso de 500 vence
     poeBloco(0x4A, 0x2C, 1024);                // 1024*33/32 = 1056 -> passa do piso
     poeBloco(0x3C, 0x2C, 77);                  // EMP: FORA da faixa, nao pode mudar
-    digita("Dan's guns could die more people.");
+    digita("Dan's gun could die more people.");
     casos.push_back({"cheat 3: penetracao 64 -> 500 (piso)", bloco(0x3D, 0x2C), 500});
     casos.push_back({"cheat 3: penetracao 1024 -> 1056", bloco(0x4A, 0x2C), 1056});
     casos.push_back({"cheat 3: EMP (0x3C) intocada", bloco(0x3C, 0x2C), 77});
