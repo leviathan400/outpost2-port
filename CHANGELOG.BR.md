@@ -8,7 +8,34 @@ no commit `1697e7f` (2026-11-06). As mais recentes primeiro.
 
 ## 2026-11-07
 
+### Corrigido
+- **Mover com o botão direito errava o tile e nunca atracava.** O clique
+  direito tirava o alvo das coordenadas da janela em vez das da vista do
+  mapa, então as unidades iam para um ponto 12 px à direita e 22 px abaixo
+  do clique — quase sempre o tile de baixo. E pulava a lógica de mover do
+  original (`sub_451280`), então clicar na doca de um prédio nunca mandava a
+  ordem de atracar. Agora usa as coordenadas da vista e o mesmo caminho do
+  botão MOVE: clicar com o botão direito na doca, com um caminhão que pode
+  usá-la, atraca. (Defeito do upstream, já presente em `1697e7f`.)
+- **Doca do Agridome.** O Agridome tem doca de caminhão (`BUILDING.TXT`:
+  Docking Truck = Y, tile inferior esquerdo), mas a arte dele não tem a
+  plataforma, então os caminhões paravam em chão vazio. Agora ele ganha a
+  mesma plataforma "X" que os outros prédios com doca trazem na arte
+  (imagens 385–388, posicionadas exatamente como nos 10 grupos de Structure
+  Factory / Smelter / Spaceport / GORF), como o OPU mostra. As duas facções;
+  desenhada depois que o prédio fica pronto.
+- **Capturas de teste depois da mudança de resolução.** Os modos `--*shot` /
+  `--screenshot` / `--missiontest` salvavam uma imagem fixa de 640×480, que
+  saía embaralhada nas capturas do jogo agora que a tela do jogo tem o
+  tamanho da janela. Agora salvam no tamanho real do quadro.
+
 ### Adicionado
+- `--dockclicktest <DLL>`: clica com o botão direito na doca de um Agridome
+  com um caminhão, pelo caminho real de entrada, e confere que ele atraca;
+  depois clica num tile livre e confere que ele chega exatamente lá. Falha
+  no código antigo (o caminhão para um tile abaixo), passa no `t13` e `t14`.
+- `--missiontest <DLL> <saida> [ticks] [camTileX camTileY]`: posição
+  opcional da câmera para a captura.
 - **Chave `MenuSkin`** (seção `[Game]` do `OUTPOST2.INI`) para escolher o
   estilo dos menus (`98c305b`):
   - `MenuSkin=0` (padrão): o visual do próprio porte, exatamente como o

@@ -51,6 +51,7 @@
 #include "../mission/mission.h"
 #include "../gfx/artfile.h"
 #include "../gfx/art_blit.h"
+#include "../game/docking.h"
 
 namespace op2 {
 
@@ -903,6 +904,28 @@ void GameState::onIdle(Renderer& renderer, float dt) {
             if (anim >= 0 && g_art.ok() && anim < g_art.numAnimations()) {
                 int pc = (ow >= 0 && ow < kMaxPlayers) ? g_playerData[ow].colorNumber : 0;
                 const int bldFrame = guardPost ? 0 : structureFrame(r);
+                // Fork: Agridome dock pad. The Agridome has a truck dock
+                // (BUILDING.TXT: Docking Truck = Y, column 1) but its art has no
+                // pad, so trucks seemed to park on bare ground; OPU draws one.
+                // It is the same 4-picture pad every other docked building
+                // carries in its art (images 385-388) -- measured on all 10
+                // groups (Structure Factory, both Smelters, Spaceport, GORF; Eden
+                // and Plymouth) at the same place relative to the dock tile:
+                // 385/386 at (0,0), 387 at (21,0), 388 at (0,15). Drawn under the
+                // building, once it is built (not during construction or after
+                // destruction).
+                if (r.type == 0x27) {
+                    const int st = static_cast<int>((r.state34 >> 16) & 0xFFFF);
+                    const bool built = (st == 0 && (r.state34 & 0xFFFF) == 0) || st == 1 || st == 2 || st >= 5;
+                    int dx, dy;
+                    if (built && dockCell(static_cast<int>(i), dx, dy)) {
+                        const int px = screenXOf(dx * 32), py = dy * 32 - m_camY;
+                        static const int kPad[4][3] = {{385, 0, 0}, {386, 0, 0}, {387, 21, 0}, {388, 0, 15}};
+                        for (const auto& p : kPad)
+                            blitArtImage(renderer.getFramebuffer(), m_fbW, m_fbH, p[0], px + p[1], py + p[2],
+                                         pc, 0, 0, viewportW(), viewportH());
+                    }
+                }
                 drew = drawSprite(anim, bldFrame, ucx, ucy, pc);
                 if (drew) recDeco((int)i, ucx, ucy, anim, bldFrame);
                 // EMP / ESG (0x180000) no prédio (sub_408DB0): grade de 16 px no
@@ -1801,16 +1824,16 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
             m_dragging = true; m_dragSX = vx; m_dragSY = vy;
         } else if (e.button.button == SDL_BUTTON_RIGHT && inView && !m_selected.empty()) {
             // Mover os SELECIONADOS para o tile clicado (pipeline real + espiral).
-            int tileX = (m_camX + nx) / 32, tileY = (m_camY + ny) / 32;
+            // Fork: (1) o tile vem das coordenadas DA VISTA (vx/vy), não das do
+            // quadro (nx/ny) -- antes o alvo caía 12 px à direita e 22 px abaixo
+            // do clique, quase sempre no tile de baixo; (2) passa pelo mesmo
+            // caminho do botão MOVE (sub_451280 em uiCommandTarget): clicar na
+            // doca de um prédio com um veículo que atraca manda o pacote de
+            // doca (3, ou 4 na garagem de Eden), não um "mover" simples.
+            int tileX = (m_camX + vx) / 32, tileY = (m_camY + vy) / 32;
             if (g_gameMap.ok()) tileX &= (g_gameMap.width() - 1);
-            int me = TethysGame::localPlayer();
-            CommandPacket pkt; pkt.type = CMD_MOVE;
-            pkt.waypoints.push_back(packLocation(tileX, tileY));
-            for (int id : m_selected) {
-                Unit u(id);
-                if (u.IsLive() && u.OwnerID() == me && u.IsVehicle()) pkt.unitIds.push_back(id);
-            }
-            if (!pkt.unitIds.empty()) { commandSubmit(me, pkt); soundPlay(0x56); }
+            uiSetCursorPixel(g_gameMap.ok() ? (m_camX + vx) & (g_gameMap.width() * 32 - 1) : m_camX + vx, m_camY + vy);
+            uiCommandTarget(UC_MOVE, m_selected, tileX, tileY);
         }
     }
     if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT && m_miniDrag) {

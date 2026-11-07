@@ -31,6 +31,11 @@ uint32_t shadeArgb(uint32_t argb, int darkness);
 // que vt[0x30]/vt[0x34] do original devolvem para o colchete de seleção
 // (sub_43E950). Devolve false se o frame não tem pixels. (ox,oy) = canto
 // superior-esquerdo; (w,h) = dimensões.
+// Fork: one op2_art IMAGE (not an animation frame) with its top-left at (x, y),
+// same decoding and clipping as blitArtFrame. Used for the Agridome dock pad.
+bool blitArtImage(uint32_t* fb, int fbW, int fbH, int imageIdx, int x, int y,
+                  int playerColor, int clipX0, int clipY0, int clipX1, int clipY1);
+
 bool artFrameBounds(int animIdx, int frameIdx, int& ox, int& oy, int& w, int& h);
 
 } // namespace op2

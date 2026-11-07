@@ -8,7 +8,33 @@ at commit `1697e7f` (2026-11-06). Newest first.
 
 ## 2026-11-07
 
+### Fixed
+- **Right-click move missed the clicked tile, and never docked.** The
+  right-click took its target from window coordinates instead of map-view
+  coordinates, so units went to a point 12 px right and 22 px below the
+  click — usually the tile underneath. It also bypassed the original's
+  move-click logic (`sub_451280`), so right-clicking a building's dock never
+  sent the dock order. It now uses the view coordinates and the same path as
+  the MOVE button: right-clicking a dock with a truck that can use it docks.
+  (Upstream bug, also in `1697e7f`.)
+- **Agridome dock pad.** The Agridome has a truck dock (`BUILDING.TXT`:
+  Docking Truck = Y, bottom-left tile), but its art has no pad, so trucks
+  parked on bare ground. It now gets the same "X" dock pad the other docked
+  buildings carry in their art (images 385–388, placed exactly as in all 10
+  Structure Factory / Smelter / Spaceport / GORF groups), as OPU shows it.
+  Both factions; drawn once the building is finished.
+- **Test screenshots after the resolution change.** The `--*shot` /
+  `--screenshot` / `--missiontest` modes saved a fixed 640×480 image, which
+  came out scrambled for in-game captures now that the game screen is
+  window-sized. They now save at the real frame size.
+
 ### Added
+- `--dockclicktest <DLL>`: right-clicks an Agridome dock with a cargo truck
+  through the real input path and checks it docks, then right-clicks a free
+  tile and checks it arrives exactly there. Fails on the old code
+  (truck stops one tile low), passes on `t13` and `t14`.
+- `--missiontest <DLL> <out> [ticks] [camTileX camTileY]`: optional camera
+  position for the capture.
 - **`MenuSkin` setting** (`[Game]` section of `OUTPOST2.INI`) to choose the
   menu style (`98c305b`):
   - `MenuSkin=0` (default): the port's own look, exactly as upstream draws it:

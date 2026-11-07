@@ -305,7 +305,7 @@ static int runScreenshot(int argc, char* argv[], const std::string& outPath) {
     shellMenu.render(renderer);
     slotsDlg.render(renderer);
     bool ok = writeBmp32(outPath, renderer.getFramebuffer(),
-                         op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+                         renderer.getWidth(), renderer.getHeight());
     std::cout << "[Screenshot] " << (ok ? "salvo em " : "falha ao salvar ") << outPath << std::endl;
     renderer.shutdown();
     SDL_Quit();
@@ -338,7 +338,7 @@ static int runSelShot(const std::string& dll, const std::string& outPath, bool h
     }
     gs.onIdle(renderer, 0.0f);
     bool ok = writeBmp32(outPath, renderer.getFramebuffer(),
-                         op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+                         renderer.getWidth(), renderer.getHeight());
     std::cout << "[SelShot] unidade " << pick << " -> " << (ok ? outPath : "falha") << std::endl;
     renderer.shutdown();
     SDL_Quit();
@@ -411,7 +411,7 @@ static int runMiniShot(const std::string& mapName, const std::string& outPath, i
     if (camTileX) gs.setCamera(camTileX * 32, gs.camY());
     for (int i = 0; i < 3; ++i) gs.onIdle(renderer, 0.05f);
     const bool ok = writeBmp32(outPath, renderer.getFramebuffer(),
-                               op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+                               renderer.getWidth(), renderer.getHeight());
     std::printf("[MiniShot] mapa %dx%d (interna %d, desl %d) zoom=%d -> %s\n",
                 op2::g_gameMap.width(), op2::g_gameMap.height(), op2::g_gameMap.internalWidth(),
                 op2::g_gameMap.internalXOffset(), gs.debugMiniZoomLevel(),
@@ -442,7 +442,7 @@ static int runGlobeShot(const std::string& mapName, const std::string& outPath, 
     // precisos varios quadros ate ele se assentar.
     for (int i = 0; i < (spin > 0 ? spin : 3); ++i) gs.onIdle(renderer, 0.05f);
     const bool ok = writeBmp32(outPath, renderer.getFramebuffer(),
-                               op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+                               renderer.getWidth(), renderer.getHeight());
     // O topo e a base do MAPA projetados: tem de cair onde a textura deixa de
     // ser a margem preta (o alinhamento que o original erra).
     {
@@ -505,7 +505,7 @@ static int runPlaceShot(const std::string& mapName, const std::string& outPath, 
     }
     for (int i = 0; i < 5; ++i) gs.onIdle(renderer, 0.05f);
     const bool ok = writeBmp32(outPath, renderer.getFramebuffer(),
-                               op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+                               renderer.getWidth(), renderer.getHeight());
     std::printf("[PlaceShot] kit 0x%02X -> %s\n", type, outPath.c_str());
     renderer.shutdown();
     SDL_Quit();
@@ -644,7 +644,7 @@ static int runDemoTest(const std::string& prefixo) {
                     char out[512];
                     std::snprintf(out, sizeof(out), "%s_%d.bmp", prefixo.c_str(), ++quadro);
                     writeBmp32(out, renderer.getFramebuffer(),
-                               op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+                               renderer.getWidth(), renderer.getHeight());
                 }
             }
             // Quantos inimigos estariam escondidos pela cegueira noturna? Os
@@ -1149,7 +1149,7 @@ static int runNightShot(const std::string& dll, const std::string& prefix,
         char out[512];
         std::snprintf(out, sizeof(out), "%s_%03d.bmp", prefix.c_str(), n);
         if (!writeBmp32(out, renderer.getFramebuffer(),
-                        op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT))
+                        renderer.getWidth(), renderer.getHeight()))
             ok = false;
         std::printf("[NightShot] %d%%: brilho no escuro %d/32 -> %s%c",
                     n, op2::nightShadeMul(melhorEscuro), out, 10);
@@ -1174,7 +1174,7 @@ static int runPlayShot(const std::string& mapName, const std::string& outPath, b
     if (camTileX >= 0) gs.setCamera(camTileX * 32, gs.camY());
     for (int i = 0; i < 5; ++i) gs.onIdle(renderer, 0.1f);   // avança alguns ticks
     bool ok = writeBmp32(outPath, renderer.getFramebuffer(),
-                         op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+                         renderer.getWidth(), renderer.getHeight());
     dumpDark(gs);
     std::cout << "[PlayShot] " << (ok ? "salvo em " : "falha ") << outPath << std::endl;
     renderer.shutdown();
@@ -1202,7 +1202,7 @@ static int runStructTest(const std::string& mapName, const std::string& prefix) 
         char path[256];
         std::snprintf(path, sizeof(path), "%s_%s.bmp", prefix.c_str(), tag);
         writeBmp32(path, renderer.getFramebuffer(),
-                   op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+                   renderer.getWidth(), renderer.getHeight());
         std::printf("[Struct] %-10s tick=%d id=%d estado=%u sub=%u dano=%d/%d anim=%d frame=%d acao=0x%X\n",
                     tag, op2::TethysGame::tick(), r.id, (r.state34 >> 16) & 0xFFFF,
                     r.state34 & 0xFFFF, r.damage, op2::structureMaxHP(r),
@@ -1272,7 +1272,7 @@ static int runPaneShot(const std::string& mapName, const std::string& outPath, i
     gs.setMouse(200, 150);
     for (int i = 0; i < 40; ++i) gs.onIdle(renderer, 0.05f);
     bool ok = writeBmp32(outPath, renderer.getFramebuffer(),
-                         op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+                         renderer.getWidth(), renderer.getHeight());
     std::printf("[PaneShot] %s\n", ok ? outPath.c_str() : "falha");
     renderer.shutdown(); SDL_Quit();
     return ok ? 0 : 1;
@@ -1304,7 +1304,7 @@ static int runCmdShot(const std::string& mapName, const std::string& outPath, in
     gs.setMouse(gs.kColX + 28 + 22, op2::GameState::kPaneTop + 0x3C + 57 + 22);
     for (int i = 0; i < 10; ++i) gs.onIdle(renderer, 0.05f);
     bool ok = writeBmp32(outPath, renderer.getFramebuffer(),
-                         op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+                         renderer.getWidth(), renderer.getHeight());
     std::printf("[CmdShot] tipo 0x%02X x%d -> %s\n", type, (int)sel.size(), ok ? outPath.c_str() : "falha");
     renderer.shutdown(); SDL_Quit();
     return ok ? 0 : 1;
@@ -1496,8 +1496,8 @@ static int runEarthTest(const std::string& mapName, const std::string& prefix) {
         for (int t = 0; t < 20; ++t) gs.onIdle(renderer, 0.2501f / 4.0f);
         gs.setCamera(17 * 32, 17 * 32);
         gs.onIdle(renderer, 0.0f);
-        writeBmp32(prefix + "_overlay.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH,
-                   op2::Renderer::NATIVE_HEIGHT);
+        writeBmp32(prefix + "_overlay.bmp", renderer.getFramebuffer(), renderer.getWidth(),
+                   renderer.getHeight());
         op2::resetUnits();
     }
     {   // Reparo (0x1C), desmonte (0x1E) e tomada (0x1D).
@@ -1567,14 +1567,14 @@ static int runEarthTest(const std::string& mapName, const std::string& prefix) {
             gs.setSelection({sp0.id()});
             gs.pressCommand(op2::UC_LAUNCH_PAD);
             for (int q = 0; q < 3; ++q) gs.onIdle(renderer, 0.05f);
-            writeBmp32(prefix + "_launch1.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH,
-                       op2::Renderer::NATIVE_HEIGHT);
+            writeBmp32(prefix + "_launch1.bmp", renderer.getFramebuffer(), renderer.getWidth(),
+                       renderer.getHeight());
             std::printf("[RLV] painel: launch disponivel=%d troca baia0=%d\n", op2::spaceportLaunchAvailable(sp0.id()),
                         op2::spaceportPadSwapAvailable(sp0.id(), 0));
             op2::spaceportPadSwap(0, sp0.id(), 0);
             for (int q = 0; q < 3; ++q) gs.onIdle(renderer, 0.05f);
-            writeBmp32(prefix + "_launch2.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH,
-                       op2::Renderer::NATIVE_HEIGHT);
+            writeBmp32(prefix + "_launch2.bmp", renderer.getFramebuffer(), renderer.getWidth(),
+                       renderer.getHeight());
             std::printf("[RLV] apos troca: carga=0x%X baia0=0x%X launch disponivel=%d\n", op2::g_units[sp0.id()].padPayload,
                         op2::g_units[sp0.id()].bayType[0], op2::spaceportLaunchAvailable(sp0.id()));
             gs.pressCommand(-14);                              // kCmdLaunch
@@ -1636,8 +1636,8 @@ static int runEarthTest(const std::string& mapName, const std::string& prefix) {
                 shot = true;
                 gs.setCamera(15 * 32, 15 * 32);
                 gs.onIdle(renderer, 0.0f);
-                writeBmp32(prefix + "_emp.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH,
-                           op2::Renderer::NATIVE_HEIGHT);
+                writeBmp32(prefix + "_emp.bmp", renderer.getFramebuffer(), renderer.getWidth(),
+                           renderer.getHeight());
             }
         }
         for (int k = 0; k < 3; ++k)
@@ -1724,7 +1724,7 @@ static int runEarthTest(const std::string& mapName, const std::string& prefix) {
                 ct(tx0 + 4, ty0), ct(tx0 + 5, ty0), e.damage);
     gs.setCamera(bx * 32 - 64, by * 32 - 96);
     gs.onIdle(renderer, 0.0f);
-    writeBmp32(prefix + "_earth.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+    writeBmp32(prefix + "_earth.bmp", renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
     renderer.shutdown();
     SDL_Quit();
     return 0;
@@ -1998,7 +1998,7 @@ static int runOreTest(const std::string& mapName, const std::string& prefix) {
             gs.setCamera(tr.pixelX - 200, tr.pixelY - 200);
             gs.onIdle(renderer, 0.0f);
             writeBmp32(prefix + "_route" + std::to_string(t) + ".bmp", renderer.getFramebuffer(),
-                       op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+                       renderer.getWidth(), renderer.getHeight());
         }
     }
     // STORAGE de recursos: 2º caminhão parado na doca do smelter → LOAD / UNLOAD.
@@ -2018,8 +2018,8 @@ static int runOreTest(const std::string& mapName, const std::string& prefix) {
         gs.setSelection({sm.id()});
         gs.pressCommand(op2::UC_STORAGE);
         for (int k = 0; k < 4; ++k) gs.onIdle(renderer, 0.05f);
-        writeBmp32(prefix + "_storage.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH,
-                   op2::Renderer::NATIVE_HEIGHT);
+        writeBmp32(prefix + "_storage.bmp", renderer.getFramebuffer(), renderer.getWidth(),
+                   renderer.getHeight());
         const int s0 = pd.ore;
         std::printf("[Ore] LOAD disponivel=%d UNLOAD=%d estoque=%d\n", (int)op2::storageLoadAvailable(sm.id()),
                     (int)op2::storageUnloadAvailable(sm.id()), s0);
@@ -2032,8 +2032,8 @@ static int runOreTest(const std::string& mapName, const std::string& prefix) {
         for (k = 0; k < 600 && (tt.field22 == 0x0D || k == 0); ++k) gs.onIdle(renderer, 0.2501f / 4.0f);
         std::printf("[Ore] apos UNLOAD (t=%d): carga=%d estoque=%d\n", k, (tt.cargo >> 4) & 0xFFF, pd.ore);
         for (int q = 0; q < 4; ++q) gs.onIdle(renderer, 0.05f);
-        writeBmp32(prefix + "_storage2.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH,
-                   op2::Renderer::NATIVE_HEIGHT);
+        writeBmp32(prefix + "_storage2.bmp", renderer.getFramebuffer(), renderer.getWidth(),
+                   renderer.getHeight());
         // Despejar: carrega de novo, DUMP CARGO → confirmação → YES.
         gs.pressCommand(-12);
         for (k = 0; k < 600 && (tt.field22 == 0x0D || k == 0); ++k) gs.onIdle(renderer, 0.2501f / 4.0f);
@@ -2041,8 +2041,8 @@ static int runOreTest(const std::string& mapName, const std::string& prefix) {
         gs.setSelection({t2.id()});
         gs.pressCommand(op2::UC_DUMP_CARGO);
         for (int q = 0; q < 4; ++q) gs.onIdle(renderer, 0.05f);
-        writeBmp32(prefix + "_dump.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH,
-                   op2::Renderer::NATIVE_HEIGHT);
+        writeBmp32(prefix + "_dump.bmp", renderer.getFramebuffer(), renderer.getWidth(),
+                   renderer.getHeight());
         gs.pressCommand(-9);                                   // kCmdYes
         for (k = 0; k < 600 && (tt.action == 0x0E || k == 0); ++k) gs.onIdle(renderer, 0.2501f / 4.0f);
         std::printf("[Ore] despejo (t=%d): carga=%d acao=%d estoque=%d (antes %d)\n", k, (tt.cargo >> 4) & 0xFFF,
@@ -2105,7 +2105,7 @@ static int runProduceTest(const std::string& mapName, const std::string& prefix)
     const int listY0 = op2::GameState::kPaneTop + 0x21 + 2;   // topo do quadro + 33 + 2
     gs.setMouse(gs.kColX + 40, listY0 + 2 * 15 + 5);
     for (int i = 0; i < 4; ++i) gs.onIdle(renderer, 0.05f);
-    writeBmp32(prefix + "_list.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+    writeBmp32(prefix + "_list.bmp", renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
     // Produz o Lynx/Laser (1o combo de chassi) pelo pacote 9.
     uint32_t lynx = 0;
     for (uint32_t it : vitems) if ((it & 0xFFFF) == op2::mapLynx) { lynx = it; break; }
@@ -2148,14 +2148,14 @@ static int runProduceTest(const std::string& mapName, const std::string& prefix)
         gs.setSelection({sf.id()});
         gs.pressCommand(op2::UC_STORAGE);
         for (int i = 0; i < 3; ++i) gs.onIdle(renderer, 0.05f);
-        writeBmp32(prefix + "_storage.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        writeBmp32(prefix + "_storage.bmp", renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
         op2::sendBayTransfer(sf.id(), 0);
         std::printf("[Produce] troca: convec sub=0x%X tempo=%d\n", c.field22, c.field3C);
         int tt = 0;
         for (; tt < 400 && c.field22 == 0x0D; ++tt) gs.onIdle(renderer, 0.2501f / 4.0f);
         std::printf("[Produce] apos %d: convec carga=0x%X sub=0x%X | baia0=0x%X\n", tt, c.cargo, c.field22, s.bayType[0]);
         for (int i = 0; i < 3; ++i) gs.onIdle(renderer, 0.05f);
-        writeBmp32(prefix + "_storage2.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        writeBmp32(prefix + "_storage2.bmp", renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
         // ConVec constrói o Tokamak (kit) num local livre perto dela.
         int w = 0, h = 0;
         op2::kitFootprint(cv.id(), w, h);
@@ -2178,7 +2178,7 @@ static int runProduceTest(const std::string& mapName, const std::string& prefix)
         gs.setCamera(px * 32 - 200, py * 32 - 200 < 0 ? 0 : py * 32 - 200);
         gs.setMouse(op2::GameState::kViewX + 200 + 16, op2::GameState::kViewY + (py * 32 - 200 < 0 ? py * 32 : 200) + 16);
         for (int i = 0; i < 2; ++i) gs.onIdle(renderer, 0.05f);
-        writeBmp32(prefix + "_place.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        writeBmp32(prefix + "_place.bmp", renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
         op2::sendBuildKit({cv.id()}, px, py);
         std::printf("[Produce] convec acao=%d sub=%d destino retangulo=(%d,%d)-(%d,%d)\n", c.action, c.field22,
                     c.buildL, c.buildT, c.buildR, c.buildB);
@@ -2231,13 +2231,13 @@ static int runResearchTest(const std::string& dll, const std::string& prefix) {
     gs.setSelection({lab});
     gs.pressCommand(op2::UC_ASSIGN_SCIENTISTS);
     for (int i = 0; i < 2; ++i) gs.onIdle(renderer, 0.05f);
-    writeBmp32(prefix + "_topics.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+    writeBmp32(prefix + "_topics.bmp", renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
     gs.researchPaneForTest().open(lab, 0);
     // escolhe o 1o tópico (como o clique na lista) e passa ao modo 1
     gs.researchPaneForTest().selectForTest(topics[0]);
     gs.pressCommand(-5);   // kCmdAssign
     for (int i = 0; i < 2; ++i) gs.onIdle(renderer, 0.05f);
-    writeBmp32(prefix + "_assign.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+    writeBmp32(prefix + "_assign.bmp", renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
     gs.researchPaneForTest().more();
     gs.pressCommand(-7);   // kCmdStart
     std::printf("[Research] START %s: lab acao=0x%X cientistas=%d\n", op2::techAt(topics[0])->name.c_str(), L.action,
@@ -2249,7 +2249,7 @@ static int runResearchTest(const std::string& dll, const std::string& prefix) {
     gs.setSelection({lab});
     gs.pressCommand(op2::UC_STOP_RESEARCH);
     for (int i = 0; i < 2; ++i) gs.onIdle(renderer, 0.05f);
-    writeBmp32(prefix + "_stop.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+    writeBmp32(prefix + "_stop.bmp", renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
     gs.pressCommand(-9);   // kCmdYes
     for (int i = 0; i < 3; ++i) gs.onIdle(renderer, 0.2501f / 4.0f);
     std::printf("[Research] STOP+YES: lab acao=0x%X sub=0x%X topico=%d cientistas=%d\n", L.action, L.field22, L.labTopic,
@@ -2266,7 +2266,7 @@ static int runResearchTest(const std::string& dll, const std::string& prefix) {
         gs.setSelection({uni});
         gs.pressCommand(op2::UC_ASSIGN_STUDENTS);
         for (int i = 0; i < 2; ++i) gs.onIdle(renderer, 0.05f);
-        writeBmp32(prefix + "_students.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        writeBmp32(prefix + "_students.bmp", renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
         const int w0 = op2::g_playerData[0].workers, s0 = op2::g_playerData[0].scientists;
         gs.pressCommand(-11);  // kCmdStartClass
         if (U.action != 0x17) op2::sendTrain(uni, 2);   // sem trabalhadores livres: força uma turma de 2
@@ -2480,7 +2480,7 @@ static int runCombatTest(const std::string& mapName, const std::string& prefix, 
             char fn[256];
             if (tag) std::snprintf(fn, sizeof(fn), "%s_%s.bmp", prefix.c_str(), tag);
             else std::snprintf(fn, sizeof(fn), "%s_t%03d.bmp", prefix.c_str(), t);
-            writeBmp32(fn, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+            writeBmp32(fn, renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
         }
     }
     std::printf("[Combat] projeteis criados (aprox.): %d\n", shots);
@@ -2753,7 +2753,89 @@ static int runPinwheelTest(const std::string& dll, int calls, int ticks) {
     return 0;
 }
 
-static int runMissionTest(const std::string& dll, const std::string& outPath, int ticks) {
+// Fork: --dockclicktest <DLL>: o CLIQUE DIREITO de mover, pelo caminho real de
+// entrada (handleEvent). Seleciona um Cargo Truck do jogador local, clica com o
+// botão direito na parte de BAIXO da doca de um Agridome (onde o alvo antigo,
+// em coordenadas do quadro e não da vista, caía no tile de baixo) e confere que
+// o caminhão ATRACA; depois clica num tile livre e confere que ele chega
+// exatamente lá. Sai 0 se os dois casos passam.
+static int runDockClickTest(const std::string& dll) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 dockclicktest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { std::printf("[DockClick] missao falhou\n"); renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    gs.onIdle(renderer, 0.0f);                       // quadro do tamanho da janela + layout
+    const int me = op2::TethysGame::localPlayer();
+    int agri = 0, truck = 0;
+    for (size_t i = 1; i < op2::g_units.size(); ++i) {
+        const op2::UnitRecord& r = op2::g_units[i];
+        if (r.id == -1 || (r.owner & 0x0F) != me) continue;
+        if (!agri && r.type == 0x27) agri = static_cast<int>(i);
+    }
+    // Um caminhão que PODE atracar no Agridome (vazio ou com comida, sub_44DA80);
+    // com outra carga o original não faz nada ao clicar na doca.
+    for (size_t i = 1; i < op2::g_units.size() && agri; ++i) {
+        const op2::UnitRecord& r = op2::g_units[i];
+        if (r.id == -1 || (r.owner & 0x0F) != me || r.type != op2::mapCargoTruck) continue;
+        const bool can = op2::vehicleCanDock(static_cast<int>(i), agri, true);
+        std::printf("[DockClick] caminhao %d carga '%s' pode atracar=%s\n", static_cast<int>(i),
+                    op2::truckCargoName(r), can ? "sim" : "nao");
+        if (!truck && can) truck = static_cast<int>(i);
+    }
+    int dx = 0, dy = 0;
+    if (!agri || !truck || !op2::dockCell(agri, dx, dy)) {
+        std::printf("[DockClick] sem Agridome/caminhao/doca (agri=%d truck=%d)\n", agri, truck);
+        renderer.shutdown(); SDL_Quit(); return 3;
+    }
+    auto tileOf = [](int id, int& x, int& y) {
+        const op2::UnitRecord& r = op2::g_units[id];
+        x = op2::unitOX(r) >> 5; y = op2::unitOY(r) >> 5;
+    };
+    // Clique direito no ponto (px, py) do mapa, pela tela: a câmera põe o ponto
+    // dentro da vista; o quadro é 1:1 com a janela.
+    auto rightClick = [&](int px, int py) {
+        gs.setCamera(std::max(0, px - 200), std::max(0, py - 200));
+        gs.onIdle(renderer, 0.0f);
+        SDL_Event ev{};
+        ev.type = SDL_MOUSEBUTTONDOWN;
+        ev.button.button = SDL_BUTTON_RIGHT;
+        ev.button.x = op2::GameState::kViewX + (px - gs.camX());
+        ev.button.y = op2::GameState::kViewY + (py - gs.camY());
+        gs.handleEvent(renderer, ev);
+    };
+    auto run = [&](int ticks) { for (int k = 0; k < ticks; ++k) gs.onIdle(renderer, 0.2501f / 4.0f); };
+    int tx, ty;
+    tileOf(truck, tx, ty);
+    const int sx0 = tx, sy0 = ty;                    // tile de partida (fica livre)
+    std::printf("[DockClick] Agridome %d doca (%d,%d); caminhao %d em (%d,%d)\n", agri, dx, dy, truck, tx, ty);
+
+    // 1) doca: clique 26 px abaixo do topo do tile (parte de baixo).
+    gs.setSelection({truck});
+    rightClick(dx * 32 + 16, dy * 32 + 26);
+    int docked = 0;
+    for (int k = 0; k < 1200 && !docked; k += 25) { run(25); docked = op2::dockedVehicle(agri) == truck; }
+    tileOf(truck, tx, ty);
+    const bool okDock = docked != 0;
+    std::printf("[DockClick] doca: caminhao em (%d,%d), atracado=%s -> %s\n", tx, ty, docked ? "sim" : "nao",
+                okDock ? "PASSOU" : "FALHOU");
+
+    // 2) tile livre: volta ao tile de partida, clique na parte de baixo do tile.
+    const int gx = sx0, gy = sy0;
+    rightClick(gx * 32 + 16, gy * 32 + 26);
+    bool arrived = false;
+    for (int k = 0; k < 1200 && !arrived; k += 25) { run(25); tileOf(truck, tx, ty); arrived = tx == gx && ty == gy; }
+    std::printf("[DockClick] mover p/ (%d,%d): caminhao em (%d,%d) -> %s\n", gx, gy, tx, ty,
+                arrived ? "PASSOU" : "FALHOU");
+    renderer.shutdown(); SDL_Quit();
+    return (okDock && arrived) ? 0 : 4;
+}
+
+static int runMissionTest(const std::string& dll, const std::string& outPath, int ticks,
+                          int camTileX = -1, int camTileY = -1) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
     op2::g_ResManager.init(".");
     op2::g_art.load();
@@ -2799,7 +2881,11 @@ static int runMissionTest(const std::string& dll, const std::string& outPath, in
                     n, up, cv0->hitPoints, cv1->hitPoints, cv0->productionRate, cv1->productionRate);
     }
     std::printf("[MissionTest] tick=%d fim=%d\n", op2::TethysGame::tick(), op2::gameEndCode());
-    bool ok = writeBmp32(outPath, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+    if (camTileX >= 0 && camTileY >= 0) {      // fork: câmera opcional p/ a captura
+        gs.setCamera(camTileX * 32, camTileY * 32);
+        gs.onIdle(renderer, 0.0f);
+    }
+    bool ok = writeBmp32(outPath, renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
     renderer.shutdown(); SDL_Quit();
     return ok ? 0 : 1;
 }
@@ -2866,7 +2952,7 @@ static int runGuardPostTest(const std::string& mapName, const std::string& prefi
         if (t == 20 || t == 60 || t == 200) {
             gs.onIdle(renderer, 0.0f);
             char fn[256]; std::snprintf(fn, sizeof(fn), "%s_t%03d.bmp", prefix.c_str(), t);
-            writeBmp32(fn, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+            writeBmp32(fn, renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
         }
     }
     renderer.shutdown(); SDL_Quit();
@@ -3068,8 +3154,8 @@ static int runChatTest(const std::string& dll, const char* shot) {
     escreve("nao vai");
     if (shot) {                                   // a linha aberta, para conferir o desenho
         gs.onIdle(renderer, 0.0f);
-        writeBmp32(shot, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH,
-                   op2::Renderer::NATIVE_HEIGHT);
+        writeBmp32(shot, renderer.getFramebuffer(), renderer.getWidth(),
+                   renderer.getHeight());
         std::printf("[ChatTest] tela -> %s\n", shot);
     }
     tecla(SDLK_ESCAPE);
@@ -3167,17 +3253,17 @@ static int runPaneTest(const std::string& dll, const std::string& prefix) {
         gs.setCamera(op2::unitOX(r) - 200, op2::unitOY(r) - 200);
         gs.onIdle(renderer, 0.0f);
         char fn[256]; std::snprintf(fn, sizeof(fn), "%s_%02X.bmp", prefix.c_str(), r.type);
-        writeBmp32(fn, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        writeBmp32(fn, renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
         std::printf("[Pane] %s -> %s\n", op2::unitTitle(r).c_str(), fn);
         if (r.type == 0x1F) {                                    // &VEHICLES (lista de veículos)
             gs.debugVehicleList(1, false);
             gs.onIdle(renderer, 0.0f);
             char f2[256]; std::snprintf(f2, sizeof(f2), "%s_vlist.bmp", prefix.c_str());
-            writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+            writeBmp32(f2, renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
             gs.debugVehicleList(-1, true);
             gs.onIdle(renderer, 0.0f);
             std::snprintf(f2, sizeof(f2), "%s_vjump.bmp", prefix.c_str());
-            writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+            writeBmp32(f2, renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
             gs.setSelection({});
             gs.debugVehicleList(-1, false);                      // (fecha via STATUS na próxima)
         }
@@ -3193,7 +3279,7 @@ static int runPaneTest(const std::string& dll, const std::string& prefix) {
         gs.debugTab(3, 0);
         gs.onIdle(renderer, 0.0f);
         char f2[256]; std::snprintf(f2, sizeof(f2), "%s_comms.bmp", prefix.c_str());
-        writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        writeBmp32(f2, renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
         std::printf("[Pane] Communications -> %s\n", f2);
         // A tela "Set Up Allies and Chat Partners": precisa de outros
         // jogadores HUMANOS na mesa, entao a captura liga os que houver.
@@ -3202,45 +3288,45 @@ static int runPaneTest(const std::string& dll, const std::string& prefix) {
         gs.debugAlliesChat();
         gs.onIdle(renderer, 0.0f);
         std::snprintf(f2, sizeof(f2), "%s_allies.bmp", prefix.c_str());
-        writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        writeBmp32(f2, renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
         std::printf("[Pane] Allies/Chat -> %s\n", f2);
         gs.debugNetStats();
         gs.onIdle(renderer, 0.0f);
         std::snprintf(f2, sizeof(f2), "%s_netstats.bmp", prefix.c_str());
-        writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        writeBmp32(f2, renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
         std::printf("[Pane] Network Statistics -> %s\n", f2);
         gs.debugTab(0, 0);
         gs.onIdle(renderer, 0.0f);
         std::snprintf(f2, sizeof(f2), "%s_factories.bmp", prefix.c_str());
-        writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        writeBmp32(f2, renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
         gs.debugTab(1, 0);
         gs.onIdle(renderer, 0.0f);
         std::snprintf(f2, sizeof(f2), "%s_labs0.bmp", prefix.c_str());
-        writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        writeBmp32(f2, renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
         gs.debugLabs(1, 2);
         gs.onIdle(renderer, 0.0f);
         std::snprintf(f2, sizeof(f2), "%s_labs1.bmp", prefix.c_str());
-        writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        writeBmp32(f2, renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
         gs.debugLabs(2, -1);
         gs.onIdle(renderer, 0.0f);
         std::snprintf(f2, sizeof(f2), "%s_labs2.bmp", prefix.c_str());
-        writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        writeBmp32(f2, renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
         for (int md = 0; md <= 12; ++md) {
             gs.debugResources(md, md == 0 ? 1 : md >= 7 ? 0 : -1);
             gs.onIdle(renderer, 0.0f);
             std::snprintf(f2, sizeof(f2), "%s_res%02d.bmp", prefix.c_str(), md);
-            writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+            writeBmp32(f2, renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
         }
         for (int md = 0; md <= 1; ++md) {
             gs.debugSpace(md);
             gs.onIdle(renderer, 0.0f);
             std::snprintf(f2, sizeof(f2), "%s_space%d.bmp", prefix.c_str(), md);
-            writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+            writeBmp32(f2, renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
         }
         gs.debugTab(5);
         gs.onIdle(renderer, 0.0f);
         std::snprintf(f2, sizeof(f2), "%s_options.bmp", prefix.c_str());
-        writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        writeBmp32(f2, renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
         // As cinco telas da aba: menu, preferencias, fim de missao, manual e
         // um topico do manual.
         static const char* kTelas[5] = {"gameopt", "gameprefs", "gameend", "manual", "manualtxt"};
@@ -3249,13 +3335,13 @@ static int runPaneTest(const std::string& dll, const std::string& prefix) {
             gs.onIdle(renderer, 0.0f);
             char fq[512];
             std::snprintf(fq, sizeof(fq), "%s_%s.bmp", prefix.c_str(), kTelas[q]);
-            writeBmp32(fq, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH,
-                       op2::Renderer::NATIVE_HEIGHT);
+            writeBmp32(fq, renderer.getFramebuffer(), renderer.getWidth(),
+                       renderer.getHeight());
         }
         gs.debugOptionsScreen(0);                    // painel "Game Options"
         gs.onIdle(renderer, 0.0f);
         std::snprintf(f2, sizeof(f2), "%s_gameopt.bmp", prefix.c_str());
-        writeBmp32(f2, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+        writeBmp32(f2, renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
     }
     renderer.shutdown(); SDL_Quit();
     return 0;
@@ -3866,7 +3952,7 @@ static int runDisasterTest(const std::string& mapName, const std::string& kind, 
             gs.setCamera(lastX - 240, lastY - 220);
             gs.onIdle(renderer, 0.0f);
             char fn[256]; std::snprintf(fn, sizeof(fn), "%s_%02d.bmp", prefix.c_str(), shots++);
-            writeBmp32(fn, renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+            writeBmp32(fn, renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
         }
         if (start >= 0 && !did && type != 0x4F && op2::TethysGame::tick() > start + 40) break;
     }
@@ -3948,7 +4034,7 @@ static int runMoveCap(const std::string& mapName, const std::string& prefix) {
             char path[256];
             std::snprintf(path, sizeof(path), "%s_%02d.bmp", prefix.c_str(), f);
             writeBmp32(path, renderer.getFramebuffer(),
-                       op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
+                       renderer.getWidth(), renderer.getHeight());
             std::cout << "[MoveCap] frame " << f << " -> " << path << std::endl;
         }
     }
@@ -4355,8 +4441,12 @@ int main(int argc, char* argv[]) {
             return runAiTest(argv[i + 1], atoi(argv[i + 2]), atoi(argv[i + 3]), atoi(argv[i + 4]));
         if (std::strcmp(argv[i], "--pinwheeltest") == 0 && i + 3 < argc)
             return runPinwheelTest(argv[i + 1], atoi(argv[i + 2]), atoi(argv[i + 3]));
+        if (std::strcmp(argv[i], "--dockclicktest") == 0 && i + 1 < argc)
+            return runDockClickTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--missiontest") == 0 && i + 2 < argc)
-            return runMissionTest(argv[i + 1], argv[i + 2], i + 3 < argc ? atoi(argv[i + 3]) : 200);
+            return runMissionTest(argv[i + 1], argv[i + 2], i + 3 < argc ? atoi(argv[i + 3]) : 200,
+                                  i + 5 < argc ? atoi(argv[i + 4]) : -1,
+                                  i + 5 < argc ? atoi(argv[i + 5]) : -1);
         if (std::strcmp(argv[i], "--combattest") == 0 && i + 6 < argc) {
             const int wp[4] = {(int)std::strtol(argv[i + 3], nullptr, 16), (int)std::strtol(argv[i + 4], nullptr, 16),
                                (int)std::strtol(argv[i + 5], nullptr, 16), (int)std::strtol(argv[i + 6], nullptr, 16)};
