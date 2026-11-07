@@ -89,6 +89,7 @@ add_executable(outpost2_modern
     src/app/storage_pane.cpp
     src/app/research_pane.cpp
     src/gfx/ui_font.cpp
+    src/gfx/dialog_skin.cpp
     src/audio/sound.cpp
     src/game/mining.cpp
     src/game/earthwork.cpp

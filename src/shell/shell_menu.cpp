@@ -1,5 +1,6 @@
 #include "shell_menu.h"
 #include "font.h"
+#include "../gfx/dialog_skin.h"
 #include "../res/res_manager.h"
 #include "../core/config.h"
 #include "../game/tethys_game.h"
@@ -35,7 +36,7 @@ namespace {
     constexpr int kHpX = 20, kHpY = 28, kHpW = 600, kHpH = 424;
     constexpr int kHpListX = kHpX + 14, kHpListY = kHpY + 40;
     constexpr int kHpListW = 210, kHpListH = 322;
-    constexpr int kHpSbW = 14;
+    constexpr int kHpSbW = 17;            // fork: barra de rolagem padrao do Windows
     constexpr int kHpRowH = 14;
     constexpr int kHpVisible = kHpListH / kHpRowH;
     constexpr int kHpTextX = kHpListX + kHpListW + 14;
@@ -43,14 +44,18 @@ namespace {
     constexpr int kHpTextW = kHpX + kHpW - 14 - kHpTextX;
 }
 
-// MAIN MENU (Dialog 137): painel à direita, revelando a nave Conestoga.
+// MAIN MENU (Dialog 137).
+// Fork: tamanho, posição e botões MEDIDOS numa captura do menu original
+// (192x348): o fundo "blueprint" da captura bate pixel a pixel com o bitmap 225
+// do OP2SHRES no deslocamento (224,54), que é onde a janela fica na tela de
+// 640x480. Botões de 146x26 (uma célula da tira 236) em x = 21 (contorno em 23), com os topos
+// em 38, 71, 103, 136, 168, 201, 233, 266, 298 (passo alternando 33/32).
 namespace {
-    constexpr int kMenuDlgW = 190, kMenuDlgH = 320;
-    constexpr int kMenuDlgX = 640 - kMenuDlgW - 10,  kMenuDlgY = 146;
-    constexpr int kMenuBtnX = kMenuDlgX + 27;
-    constexpr int kMenuBtnW = 135, kMenuBtnH = 23;
-    constexpr int kMenuFirstY = kMenuDlgY + 30;
-    constexpr int kMenuStepY = 32;
+    constexpr int kMenuDlgW = 192, kMenuDlgH = 348;
+    constexpr int kMenuDlgX = 224, kMenuDlgY = 54;
+    constexpr int kMenuBtnX = kMenuDlgX + 21;   // contorno em x = 23 (medido)
+    constexpr int kMenuBtnW = 146, kMenuBtnH = 26;
+    constexpr int kMenuBtnTop[9] = {38, 71, 103, 136, 168, 201, 233, 266, 298};
 }
 
 // TUTORIALS (Dialog 269): listbox com scrollbar + START + BACK TO MAIN MENU.
@@ -59,9 +64,9 @@ namespace {
     constexpr int kTutDlgW = 420, kTutDlgH = 288;
     constexpr int kTutListX = kTutDlgX + 14, kTutListY = kTutDlgY + 34;
     constexpr int kTutListW = kTutDlgW - 28, kTutListH = 200;
-    constexpr int kTutRowH = 22;
-    constexpr int kTutSbW = 14;
-    constexpr int kTutVisible = kTutListH / kTutRowH;
+    constexpr int kTutRowH = 14;          // fork: linhas de 14 px, como no original
+    constexpr int kTutSbW = 17;           // fork: barra de rolagem padrao do Windows
+    constexpr int kTutVisible = (kTutListH - 6) / kTutRowH;   // fork: a ultima linha nao encosta na borda
     constexpr int kTutBtnY = kTutDlgY + kTutDlgH - 34;
     constexpr int kTutBtnH = 26;
     constexpr int kTutStartW = 100, kTutBackW = 196;
@@ -74,7 +79,7 @@ namespace {
     constexpr int kCgX = 120, kCgY = 90, kCgW = 400, kCgH = 310;
     constexpr int kCgListX = kCgX + 16, kCgListY = kCgY + 36;
     constexpr int kCgListW = kCgW - 32, kCgListH = 200;
-    constexpr int kCgRowH = 22;
+    constexpr int kCgRowH = 14;           // fork: linhas de 14 px
     constexpr int kCgBtnY = kCgY + 258;
 
     // Dialog 224 "ENTER YOUR NAME" (224x100 DLU → x·1,5 / y·1,6), centrado.
@@ -108,7 +113,7 @@ namespace {
     constexpr int kRvBtnY = kRvTextY + kRvTextH + 20;
     constexpr int kChX = 95, kChY = 120, kChW = 450, kChH = 235;
     constexpr int kChListX = kChX + 10, kChListY = kChY + 30, kChListW = 429, kChListH = 158;
-    constexpr int kChRowH = 18;
+    constexpr int kChRowH = 14;           // fork: linhas de 14 px
 }
 
 // NEW CAMPAIGN / PREFERENCES / ABOUT
@@ -143,6 +148,10 @@ bool ShellMenu::init(const std::string& resDllPath) {
         std::cout << "[ShellMenu] Loaded logo Bitmap 145 ("
                   << m_logoBitmap.getWidth() << "x" << m_logoBitmap.getHeight() << ")" << std::endl;
     }
+
+    // Fork: a pele dos diálogos do original (blueprint 225, botões 235/236).
+    if (DialogSkin::load(reader))
+        std::cout << "[ShellMenu] Dialog skin loaded (OP2SHRES 225/235/236)" << std::endl;
 
     if (reader.getDialog(137, m_mainMenuDlg)) {
         std::cout << "[ShellMenu] Loaded Dialog 137: " << m_mainMenuDlg.title
@@ -276,16 +285,17 @@ void ShellMenu::rebuildControls() {
 
     switch (m_state) {
     case MenuState::MainMenu: {
+        // '&' marca a letra sublinhada (como no template do diálogo original).
         struct Def { int id; const char* label; bool dis; } defs[] = {
-            {1014, "TUTORIALS", false}, {1000, "NEW CAMPAIGN", false},
-            {1006, "COLONY GAMES", false}, {1005, "MULTIPLAYER", false},
-            {1007, "LOAD GAME", false}, {1011, "GAME PREFERENCES", false},
-            {1012, "HELP", false}, {1010, "ABOUT OUTPOST 2", false},
-            {1013, "QUIT", false}
+            {1014, "&TUTORIALS", false}, {1000, "&NEW CAMPAIGN", false},
+            {1006, "&COLONY GAMES", false}, {1005, "&MULTIPLAYER", false},
+            {1007, "&LOAD GAME", false}, {1011, "&GAME PREFERENCES", false},
+            {1012, "&HELP", false}, {1010, "&ABOUT OUTPOST 2", false},
+            {1013, "&QUIT", false}
         };
         for (int i = 0; i < 9; ++i)
             addButton(defs[i].id, defs[i].label, kMenuBtnX,
-                      kMenuFirstY + i * kMenuStepY, kMenuBtnW, kMenuBtnH, false, defs[i].dis);
+                      kMenuDlgY + kMenuBtnTop[i], kMenuBtnW, kMenuBtnH, false, defs[i].dis);
         break;
     }
     case MenuState::Tutorials: {
@@ -411,7 +421,7 @@ void ShellMenu::rebuildControls() {
         break;
     }
     case MenuState::About:
-        addButton(1, "OK", kAbX + (kAbW - 100) / 2, kAbY + 258, 100, 26, true);
+        addButton(1, "&OK", kAbX + (kAbW - 100) / 2, kAbY + 258, 100, 26, true);
         break;
     case MenuState::Help: {
         Control lc; lc.kind = CtrlKind::List; lc.id = 1090;
@@ -508,9 +518,9 @@ void ShellMenu::rebuildControls() {
         // a partir do mesmo x em que o original começa.
         {
             int cx = d.x(9);
-            const int gap = 10, box = Font::getTextWidth("[X] ");
+            const int gap = 10, box = SkinText::width("[X] ");
             auto opt = [&](int id, const char* label, bool* tgt) {
-                const int wTotal = box + Font::getTextWidth(label);
+                const int wTotal = box + SkinText::width(label);
                 addCheck(id, label, cx, d.y(135), wTotal, tgt).disabled = !m_mpIsHost;
                 cx += wTotal + gap;
             };
@@ -1522,23 +1532,39 @@ void ShellMenu::drawOpenCombo(Renderer& renderer) {
     const int n = (int)c.comboItems->size();
     const int vis = (h - 4) / kComboItemH;
 
-    renderer.fillRect(x, y, w, h, 0xFF101620);
-    renderer.drawRect(x, y, w, h, 0xFFFFD24A);
+    const bool skin = DialogSkin::ok();
+    if (skin) {
+        renderer.fillRect(x, y, w, h, DialogSkin::kBoxBg);
+        renderer.drawRect(x, y, w, h, DialogSkin::kBoxEdge);
+    } else {
+        renderer.fillRect(x, y, w, h, 0xFF101620);
+        renderer.drawRect(x, y, w, h, 0xFFFFD24A);
+    }
+    // Fork: com a pele, barra de rolagem à direita quando a lista não cabe.
+    const int sbW = (skin && n > vis) ? 16 : 0;
     for (int k = 0; k < vis; ++k) {
         const int item = m_comboScroll + k;
         if (item < 0 || item >= n) break;
         const int iy = y + 2 + k * kComboItemH;
         const bool hot = (item == m_comboHover);
-        if (hot) renderer.fillRect(x + 2, iy, w - 4, kComboItemH, 0xFF2A3A55);
-        Font::drawText(fb, 640, 480, (*c.comboItems)[item], x + 5, iy + 2,
-                       hot ? 0xFFFFFF99 : 0xFFC8D4E8, true);
+        if (hot) renderer.fillRect(x + 2, iy, w - 4 - sbW, kComboItemH,
+                                   skin ? DialogSkin::kSelBg : 0xFF2A3A55);
+        if (hot && skin)
+            SkinText::drawRaw(fb, 640, 480, (*c.comboItems)[item], x + 5, iy + 2, DialogSkin::kSelText);
+        else
+            SkinText::draw(fb, 640, 480, (*c.comboItems)[item], x + 5, iy + 2,
+                           hot ? 0xFFFFFF99 : 0xFFC8D4E8, true);
+    }
+    if (sbW) {
+        renderer.drawSkinScrollBar(x + w - 1 - sbW, y + 1, sbW, h - 2, m_comboScroll, vis, n);
+        return;
     }
     // As setinhas de rolagem, quando a lista é maior que a janela.
     if (n > vis) {
         if (m_comboScroll > 0)
-            Font::drawText(fb, 640, 480, "^", x + w - 10, y + 2, 0xFF8090A8, true);
+            SkinText::draw(fb, 640, 480, "^", x + w - 10, y + 2, 0xFF8090A8, true);
         if (m_comboScroll + vis < n)
-            Font::drawText(fb, 640, 480, "v", x + w - 10, y + h - 14, 0xFF8090A8, true);
+            SkinText::draw(fb, 640, 480, "v", x + w - 10, y + h - 14, 0xFF8090A8, true);
     }
 }
 
@@ -1556,16 +1582,28 @@ void ShellMenu::drawControls(Renderer& renderer) {
             break;
         case CtrlKind::Radio: {
             bool sel = c.radioTarget && (*c.radioTarget == c.radioValue);
+            if (DialogSkin::ok()) {             // Fork: glifo + texto verde
+                renderer.drawSkinRadio(c.x, c.y, sel, c.disabled);
+                SkinText::drawRaw(fb, 640, 480, c.text, c.x + 18, c.y,
+                                  c.disabled ? DialogSkin::kTextOff : DialogSkin::kText);
+                break;
+            }
             uint32_t col = c.disabled ? 0xFF60708A
                          : (hl ? 0xFFFFFF99 : (sel ? 0xFFE0ECFF : 0xFFA0B0C8));
-            Font::drawText(fb, 640, 480, (sel ? "(o) " : "( ) ") + c.text, c.x, c.y, col, true);
+            SkinText::draw(fb, 640, 480, (sel ? "(o) " : "( ) ") + c.text, c.x, c.y, col, true);
             break;
         }
         case CtrlKind::Check: {
             bool on = c.checkTarget && *c.checkTarget;
+            if (DialogSkin::ok()) {             // Fork: glifo + texto verde
+                renderer.drawSkinCheck(c.x, c.y, on, c.disabled);
+                SkinText::drawRaw(fb, 640, 480, c.text, c.x + 18, c.y,
+                                  c.disabled ? DialogSkin::kTextOff : DialogSkin::kText);
+                break;
+            }
             uint32_t col = c.disabled ? 0xFF60708A
                          : (hl ? 0xFFFFFF99 : (on ? 0xFFE0ECFF : 0xFFA0B0C8));
-            Font::drawText(fb, 640, 480, (on ? "[X] " : "[ ] ") + c.text, c.x, c.y, col, true);
+            SkinText::draw(fb, 640, 480, (on ? "[X] " : "[ ] ") + c.text, c.x, c.y, col, true);
             break;
         }
         case CtrlKind::List:
@@ -1575,11 +1613,20 @@ void ShellMenu::drawControls(Renderer& renderer) {
                                      *c.comboSel >= 0 &&
                                      *c.comboSel < (int)c.comboItems->size())
                                   ? (*c.comboItems)[*c.comboSel] : std::string();
+            if (DialogSkin::ok()) {
+                // Fork: caixa preta com borda clara, botão de seta à direita.
+                const int ab = std::min(17, c.h - 4);
+                renderer.drawSkinBox(c.x, c.y, c.w, c.h);
+                renderer.drawSkinArrowButton(c.x + c.w - 2 - ab, c.y + 2, ab, c.h - 4, false);
+                SkinText::drawRaw(fb, 640, 480, txt, c.x + 4, c.y + (c.h - SkinText::height()) / 2 + 1,
+                                  c.disabled ? DialogSkin::kTextOff : DialogSkin::kText);
+                break;
+            }
             renderer.drawRect(c.x, c.y, c.w, c.h, c.disabled ? 0xFF2A3545 : 0xFF405068);
-            Font::drawText(fb, 640, 480, txt, c.x + 4, c.y + (c.h - 10) / 2,
+            SkinText::draw(fb, 640, 480, txt, c.x + 4, c.y + (c.h - 10) / 2,
                            c.disabled ? 0xFF60708A : (hl ? 0xFFFFFF99 : 0xFFC8D4E8), true);
             // a marca da lista suspensa, no canto direito
-            Font::drawText(fb, 640, 480, (i == m_openCombo) ? "^" : "v",
+            SkinText::draw(fb, 640, 480, (i == m_openCombo) ? "^" : "v",
                            c.x + c.w - 10, c.y + (c.h - 10) / 2,
                            c.disabled ? 0xFF60708A : 0xFF8090A8, true);
             break;
@@ -1589,17 +1636,20 @@ void ShellMenu::drawControls(Renderer& renderer) {
             const int span = c.sliderMax - c.sliderMin;
             const int kx = sliderKnobX(c);
             const int ty = c.y + c.h / 2 - 2;     // a calha, no meio da altura
-            renderer.fillRect(c.x, ty, c.w, 4, 0xFF10161F);
-            renderer.drawRect(c.x, ty, c.w, 4, c.disabled ? 0xFF2A3545 : 0xFF405068);
+            const bool skin = DialogSkin::ok();
+            renderer.fillRect(c.x, ty, c.w, 4, skin ? DialogSkin::kBoxBg : 0xFF10161F);
+            renderer.drawRect(c.x, ty, c.w, 4, skin ? DialogSkin::kBoxEdgeDk
+                                                    : (c.disabled ? 0xFF2A3545 : 0xFF405068));
             // a parte já percorrida, até o cursor
             const int fill = kx - c.x + kSliderKnobW / 2;
             if (fill > 0 && span > 0)
                 renderer.fillRect(c.x + 1, ty + 1, fill, 2,
-                                  c.disabled ? 0xFF48566C : 0xFF6C8CC0);
+                                  skin ? (c.disabled ? DialogSkin::kTextOff : 0xFF00B000)
+                                       : (c.disabled ? 0xFF48566C : 0xFF6C8CC0));
             // os riscos das pontas e do meio, para dar escala à barra
             for (int k = 0; k <= 4; ++k) {
                 const int mx = c.x + kSliderKnobW / 2 + k * (c.w - kSliderKnobW) / 4;
-                renderer.fillRect(mx, c.y + c.h - 3, 1, 3, 0xFF48566C);
+                renderer.fillRect(mx, c.y + c.h - 3, 1, 3, skin ? DialogSkin::kBoxEdgeDk : 0xFF48566C);
             }
             renderer.drawButton(kx, c.y, kSliderKnobW, c.h, "", hl, c.pressed, c.disabled);
             (void)v;
@@ -1607,17 +1657,26 @@ void ShellMenu::drawControls(Renderer& renderer) {
         }
         case CtrlKind::Edit: {
             const bool active = focused && !c.disabled;
-            renderer.drawRect(c.x, c.y, c.w, c.h, active ? 0xFFFFD24A : 0xFF405068);
             std::string txt = c.editTarget ? *c.editTarget : std::string();
             if (active) txt += "_";
-            Font::drawText(fb, 640, 480, txt, c.x + 4, c.y + (c.h - 10) / 2,
+            if (DialogSkin::ok()) {             // Fork: caixa preta, texto verde
+                renderer.drawSkinBox(c.x, c.y, c.w, c.h);
+                SkinText::drawRaw(fb, 640, 480, txt, c.x + 4, c.y + (c.h - SkinText::height()) / 2 + 1,
+                                  c.disabled ? DialogSkin::kTextOff : DialogSkin::kText);
+                break;
+            }
+            renderer.drawRect(c.x, c.y, c.w, c.h, active ? 0xFFFFD24A : 0xFF405068);
+            SkinText::draw(fb, 640, 480, txt, c.x + 4, c.y + (c.h - 10) / 2,
                            c.disabled ? 0xFF60708A : 0xFFE0ECFF, true);
             break;
         }
         }
 
         // Retângulo de foco (amarelo) mostrando qual controle está focado.
-        if (focused && !c.disabled)
+        // Fork: com a pele do original o botão focado já tem o contorno
+        // vermelho vivo (estado 2 da tira), sem retângulo extra.
+        const bool skinnedButton = DialogSkin::ok();   // Fork: nenhum controle usa o retângulo amarelo
+        if (focused && !c.disabled && !skinnedButton)
             renderer.drawRect(c.x - 3, c.y - 3, c.w + 6, c.h + 6, 0xFFFFD24A);
     }
     drawOpenCombo(renderer);   // a lista solta fica por cima de todos
@@ -1630,7 +1689,7 @@ void ShellMenu::renderSplash(Renderer& renderer) {
         int lh = m_logoBitmap.getHeight();
         renderer.blitBitmap(m_logoBitmap, (640 - lw) / 2, (480 - lh) / 2 - 20, true, 0xFF000000);
     }
-    Font::drawTextCentered(renderer.getFramebuffer(), 640, 480,
+    SkinText::drawCentered(renderer.getFramebuffer(), 640, 480,
                            "Loading...", 320, 430, 0xFF9CB0C8, true);
 }
 
@@ -1644,8 +1703,8 @@ void ShellMenu::renderNewCampaignDialog(Renderer& renderer) {
     renderer.dimRect(0, 0, 640, 480, 0x88);
     renderer.drawDialogFrame(kNcX, kNcY, kNcW, kNcH, "NEW CAMPAIGN OPTIONS");
     uint32_t* fb = renderer.getFramebuffer();
-    Font::drawText(fb, 640, 480, "Colony:", kNcX + 16, kNcY + 36, 0xFFD8E4F8, true);
-    Font::drawText(fb, 640, 480, "Difficulty:", kNcX + 150, kNcY + 36, 0xFFD8E4F8, true);
+    SkinText::draw(fb, 640, 480, "Colony:", kNcX + 16, kNcY + 36, 0xFFD8E4F8, true);
+    SkinText::draw(fb, 640, 480, "Difficulty:", kNcX + 150, kNcY + 36, 0xFFD8E4F8, true);
     // Radios e botões são desenhados por drawControls().
 }
 
@@ -1653,19 +1712,18 @@ void ShellMenu::renderAboutDialog(Renderer& renderer) {
     renderer.dimRect(0, 0, 640, 480, 0x88);
     renderer.drawDialogFrame(kAbX, kAbY, kAbW, kAbH, "ABOUT OUTPOST 2...");
     uint32_t* fb = renderer.getFramebuffer();
-    Font::drawTextCentered(fb, 640, 480, "Outpost 2: Divided Destiny", kAbX + kAbW/2, kAbY + 36, 0xFFFFFFFF, true);
-    Font::drawTextCentered(fb, 640, 480, "Copyright 1997, Sierra On-Line, Inc.", kAbX + kAbW/2, kAbY + 56, 0xFF9CB0C8, true);
-    Font::drawTextCentered(fb, 640, 480, "Modern C++ SDL2 Engine Port", kAbX + kAbW/2, kAbY + 76, 0xFF8AE0AA, true);
+    SkinText::drawCentered(fb, 640, 480, "Outpost 2: Divided Destiny", kAbX + kAbW/2, kAbY + 36, 0xFFFFFFFF, true);
+    SkinText::drawCentered(fb, 640, 480, "Copyright 1997, Sierra On-Line, Inc.", kAbX + kAbW/2, kAbY + 56, 0xFF9CB0C8, true);
+    SkinText::drawCentered(fb, 640, 480, "Modern C++ SDL2 Engine Port", kAbX + kAbW/2, kAbY + 76, 0xFF8AE0AA, true);
 
     int boxX = kAbX + 16, boxY = kAbY + 105, boxW = kAbW - 32, boxH = 140;
-    renderer.fillRect(boxX, boxY, boxW, boxH, 0xFF0D121B);
-    renderer.drawBevelRect(boxX, boxY, boxW, boxH, 0xFF05080E, 0xFF35445B);
-    Font::drawText(fb, 640, 480, "Original Dynamix / Sierra Team:", boxX + 10, boxY + 10, 0xFFFFFF99);
-    Font::drawText(fb, 640, 480, "- Lead Design: Jason Pratt", boxX + 10, boxY + 28, 0xFFD0DCE8);
-    Font::drawText(fb, 640, 480, "- Lead Programming: Bryan Shannon", boxX + 10, boxY + 44, 0xFFD0DCE8);
-    Font::drawText(fb, 640, 480, "- Art Director: Terry Robinson", boxX + 10, boxY + 60, 0xFFD0DCE8);
-    Font::drawText(fb, 640, 480, "- Audio: Jan Paul Moorhead", boxX + 10, boxY + 76, 0xFFD0DCE8);
-    Font::drawText(fb, 640, 480, "Reconstruction 1:1 via Disassembly", boxX + 10, boxY + 105, 0xFF65C8FF);
+    renderer.drawSkinBox(boxX, boxY, boxW, boxH);
+    SkinText::draw(fb, 640, 480, "Original Dynamix / Sierra Team:", boxX + 10, boxY + 10, 0xFFFFFF99);
+    SkinText::draw(fb, 640, 480, "- Lead Design: Jason Pratt", boxX + 10, boxY + 28, 0xFFD0DCE8);
+    SkinText::draw(fb, 640, 480, "- Lead Programming: Bryan Shannon", boxX + 10, boxY + 44, 0xFFD0DCE8);
+    SkinText::draw(fb, 640, 480, "- Art Director: Terry Robinson", boxX + 10, boxY + 60, 0xFFD0DCE8);
+    SkinText::draw(fb, 640, 480, "- Audio: Jan Paul Moorhead", boxX + 10, boxY + 76, 0xFFD0DCE8);
+    SkinText::draw(fb, 640, 480, "Reconstruction 1:1 via Disassembly", boxX + 10, boxY + 105, 0xFF65C8FF);
     // Botão OK desenhado por drawControls().
 }
 
@@ -1719,26 +1777,26 @@ void ShellMenu::renderPreferencesDialog(Renderer& renderer) {
             { "Scroll Speed:", m_prefScrollRate,  6, kPrY + 186 },
         };
         for (const auto& l : linhas) {
-            Font::drawText(fb, 640, 480, l.rotulo, kPrX + 24, l.y, 0xFFD8E4F8, true);
+            SkinText::draw(fb, 640, 480, l.rotulo, kPrX + 24, l.y, 0xFFD8E4F8, true);
             std::snprintf(buf, sizeof(buf), "%d / %d", l.valor, l.maximo);
             // alinhado a direita, encostando nos botoes
-            Font::drawText(fb, 640, 480, buf, kPrX + 178 - Font::getTextWidth(buf),
+            SkinText::draw(fb, 640, 480, buf, kPrX + 178 - SkinText::width(buf),
                            l.y, 0xFFFFD24A, true);
         }
     }
     // Nível da IA (só deste porte): o rótulo do combo 1200 e a explicação do
     // AUTO, que é como o jogo original se comporta.
-    Font::drawText(fb, 640, 480, "AI Level:", kPrX + 24, kPrY + 219, 0xFFD8E4F8, true);
-    Font::drawText(fb, 640, 480,
+    SkinText::draw(fb, 640, 480, "AI Level:", kPrX + 24, kPrY + 219, 0xFFD8E4F8, true);
+    SkinText::draw(fb, 640, 480,
                    m_prefAiLevel == 0 ? "(o nivel que a partida escolher)"
                                       : "(vale em campanha e colonia)",
                    kPrX + 24, kPrY + 246, 0xFF8090A8, true);
     // Volume do áudio (idem): o rótulo à esquerda e o valor na mesma linha,
     // como o original põe o static 1103 ao lado do "Volume:".
-    Font::drawText(fb, 640, 480, "Audio Volume:", kPrX + 24, kPrY + 270, 0xFFD8E4F8, true);
+    SkinText::draw(fb, 640, 480, "Audio Volume:", kPrX + 24, kPrY + 270, 0xFFD8E4F8, true);
     char pct[16];
     std::snprintf(pct, sizeof(pct), "%d%%", m_prefAudioVolume);
-    Font::drawText(fb, 640, 480, pct, kPrX + kPrW - 24 - Font::getTextWidth(pct),
+    SkinText::draw(fb, 640, 480, pct, kPrX + kPrW - 24 - SkinText::width(pct),
                    kPrY + 270, 0xFFFFD24A, true);
 }
 
@@ -1767,7 +1825,7 @@ void ShellMenu::openHelp() {
     setState(MenuState::Help);
 }
 
-int ShellMenu::helpVisibleLines() const { return kHpTextH / (Font::getTextHeight() + 2); }
+int ShellMenu::helpVisibleLines() const { return kHpTextH / (SkinText::height() + 2); }
 
 void ShellMenu::helpBuildLines() {
     m_helpBuiltFor = m_helpTopic;
@@ -1839,10 +1897,10 @@ void ShellMenu::renderHelp(Renderer& renderer) {
     uint32_t* fb = renderer.getFramebuffer();
 
     if (!m_help.ok()) {
-        Font::drawText(fb, 640, 480, "O manual nao pode ser aberto:", kHpX + 24, kHpY + 60,
+        SkinText::draw(fb, 640, 480, "O manual nao pode ser aberto:", kHpX + 24, kHpY + 60,
                        0xFFD8E4F8, true);
-        Font::drawText(fb, 640, 480, m_help.error(), kHpX + 24, kHpY + 82, 0xFFFF9999, true);
-        Font::drawText(fb, 640, 480, "Ponha o OUTPOST2.HLP (ou um manual em PDF) junto do jogo.",
+        SkinText::draw(fb, 640, 480, m_help.error(), kHpX + 24, kHpY + 82, 0xFFFF9999, true);
+        SkinText::draw(fb, 640, 480, "Ponha o OUTPOST2.HLP (ou um manual em PDF) junto do jogo.",
                        kHpX + 24, kHpY + 110, 0xFF8090A8, true);
         return;
     }
@@ -1850,10 +1908,31 @@ void ShellMenu::renderHelp(Renderer& renderer) {
 
     // ---- lista de tópicos ----
     const std::vector<HelpTopic>& tops = m_help.topics();
-    renderer.drawRect(kHpListX, kHpListY, kHpListW, kHpListH, 0xFF405068);
     const int total = (int)tops.size();
     const int maxScroll = (total > kHpVisible) ? (total - kHpVisible) : 0;
     if (m_helpListScroll > maxScroll) m_helpListScroll = maxScroll;
+    if (DialogSkin::ok()) {
+        // Fork: listbox do original -- caixa preta, seleção azul, barra padrão.
+        renderer.drawSkinBox(kHpListX, kHpListY, kHpListW, kHpListH);
+        const int textW = kHpListW - kHpSbW - 8;
+        for (int k = 0; k < kHpVisible; ++k) {
+            const int i = m_helpListScroll + k;
+            if (i < 0 || i >= total) break;
+            const int y = kHpListY + 1 + k * kHpRowH;
+            const bool sel = (i == m_helpTopic);
+            if (sel) renderer.fillRect(kHpListX + 2, y, kHpListW - kHpSbW - 4, kHpRowH, DialogSkin::kSelBg);
+            std::string t = tops[i].title;
+            if (SkinText::width(t) > textW) {
+                while (!t.empty() && SkinText::width(t + "...") > textW) t.pop_back();
+                t += "...";
+            }
+            SkinText::drawRaw(fb, 640, 480, t, kHpListX + 4, y + 1,
+                              sel ? DialogSkin::kSelText : DialogSkin::kText);
+        }
+        renderer.drawSkinScrollBar(kHpListX + kHpListW - 2 - kHpSbW, kHpListY + 2, kHpSbW,
+                                   kHpListH - 4, m_helpListScroll, kHpVisible, total);
+    } else {
+    renderer.drawRect(kHpListX, kHpListY, kHpListW, kHpListH, 0xFF405068);
     for (int k = 0; k < kHpVisible; ++k) {
         const int i = m_helpListScroll + k;
         if (i < 0 || i >= total) break;
@@ -1863,22 +1942,25 @@ void ShellMenu::renderHelp(Renderer& renderer) {
         std::string t = tops[i].title;
         const int cabe = (kHpListW - kHpSbW - 12) / 8;
         if ((int)t.size() > cabe && cabe > 2) t = t.substr(0, cabe - 2) + "..";
-        Font::drawText(fb, 640, 480, t, kHpListX + 6, y, sel ? 0xFFFFFF99 : 0xFFC8D4E8, true);
+        SkinText::draw(fb, 640, 480, t, kHpListX + 6, y, sel ? 0xFFFFFF99 : 0xFFC8D4E8, true);
+    }
     }
     // barra de rolagem da lista: as duas setas e o cursor
     const int sbX = kHpListX + kHpListW - kHpSbW;
+    if (!DialogSkin::ok()) {
     renderer.drawRect(sbX, kHpListY, kHpSbW, kHpListH, 0xFF405068);
-    Font::drawTextCentered(fb, 640, 480, "^", sbX + kHpSbW / 2, kHpListY + 2, 0xFF8090A8, true);
-    Font::drawTextCentered(fb, 640, 480, "v", sbX + kHpSbW / 2, kHpListY + kHpListH - 14,
+    SkinText::drawCentered(fb, 640, 480, "^", sbX + kHpSbW / 2, kHpListY + 2, 0xFF8090A8, true);
+    SkinText::drawCentered(fb, 640, 480, "v", sbX + kHpSbW / 2, kHpListY + kHpListH - 14,
                            0xFF8090A8, true);
     if (maxScroll > 0) {
         const int faixa = kHpListH - 2 * kHpSbW - 8;
         const int cy = kHpListY + kHpSbW + 4 + faixa * m_helpListScroll / maxScroll;
         renderer.fillRect(sbX + 3, cy, kHpSbW - 6, 10, 0xFF6C8CC0);
     }
+    }
 
     // ---- texto do tópico ----
-    const int lineH = Font::getTextHeight() + 2;
+    const int lineH = SkinText::height() + 2;
     const int vis = helpVisibleLines();
     const int maxTxt = (int)m_helpLines.size() > vis ? (int)m_helpLines.size() - vis : 0;
     if (m_helpTextScroll > maxTxt) m_helpTextScroll = maxTxt;
@@ -1888,12 +1970,12 @@ void ShellMenu::renderHelp(Renderer& renderer) {
         if (i < 0 || i >= (int)m_helpLines.size()) break;
         const int y = kHpTextY + k * lineH;
         for (const RtfLine::Piece& pc : m_helpLines[i].pieces)
-            Font::drawText(fb, 640, 480, pc.text, kHpTextX + pc.x, y, pc.color, true);
+            SkinText::draw(fb, 640, 480, pc.text, kHpTextX + pc.x, y, pc.color, true);
     }
     if (maxTxt > 0) {
         char buf[64];
         std::snprintf(buf, sizeof(buf), "%d%%", 100 * m_helpTextScroll / maxTxt);
-        Font::drawText(fb, 640, 480, buf, kHpX + kHpW - 50, kHpY + kHpH - 34, 0xFF8090A8, true);
+        SkinText::draw(fb, 640, 480, buf, kHpX + kHpW - 50, kHpY + kHpH - 34, 0xFF8090A8, true);
     }
 }
 
@@ -1901,14 +1983,19 @@ void ShellMenu::renderColonyGamesDialog(Renderer& renderer) {
     renderer.dimRect(0, 0, 640, 480, 0x88);
     renderer.drawDialogFrame(kCgX, kCgY, kCgW, kCgH, "COLONY GAMES");
 
-    renderer.fillRect(kCgListX, kCgListY, kCgListW, kCgListH, 0xFF0D121B);
-    renderer.drawBevelRect(kCgListX, kCgListY, kCgListW, kCgListH, 0xFF05080E, 0xFF35445B);
+    renderer.drawSkinBox(kCgListX, kCgListY, kCgListW, kCgListH);
     for (size_t i = 0; i < m_colonyGameList.size(); ++i) {
         int itemY = kCgListY + 8 + (int)i * kCgRowH;
         if (itemY + 16 > kCgListY + kCgListH) break;
         bool sel = ((int)i == m_selectedColonyGame);
+        if (DialogSkin::ok()) {     // Fork: seleção azul, texto branco / verde
+            if (sel) renderer.fillRect(kCgListX + 2, itemY, kCgListW - 4, kCgRowH, DialogSkin::kSelBg);
+            SkinText::drawRaw(renderer.getFramebuffer(), 640, 480, m_colonyGameList[i],
+                              kCgListX + 4, itemY + 1, sel ? DialogSkin::kSelText : DialogSkin::kText);
+            continue;
+        }
         if (sel) renderer.fillRect(kCgListX + 2, itemY - 2, kCgListW - 4, 18, 0xFF203858);
-        Font::drawText(renderer.getFramebuffer(), 640, 480, m_colonyGameList[i],
+        SkinText::draw(renderer.getFramebuffer(), 640, 480, m_colonyGameList[i],
                        kCgListX + 10, itemY, sel ? 0xFFFFFF99 : 0xFFCCD6E8);
     }
     // Botões PLAY / SCORES / BACK desenhados por drawControls().
@@ -1919,35 +2006,32 @@ void ShellMenu::renderTutorialsDialog(Renderer& renderer) {
     renderer.drawDialogFrame(kTutDlgX, kTutDlgY, kTutDlgW, kTutDlgH, "TUTORIALS");
 
     int lx = kTutListX, ly = kTutListY, lw = kTutListW - kTutSbW, lh = kTutListH;
-    renderer.fillRect(lx, ly, lw, lh, 0xFF0D121B);
-    renderer.drawBevelRect(lx, ly, lw, lh, 0xFF05080E, 0xFF35445B);
+    // Fork: como o listbox do original -- a borda envolve a lista E a barra
+    // de rolagem; linha selecionada em azul com texto branco.
+    renderer.drawSkinBox(lx, ly, kTutListW, lh);
 
+    uint32_t* fb = renderer.getFramebuffer();
     int total = (int)m_tutorialList.size();
     for (int row = 0; row < kTutVisible; ++row) {
         int i = m_tutorialScroll + row;
         if (i >= total) break;
         int itemY = ly + 4 + row * kTutRowH;
         bool sel = (i == m_selectedTutorial);
-        if (sel) renderer.fillRect(lx + 2, itemY - 1, lw - 4, kTutRowH - 2, 0xFF264066);
         std::string txt = m_tutorialList[i];
-        while (!txt.empty() && Font::getTextWidth(txt) > lw - 16) txt.pop_back();
-        Font::drawText(renderer.getFramebuffer(), 640, 480, txt, lx + 8, itemY + 4,
-                       sel ? 0xFFFFFF99 : 0xFFCCD6E8);
+        while (!txt.empty() && SkinText::width(txt) > lw - 10) txt.pop_back();
+        if (DialogSkin::ok()) {
+            if (sel) renderer.fillRect(lx + 2, itemY, lw - 2, kTutRowH, DialogSkin::kSelBg);
+            SkinText::drawRaw(fb, 640, 480, txt, lx + 4, itemY + 1,
+                              sel ? DialogSkin::kSelText : DialogSkin::kText);
+        } else {
+            if (sel) renderer.fillRect(lx + 2, itemY - 1, lw - 4, kTutRowH - 2, 0xFF264066);
+            SkinText::draw(fb, 640, 480, txt, lx + 8, itemY + 1, sel ? 0xFFFFFF99 : 0xFFCCD6E8);
+        }
     }
 
-    // Scrollbar vertical.
-    int sbX = lx + lw, sbY = ly, sbH = lh;
-    renderer.fillRect(sbX, sbY, kTutSbW, sbH, 0xFF11161F);
-    renderer.drawBevelRect(sbX, sbY, kTutSbW, sbH, 0xFF05080E, 0xFF35445B);
-    renderer.drawButton(sbX, sbY, kTutSbW, kTutSbW, "^", false, false);
-    renderer.drawButton(sbX, sbY + sbH - kTutSbW, kTutSbW, kTutSbW, "v", false, false);
-    int trackY = sbY + kTutSbW, trackH = sbH - 2 * kTutSbW;
-    int maxScroll = (total > kTutVisible) ? (total - kTutVisible) : 0;
-    int thumbH = (total > kTutVisible) ? std::max(16, trackH * kTutVisible / total) : trackH;
-    thumbH = std::min(thumbH, trackH);
-    int thumbY = trackY + (maxScroll > 0 ? (trackH - thumbH) * m_tutorialScroll / maxScroll : 0);
-    renderer.fillRect(sbX + 2, thumbY, kTutSbW - 4, thumbH, 0xFF3A557E);
-    renderer.drawBevelRect(sbX + 2, thumbY, kTutSbW - 4, thumbH, 0xFF5A7AA8, 0xFF223144);
+    // Scrollbar vertical, dentro da borda.
+    renderer.drawSkinScrollBar(lx + lw - 2, ly + 2, kTutSbW, lh - 4,
+                               m_tutorialScroll, kTutVisible, total);
     // Botões START / BACK desenhados por drawControls().
 }
 
@@ -1969,7 +2053,7 @@ void ShellMenu::debugCampaign(bool eden, int difficulty, int missionNumber, int 
     }
 }
 
-int ShellMenu::rtfVisibleLines() const { return kRvTextH / (Font::getTextHeight() + 2); }
+int ShellMenu::rtfVisibleLines() const { return kRvTextH / (SkinText::height() + 2); }
 
 // Mensagem 0x73a da janela do shell (motivo − 1 → tabela 0x130090b4). Os filmes
 // (opção Game/ShowMovies, mensagem 0x72b) não existem aqui: vai direto ao passo
@@ -2019,15 +2103,14 @@ void ShellMenu::renderEnterName(Renderer& renderer) {
     renderer.drawDialogFrame(kEnX, kEnY, kEnW, kEnH, "ENTER YOUR NAME");
     uint32_t* fb = renderer.getFramebuffer();
     const int tx = kEnX + 10, ty = kEnY + 22 + 11;
-    Font::drawText(fb, 640, 480, "Congratulations on completing this", tx, ty, 0xFFCCD6E8);
-    Font::drawText(fb, 640, 480, "colony game! Please enter your", tx, ty + 16, 0xFFCCD6E8);
-    Font::drawText(fb, 640, 480, "name below.", tx, ty + 32, 0xFFCCD6E8);
-    Font::drawText(fb, 640, 480, "Your Name:", tx, kEnEditY + 6, 0xFFCCD6E8);
-    renderer.fillRect(kEnEditX, kEnEditY, kEnEditW, kEnEditH, 0xFF0D121B);
-    renderer.drawBevelRect(kEnEditX, kEnEditY, kEnEditW, kEnEditH, 0xFF05080E, 0xFF35445B);
+    SkinText::draw(fb, 640, 480, "Congratulations on completing this", tx, ty, 0xFFCCD6E8);
+    SkinText::draw(fb, 640, 480, "colony game! Please enter your", tx, ty + 16, 0xFFCCD6E8);
+    SkinText::draw(fb, 640, 480, "name below.", tx, ty + 32, 0xFFCCD6E8);
+    SkinText::draw(fb, 640, 480, "Your Name:", tx, kEnEditY + 6, 0xFFCCD6E8);
+    renderer.drawSkinBox(kEnEditX, kEnEditY, kEnEditW, kEnEditH);
     std::string t = m_scoreName + ((SDL_GetTicks() / 400) & 1 ? "_" : "");
-    while (!t.empty() && Font::getTextWidth(t) > kEnEditW - 8) t.erase(0, 1);
-    Font::drawText(fb, 640, 480, t, kEnEditX + 4, kEnEditY + 7, 0xFFFFFFFF);
+    while (!t.empty() && SkinText::width(t) > kEnEditW - 8) t.erase(0, 1);
+    SkinText::draw(fb, 640, 480, t, kEnEditX + 4, kEnEditY + 7, 0xFFFFFFFF);
 }
 
 // Dialog 155 (motivos 7..9 da mensagem 0x73a): os seis contadores do jogador
@@ -2053,7 +2136,7 @@ void ShellMenu::renderMpStats(Renderer& renderer) {
     // A coluna do numero fica depois do rotulo mais largo da sua coluna.
     int fim[2] = {0, 0};
     for (const Linha& l : linhas) {
-        const int w = Font::getTextWidth(l.rot);
+        const int w = SkinText::width(l.rot);
         if (w > fim[l.col]) fim[l.col] = w;
     }
     // A coluna da direita so comeca depois do NUMERO da esquerda, senao os dois
@@ -2061,7 +2144,7 @@ void ShellMenu::renderMpStats(Renderer& renderer) {
     int larguraVal = 0;
     for (const Linha& l : linhas)
         if (l.col == 0) {
-            const int w = Font::getTextWidth(std::to_string(l.valor));
+            const int w = SkinText::width(std::to_string(l.valor));
             if (w > larguraVal) larguraVal = w;
         }
     const int colX0 = kMsX + 10;
@@ -2070,8 +2153,8 @@ void ShellMenu::renderMpStats(Renderer& renderer) {
     const int valX[2] = {valX0, colX[1] + fim[1] + 10};
     for (const Linha& l : linhas) {
         const int y = kMsY + 22 + 8 + l.lin * 21;
-        Font::drawText(fb, 640, 480, l.rot, colX[l.col], y, 0xFFCCD6E8);
-        Font::drawText(fb, 640, 480, std::to_string(l.valor), valX[l.col], y, 0xFFFFFFFF);
+        SkinText::draw(fb, 640, 480, l.rot, colX[l.col], y, 0xFFCCD6E8);
+        SkinText::draw(fb, 640, 480, std::to_string(l.valor), valX[l.col], y, 0xFFFFFFFF);
     }
 }
 
@@ -2080,23 +2163,22 @@ void ShellMenu::renderScores(Renderer& renderer) {
     renderer.dimRect(0, 0, 640, 480, 0x88);
     renderer.drawDialogFrame(kScX, kScY, kScW, kScH, "COLONY GAME SCORES");
     uint32_t* fb = renderer.getFramebuffer();
-    renderer.fillRect(kScListX, kScListY, kScListW, kScListH, 0xFF0D121B);
-    renderer.drawBevelRect(kScListX, kScListY, kScListW, kScListH, 0xFF05080E, 0xFF35445B);
+    renderer.drawSkinBox(kScListX, kScListY, kScListW, kScListH);
     const int vis = scoreVisibleLines();
     for (int k = 0; k < vis; ++k) {
         const int i = m_scoreScroll + k;
         if (i < 0 || i >= (int)m_scores.size()) break;
         std::string line = scoreLine(m_scores[i]);
-        while (!line.empty() && Font::getTextWidth(line) > kScListW - 16) line.pop_back();
-        Font::drawText(fb, 640, 480, line, kScListX + 8, kScListY + 6 + k * kScRowH, 0xFFCCD6E8);
+        while (!line.empty() && SkinText::width(line) > kScListW - 16) line.pop_back();
+        SkinText::draw(fb, 640, 480, line, kScListX + 8, kScListY + 6 + k * kScRowH, 0xFFCCD6E8);
     }
     if (m_scores.empty())
-        Font::drawText(fb, 640, 480, "(no scores yet)", kScListX + 8, kScListY + 6, 0xFF708090);
+        SkinText::draw(fb, 640, 480, "(no scores yet)", kScListX + 8, kScListY + 6, 0xFF708090);
     if (m_clearConfirm) {                                 // caixa de confirmação
         const int cw = 420, ch = 96, cx = (640 - cw) / 2, cy = kScY + 60;
         renderer.drawDialogFrame(cx, cy, cw, ch, "Delete All Scores?");
-        Font::drawText(fb, 640, 480, "Are you sure you want to clear", cx + 12, cy + 34, 0xFFCCD6E8);
-        Font::drawText(fb, 640, 480, "all of the scores?", cx + 12, cy + 50, 0xFFCCD6E8);
+        SkinText::draw(fb, 640, 480, "Are you sure you want to clear", cx + 12, cy + 34, 0xFFCCD6E8);
+        SkinText::draw(fb, 640, 480, "all of the scores?", cx + 12, cy + 50, 0xFFCCD6E8);
     }
 }
 
@@ -2167,19 +2249,24 @@ void ShellMenu::renderMissionMenu(Renderer& renderer) {
 void ShellMenu::renderRtfView(Renderer& renderer) {
     renderer.dimRect(0, 0, 640, 480, 0x88);
     renderer.drawDialogFrame(kRvX, kRvY, kRvW, kRvH, m_rtfTitle);
+    if (DialogSkin::ok())   // Fork: borda clara de 2 px, como a lista do original
+        renderer.drawSkinBox(kRvTextX - 2, kRvTextY - 2, kRvTextW + 4, kRvTextH + 4);
     renderer.fillRect(kRvTextX, kRvTextY, kRvTextW, kRvTextH, 0xFF000000);   // EM_SETBKGNDCOLOR(0)
-    renderer.drawBevelRect(kRvTextX - 1, kRvTextY - 1, kRvTextW + 2, kRvTextH + 2, 0xFF05080E, 0xFF35445B);
+    if (!DialogSkin::ok())
+        renderer.drawBevelRect(kRvTextX - 1, kRvTextY - 1, kRvTextW + 2, kRvTextH + 2, 0xFF05080E, 0xFF35445B);
     uint32_t* fb = renderer.getFramebuffer();
-    const int lh = Font::getTextHeight() + 2, vis = rtfVisibleLines();
+    const int lh = SkinText::height() + 2, vis = rtfVisibleLines();
     for (int i = 0; i < vis; ++i) {
         const int li = m_rtfScroll + i;
         if (li >= static_cast<int>(m_rtfLines.size())) break;
         for (const RtfLine::Piece& pc : m_rtfLines[static_cast<size_t>(li)].pieces)
-            Font::drawText(fb, 640, 480, pc.text, kRvTextX + 4 + pc.x, kRvTextY + 4 + i * lh, pc.color);
+            SkinText::draw(fb, 640, 480, pc.text, kRvTextX + 4 + pc.x, kRvTextY + 4 + i * lh, pc.color);
     }
     // Barra de rolagem (só a posição).
     const int total = static_cast<int>(m_rtfLines.size());
-    if (total > vis) {
+    if (total > vis && DialogSkin::ok()) {
+        renderer.drawSkinScrollBar(kRvTextX + kRvTextW - 17, kRvTextY, 17, kRvTextH, m_rtfScroll, vis, total);
+    } else if (total > vis) {
         const int trackX = kRvTextX + kRvTextW - 10, trackH = kRvTextH - 4;
         const int thumbH = std::max(16, trackH * vis / total);
         const int maxScroll = total - vis;
@@ -2192,14 +2279,19 @@ void ShellMenu::renderRtfView(Renderer& renderer) {
 void ShellMenu::renderChapters(Renderer& renderer) {
     renderer.dimRect(0, 0, 640, 480, 0x88);
     renderer.drawDialogFrame(kChX, kChY, kChW, kChH, "CHAPTERS");
-    renderer.fillRect(kChListX, kChListY, kChListW, kChListH, 0xFF0D121B);
-    renderer.drawBevelRect(kChListX, kChListY, kChListW, kChListH, 0xFF05080E, 0xFF35445B);
+    renderer.drawSkinBox(kChListX, kChListY, kChListW, kChListH);
     for (size_t i = 0; i < m_chapters.size(); ++i) {
         const int y = kChListY + 8 + static_cast<int>(i) * kChRowH;
         if (y + 14 > kChListY + kChListH) break;
         const bool sel = static_cast<int>(i) == m_selChapter;
+        if (DialogSkin::ok()) {     // Fork: seleção azul, texto branco / verde
+            if (sel) renderer.fillRect(kChListX + 2, y, kChListW - 4, kChRowH, DialogSkin::kSelBg);
+            SkinText::drawRaw(renderer.getFramebuffer(), 640, 480, m_chapters[i], kChListX + 4, y + 1,
+                              sel ? DialogSkin::kSelText : DialogSkin::kText);
+            continue;
+        }
         if (sel) renderer.fillRect(kChListX + 2, y - 2, kChListW - 4, kChRowH - 2, 0xFF203858);
-        Font::drawText(renderer.getFramebuffer(), 640, 480, m_chapters[i], kChListX + 10, y,
+        SkinText::draw(renderer.getFramebuffer(), 640, 480, m_chapters[i], kChListX + 10, y,
                        sel ? 0xFFFFFF99 : 0xFFCCD6E8);
     }
 }

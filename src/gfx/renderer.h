@@ -54,6 +54,19 @@ public:
     void drawButton(int x, int y, int w, int h, const std::string& text, bool hovered,
                     bool pressed, bool disabled = false, uint8_t opacity = 255);
 
+    // Fork: controls of the skinned shell dialogs (see DialogSkin), as the
+    // original menus look on Windows 10. Without the skin they draw the port's
+    // old dark style, so callers need no fallback.
+    // List / edit / combo body: black, with a 2 px light border.
+    void drawSkinBox(int x, int y, int w, int h);
+    // Vertical scroll bar: arrow buttons at both ends, track and thumb.
+    void drawSkinScrollBar(int x, int y, int w, int h, int first, int visible, int total);
+    // A scroll-bar style button with an up or down arrow (also the combo's).
+    void drawSkinArrowButton(int x, int y, int w, int h, bool up);
+    // Radio / check glyph (13x13) at (x, y).
+    void drawSkinRadio(int x, int y, bool on, bool disabled);
+    void drawSkinCheck(int x, int y, bool on, bool disabled);
+
     uint32_t* getFramebuffer() { return m_framebuffer.data(); }
     int getWidth() const { return m_w; }
     int getHeight() const { return m_h; }

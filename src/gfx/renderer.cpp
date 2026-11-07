@@ -1,5 +1,7 @@
 #include "renderer.h"
 #include "font.h"
+#include "ui_font.h"
+#include "dialog_skin.h"
 #include <iostream>
 #include <algorithm>
 
@@ -322,8 +324,75 @@ void Renderer::fillRectAlpha(int x, int y, int w, int h, uint32_t color, uint8_t
         }
 }
 
+namespace {
+// "&File" -> "File", accelerator index 0 (or -1). "&&" is a literal '&'.
+std::string stripAccel(const std::string& s, int& accel) {
+    std::string out;
+    accel = -1;
+    for (size_t i = 0; i < s.size(); ++i) {
+        if (s[i] == '&' && i + 1 < s.size()) {
+            ++i;
+            if (s[i] != '&' && accel < 0) accel = static_cast<int>(out.size());
+        }
+        out += s[i];
+    }
+    return out;
+}
+
+// One coordinate of a 9-slice: keep `m` px at each end, stretch the middle.
+int slice9(int d, int dLen, int sLen, int m) {
+    if (d < m) return d;
+    if (d >= dLen - m) return sLen - (dLen - d);
+    if (dLen - 2 * m <= 0) return m;
+    return m + (d - m) * (sLen - 2 * m) / (dLen - 2 * m);
+}
+
+// Colours of the original shell dialog skin (sampled from the real main menu).
+constexpr uint32_t kSkinTitleBg  = 0xFF000033;   // title bar navy
+constexpr uint32_t kSkinTitleTx  = 0xFF00FF00;   // title text
+constexpr uint32_t kSkinRed      = 0xFFFC0000;   // bright border / separator
+constexpr uint32_t kSkinRedDark  = 0xFF720000;   // outer rows of the top/bottom border
+constexpr uint32_t kSkinRedSide  = 0xFFA01F10;   // left/right border
+constexpr uint32_t kSkinBtnText  = 0xFFDDFF22;   // button text (yellow-green)
+constexpr uint32_t kSkinBtnOff   = 0xFF808080;   // disabled button text
+} // namespace
+
 void Renderer::drawDialogFrame(int x, int y, int w, int h, const std::string& title,
                                uint8_t opacity) {
+    if (DialogSkin::ok()) {
+        // Fork: the original's skinned dialog (measured on the 192x348 main
+        // menu). The body is the blueprint (OP2SHRES 225), aligned to the
+        // screen. Border: 3 rows top and bottom (dark/bright/dark red), 1 column
+        // each side; title bar navy from row 3 to 25 with a bright red line at
+        // row 26 and the title in green Arial bold. The original dialogs are
+        // opaque, so `opacity` is not used here.
+        (void)opacity;
+        const Bitmap& bp = DialogSkin::blueprint();
+        const int bw = bp.getWidth(), bh = bp.getHeight();
+        const int x1 = std::max(0, x), y1 = std::max(0, y);
+        const int x2 = std::min(m_w, x + w), y2 = std::min(m_h, y + h);
+        for (int cy = y1; cy < y2; ++cy)
+            for (int cx = x1; cx < x2; ++cx)
+                m_framebuffer[cy * m_w + cx] = bp.getPixel32(cx % bw, cy % bh);
+        if (!title.empty()) {
+            fillRect(x + 1, y + 3, w - 2, 23, kSkinTitleBg);
+            fillRect(x + 1, y + 26, w - 2, 1, kSkinRed);
+            // "MAIN MENU" has its cap height on rows 10..19: baseline after row 19.
+            const int face = UiFont::kDialogTitle;
+            UiFont::drawCentered(m_framebuffer.data(), m_w, m_h, title, x + w / 2,
+                                 y + 20 - UiFont::ascent(face), kSkinTitleTx, face);
+        }
+        fillRect(x, y, w, 1, kSkinRedDark);
+        fillRect(x, y + 1, w, 1, kSkinRed);
+        fillRect(x, y + 2, w, 1, kSkinRedDark);
+        fillRect(x, y + h - 3, w, 1, kSkinRedDark);
+        fillRect(x, y + h - 2, w, 1, kSkinRed);
+        fillRect(x, y + h - 1, w, 1, 0xFF780000);
+        fillRect(x, y + 3, 1, h - 6, kSkinRedSide);
+        fillRect(x + w - 1, y + 3, 1, h - 6, kSkinRedSide);
+        return;
+    }
+
     // Outpost 2 UI style frame
     // Dark metallic background
     fillRectAlpha(x, y, w, h, 0xFF141923, opacity);
@@ -345,8 +414,42 @@ void Renderer::drawDialogFrame(int x, int y, int w, int h, const std::string& ti
     }
 }
 
-void Renderer::drawButton(int x, int y, int w, int h, const std::string& text, bool hovered,
+void Renderer::drawButton(int x, int y, int w, int h, const std::string& rawText, bool hovered,
                           bool pressed, bool disabled, uint8_t opacity) {
+    int accel = -1;
+    const std::string text = stripAccel(rawText, accel);
+    if (DialogSkin::ok()) {
+        // Fork: the original's skinned push button. The art is a state cell of
+        // OP2SHRES 236 (146x26, the main menu buttons) or 235 (75x26), drawn
+        // 9-sliced into the control's rect. Text: Arial bold −11, yellow-green,
+        // with the '&' letter underlined 2 px under the baseline.
+        const Bitmap& strip = (w >= 110) ? DialogSkin::wideButtons() : DialogSkin::buttons();
+        const int cw = strip.getWidth() / 5, ch = strip.getHeight();
+        const int cell = disabled ? 1 : pressed ? 3 : hovered ? 2 : 0;
+        for (int dy = 0; dy < h; ++dy) {
+            const int ty = y + dy;
+            if (ty < 0 || ty >= m_h) continue;
+            const int sy = slice9(dy, h, ch, 7);
+            for (int dx = 0; dx < w; ++dx) {
+                const int tx = x + dx;
+                if (tx < 0 || tx >= m_w) continue;
+                m_framebuffer[ty * m_w + tx] = strip.getPixel32(cell * cw + slice9(dx, w, cw, 7), sy);
+            }
+        }
+        const int face = UiFont::kTitle;
+        const uint32_t col = disabled ? kSkinBtnOff : kSkinBtnText;
+        const int tw = UiFont::width(text, face);
+        int tx = x + (w - tw) / 2, ty = UiFont::centeredY(y, y + h - 1, face);
+        if (pressed) { ++tx; ++ty; }
+        UiFont::draw(m_framebuffer.data(), m_w, m_h, text, tx, ty, col, face);
+        if (accel >= 0) {
+            const int ux = tx + UiFont::width(text.substr(0, accel), face);
+            const int uw = UiFont::width(text.substr(accel, 1), face);
+            fillRect(ux, ty + UiFont::ascent(face) + 2, uw, 1, col);
+        }
+        return;
+    }
+
     uint32_t bgColor;
     uint32_t borderTL, borderBR;
     uint32_t textColor;
@@ -391,5 +494,93 @@ void Renderer::drawButton(int x, int y, int w, int h, const std::string& text, b
     Font::drawTextCentered(m_framebuffer.data(), m_w, m_h,
                            text, textX, textY, textColor, !disabled, 0xFF000000);
 }
+
+// ---------------------------------------------------------------------------
+// Fork: skinned shell controls (the original menus on Windows 10).
+
+void Renderer::drawSkinBox(int x, int y, int w, int h) {
+    if (!DialogSkin::ok()) {
+        fillRect(x, y, w, h, 0xFF0D121B);
+        drawBevelRect(x, y, w, h, 0xFF05080E, 0xFF35445B);
+        return;
+    }
+    fillRect(x, y, w, h, DialogSkin::kBoxBg);
+    drawRect(x, y, w, h, DialogSkin::kBoxEdgeDk);
+    drawRect(x + 1, y + 1, w - 2, h - 2, DialogSkin::kBoxEdge);
+}
+
+void Renderer::drawSkinArrowButton(int x, int y, int w, int h, bool up) {
+    if (!DialogSkin::ok()) {
+        drawButton(x, y, w, h, up ? "^" : "v", false, false);
+        return;
+    }
+    fillRect(x, y, w, h, 0xFFF0F0F0);
+    // chevron: 7 px wide, 4 rows, centred
+    const int cx = x + w / 2, cy = y + h / 2;
+    for (int r = 0; r < 4; ++r) {
+        const int half = up ? r : 3 - r;
+        fillRect(cx - half, cy - 2 + r, 2 * half + 1, 1, 0xFF606060);
+    }
+}
+
+void Renderer::drawSkinScrollBar(int x, int y, int w, int h, int first, int visible, int total) {
+    const int ab = std::min(w, h / 2);                 // arrow buttons are square
+    if (!DialogSkin::ok()) {
+        fillRect(x, y, w, h, 0xFF11161F);
+        drawBevelRect(x, y, w, h, 0xFF05080E, 0xFF35445B);
+    } else {
+        fillRect(x, y, w, h, 0xFFF0F0F0);
+    }
+    drawSkinArrowButton(x, y, w, ab, true);
+    drawSkinArrowButton(x, y + h - ab, w, ab, false);
+    const int trackY = y + ab, trackH = h - 2 * ab;
+    if (trackH <= 0 || total <= visible || visible <= 0) return;   // nothing to scroll
+    const int maxFirst = total - visible;
+    int thumbH = std::max(12, trackH * visible / total);
+    thumbH = std::min(thumbH, trackH);
+    const int f = std::max(0, std::min(first, maxFirst));
+    const int thumbY = trackY + (trackH - thumbH) * f / maxFirst;
+    if (DialogSkin::ok()) {
+        fillRect(x + 1, thumbY, w - 2, thumbH, 0xFFCDCDCD);
+    } else {
+        fillRect(x + 2, thumbY, w - 4, thumbH, 0xFF3A557E);
+        drawBevelRect(x + 2, thumbY, w - 4, thumbH, 0xFF5A7AA8, 0xFF223144);
+    }
+}
+
+void Renderer::drawSkinRadio(int x, int y, bool on, bool disabled) {
+    // 13x13 circle drawn from rows (classic radio glyph), black inside.
+    static const char* kRing[13] = {
+        "....#####....", "..##.....##..", ".#.........#.", ".#.........#.", "#...........#",
+        "#...........#", "#...........#", "#...........#", "#...........#", ".#.........#.",
+        ".#.........#.", "..##.....##..", "....#####...."};
+    const uint32_t edge = DialogSkin::ok() ? DialogSkin::kBoxEdge : 0xFF8090A8;
+    const uint32_t dot = disabled ? DialogSkin::kTextOff : DialogSkin::kText;
+    for (int r = 0; r < 13; ++r) {
+        int a = -1, b = -1;
+        for (int c = 0; c < 13; ++c)
+            if (kRing[r][c] == '#') { if (a < 0) a = c; b = c; }
+        if (a >= 0 && b > a) fillRect(x + a + 1, y + r, b - a - 1, 1, 0xFF000000);
+        for (int c = 0; c < 13; ++c)
+            if (kRing[r][c] == '#') fillRect(x + c, y + r, 1, 1, edge);
+    }
+    if (on) {
+        fillRect(x + 5, y + 4, 3, 5, dot);
+        fillRect(x + 4, y + 5, 5, 3, dot);
+    }
+}
+
+void Renderer::drawSkinCheck(int x, int y, bool on, bool disabled) {
+    const uint32_t edge = DialogSkin::ok() ? DialogSkin::kBoxEdge : 0xFF8090A8;
+    fillRect(x, y, 13, 13, 0xFF000000);
+    drawRect(x, y, 13, 13, edge);
+    if (on) {
+        const uint32_t mark = disabled ? DialogSkin::kTextOff : DialogSkin::kText;
+        // the classic 7-step check mark, 2 px thick
+        static const int kY[7] = {4, 5, 6, 5, 4, 3, 2};
+        for (int i = 0; i < 7; ++i) fillRect(x + 3 + i, y + 2 + kY[i], 1, 3, mark);
+    }
+}
+
 
 } // namespace op2
