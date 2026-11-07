@@ -85,16 +85,29 @@ public:
     //   (vista+8, 0) 192x128; faixa de 6; janela do quadro (vista+8, 0x86)
     //   192 x resto, com as abas no topo e o conteúdo 42 px abaixo
     //   (sub_45CB00); barra de status sob a vista.
-    static constexpr int kClientX = 12, kClientY = 22, kClientW = 616, kClientH = 446;
-    static constexpr int kViewX = kClientX, kViewY = kClientY, kViewW = 416, kViewH = 416;
-    static constexpr int kColX = kClientX + kViewW + 8;       // 436
+    //
+    // Fork: o quadro do jogo acompanha o tamanho da janela (como o original e
+    // o OPU, cuja janela é redimensionável). A coluna direita tem largura fixa
+    // e fica presa à borda direita (o filete de sub_499BC0 está em R − 0xC8);
+    // a vista ocupa o resto. Os valores abaixo são os de 640x480 e são
+    // recalculados por relayout(). Diferença do original: a vista preenche a
+    // área toda em vez de arredondar para múltiplo de 32, para não sobrar faixa
+    // vazia entre a vista e a coluna.
+    static constexpr int kClientX = 12, kClientY = 22;
+    static constexpr int kViewX = kClientX, kViewY = kClientY;
     static constexpr int kColW = 0xC0;                        // 192
     static constexpr int kMiniMapY = kClientY, kMiniMapH = 0x80;
     static constexpr int kPaneWinY = kClientY + 0x86;         // 156: janela do quadro (abas)
     static constexpr int kPaneTop = kPaneWinY + 42;           // 198: conteúdo
-    static constexpr int kPaneBottom = kClientY + kClientH;   // 468
-    static constexpr int kStatusY = kViewY + kViewH;          // 438
-    static constexpr int kStatusH = kClientH - kViewH;        // 30
+    static constexpr int kStatusH = 30;                       // barra de status
+    int kClientW = 616, kClientH = 446;
+    int kViewW = 416, kViewH = 416;
+    int kColX = kClientX + 416 + 8;                           // 436
+    int kPaneBottom = kClientY + 446;                         // 468
+    int kStatusY = kViewY + 416;                              // 438
+    int m_fbW = 640, m_fbH = 480;                             // quadro inteiro
+    // Recalcula o layout para um quadro de fbW x fbH (mínimo 640x480).
+    void relayout(int fbW, int fbH);
 
 private:
     void loadSettings();

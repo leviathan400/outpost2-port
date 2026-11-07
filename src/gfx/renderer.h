@@ -55,8 +55,17 @@ public:
                     bool pressed, bool disabled = false, uint8_t opacity = 255);
 
     uint32_t* getFramebuffer() { return m_framebuffer.data(); }
-    int getWidth() const { return NATIVE_WIDTH; }
-    int getHeight() const { return NATIVE_HEIGHT; }
+    int getWidth() const { return m_w; }
+    int getHeight() const { return m_h; }
+
+    // Tamanho logico do quadro (o shell fica em 640x480 escalado; o jogo usa o
+    // tamanho da janela 1:1). Devolve true se mudou -- o conteudo e apagado.
+    bool setLogicalSize(int w, int h);
+    // Quadro do tamanho da janela, com um minimo. Devolve true se mudou.
+    bool fitToWindow(int minW, int minH);
+    // Deslocamento subtraido das coordenadas do mouse (dialogo de 640x480
+    // desenhado centralizado num quadro maior).
+    void setInputOffset(int dx, int dy) { m_inputOffX = dx; m_inputOffY = dy; }
 
     SDL_Window* getWindow() const { return m_window; }
 
@@ -69,6 +78,8 @@ private:
     SDL_Texture* m_nativeTexture = nullptr;
 
     std::vector<uint32_t> m_framebuffer;
+    int m_w = NATIVE_WIDTH, m_h = NATIVE_HEIGHT;
+    int m_inputOffX = 0, m_inputOffY = 0;
     SDL_Rect m_viewportRect = {0, 0, NATIVE_WIDTH, NATIVE_HEIGHT};
 
     void updateViewport();

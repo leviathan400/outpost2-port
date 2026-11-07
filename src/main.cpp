@@ -494,8 +494,8 @@ static int runPlaceShot(const std::string& mapName, const std::string& outPath, 
                                      type < 0 ? 0x24 : type))
         { renderer.shutdown(); SDL_Quit(); return 4; }
     gs.setSelection({u.id()});
-    gs.setMouse(op2::GameState::kViewX + op2::GameState::kViewW / 2 + dx,
-                op2::GameState::kViewY + op2::GameState::kViewH / 2 + dy);
+    gs.setMouse(op2::GameState::kViewX + gs.kViewW / 2 + dx,
+                op2::GameState::kViewY + gs.kViewH / 2 + dy);
     // tipo < 0: em vez do kit, arrasta a área do comando −tipo (muro, terraplanar…)
     // a partir de 3 tiles acima e à esquerda do cursor.
     if (type < 0) {
@@ -1301,7 +1301,7 @@ static int runCmdShot(const std::string& mapName, const std::string& outPath, in
             sel.push_back(u.id());
     }
     gs.setSelection(sel);
-    gs.setMouse(op2::GameState::kColX + 28 + 22, op2::GameState::kPaneTop + 0x3C + 57 + 22);
+    gs.setMouse(gs.kColX + 28 + 22, op2::GameState::kPaneTop + 0x3C + 57 + 22);
     for (int i = 0; i < 10; ++i) gs.onIdle(renderer, 0.05f);
     bool ok = writeBmp32(outPath, renderer.getFramebuffer(),
                          op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
@@ -1452,12 +1452,12 @@ static int runEarthTest(const std::string& mapName, const std::string& prefix) {
     {   // Minimapa: clique no canto inferior direito -> vista centrada lá.
         SDL_Event ev{};
         ev.type = SDL_MOUSEBUTTONDOWN; ev.button.button = SDL_BUTTON_LEFT; ev.button.clicks = 1;
-        ev.button.x = (op2::GameState::kColX + op2::GameState::kColW - 4) * 2;
+        ev.button.x = (gs.kColX + op2::GameState::kColW - 4) * 2;
         ev.button.y = (op2::GameState::kMiniMapY + op2::GameState::kMiniMapH - 4) * 2;
         gs.handleEvent(renderer, ev);
         gs.onIdle(renderer, 0.0f);
         const int c1x = gs.camX(), c1y = gs.camY();
-        ev.button.x = (op2::GameState::kColX + 60) * 2; ev.button.y = (op2::GameState::kMiniMapY + 64) * 2;
+        ev.button.x = (gs.kColX + 60) * 2; ev.button.y = (op2::GameState::kMiniMapY + 64) * 2;
         gs.handleEvent(renderer, ev);
         gs.onIdle(renderer, 0.0f);
         std::printf("[Mini] canto -> cam (%d,%d) | meio -> cam (%d,%d) mapa %dx%d\n", c1x, c1y, gs.camX(), gs.camY(),
@@ -2103,7 +2103,7 @@ static int runProduceTest(const std::string& mapName, const std::string& prefix)
     gs.pressCommand(op2::UC_BUILD);
     const std::vector<uint32_t> vitems = op2::factoryProduceList(vf.id());
     const int listY0 = op2::GameState::kPaneTop + 0x21 + 2;   // topo do quadro + 33 + 2
-    gs.setMouse(op2::GameState::kColX + 40, listY0 + 2 * 15 + 5);
+    gs.setMouse(gs.kColX + 40, listY0 + 2 * 15 + 5);
     for (int i = 0; i < 4; ++i) gs.onIdle(renderer, 0.05f);
     writeBmp32(prefix + "_list.bmp", renderer.getFramebuffer(), op2::Renderer::NATIVE_WIDTH, op2::Renderer::NATIVE_HEIGHT);
     // Produz o Lynx/Laser (1o combo de chassi) pelo pacote 9.
