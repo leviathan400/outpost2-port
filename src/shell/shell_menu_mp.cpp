@@ -894,7 +894,8 @@ void ShellMenu::renderMpPickSession(Renderer& renderer) {
     renderer.drawDialogFrame(d.fx, d.fy, d.fw, d.fh, "PICK SESSION");
 
     const int lx = d.x(7), ly = d.y(9), lw = d.w(348), lh = d.h(64);
-    renderer.drawSkinBox(lx, ly, lw, lh);
+    if (DialogSkin::ok()) renderer.drawSkinBox(lx, ly, lw, lh);
+    else renderer.drawRect(lx, ly, lw, lh, 0xFF405068);
     // As quatro colunas, em frações da largura da lista.
     const int cName = lx + 6, cAddr = lx + lw * 42 / 100,
               cPlay = lx + lw * 70 / 100, cPing = lx + lw * 85 / 100;
@@ -996,7 +997,8 @@ void ShellMenu::renderMpGameSettings(Renderer& renderer) {
 
     // O registro da conversa (Edit 40031, multilinha) e o rótulo do Edit 40030.
     const int cx = d.x(8), cy = d.y(149), cw = d.w(300), ch = d.h(39);
-    renderer.drawSkinBox(cx, cy, cw, ch);
+    if (DialogSkin::ok()) renderer.drawSkinBox(cx, cy, cw, ch);
+    else renderer.drawRect(cx, cy, cw, ch, 0xFF405068);
     const int lineH = 14, rows = (ch - 8) / lineH;
     const int firstLine = std::max(0, (int)m_mpChat.size() - rows);
     int line = 0;

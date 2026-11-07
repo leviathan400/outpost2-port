@@ -21,7 +21,11 @@ class PeResourceReader;
 class DialogSkin {
 public:
     static bool load(const PeResourceReader& reader);
+    // True when the skin is loaded AND switched on ([Game] MenuSkin=1).
+    // Every skinned control falls back to the port's own look otherwise.
     static bool ok();
+    static void setEnabled(bool on);
+    static bool enabled();
     static const Bitmap& blueprint();
     static const Bitmap& buttons();
     static const Bitmap& wideButtons();

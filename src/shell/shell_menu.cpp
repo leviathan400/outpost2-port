@@ -36,7 +36,7 @@ namespace {
     constexpr int kHpX = 20, kHpY = 28, kHpW = 600, kHpH = 424;
     constexpr int kHpListX = kHpX + 14, kHpListY = kHpY + 40;
     constexpr int kHpListW = 210, kHpListH = 322;
-    constexpr int kHpSbW = 17;            // fork: barra de rolagem padrao do Windows
+    int kHpSbW = 14;                      // fork: 17 com a pele OP2 (applyMenuStyle)
     constexpr int kHpRowH = 14;
     constexpr int kHpVisible = kHpListH / kHpRowH;
     constexpr int kHpTextX = kHpListX + kHpListW + 14;
@@ -51,11 +51,13 @@ namespace {
 // 640x480. Botões de 146x26 (uma célula da tira 236) em x = 21 (contorno em 23), com os topos
 // em 38, 71, 103, 136, 168, 201, 233, 266, 298 (passo alternando 33/32).
 namespace {
-    constexpr int kMenuDlgW = 192, kMenuDlgH = 348;
-    constexpr int kMenuDlgX = 224, kMenuDlgY = 54;
-    constexpr int kMenuBtnX = kMenuDlgX + 21;   // contorno em x = 23 (medido)
-    constexpr int kMenuBtnW = 146, kMenuBtnH = 26;
-    constexpr int kMenuBtnTop[9] = {38, 71, 103, 136, 168, 201, 233, 266, 298};
+    // Valores do estilo do porte (painel à direita, revelando a nave
+    // Conestoga); applyMenuStyle troca pelos medidos quando MenuSkin=1.
+    int kMenuDlgW = 190, kMenuDlgH = 320;
+    int kMenuDlgX = 640 - 190 - 10, kMenuDlgY = 146;
+    int kMenuBtnX = kMenuDlgX + 27;
+    int kMenuBtnW = 135, kMenuBtnH = 23;
+    int kMenuBtnTop[9] = {30, 62, 94, 126, 158, 190, 222, 254, 286};
 }
 
 // TUTORIALS (Dialog 269): listbox com scrollbar + START + BACK TO MAIN MENU.
@@ -64,9 +66,9 @@ namespace {
     constexpr int kTutDlgW = 420, kTutDlgH = 288;
     constexpr int kTutListX = kTutDlgX + 14, kTutListY = kTutDlgY + 34;
     constexpr int kTutListW = kTutDlgW - 28, kTutListH = 200;
-    constexpr int kTutRowH = 14;          // fork: linhas de 14 px, como no original
-    constexpr int kTutSbW = 17;           // fork: barra de rolagem padrao do Windows
-    constexpr int kTutVisible = (kTutListH - 6) / kTutRowH;   // fork: a ultima linha nao encosta na borda
+    int kTutRowH = 22;                    // fork: 14 com a pele OP2 (applyMenuStyle)
+    int kTutSbW = 14;                     // fork: 17 com a pele OP2
+    int kTutVisible = kTutListH / 22;     // fork: (kTutListH - 6) / 14 com a pele OP2
     constexpr int kTutBtnY = kTutDlgY + kTutDlgH - 34;
     constexpr int kTutBtnH = 26;
     constexpr int kTutStartW = 100, kTutBackW = 196;
@@ -79,7 +81,7 @@ namespace {
     constexpr int kCgX = 120, kCgY = 90, kCgW = 400, kCgH = 310;
     constexpr int kCgListX = kCgX + 16, kCgListY = kCgY + 36;
     constexpr int kCgListW = kCgW - 32, kCgListH = 200;
-    constexpr int kCgRowH = 14;           // fork: linhas de 14 px
+    int kCgRowH = 22;                     // fork: 14 com a pele OP2 (applyMenuStyle)
     constexpr int kCgBtnY = kCgY + 258;
 
     // Dialog 224 "ENTER YOUR NAME" (224x100 DLU → x·1,5 / y·1,6), centrado.
@@ -113,7 +115,7 @@ namespace {
     constexpr int kRvBtnY = kRvTextY + kRvTextH + 20;
     constexpr int kChX = 95, kChY = 120, kChW = 450, kChH = 235;
     constexpr int kChListX = kChX + 10, kChListY = kChY + 30, kChListW = 429, kChListH = 158;
-    constexpr int kChRowH = 14;           // fork: linhas de 14 px
+    int kChRowH = 18;                     // fork: 14 com a pele OP2 (applyMenuStyle)
 }
 
 // NEW CAMPAIGN / PREFERENCES / ABOUT
@@ -122,6 +124,32 @@ namespace {
     constexpr int kPrX = 140, kPrY = 59, kPrW = 360, kPrH = 362;
     constexpr int kAbX = 140, kAbY = 100, kAbW = 360, kAbH = 300;
 }
+
+// Fork: [Game] MenuSkin escolhe o estilo dos menus. 0 = o do porte (os valores
+// acima); 1 = a pele do original, com o menu principal e as listas medidos.
+namespace {
+void applyMenuStyle(bool op2) {
+    if (op2) {
+        // MAIN MENU medido numa captura do original (192x348): o fundo
+        // "blueprint" bate pixel a pixel com o bitmap 225 no deslocamento
+        // (224,54); botões de 146x26 (tira 236) com o contorno em x = 23 e os
+        // topos em 38, 71, 103... (passo alternando 33/32).
+        static const int tops[9] = {38, 71, 103, 136, 168, 201, 233, 266, 298};
+        kMenuDlgW = 192; kMenuDlgH = 348; kMenuDlgX = 224; kMenuDlgY = 54;
+        kMenuBtnX = kMenuDlgX + 21; kMenuBtnW = 146; kMenuBtnH = 26;
+        for (int i = 0; i < 9; ++i) kMenuBtnTop[i] = tops[i];
+        // Listas com linhas de 14 px e a barra de rolagem padrão do Windows.
+        kTutRowH = 14; kTutSbW = 17; kTutVisible = (kTutListH - 6) / kTutRowH;
+        kCgRowH = 14; kChRowH = 14; kHpSbW = 17;
+    } else {
+        kMenuDlgW = 190; kMenuDlgH = 320; kMenuDlgX = 640 - 190 - 10; kMenuDlgY = 146;
+        kMenuBtnX = kMenuDlgX + 27; kMenuBtnW = 135; kMenuBtnH = 23;
+        for (int i = 0; i < 9; ++i) kMenuBtnTop[i] = 30 + i * 32;
+        kTutRowH = 22; kTutSbW = 14; kTutVisible = kTutListH / kTutRowH;
+        kCgRowH = 22; kChRowH = 18; kHpSbW = 14;
+    }
+}
+} // namespace
 
 ShellMenu::ShellMenu() = default;
 ShellMenu::~ShellMenu() = default;
@@ -149,9 +177,20 @@ bool ShellMenu::init(const std::string& resDllPath) {
                   << m_logoBitmap.getWidth() << "x" << m_logoBitmap.getHeight() << ")" << std::endl;
     }
 
-    // Fork: a pele dos diálogos do original (blueprint 225, botões 235/236).
-    if (DialogSkin::load(reader))
-        std::cout << "[ShellMenu] Dialog skin loaded (OP2SHRES 225/235/236)" << std::endl;
+    // Fork: a pele dos diálogos do original (blueprint 225, botões 235/236),
+    // ligada por [Game] MenuSkin=1. Sem ela, o estilo do próprio porte.
+    {
+        Config cfg("OUTPOST2.INI");
+        GameSettings gs;
+        if (cfg.load()) gs.loadFrom(cfg);
+        const bool loaded = DialogSkin::load(reader);
+        DialogSkin::setEnabled(gs.menuSkin != 0);
+        applyMenuStyle(DialogSkin::ok());
+        std::cout << "[ShellMenu] menus: "
+                  << (DialogSkin::ok() ? "OP2 skin" : loaded ? "port style (MenuSkin=0)"
+                                                             : "port style (skin not loaded)")
+                  << std::endl;
+    }
 
     if (reader.getDialog(137, m_mainMenuDlg)) {
         std::cout << "[ShellMenu] Loaded Dialog 137: " << m_mainMenuDlg.title
@@ -2006,32 +2045,56 @@ void ShellMenu::renderTutorialsDialog(Renderer& renderer) {
     renderer.drawDialogFrame(kTutDlgX, kTutDlgY, kTutDlgW, kTutDlgH, "TUTORIALS");
 
     int lx = kTutListX, ly = kTutListY, lw = kTutListW - kTutSbW, lh = kTutListH;
-    // Fork: como o listbox do original -- a borda envolve a lista E a barra
-    // de rolagem; linha selecionada em azul com texto branco.
-    renderer.drawSkinBox(lx, ly, kTutListW, lh);
-
-    uint32_t* fb = renderer.getFramebuffer();
     int total = (int)m_tutorialList.size();
+    if (DialogSkin::ok()) {
+        // Fork: como o listbox do original -- a borda envolve a lista E a
+        // barra de rolagem; linha selecionada em azul com texto branco.
+        renderer.drawSkinBox(lx, ly, kTutListW, lh);
+        uint32_t* fb = renderer.getFramebuffer();
+        for (int row = 0; row < kTutVisible; ++row) {
+            int i = m_tutorialScroll + row;
+            if (i >= total) break;
+            int itemY = ly + 4 + row * kTutRowH;
+            bool sel = (i == m_selectedTutorial);
+            std::string txt = m_tutorialList[i];
+            while (!txt.empty() && SkinText::width(txt) > lw - 10) txt.pop_back();
+            if (sel) renderer.fillRect(lx + 2, itemY, lw - 2, kTutRowH, DialogSkin::kSelBg);
+            SkinText::drawRaw(fb, 640, 480, txt, lx + 4, itemY + 1,
+                              sel ? DialogSkin::kSelText : DialogSkin::kText);
+        }
+        renderer.drawSkinScrollBar(lx + lw - 2, ly + 2, kTutSbW, lh - 4,
+                                   m_tutorialScroll, kTutVisible, total);
+        return;
+    }
+
+    renderer.fillRect(lx, ly, lw, lh, 0xFF0D121B);
+    renderer.drawBevelRect(lx, ly, lw, lh, 0xFF05080E, 0xFF35445B);
+
     for (int row = 0; row < kTutVisible; ++row) {
         int i = m_tutorialScroll + row;
         if (i >= total) break;
         int itemY = ly + 4 + row * kTutRowH;
         bool sel = (i == m_selectedTutorial);
+        if (sel) renderer.fillRect(lx + 2, itemY - 1, lw - 4, kTutRowH - 2, 0xFF264066);
         std::string txt = m_tutorialList[i];
-        while (!txt.empty() && SkinText::width(txt) > lw - 10) txt.pop_back();
-        if (DialogSkin::ok()) {
-            if (sel) renderer.fillRect(lx + 2, itemY, lw - 2, kTutRowH, DialogSkin::kSelBg);
-            SkinText::drawRaw(fb, 640, 480, txt, lx + 4, itemY + 1,
-                              sel ? DialogSkin::kSelText : DialogSkin::kText);
-        } else {
-            if (sel) renderer.fillRect(lx + 2, itemY - 1, lw - 4, kTutRowH - 2, 0xFF264066);
-            SkinText::draw(fb, 640, 480, txt, lx + 8, itemY + 1, sel ? 0xFFFFFF99 : 0xFFCCD6E8);
-        }
+        while (!txt.empty() && SkinText::width(txt) > lw - 16) txt.pop_back();
+        SkinText::draw(renderer.getFramebuffer(), 640, 480, txt, lx + 8, itemY + 4,
+                       sel ? 0xFFFFFF99 : 0xFFCCD6E8);
     }
 
-    // Scrollbar vertical, dentro da borda.
-    renderer.drawSkinScrollBar(lx + lw - 2, ly + 2, kTutSbW, lh - 4,
-                               m_tutorialScroll, kTutVisible, total);
+    // Scrollbar vertical.
+    int sbX = lx + lw, sbY = ly, sbH = lh;
+    renderer.fillRect(sbX, sbY, kTutSbW, sbH, 0xFF11161F);
+    renderer.drawBevelRect(sbX, sbY, kTutSbW, sbH, 0xFF05080E, 0xFF35445B);
+    renderer.drawButton(sbX, sbY, kTutSbW, kTutSbW, "^", false, false);
+    renderer.drawButton(sbX, sbY + sbH - kTutSbW, kTutSbW, kTutSbW, "v", false, false);
+    int trackY = sbY + kTutSbW, trackH = sbH - 2 * kTutSbW;
+    int maxScroll = (total > kTutVisible) ? (total - kTutVisible) : 0;
+    int thumbH = (total > kTutVisible) ? std::max(16, trackH * kTutVisible / total) : trackH;
+    thumbH = std::min(thumbH, trackH);
+    int thumbY = trackY + (maxScroll > 0 ? (trackH - thumbH) * m_tutorialScroll / maxScroll : 0);
+    renderer.fillRect(sbX + 2, thumbY, kTutSbW - 4, thumbH, 0xFF3A557E);
+    renderer.drawBevelRect(sbX + 2, thumbY, kTutSbW - 4, thumbH, 0xFF5A7AA8, 0xFF223144);
     // Botões START / BACK desenhados por drawControls().
 }
 

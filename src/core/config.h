@@ -102,6 +102,10 @@ struct GameSettings {
     // escalada mantendo a proporcao); 0 = janela. Alt+Enter alterna em
     // qualquer um dos dois, e o botao de maximizar da barra de titulo tambem.
     int fullscreen = 1;
+    // Fork: "MenuSkin". 0 = the port's own menu look (dark blue panels, the
+    // main menu on the right); 1 = the original OP2 dialog skin (blueprint
+    // background, red frames, green text -- see DialogSkin).
+    int menuSkin = 0;
 
     // [WindowInfo]
     int miniMapButtons = 0;

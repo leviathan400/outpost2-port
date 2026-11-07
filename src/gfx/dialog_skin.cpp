@@ -12,6 +12,7 @@ namespace op2 {
 namespace {
 Bitmap s_blueprint, s_buttons, s_wide;
 bool s_ok = false;
+bool s_enabled = false;   // [Game] MenuSkin
 
 bool loadOne(const PeResourceReader& reader, uint32_t id, Bitmap& out) {
     std::vector<uint8_t> dib = reader.getBitmapDIB(id);
@@ -29,7 +30,9 @@ bool DialogSkin::load(const PeResourceReader& reader) {
     return s_ok;
 }
 
-bool DialogSkin::ok() { return s_ok; }
+bool DialogSkin::ok() { return s_ok && s_enabled; }
+void DialogSkin::setEnabled(bool on) { s_enabled = on; }
+bool DialogSkin::enabled() { return s_enabled; }
 const Bitmap& DialogSkin::blueprint() { return s_blueprint; }
 const Bitmap& DialogSkin::buttons() { return s_buttons; }
 const Bitmap& DialogSkin::wideButtons() { return s_wide; }

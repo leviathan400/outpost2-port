@@ -133,6 +133,7 @@ preferências; o original ignora chaves que não conhece.
 | `AudioVolume` | 0..100 | 50 | Volume mestre sobre a mistura final (sons e música). O original só tem `MusicVol`/`SoundVol`, por canal e em 6 degraus. |
 | `DemoCamera` | 0/1 | 1 | No demo de atração a câmera passeia pelos pontos de ação (desastre, combate, unidades). 0 devolve a câmera parada do original. |
 | `Fullscreen` | 0/1 | 1 | Abre em tela cheia (sem troca de modo de vídeo; a vista de 640×480 escalada com a proporção mantida). Alt+Enter alterna a qualquer momento. |
+| `MenuSkin` | 0/1 | 0 | *(fork)* Estilo dos menus. 0 = o visual do próprio porte (painéis azul-escuros, menu principal à direita); 1 = a pele de diálogo do OP2 original (fundo "blueprint", molduras vermelhas, texto verde, arte do `OP2SHRES.DLL`). |
 
 ---
 

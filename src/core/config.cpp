@@ -184,6 +184,7 @@ void GameSettings::loadFrom(const Config& cfg) {
     audioVolume       = cfg.getInt("Game", "AudioVolume", audioVolume);
     demoCamera        = cfg.getInt("Game", "DemoCamera", demoCamera);
     fullscreen        = cfg.getInt("Game", "Fullscreen", fullscreen);
+    menuSkin          = cfg.getInt("Game", "MenuSkin", menuSkin);
     name              = cfg.getString("Game", "Name", name);
 
     miniMapButtons    = cfg.getInt("WindowInfo", "MiniMapButtons", miniMapButtons);
@@ -211,6 +212,7 @@ void GameSettings::saveTo(Config& cfg) const {
     cfg.setInt("Game", "AudioVolume", audioVolume);
     cfg.setInt("Game", "DemoCamera", demoCamera);
     cfg.setInt("Game", "Fullscreen", fullscreen);
+    cfg.setInt("Game", "MenuSkin", menuSkin);
     cfg.setString("Game", "Name", name);
 
     cfg.setInt("WindowInfo", "MiniMapButtons", miniMapButtons);
