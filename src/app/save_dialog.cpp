@@ -4,6 +4,7 @@
 #include <ctime>
 
 #include "../gfx/font.h"
+#include "../gfx/dialog_skin.h"
 #include "../gfx/renderer.h"
 
 namespace op2 {
@@ -61,24 +62,29 @@ void SaveSlotsDialog::render(Renderer& renderer) {
         // Owner-draw dos slots (sub_4173A0, casos dos 10 slots): a descrição gravada
         // em +0x36C ou "EMPTY SLOT" (off_4E93B0), centrada (DT_CENTER|DT_VCENTER).
         std::string t = m_has[i] ? m_hdr[i].description : std::string("EMPTY SLOT");
-        while (!t.empty() && Font::getTextWidth(t) > kSlotW - 12) t.pop_back();
+        while (!t.empty() && SkinText::width(t) > kSlotW - 12) t.pop_back();
         const int y = kSlotY0 + i * kSlotStep;
         renderer.drawButton(kSlotX, y, kSlotW, kSlotH, t, hov == i || m_sel == i, false,
                             m_mode == kLoad && !m_has[i]);
-        if (m_sel == i) renderer.drawRect(kSlotX - 2, y - 2, kSlotW + 4, kSlotH + 4, 0xFFFFD24A);
+        // Fork: com a pele, o slot escolhido já sai com o contorno vermelho vivo.
+        if (m_sel == i && !DialogSkin::ok())
+            renderer.drawRect(kSlotX - 2, y - 2, kSlotW + 4, kSlotH + 4, 0xFFFFD24A);
     }
     if (m_mode == kSave) {                                 // Edit 1070
-        renderer.fillRect(kEditX, kEditY, kEditW, kEditH, 0xFF0D121B);
-        renderer.drawBevelRect(kEditX, kEditY, kEditW, kEditH, 0xFF05080E, 0xFF35445B);
+        renderer.drawSkinBox(kEditX, kEditY, kEditW, kEditH);
         std::string t = m_desc + ((SDL_GetTicks() / 400) & 1 ? "_" : "");
-        while (!t.empty() && Font::getTextWidth(t) > kEditW - 8) t.erase(0, 1);
-        Font::drawText(fb, W, H, t, kEditX + 4, kEditY + 5, 0xFFFFFFFF);
+        while (!t.empty() && SkinText::width(t) > kEditW - 8) t.erase(0, 1);
+        SkinText::draw(fb, W, H, t, kEditX + 4, kEditY + 5, 0xFFFFFFFF);
     }
     // Quadro da prévia (caso 15): o original copia a miniatura do slot (0x10810
     // bytes) ou zera o quadro (preto) se o slot está vazio. Sem a miniatura, o
     // port escreve ali a missão, a data e o tick.
-    renderer.fillRect(kPrevX, kPrevY, kPrevW, kPrevH, 0xFF000000);
-    renderer.drawBevelRect(kPrevX, kPrevY, kPrevW, kPrevH, 0xFF05080E, 0xFF35445B);
+    if (DialogSkin::ok()) {
+        renderer.drawSkinBox(kPrevX, kPrevY, kPrevW, kPrevH);
+    } else {
+        renderer.fillRect(kPrevX, kPrevY, kPrevW, kPrevH, 0xFF000000);
+        renderer.drawBevelRect(kPrevX, kPrevY, kPrevW, kPrevH, 0xFF05080E, 0xFF35445B);
+    }
     if (m_has[m_sel]) {
         const SaveHeader& h = m_hdr[m_sel];
         char when[64] = "";
@@ -86,10 +92,10 @@ void SaveSlotsDialog::render(Renderer& renderer) {
         if (const std::tm* lt = std::localtime(&tt)) std::strftime(when, sizeof(when), "%Y-%m-%d %H:%M", lt);
         char tick[48];
         std::snprintf(tick, sizeof(tick), "Mark %u", h.tick / 100);
-        Font::drawText(fb, W, H, h.description, kPrevX + 8, kPrevY + 10, 0xFFFFFF99);
-        Font::drawText(fb, W, H, h.dll, kPrevX + 8, kPrevY + 30, 0xFFCCD6E8);
-        Font::drawText(fb, W, H, when, kPrevX + 8, kPrevY + 48, 0xFFCCD6E8);
-        Font::drawText(fb, W, H, tick, kPrevX + 8, kPrevY + 66, 0xFFCCD6E8);
+        SkinText::draw(fb, W, H, h.description, kPrevX + 8, kPrevY + 10, 0xFFFFFF99);
+        SkinText::draw(fb, W, H, h.dll, kPrevX + 8, kPrevY + 30, 0xFFCCD6E8);
+        SkinText::draw(fb, W, H, when, kPrevX + 8, kPrevY + 48, 0xFFCCD6E8);
+        SkinText::draw(fb, W, H, tick, kPrevX + 8, kPrevY + 66, 0xFFCCD6E8);
     }
     const bool canAct = m_mode == kSave || m_has[m_sel];
     renderer.drawButton(kActX, kActY, kBtnW, kBtnH, m_mode == kSave ? "SAVE" : "LOAD", hov == 20, false, !canAct);

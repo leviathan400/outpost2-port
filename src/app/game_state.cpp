@@ -51,6 +51,7 @@
 #include "../mission/mission.h"
 #include "../gfx/artfile.h"
 #include "../gfx/art_blit.h"
+#include "../game/docking.h"
 
 namespace op2 {
 
@@ -81,13 +82,22 @@ void GameState::loadSettings() {
     setNightDarkness(gs.nightDarkness);                // "NightDarkness" (idem)
     soundSetMasterVolume(gs.audioVolume);              // "AudioVolume" (idem)
     m_demoCam = gs.demoCamera != 0;                    // "DemoCamera" (idem)
+    m_mapWrapAll = gs.mapWrap != 0;                    // "MapWrap" (fork)
     // "Fullscreen" NAO entra aqui: a janela nao pode pular de modo a cada
     // loadSettings (o Alt+Enter troca a tela sem gravar o INI, e o valor do
     // arquivo estaria velho). Quem aplica e o APPLY, por applyScreenMode.
 }
 
+// Does the view wrap horizontally? The original only wraps "around the world"
+// maps (lgWidth >= 9, internal X offset 0); the others stop at their edges.
+// MapWrap=1 makes every map wrap, as this port used to.
+bool GameState::viewWraps() const {
+    if (m_mapWrapAll) return true;
+    return g_gameMap.ok() && g_gameMap.internalXOffset() == 0;
+}
+
 // Entrar no PREFERENCES. O espelho do painel vem do INI; como o Alt+Enter nao
-// grava nada lá, o radio do modo de tela e acertado com a janela de verdade no
+// grava nada la, o radio do modo de tela e acertado com a janela de verdade no
 // quadro seguinte.
 void GameState::enterPrefs() {
     m_gameOptions.setMode(GameOptionsPane::PREFS);
@@ -117,7 +127,7 @@ bool GameState::loadMap(const std::string& mapName) {
         std::cerr << "[GameState] falha ao carregar tilesets de " << mapName << std::endl;
         return false;
     }
-    const int VW = Renderer::NATIVE_WIDTH, VH = Renderer::NATIVE_HEIGHT;
+    const int VW = m_fbW, VH = m_fbH;
     m_maxX = m_terrain.mapPixelWidth() - viewportW();
     m_maxY = m_terrain.mapPixelHeight() - viewportH();
     if (m_maxY < 0) m_maxY = 0;
@@ -442,7 +452,7 @@ void GameState::demoCameraTick() {
     // Rola até o alvo. Em X o mapa dá a volta, então vai pelo lado mais curto.
     const int larguraPx = g_gameMap.ok() ? g_gameMap.width() * 32 : 0;
     int dx = m_demoTargX - (m_camX + viewportW() / 2);
-    if (larguraPx) {
+    if (larguraPx && viewWraps()) {
         while (dx > larguraPx / 2) dx -= larguraPx;
         while (dx < -larguraPx / 2) dx += larguraPx;
     }
@@ -450,7 +460,7 @@ void GameState::demoCameraTick() {
     auto anda = [&](int d) { return d > kPasso ? kPasso : (d < -kPasso ? -kPasso : d); };
     m_camX += anda(dx);
     m_camY += anda(dy);
-    if (larguraPx) {
+    if (larguraPx && viewWraps()) {
         while (m_camX < 0) m_camX += larguraPx;
         while (m_camX >= larguraPx) m_camX -= larguraPx;
     }
@@ -562,7 +572,17 @@ void GameState::drawChatLine(uint32_t* fb, int vw, int vh) const {
 void GameState::clampCamera() {
     if (m_camY < 0) m_camY = 0;
     if (m_camY > m_maxY) m_camY = m_maxY;
-    // X faz wrap no engine; deixamos rolar livremente (terrain faz o wrap).
+    if (!g_gameMap.ok()) return;
+    const int worldW = g_gameMap.width() * 32;
+    if (viewWraps()) {
+        // Wrapping map: scroll freely, kept in [0, worldW) (terrain wraps).
+        if (worldW > 0) m_camX = ((m_camX % worldW) + worldW) % worldW;
+        return;
+    }
+    // Like OP2: the view stops at the left and right edges of the map.
+    const int maxX = worldW - viewportW();
+    if (m_camX > maxX) m_camX = maxX;
+    if (m_camX < 0) m_camX = 0;
 }
 
 void GameState::onActivate() {
@@ -600,7 +620,31 @@ static const int kMiniBtnArt[4] = {0x9D, 0x9C, 0x9E, 0x9A};
 
 // Dialog 262 (OUT2RES.DLL, 186x94 DLU): texto + dois botões (25,57) e (102,58).
 static constexpr int kSdW = 279, kSdH = 153;
-static constexpr int kSdX = (Renderer::NATIVE_WIDTH - kSdW) / 2, kSdY = (Renderer::NATIVE_HEIGHT - kSdH) / 2;
+static int kSdX = (640 - kSdW) / 2, kSdY = (480 - kSdH) / 2;   // centrada: relayout()
+
+void GameState::relayout(int fbW, int fbH) {
+    m_fbW = std::max(fbW, 640);
+    m_fbH = std::max(fbH, 480);
+    // Moldura: título de 22 px em cima, bordas de 12 nos lados e embaixo.
+    kClientW = m_fbW - kClientX - 12;
+    kClientH = m_fbH - kClientY - 12;
+    // Coluna direita presa à borda (filete de 8 px em R − 0xC8, sub_499BC0);
+    // a vista ocupa o resto da largura e tudo menos a barra de status na altura.
+    kViewW = kClientW - kColW - 8;
+    kViewH = kClientH - kStatusH;
+    kColX = kClientX + kClientW - kColW;
+    kPaneBottom = kClientY + kClientH;
+    kStatusY = kViewY + kViewH;
+    kSdX = (m_fbW - kSdW) / 2;
+    kSdY = (m_fbH - kSdH) / 2;
+    // A vista mudou de tamanho: o limite da câmera também.
+    if (m_terrain.mapPixelWidth() > 0) {
+        m_maxX = m_terrain.mapPixelWidth() - viewportW();
+        m_maxY = m_terrain.mapPixelHeight() - viewportH();
+        if (m_maxY < 0) m_maxY = 0;
+        clampCamera();
+    }
+}
 
 int GameState::successButtonAt(int x, int y) const {
     if (y >= kSdY + 93 && y < kSdY + 93 + 23) {
@@ -612,7 +656,7 @@ int GameState::successButtonAt(int x, int y) const {
 
 void GameState::drawSuccessDialog(Renderer& renderer) {
     renderer.drawDialogFrame(kSdX, kSdY, kSdW, kSdH, "");
-    Font::drawTextCentered(renderer.getFramebuffer(), Renderer::NATIVE_WIDTH, Renderer::NATIVE_HEIGHT, "Success",
+    Font::drawTextCentered(renderer.getFramebuffer(), m_fbW, m_fbH, "Success",
                            kSdX + kSdW / 2, kSdY + 45, 0xFFFFFFFF, true);
     renderer.drawButton(kSdX + 37, kSdY + 93, 75, 23, "Save Game", successButtonAt(m_mouseNX, m_mouseNY) == 1, false);
     renderer.drawButton(kSdX + 153, kSdY + 93, 75, 23, "Continue", successButtonAt(m_mouseNX, m_mouseNY) == 2, false);
@@ -620,6 +664,12 @@ void GameState::drawSuccessDialog(Renderer& renderer) {
 
 void GameState::onIdle(Renderer& renderer, float dt) {
     applyScreenMode(renderer);               // extra do porte: o radio "Screen Mode"
+    // Fork: o quadro do jogo tem o tamanho da janela (1:1), nao 640x480 esticado.
+    // Vem DEPOIS do applyScreenMode: se o &APPLY acabou de trocar o modo, o
+    // encaixe ja ve a janela nova.
+    renderer.fitToWindow(640, 480);
+    if (renderer.getWidth() != m_fbW || renderer.getHeight() != m_fbH)
+        relayout(renderer.getWidth(), renderer.getHeight());
     if (!m_pendingLoad.empty()) {                            // TFrame::PostDelayedLoadMessage
         const std::string path = m_pendingLoad;
         m_pendingLoad.clear();
@@ -712,17 +762,18 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     // Ciclo dia/noite no terreno: cada coluna de tile sai pela paleta da sua
     // escuridao (sub_4A8BD0). Com SetDaylightEverywhere nao se escurece nada,
     // exatamente como o teste de dword_56DEA4 la dentro.
-    m_terrain.render(renderer.getFramebuffer(), Renderer::NATIVE_WIDTH,
-                     Renderer::NATIVE_HEIGHT, m_camX, m_camY,
-                     TethysGame::daylightEverywhere() ? nullptr : &GameState::tileDarkness);
+    m_terrain.render(renderer.getFramebuffer(), m_fbW,
+                     m_fbH, m_camX, m_camY,
+                     TethysGame::daylightEverywhere() ? nullptr : &GameState::tileDarkness,
+                     viewWraps());
 
     // Overlay de passabilidade (debug, tecla G): tinge de vermelho as células
     // impassáveis visíveis. Base visual para waypoints/pathfinding.
     if (m_showPassability) {
         uint32_t* fb = renderer.getFramebuffer();
         int t0x = m_camX / 32, t0y = m_camY / 32;
-        int t1x = (m_camX + Renderer::NATIVE_WIDTH) / 32;
-        int t1y = (m_camY + Renderer::NATIVE_HEIGHT) / 32;
+        int t1x = (m_camX + m_fbW) / 32;
+        int t1y = (m_camY + m_fbH) / 32;
         for (int ty = t0y; ty <= t1y; ++ty) {
             if (ty < 0 || ty >= g_gameMap.height()) continue;
             for (int tx = t0x; tx <= t1x; ++tx) {
@@ -730,14 +781,14 @@ void GameState::onIdle(Renderer& renderer, float dt) {
                 int sx = tx * 32 - m_camX, sy = ty * 32 - m_camY;
                 for (int yy = 0; yy < 32; ++yy) {
                     int py = sy + yy;
-                    if (py < 0 || py >= Renderer::NATIVE_HEIGHT) continue;
+                    if (py < 0 || py >= m_fbH) continue;
                     for (int xx = 0; xx < 32; ++xx) {
                         int px = sx + xx;
-                        if (px < 0 || px >= Renderer::NATIVE_WIDTH) continue;
-                        uint32_t c = fb[py * Renderer::NATIVE_WIDTH + px];
+                        if (px < 0 || px >= m_fbW) continue;
+                        uint32_t c = fb[py * m_fbW + px];
                         uint32_t r = ((c >> 16) & 0xFF), g = (c >> 8) & 0xFF, b = c & 0xFF;
                         r = r / 2 + 128; g = g / 2; b = b / 2;   // tinge vermelho
-                        fb[py * Renderer::NATIVE_WIDTH + px] = 0xFF000000 | (r << 16) | (g << 8) | b;
+                        fb[py * m_fbW + px] = 0xFF000000 | (r << 16) | (g << 8) | b;
                     }
                 }
             }
@@ -767,7 +818,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     // de verdade (sub_4056E0 / sub_405840, a animacao fixa 0x2A2): no original
     // so o TERRENO escurece, e as unidades seguem legiveis no escuro.
     auto drawSprite = [&](int animIdx, int frameIdx, int cx, int cy, int playerColor) {
-        return blitArtFrame(renderer.getFramebuffer(), Renderer::NATIVE_WIDTH, Renderer::NATIVE_HEIGHT,
+        return blitArtFrame(renderer.getFramebuffer(), m_fbW, m_fbH,
                             animIdx, frameIdx, cx, cy, playerColor,
                             0, 0, viewportW(), viewportH());
     };
@@ -913,6 +964,28 @@ void GameState::onIdle(Renderer& renderer, float dt) {
             if (anim >= 0 && g_art.ok() && anim < g_art.numAnimations()) {
                 int pc = (ow >= 0 && ow < kMaxPlayers) ? g_playerData[ow].colorNumber : 0;
                 const int bldFrame = guardPost ? 0 : structureFrame(r);
+                // Fork: Agridome dock pad. The Agridome has a truck dock
+                // (BUILDING.TXT: Docking Truck = Y, column 1) but its art has no
+                // pad, so trucks seemed to park on bare ground; OPU draws one.
+                // It is the same 4-picture pad every other docked building
+                // carries in its art (images 385-388) -- measured on all 10
+                // groups (Structure Factory, both Smelters, Spaceport, GORF; Eden
+                // and Plymouth) at the same place relative to the dock tile:
+                // 385/386 at (0,0), 387 at (21,0), 388 at (0,15). Drawn under the
+                // building, once it is built (not during construction or after
+                // destruction).
+                if (r.type == 0x27) {
+                    const int st = static_cast<int>((r.state34 >> 16) & 0xFFFF);
+                    const bool built = (st == 0 && (r.state34 & 0xFFFF) == 0) || st == 1 || st == 2 || st >= 5;
+                    int dx, dy;
+                    if (built && dockCell(static_cast<int>(i), dx, dy)) {
+                        const int px = screenXOf(dx * 32), py = dy * 32 - m_camY;
+                        static const int kPad[4][3] = {{385, 0, 0}, {386, 0, 0}, {387, 21, 0}, {388, 0, 15}};
+                        for (const auto& p : kPad)
+                            blitArtImage(renderer.getFramebuffer(), m_fbW, m_fbH, p[0], px + p[1], py + p[2],
+                                         pc, 0, 0, viewportW(), viewportH());
+                    }
+                }
                 drew = drawSprite(anim, bldFrame, ucx, ucy, pc);
                 if (drew) recDeco((int)i, ucx, ucy, anim, bldFrame);
                 // EMP / ESG (0x180000) no prédio (sub_408DB0): grade de 16 px no
@@ -1090,7 +1163,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     const int vw = viewportW(), vh = viewportH();
     uint32_t* fb = renderer.getFramebuffer();
     auto put = [&](int x, int y, uint32_t c) {         // 1 px recortado à vista
-        if (x >= 0 && x < vw && y >= 0 && y < vh) fb[y * Renderer::NATIVE_WIDTH + x] = c;
+        if (x >= 0 && x < vw && y >= 0 && y < vh) fb[y * m_fbW + x] = c;
     };
     auto hseg = [&](int x, int y, int len, uint32_t c) {   // len<0 = p/ a esquerda
         const int s = len < 0 ? -1 : 1;
@@ -1104,7 +1177,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
             if (yy < 0 || yy >= vh) continue;
             for (int xx = px; xx < px + 32; ++xx) {
                 if (xx < 0 || xx >= vw) continue;
-                uint32_t& d = fb[yy * Renderer::NATIVE_WIDTH + xx];
+                uint32_t& d = fb[yy * m_fbW + xx];
                 const int dr = ((d >> 19) & 31) >> 1, dg = ((d >> 11) & 31) >> 1,
                           db = ((d >> 3) & 31) >> 1;
                 d = 0xFF000000u | (static_cast<uint32_t>((dr + (r5 >> 1)) << 3) << 16) |
@@ -1212,7 +1285,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     // (O original usa a fonte grande do quadro de detalhe — aqui a fonte do port.)
     if (gameEndCode()) {
         const int cy = viewportH() / 2;
-        Font::drawTextCentered(renderer.getFramebuffer(), Renderer::NATIVE_WIDTH, Renderer::NATIVE_HEIGHT,
+        Font::drawTextCentered(renderer.getFramebuffer(), m_fbW, m_fbH,
                                gameEndText(gameEndCode()), viewportW() / 2, cy, 0xFFFFE070, true);
     }
     // vt[6] do terremoto (sub_413560): tremor p/ o próximo quadro, pelo centro da vista.
@@ -1223,18 +1296,18 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     // (12,22); o resto da tela é a moldura e a coluna direita (renderPanel).
     {
         uint32_t* fb = renderer.getFramebuffer();
-        const int VW = Renderer::NATIVE_WIDTH;
+        const int VW = m_fbW;
         for (int y = kViewH - 1; y >= 0; --y)
             std::memmove(&fb[(y + kViewY) * VW + kViewX], &fb[y * VW], sizeof(uint32_t) * kViewW);
     }
     renderPanel(renderer);
-    drawChatLine(renderer.getFramebuffer(), Renderer::NATIVE_WIDTH, Renderer::NATIVE_HEIGHT);
+    drawChatLine(renderer.getFramebuffer(), m_fbW, m_fbH);
 
     // Overlay: relógio (Tick/Time) + uma amostra do RNG — prova visível de que o
     // núcleo de simulação está rodando determinístico.
     if (m_showDebugHud) {
     uint32_t* fb = renderer.getFramebuffer();
-    const int VW = Renderer::NATIVE_WIDTH, VH = Renderer::NATIVE_HEIGHT;
+    const int VW = m_fbW, VH = m_fbH;
     const _Player& p = Player[TethysGame::localPlayer()];
 
     char l1[96], l2[128];
@@ -1264,7 +1337,29 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     }
 
     if (m_endPhase == 2 && !m_saveDlg.active()) drawSuccessDialog(renderer);
-    m_saveDlg.render(renderer);
+    if (m_saveDlg.active()) {
+        // O diálogo tem coordenadas fixas de 640x480 (é o mesmo do shell). Num
+        // quadro maior ele é desenhado no lugar de sempre e o retângulo dele é
+        // levado para o centro, devolvendo o que estava por baixo.
+        const int ox = (m_fbW - 640) / 2, oy = (m_fbH - 480) / 2;
+        if (ox == 0 && oy == 0) {
+            m_saveDlg.render(renderer);
+        } else {
+            constexpr int W = SaveSlotsDialog::kDlgW, H = SaveSlotsDialog::kDlgH;
+            constexpr int dx = (640 - W) / 2, dy = (480 - H) / 2;
+            uint32_t* fb = renderer.getFramebuffer();
+            std::vector<uint32_t> under(W * H), dlg(W * H);
+            for (int y = 0; y < H; ++y)
+                std::memcpy(&under[y * W], &fb[(dy + y) * m_fbW + dx], W * sizeof(uint32_t));
+            m_saveDlg.render(renderer);
+            for (int y = 0; y < H; ++y) {
+                std::memcpy(&dlg[y * W], &fb[(dy + y) * m_fbW + dx], W * sizeof(uint32_t));
+                std::memcpy(&fb[(dy + y) * m_fbW + dx], &under[y * W], W * sizeof(uint32_t));
+            }
+            for (int y = 0; y < H; ++y)
+                std::memcpy(&fb[(dy + oy + y) * m_fbW + dx + ox], &dlg[y * W], W * sizeof(uint32_t));
+        }
+    }
     renderer.present();
 }
 
@@ -1276,7 +1371,7 @@ int GameState::viewportW() const { return kViewW; }
 // 0x30003 a cada ponto aceso e volta ao início a cada falha do padrão).
 void GameState::drawBeam(Renderer& renderer, const WeaponDrawOp& op) {
     uint32_t* fb = renderer.getFramebuffer();
-    const int VW = Renderer::NATIVE_WIDTH, clipW = viewportW(), clipH = viewportH();
+    const int VW = m_fbW, clipW = viewportW(), clipH = viewportH();
     auto c555 = [](uint32_t w) {
         const uint32_t r = (w >> 10) & 31, g = (w >> 5) & 31, b = w & 31;
         return 0xFF000000u | (((r << 3) | (r >> 2)) << 16) | (((g << 3) | (g >> 2)) << 8) | ((b << 3) | (b >> 2));
@@ -1397,7 +1492,7 @@ void GameState::drawGlobe(uint32_t* fb) {
         m_globeTex[idx] = kOC5[ow % 7];
     }
 
-    m_globe.draw(fb, Renderer::NATIVE_WIDTH, kColX, kMiniMapY,
+    m_globe.draw(fb, m_fbW, kColX, kMiniMapY,
                  m_camX >> 5, m_camY >> 5,
                  (m_camX + viewportW()) >> 5, (m_camY + viewportH()) >> 5,
                  m_miniDrag);
@@ -1443,7 +1538,7 @@ int GameState::miniButtonCount() const {
 
 int GameState::screenXOf(int worldPixelX) const {
     int sx = worldPixelX - m_camX;
-    if (!g_gameMap.ok()) return sx;
+    if (!g_gameMap.ok() || !viewWraps()) return sx;
     const int worldW = g_gameMap.width() * 32;       // largura do mapa em pixels
     if (worldW <= 0) return sx;
     sx = ((sx % worldW) + worldW) % worldW;           // [0, worldW)
@@ -1516,7 +1611,11 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
         return;
     }
     if (m_saveDlg.active()) {                                // TFileDialog (modal)
+        // O diálogo foi desenhado centrado no quadro (ver onIdle): o mouse
+        // volta para as coordenadas de 640x480 dele.
+        renderer.setInputOffset((m_fbW - 640) / 2, (m_fbH - 480) / 2);
         const SaveSlotsDialog::Result r = m_saveDlg.handleEvent(renderer, e);
+        renderer.setInputOffset(0, 0);
         if (r == SaveSlotsDialog::kDoSave) {
             saveToFile(m_saveDlg.path(), m_saveDlg.description());   // TApp::SaveGame
         } else if (r == SaveSlotsDialog::kDoLoad) {
@@ -1637,12 +1736,12 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
     // (SC_MINIMIZE / SC_MAXIMIZE / SC_CLOSE).
     if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
         int nx, ny; renderer.screenToNative(e.button.x, e.button.y, nx, ny);
-        const int c = m_frame.captionButtonAt(nx, ny, Renderer::NATIVE_WIDTH);
+        const int c = m_frame.captionButtonAt(nx, ny, m_fbW);
         if (c >= 0) { m_capPressed = c; return; }
     }
     if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT && m_capPressed >= 0) {
         int nx, ny; renderer.screenToNative(e.button.x, e.button.y, nx, ny);
-        const int c = m_frame.captionButtonAt(nx, ny, Renderer::NATIVE_WIDTH);
+        const int c = m_frame.captionButtonAt(nx, ny, m_fbW);
         const int was = m_capPressed;
         m_capPressed = -1;
         if (c == was) {
@@ -1785,16 +1884,16 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
             m_dragging = true; m_dragSX = vx; m_dragSY = vy;
         } else if (e.button.button == SDL_BUTTON_RIGHT && inView && !m_selected.empty()) {
             // Mover os SELECIONADOS para o tile clicado (pipeline real + espiral).
-            int tileX = (m_camX + nx) / 32, tileY = (m_camY + ny) / 32;
+            // Fork: (1) o tile vem das coordenadas DA VISTA (vx/vy), não das do
+            // quadro (nx/ny) -- antes o alvo caía 12 px à direita e 22 px abaixo
+            // do clique, quase sempre no tile de baixo; (2) passa pelo mesmo
+            // caminho do botão MOVE (sub_451280 em uiCommandTarget): clicar na
+            // doca de um prédio com um veículo que atraca manda o pacote de
+            // doca (3, ou 4 na garagem de Eden), não um "mover" simples.
+            int tileX = (m_camX + vx) / 32, tileY = (m_camY + vy) / 32;
             if (g_gameMap.ok()) tileX &= (g_gameMap.width() - 1);
-            int me = TethysGame::localPlayer();
-            CommandPacket pkt; pkt.type = CMD_MOVE;
-            pkt.waypoints.push_back(packLocation(tileX, tileY));
-            for (int id : m_selected) {
-                Unit u(id);
-                if (u.IsLive() && u.OwnerID() == me && u.IsVehicle()) pkt.unitIds.push_back(id);
-            }
-            if (!pkt.unitIds.empty()) { commandSubmit(me, pkt); soundPlay(0x56); }
+            uiSetCursorPixel(g_gameMap.ok() ? (m_camX + vx) & (g_gameMap.width() * 32 - 1) : m_camX + vx, m_camY + vy);
+            uiCommandTarget(UC_MOVE, m_selected, tileX, tileY);
         }
     }
     if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT && m_miniDrag) {
@@ -2594,7 +2693,7 @@ static int vehSerial(const UnitRecord& r, size_t idx) {
 // Lista de objetivos do painel (modo dword_565C8C = 1, sub_4663A0): uma linha
 // por VictoryCondition, "<C0>%s" se cumprida (verde) e "<C2>%s" se não (vermelho).
 void GameState::renderPanel(Renderer& renderer) {
-    const int VW = Renderer::NATIVE_WIDTH, VH = Renderer::NATIVE_HEIGHT;
+    const int VW = m_fbW, VH = m_fbH;
     const int px0 = kColX;                       // coluna direita (x)
     uint32_t* fb = renderer.getFramebuffer();
     const int me = TethysGame::localPlayer();

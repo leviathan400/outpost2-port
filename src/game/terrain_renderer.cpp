@@ -45,7 +45,7 @@ int TerrainRenderer::mapPixelHeight() const { return m_map ? m_map->height() * 3
 
 
 void TerrainRenderer::render(uint32_t* dst, int dstW, int dstH, int camX, int camY,
-                             int (*darkOf)(int)) const {
+                             int (*darkOf)(int), bool wrapX) const {
     if (!m_ok || !m_map) return;
 
     // Faixa de tiles que toca a viewport (usa tx/ty reais; getTile faz wrap em X).
@@ -59,6 +59,7 @@ void TerrainRenderer::render(uint32_t* dst, int dstW, int dstH, int camX, int ca
     for (int ty = firstTy; ty <= lastTy; ++ty) {
         if (ty < 0 || ty >= h) continue;   // sem wrap vertical
         for (int tx = firstTx; tx <= lastTx; ++tx) {
+            if (!wrapX && (tx < 0 || tx >= m_map->width())) continue;
             int g = m_map->getTile(LOCATION{tx, ty});
             if (g < 0 || g >= static_cast<int>(m_pool.size())) continue;
             const PoolEntry& pe = m_pool[g];

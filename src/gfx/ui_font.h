@@ -28,6 +28,12 @@ public:
     static constexpr int kText = 0;     // Arial −11, 400
     static constexpr int kTitle = 1;    // Arial −11, 700
     static constexpr int kStatus = 2;   // Arial +12, 700 (barra de estado)
+    // Fork: titulo dos dialogos do shell ("MAIN MENU": 10 px de altura, 83 de
+    // largura no original, que e a Arial negrito de -14).
+    static constexpr int kDialogTitle = 3;
+    // Fork: texto dos dialogos do shell (listas, rotulos): Arial -12, com
+    // linhas de 14 px como na lista de TUTORIALS do original.
+    static constexpr int kDialogText = 4;
 
     static void draw(uint32_t* fb, int fbW, int fbH, const std::string& text, int x, int y,
                      uint32_t color, int face = kText, int clipL = 0, int clipT = 0, int clipR = 1 << 20,

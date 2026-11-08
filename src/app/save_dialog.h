@@ -27,6 +27,9 @@ public:
     std::string path() const { return saveSlotPath(m_sel); }
     const std::string& description() const { return m_desc; }
 
+    // Tamanho do quadro; o diálogo é desenhado centrado em 640x480.
+    static constexpr int kDlgW = 480, kDlgH = 372;
+
     void render(Renderer& renderer);
     Result handleEvent(Renderer& renderer, const SDL_Event& e);
 

@@ -78,9 +78,13 @@ void GameFrame::drawPiece(uint32_t* fb, int fbW, int fbH, int idx, int x, int y)
 void GameFrame::drawNonClient(uint32_t* fb, int fbW, int fbH, int wW, int wH, bool active,
                               int pressed) const {   // sub_499E80
     if (!m_ok) return;
-    // Largura/altura "encaixadas" (vista em múltiplos de 32): o resto fica preto.
-    const int W = ((wW - 0xE0) & ~31) + 0xE0;
-    const int H = ((wH - 0x40) & ~31) + 0x40;
+    // O original "encaixa" a largura/altura (vista em múltiplos de 32) e deixa o
+    // resto preto: W = ((wW − 0xE0) & ~31) + 0xE0, H = ((wH − 0x40) & ~31) + 0x40.
+    // Fork: a vista preenche a janela inteira (GameState::relayout), então a
+    // moldura vai até a borda real -- senão as bordas direita e inferior caem
+    // por baixo da coluna e da barra de status, e a beira fica preta.
+    const int W = wW;
+    const int H = wH;
     auto fill = [&](int x0, int y0, int x1, int y1) {
         for (int y = std::max(0, y0); y < std::min(fbH, y1); ++y)
             for (int x = std::max(0, x0); x < std::min(fbW, x1); ++x) fb[y * fbW + x] = 0xFF000000u;

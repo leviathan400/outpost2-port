@@ -32,6 +32,9 @@ void ShellState::onActivate() {
 void ShellState::onIdle(Renderer& renderer, float dt) {
     m_menu.update(dt);
 
+    // Fork: o shell continua em 640x480 escalado (o jogo muda o quadro para o
+    // tamanho da janela; ao voltar ao menu, o quadro volta a 640x480).
+    renderer.setLogicalSize(Renderer::NATIVE_WIDTH, Renderer::NATIVE_HEIGHT);
     renderer.clear(0xFF000000);
     m_menu.render(renderer);
     if (m_menu.consumeLoadRequest()) m_loadDlg.open(SaveSlotsDialog::kLoad, "");

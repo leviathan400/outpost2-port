@@ -30,8 +30,10 @@ public:
     // Cada tile sai pela paleta da escuridão da SUA coluna (sub_4A8BD0 escolhe
     // `paletaBase + (escuridão << 9)`); `darkOf` devolve 0..31 por coluna de
     // tile, ou nullptr para desenhar tudo de dia.
+    // wrapX = false (fork): columns outside [0, width) are left black instead
+    // of repeating the map (non-wrapping maps, as in the original).
     void render(uint32_t* dst, int dstW, int dstH, int camX, int camY,
-                int (*darkOf)(int tileX) = nullptr) const;
+                int (*darkOf)(int tileX) = nullptr, bool wrapX = true) const;
 
     // Cor do minimapa de um tile (RGB555): média dos 1024 pixels do tile do
     // mapeamento, em 5 bits por canal — sub_48B320 (tabela [obj+0x46C]->[+8]).

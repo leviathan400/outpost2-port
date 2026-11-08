@@ -55,6 +55,7 @@
 #include "../audio/sound.h"
 #include "../core/config.h"
 #include "../gfx/font.h"
+#include "../gfx/dialog_skin.h"
 #include "../res/pe_resource.h"
 
 namespace op2 {
@@ -839,7 +840,7 @@ namespace {
 
 // Encurta um texto ao que cabe em `px` pixels, com reticências.
 std::string fitText(const std::string& t, int px) {
-    const int cw = Font::getTextWidth("M");
+    const int cw = SkinText::width("M");
     const int n = px / (cw > 0 ? cw : 8);
     if ((int)t.size() <= n) return t;
     if (n <= 3) return t.substr(0, std::max(0, n));
@@ -862,12 +863,12 @@ void ShellMenu::renderMpNewGame(Renderer& renderer) {
     const DlgBox d = dlgBox(284, 122);
     renderer.dimRect(0, 0, 640, 480, 0x88);
     renderer.drawDialogFrame(d.fx, d.fy, d.fw, d.fh, "NEW NETWORK GAME");
-    Font::drawText(fb, 640, 480, "Your Name:",     d.x(10), d.y(10), 0xFFD8E4F8, true);
-    Font::drawText(fb, 640, 480, "Password:",      d.x(10), d.y(29), 0xFFD8E4F8, true);
-    Font::drawText(fb, 640, 480, "Max Players:",   d.x(10), d.y(47), 0xFFD8E4F8, true);
-    Font::drawText(fb, 640, 480, "Scenario Type:", d.x(10), d.y(68), 0xFFD8E4F8, true);
+    SkinText::draw(fb, 640, 480, "Your Name:",     d.x(10), d.y(10), 0xFFD8E4F8, true);
+    SkinText::draw(fb, 640, 480, "Password:",      d.x(10), d.y(29), 0xFFD8E4F8, true);
+    SkinText::draw(fb, 640, 480, "Max Players:",   d.x(10), d.y(47), 0xFFD8E4F8, true);
+    SkinText::draw(fb, 640, 480, "Scenario Type:", d.x(10), d.y(68), 0xFFD8E4F8, true);
     if (!m_mpStatus.empty())                       // Static 1093
-        Font::drawText(fb, 640, 480, fitText(m_mpStatus, d.w(268)),
+        SkinText::draw(fb, 640, 480, fitText(m_mpStatus, d.w(268)),
                        d.x(8), d.y(100), 0xFFFFD24A, true);
 }
 
@@ -877,9 +878,9 @@ void ShellMenu::renderMpFindSession(Renderer& renderer) {
     const DlgBox d = dlgBox(232, 98);
     renderer.dimRect(0, 0, 640, 480, 0x88);
     renderer.drawDialogFrame(d.fx, d.fy, d.fw, d.fh, "FIND SESSION");
-    Font::drawText(fb, 640, 480, "Look for sessions by:", d.x(7), d.y(7), 0xFFD8E4F8, true);
+    SkinText::draw(fb, 640, 480, "Look for sessions by:", d.x(7), d.y(7), 0xFFD8E4F8, true);
     if (!m_mpStatus.empty())
-        Font::drawText(fb, 640, 480, fitText(m_mpStatus, d.w(218)),
+        SkinText::draw(fb, 640, 480, fitText(m_mpStatus, d.w(218)),
                        d.x(7), d.y(65), 0xFFFFD24A, true);
 }
 
@@ -893,15 +894,16 @@ void ShellMenu::renderMpPickSession(Renderer& renderer) {
     renderer.drawDialogFrame(d.fx, d.fy, d.fw, d.fh, "PICK SESSION");
 
     const int lx = d.x(7), ly = d.y(9), lw = d.w(348), lh = d.h(64);
-    renderer.drawRect(lx, ly, lw, lh, 0xFF405068);
+    if (DialogSkin::ok()) renderer.drawSkinBox(lx, ly, lw, lh);
+    else renderer.drawRect(lx, ly, lw, lh, 0xFF405068);
     // As quatro colunas, em frações da largura da lista.
     const int cName = lx + 6, cAddr = lx + lw * 42 / 100,
               cPlay = lx + lw * 70 / 100, cPing = lx + lw * 85 / 100;
-    Font::drawText(fb, 640, 480, "Sessao",   cName, ly + 4, 0xFF8090A8, true);
-    Font::drawText(fb, 640, 480, "Endereco", cAddr, ly + 4, 0xFF8090A8, true);
-    Font::drawText(fb, 640, 480, "Jog.",     cPlay, ly + 4, 0xFF8090A8, true);
-    Font::drawText(fb, 640, 480, "ms",       cPing, ly + 4, 0xFF8090A8, true);
-    renderer.fillRect(lx + 2, ly + 18, lw - 4, 1, 0xFF405068);
+    SkinText::draw(fb, 640, 480, "Sessao",   cName, ly + 4, 0xFF8090A8, true);
+    SkinText::draw(fb, 640, 480, "Endereco", cAddr, ly + 4, 0xFF8090A8, true);
+    SkinText::draw(fb, 640, 480, "Jog.",     cPlay, ly + 4, 0xFF8090A8, true);
+    SkinText::draw(fb, 640, 480, "ms",       cPing, ly + 4, 0xFF8090A8, true);
+    renderer.fillRect(lx + 2, ly + 18, lw - 4, 1, DialogSkin::ok() ? DialogSkin::kBoxEdgeDk : 0xFF405068);
 
     const int rowH = 15, first = ly + 22;
     const int maxRows = (ly + lh - first) / rowH;
@@ -909,7 +911,7 @@ void ShellMenu::renderMpPickSession(Renderer& renderer) {
         const LobbySession& ses = m_mpSessions[i];
         const int ry = first + int(i) * rowH;
         const bool sel = (int)i == m_mpSelSession;
-        if (sel) renderer.fillRect(lx + 2, ry - 2, lw - 4, rowH - 1, 0xFF2A3A55);
+        if (sel) renderer.fillRect(lx + 2, ry - 2, lw - 4, rowH - 1, DialogSkin::ok() ? DialogSkin::kSelBg : 0xFF2A3A55);
         const uint32_t col = sel ? 0xFFFFFF99 : 0xFFC8D4E8;
         unsigned char ip[4];
         std::memcpy(ip, &ses.addr, 4);
@@ -917,15 +919,15 @@ void ShellMenu::renderMpPickSession(Renderer& renderer) {
         std::snprintf(addr, sizeof(addr), "%u.%u.%u.%u", ip[0], ip[1], ip[2], ip[3]);
         std::snprintf(players, sizeof(players), "%d", ses.maxPlayers);
         std::snprintf(ping, sizeof(ping), "%d", ses.replies ? ses.pingMs / ses.replies : 0);
-        Font::drawText(fb, 640, 480, fitText(ses.name, cAddr - cName - 8), cName, ry, col, true);
-        Font::drawText(fb, 640, 480, addr,    cAddr, ry, col, true);
-        Font::drawText(fb, 640, 480, players, cPlay, ry, col, true);
-        Font::drawText(fb, 640, 480, ping,    cPing, ry, col, true);
+        SkinText::draw(fb, 640, 480, fitText(ses.name, cAddr - cName - 8), cName, ry, col, true);
+        SkinText::draw(fb, 640, 480, addr,    cAddr, ry, col, true);
+        SkinText::draw(fb, 640, 480, players, cPlay, ry, col, true);
+        SkinText::draw(fb, 640, 480, ping,    cPing, ry, col, true);
     }
     if (m_mpSessions.empty())
-        Font::drawText(fb, 640, 480, "(nenhuma sessao)", cName, first, 0xFF8090A8, true);
+        SkinText::draw(fb, 640, 480, "(nenhuma sessao)", cName, first, 0xFF8090A8, true);
     if (!m_mpStatus.empty())                       // Static 1093
-        Font::drawText(fb, 640, 480, fitText(m_mpStatus, d.w(268)),
+        SkinText::draw(fb, 640, 480, fitText(m_mpStatus, d.w(268)),
                        d.x(7), d.y(88), 0xFFFFD24A, true);
 }
 
@@ -935,9 +937,9 @@ void ShellMenu::renderMpJoinName(Renderer& renderer) {
     const DlgBox d = dlgBox(226, 57);
     renderer.dimRect(0, 0, 640, 480, 0x88);
     renderer.drawDialogFrame(d.fx, d.fy, d.fw, d.fh, "JOIN A MULTIPLAYER GAME");
-    Font::drawText(fb, 640, 480, "Your Name:", d.x(8), d.y(17), 0xFFD8E4F8, true);
+    SkinText::draw(fb, 640, 480, "Your Name:", d.x(8), d.y(17), 0xFFD8E4F8, true);
     if (!m_mpStatus.empty())
-        Font::drawTextCentered(fb, 640, 480, fitText(m_mpStatus, d.w(210)),
+        SkinText::drawCentered(fb, 640, 480, fitText(m_mpStatus, d.w(210)),
                                d.fx + d.fw / 2, d.y(3), 0xFFFFD24A, true);
 }
 
@@ -953,27 +955,27 @@ void ShellMenu::renderMpGameSettings(Renderer& renderer) {
     // direita, onde não disputa espaço com nada do diálogo.
     if (!m_mpStatus.empty()) {
         const std::string st = fitText(m_mpStatus, 240);
-        Font::drawText(fb, 640, 480, st, 630 - Font::getTextWidth(st), d.fy + 6,
+        SkinText::draw(fb, 640, 480, st, 630 - SkinText::width(st), d.fy + 6,
                        0xFFFFD24A, true);
     }
 
     // Static 1080 e, para quem não hospeda, o Static 1075 no lugar do combo.
-    Font::drawText(fb, 640, 480, "Scenario:", d.x(8), d.y(4), 0xFFD8E4F8, true);
+    SkinText::draw(fb, 640, 480, "Scenario:", d.x(8), d.y(4), 0xFFD8E4F8, true);
     if (!m_mpIsHost) {
         const std::string nm = (m_mpScenario >= 0 && m_mpScenario < (int)m_mpScenarioList.size())
                              ? m_mpScenarioList[m_mpScenario] : "Unknown Mission";
-        Font::drawText(fb, 640, 480, fitText(nm, d.w(250)), d.x(52), d.y(4),
+        SkinText::draw(fb, 640, 480, fitText(nm, d.w(250)), d.x(52), d.y(4),
                        0xFFC8D4E8, true);
     }
 
     // Cabeçalho das colunas: "Name" e "Resources" são SS_CENTER no template, os
     // outros à esquerda.
-    Font::drawTextCentered(fb, 640, 480, "Name",      d.x(54),  d.y(19), 0xFF8090A8, true);
-    Font::drawText(fb, 640, 480,         "Color",     d.x(103), d.y(20), 0xFF8090A8, true);
-    Font::drawText(fb, 640, 480,         "Eden",      d.x(148), d.y(20), 0xFF8090A8, true);
-    Font::drawTextCentered(fb, 640, 480, "Resources", d.x(196), d.y(19), 0xFF8090A8, true);
-    Font::drawText(fb, 640, 480,         "Ready?",    d.x(224), d.y(20), 0xFF8090A8, true);
-    renderer.fillRect(d.x(8), d.y(31), d.w(296), 1, 0xFF405068);   // o Static de 1 DLU
+    SkinText::drawCentered(fb, 640, 480, "Name",      d.x(54),  d.y(19), 0xFF8090A8, true);
+    SkinText::draw(fb, 640, 480,         "Color",     d.x(103), d.y(20), 0xFF8090A8, true);
+    SkinText::draw(fb, 640, 480,         "Eden",      d.x(148), d.y(20), 0xFF8090A8, true);
+    SkinText::drawCentered(fb, 640, 480, "Resources", d.x(196), d.y(19), 0xFF8090A8, true);
+    SkinText::draw(fb, 640, 480,         "Ready?",    d.x(224), d.y(20), 0xFF8090A8, true);
+    renderer.fillRect(d.x(8), d.y(31), d.w(296), 1, DialogSkin::ok() ? DialogSkin::kBoxEdgeDk : 0xFF405068);   // o Static de 1 DLU
 
     // Os nomes (Static 40000+5i, centrados na coluna de 76 DLU).
     for (int i = 0; i < 6; ++i) {
@@ -981,28 +983,29 @@ void ShellMenu::renderMpGameSettings(Renderer& renderer) {
         const uint32_t col = taken ? 0xFFE0ECFF : 0xFF60708A;
         const std::string nm = taken ? (m_mpNames[i].empty() ? "PLAYER" : m_mpNames[i])
                                      : "(vazio)";
-        Font::drawTextCentered(fb, 640, 480, fitText(nm, d.w(76)),
+        SkinText::drawCentered(fb, 640, 480, fitText(nm, d.w(76)),
                                d.x(54), d.y(39 + 15 * i), col, true);
     }
 
     // Static 1084, à direita do combo 1018 — segue a linha que o layout mediu.
     for (const Control& c : m_controls)
         if (c.id == 1018) {
-            Font::drawText(fb, 640, 480, "Initial Vehicles", c.x + c.w + 10, c.y + 4,
+            SkinText::draw(fb, 640, 480, "Initial Vehicles", c.x + c.w + 10, c.y + 4,
                            m_mpIsHost ? 0xFFD8E4F8 : 0xFF60708A, true);
             break;
         }
 
     // O registro da conversa (Edit 40031, multilinha) e o rótulo do Edit 40030.
     const int cx = d.x(8), cy = d.y(149), cw = d.w(300), ch = d.h(39);
-    renderer.drawRect(cx, cy, cw, ch, 0xFF405068);
+    if (DialogSkin::ok()) renderer.drawSkinBox(cx, cy, cw, ch);
+    else renderer.drawRect(cx, cy, cw, ch, 0xFF405068);
     const int lineH = 14, rows = (ch - 8) / lineH;
     const int firstLine = std::max(0, (int)m_mpChat.size() - rows);
     int line = 0;
     for (size_t i = firstLine; i < m_mpChat.size(); ++i, ++line)
-        Font::drawText(fb, 640, 480, fitText(m_mpChat[i], cw - 12),
+        SkinText::draw(fb, 640, 480, fitText(m_mpChat[i], cw - 12),
                        cx + 6, cy + 4 + line * lineH, 0xFFA8B8D0, true);
-    Font::drawText(fb, 640, 480, "Chat:", d.x(8), d.y(192), 0xFFD8E4F8, true);
+    SkinText::draw(fb, 640, 480, "Chat:", d.x(8), d.y(192), 0xFFD8E4F8, true);
 }
 
 } // namespace op2
