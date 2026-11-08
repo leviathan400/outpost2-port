@@ -8,4 +8,14 @@ in C++17 + SDL2. Requires a legitimate installed copy of the original game.
 | 🇬🇧 English | [README.EN.md](README.EN.md) | [PORT_STATUS.EN.md](PORT_STATUS.EN.md) | [CHANGELOG.EN.md](CHANGELOG.EN.md) |
 | 🇧🇷 Português (BR) | [README.BR.md](README.BR.md) | [PORT_STATUS.BR.md](PORT_STATUS.BR.md) | [CHANGELOG.BR.md](CHANGELOG.BR.md) |
 
+## Legal notice
+
+Unofficial, non-commercial fan project. Not affiliated with or endorsed by
+Dynamix, Sierra, Activision or any other owner of *Outpost 2: Divided
+Destiny*, whose name and content belong to their respective owners. No game
+files are included; you need your own copy of the game.
+
+The [MIT licence](LICENSE) covers only the contributors' own work in this
+repository, not *Outpost 2* or any of its content.
+
 Forked from [marcelomgoncalves/outpost2](https://github.com/marcelomgoncalves/outpost2).
