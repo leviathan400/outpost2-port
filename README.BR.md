@@ -173,11 +173,12 @@ outpost2_modern.exe                      # menu principal
 outpost2_modern.exe --game eden01.map    # abre um mapa direto
 ```
 
-O arquivo `OUTPOST2.INI` do jogo é respeitado. O porte acrescenta cinco chaves
+O arquivo `OUTPOST2.INI` do jogo é respeitado. O porte acrescenta sete chaves
 que o original não tem — nível da IA, escuridão da noite, volume, câmera do
-demo e tela cheia; estão documentadas no `PORT_STATUS.BR.md`.
+demo, tela cheia e, vindas do fork, a pele dos menus (`MenuSkin`) e a volta
+horizontal do mapa (`MapWrap`); estão documentadas no `PORT_STATUS.BR.md`.
 
-Há **96 modos de linha de comando** para testes e capturas, entre eles uma
+Há **97 modos de linha de comando** para testes e capturas, entre eles uma
 bateria de regressão (`--savetest` prova o determinismo de salvar/recarregar).
 A lista está no `PORT_STATUS.BR.md`.
 
@@ -209,12 +210,12 @@ e descartado das listas de cheat que circulam por aí.
 
 ```
 src/
-  main.cpp        entrada + os 93 modos de teste/captura
+  main.cpp        entrada + os 97 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
                   combate, economia, pesquisa, desastres, triggers, IA
-  gfx/            framebuffer 640x480, PBMP, sprites, fontes (bitmap e GDI)
+  gfx/            framebuffer do tamanho da janela (base 640x480), PBMP, sprites, fontes (bitmap e GDI)
   res/            leitor de PE (.rsrc + exports), .VOL + LZHUF, ResManager
   core/           OUTPOST2.INI (CConfig)
   audio/          mixer SDL fiel ao DirectSound do original, música (.clm)

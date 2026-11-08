@@ -1,5 +1,14 @@
 **English** · [Português (BR)](PORT_STATUS.BR.md)
 
+> **This translation lags the Portuguese original.** It was written from
+> `PORT_STATUS.BR.md` as of commit `c80e74d`. Everything up to there is here;
+> the work merged afterwards is documented **only in the BR file** so far:
+> the chat-line cheats (5.6), item 21, and sections **5.7** (the Options tab
+> fixes), **5.8** (the `Screen Mode` radio and the PREFERENCES scroll arrows)
+> and **5.9** (the per-item PREFERENCES table at `0x4E3118`, and the screen's
+> real structure, still open). The fork's own changes are in
+> [CHANGELOG.EN.md](CHANGELOG.EN.md).
+
 # Outpost 2: Divided Destiny — Modern Port (C++17/SDL2)
 
 > Port status. Last revision: **2026-11-05** (199 commits), done by reading the
@@ -48,12 +57,12 @@ coverage by comparing the DLLs' import tables against the registry in
 
 ```
 src/
-  main.cpp        entry point + the 93 test/capture modes
+  main.cpp        entry point + the 97 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
                   combat, economy, research, disasters, triggers, AI
-  gfx/            640x480 framebuffer, PBMP, sprites, fonts (bitmap and GDI)
+  gfx/            window-sized framebuffer (640x480 base), PBMP, sprites, fonts (bitmap and GDI)
   res/            PE reader (.rsrc + exports), .VOL + LZHUF, ResManager
   core/           OUTPOST2.INI (CConfig)
   audio/          SDL mixer faithful to the original's DirectSound, music (.clm)
@@ -131,7 +140,7 @@ preferences screen; the original ignores keys it doesn't know.
 | `NightDarkness` | 0..100 | 75 | How much of the night darkening curve is applied (100 = the original, which takes full night to ~15% brightness and makes units, which never darken, stand out against the black). |
 | `AudioVolume` | 0..100 | 50 | Master volume over the final mix (sounds and music). The original only has `MusicVol`/`SoundVol`, per channel and in 6 steps. |
 | `DemoCamera` | 0/1 | 1 | In the attract demo the camera tours the action spots (disaster, combat, units). 0 restores the original's static camera. |
-| `Fullscreen` | 0/1 | 1 | Opens fullscreen (no video mode change; the 640×480 view scaled with aspect ratio preserved). Alt+Enter toggles at any time. |
+| `Fullscreen` | 0/1 | 1 | Opens fullscreen (no video mode change). Alt+Enter toggles at any time, and in game there is the **Screen Mode** radio pair at the end of the `PREFERENCES` list (see 5.8 in the BR status). |
 | `MenuSkin` | 0/1 | 0 | *(fork)* Menu style. 0 = the port's own look (dark-blue panels, main menu on the right); 1 = the original OP2 dialog skin (blueprint background, red frames, green text, art from `OP2SHRES.DLL`). |
 | `MapWrap` | 0/1 | 0 | *(fork)* Horizontal map wrap. 0 = as in the original: the view stops at the left/right edges of the map, and only "around the world" maps (512 tiles wide) wrap; 1 = every map wraps (the port's old behaviour). |
 
@@ -630,7 +639,7 @@ mission DLLs and the original resources from the working directory).
 
 ### Command-line tests
 
-There are 93 modes. The ones that cover real regressions:
+There are 97 modes. The ones that cover real regressions:
 
 | Mode | What it proves |
 |---|---|

@@ -2,9 +2,11 @@
 
 # Registro de mudanças
 
-Mudanças deste fork desde que ele saiu de
-[marcelomgoncalves/outpost2](https://github.com/marcelomgoncalves/outpost2)
-no commit `1697e7f` (2026-11-06). As mais recentes primeiro.
+Mudanças que vieram do fork
+[leviathan400/outpost2-port](https://github.com/leviathan400/outpost2-port),
+escritas por ele e incorporadas aqui no merge `a40b6bc` (2026-11-08). As mais
+recentes primeiro. O que este repositório fez em paralelo está no histórico do
+git e no `PORT_STATUS.BR.md`.
 
 ## 2026-11-08
 

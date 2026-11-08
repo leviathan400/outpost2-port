@@ -48,12 +48,12 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 96 modos de teste/captura
+  main.cpp        entrada + os 97 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
                   combate, economia, pesquisa, desastres, triggers, IA
-  gfx/            framebuffer 640x480, PBMP, sprites, fontes (bitmap e GDI)
+  gfx/            framebuffer do tamanho da janela (base 640x480), PBMP, sprites, fontes (bitmap e GDI)
   res/            leitor de PE (.rsrc + exports), .VOL + LZHUF, ResManager
   core/           OUTPOST2.INI (CConfig)
   audio/          mixer SDL fiel ao DirectSound do original, música (.clm)
@@ -920,11 +920,11 @@ Três detalhes que fazem a coisa funcionar de verdade:
   `Fullscreen` — se aplicasse, qualquer `loadSettings` jogaria a janela de volta
   para o valor (velho) do arquivo.
 
-O que **não** mudou: a resolução continua sendo a vista de 640×480 escalada. Ver
-mais mapa de uma vez (o outro pedido do fórum) é outra conversa — exige tirar
-`NATIVE_WIDTH`/`NATIVE_HEIGHT` de `constexpr`, recalcular o layout do HUD pela
-fórmula do `sub_4998D0` e decidir o que fazer com o shell, que é arte de 640×480
-de tamanho fixo.
+O outro pedido do fórum — **ver mais mapa de uma vez** — foi feito logo depois,
+e não por mim: veio do fork `leviathan400/outpost2-port` (commit `9480d5d`,
+incorporado no merge `a40b6bc`). O quadro do jogo passou a ter o tamanho da
+janela em vez de esticar 640×480, com o HUD se recolocando (`relayout`). O shell
+segue em 640×480 escalado, que era a saída prevista: é arte de tamanho fixo.
 
 ### A lista não dava para rolar (consertado junto)
 
@@ -1041,7 +1041,7 @@ missão e os recursos originais do diretório de trabalho).
 
 ### Testes por linha de comando
 
-São 96 modos. Os que cobrem regressão de verdade:
+São 97 modos. Os que cobrem regressão de verdade:
 
 | Modo | O que prova |
 |---|---|

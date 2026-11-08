@@ -172,13 +172,35 @@ outpost2_modern.exe                      # main menu
 outpost2_modern.exe --game eden01.map    # opens a map directly
 ```
 
-The game's `OUTPOST2.INI` file is respected. The port adds five keys the
+The game's `OUTPOST2.INI` file is respected. The port adds seven keys the
 original doesn't have — AI level, night darkness, volume, demo camera and
 fullscreen; they are documented in `PORT_STATUS.EN.md`.
 
-There are **93 command-line modes** for tests and captures, among them a
+There are **97 command-line modes** for tests and captures, among them a
 regression battery (`--savetest` proves save/reload determinism). The list is
 in `PORT_STATUS.EN.md`.
+
+---
+
+### Cheats
+
+The original's cheats are not keys: they are sentences typed into the **chat
+line** (Enter). On a match the text turns into `Woof Woof!` and the effect
+applies to whoever typed it — on every machine, without breaking network
+lockstep. **The punctuation is part of the password:**
+
+| Sentence | Effect |
+|---|---|
+| `Dan's dog could make more ore.` | fills both ore stores to capacity |
+| `Dan's car could hold more people.` | workers and scientists +25% |
+| `Dan's bike could backfire more often` | weapons reload faster |
+| `Dan's gun could die more people.` | weapons with far more penetration |
+
+The first three are from the 1997 game. The fourth is an **addition of this
+port**: the effect exists in the original, but its sentence was never
+published and the executable only stores the hash — so this sentence was
+made to reach it. `PORT_STATUS.BR.md` has the whole recogniser, the hashes,
+and what was checked and discarded from the cheat lists that circulate.
 
 ---
 
@@ -186,12 +208,12 @@ in `PORT_STATUS.EN.md`.
 
 ```
 src/
-  main.cpp        entry point + the 93 test/capture modes
+  main.cpp        entry point + the 97 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
                   combat, economy, research, disasters, triggers, AI
-  gfx/            640x480 framebuffer, PBMP, sprites, fonts (bitmap and GDI)
+  gfx/            window-sized framebuffer (640x480 base), PBMP, sprites, fonts (bitmap and GDI)
   res/            PE reader (.rsrc + exports), .VOL + LZHUF, ResManager
   core/           OUTPOST2.INI (CConfig)
   audio/          SDL mixer faithful to the original's DirectSound, music (.clm)
