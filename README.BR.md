@@ -175,8 +175,8 @@ outpost2_modern.exe --game eden01.map    # abre um mapa direto
 
 O arquivo `OUTPOST2.INI` do jogo é respeitado. O porte acrescenta sete chaves
 que o original não tem — nível da IA, escuridão da noite, volume, câmera do
-demo, tela cheia e, vindas do fork, a pele dos menus (`MenuSkin`) e a volta
-horizontal do mapa (`MapWrap`); estão documentadas no `PORT_STATUS.BR.md`.
+demo, tela cheia, a pele dos menus (`MenuSkin`) e a volta horizontal do mapa
+(`MapWrap`); estão documentadas no `PORT_STATUS.BR.md`.
 
 Há **97 modos de linha de comando** para testes e capturas, entre eles uma
 bateria de regressão (`--savetest` prova o determinismo de salvar/recarregar).
@@ -228,6 +228,72 @@ São 45.200 linhas de C++17. Os formatos de 1997 estão todos decodificados e
 documentados no `PORT_STATUS.BR.md`: o container `.VOL` (com o LZHUF), o `.map`,
 os tilesets PBMP, os sprites do `op2_art`, as planilhas de dados e os
 cursores `.ANI`.
+
+---
+
+## Mudanças recentes
+
+### 2026-11-08
+
+- **A vista do mapa para nas bordas**, como no original: só os mapas "around
+  the world" (512 tiles de largura) dão a volta. Unidades, terreno e a câmera
+  do modo demonstração seguem a mesma regra. `MapWrap=1` devolve a volta em
+  todo mapa, que era o comportamento antigo.
+- **Par de rádio `Screen Mode`** — tela cheia ou janela — nas **duas** telas de
+  preferências: a `PREFERENCES` do menu principal e a lista do `PREFERENCES` da
+  aba Options, dentro do jogo. Só vale no `ACCEPT`/`&APPLY`, e grava
+  `[Game] Fullscreen` no INI.
+- **A lista do `PREFERENCES` de dentro do jogo escondia as próprias setas de
+  rolagem** atrás dos botões: nada depois da primeira página era alcançável, e
+  o painel ainda roubava o clique do `L&ESS`.
+- **As dicas dos botões `L&ESS`/`&MORE`** passaram a ser as do original, uma
+  por item ("Turn music volume down (L&ess)"), e não uma frase genérica.
+
+### 2026-11-07
+
+- **Mover com o botão direito errava o tile e nunca atracava.** O alvo saía das
+  coordenadas da janela em vez das da vista do mapa, então as unidades iam para
+  um ponto 12 px à direita e 22 px abaixo do clique — quase sempre o tile de
+  baixo. E o caminho pulava a lógica de mover do original (`sub_451280`), então
+  clicar na doca de um prédio nunca mandava a ordem de atracar. Agora usa as
+  coordenadas da vista e o mesmo caminho do botão MOVE.
+- **Doca do Agridome.** O Agridome tem doca de caminhão (`BUILDING.TXT`:
+  Docking Truck = Y), mas a arte dele não traz a plataforma, e os caminhões
+  paravam em chão vazio. Ele ganhou a mesma plataforma que os outros prédios
+  com doca carregam na arte (imagens 385–388, posicionadas como nos 10 grupos
+  de Structure Factory / Smelter / Spaceport / GORF), nas duas facções e só
+  depois que o prédio fica pronto.
+- **A tela do jogo acompanha o tamanho da janela.** Antes era uma imagem fixa
+  de 640×480 esticada, então uma janela maior só deixava tudo maior. Agora o
+  jogo é desenhado no tamanho real da janela: a coluna da direita (minimapa,
+  abas, painel) mantém os 192 px presa à borda direita, a vista do mapa ocupa o
+  resto, e redimensionar a janela ou alternar a tela cheia refaz o layout. Os
+  menus continuam em 640×480 escalados, como no original. A moldura vai até a
+  borda real, e o diálogo de salvar/carregar e a caixa "Success" ficam
+  centralizados.
+- **Chave `MenuSkin`**, para escolher o estilo dos menus. `0` (padrão) é o
+  visual do próprio porte — painéis azul-escuros, menu principal translúcido à
+  direita. `1` é a **pele de diálogo do Outpost 2 original**, com toda a arte
+  lida do `OP2SHRES.DLL` do jogo: fundo azul-marinho "blueprint" (bitmap 225),
+  borda vermelha e barra de título com Arial negrito verde; botões com a arte
+  vermelha do jogo (bitmaps 235/236) e o contorno vivo no foco; listas pretas
+  com seleção azul; menu principal medido do original (192×348). Sem os
+  bitmaps, todo controle volta ao estilo do porte.
+- Novos modos de teste: `--dockclicktest <DLL>`, que clica com o botão direito
+  na doca de um Agridome com um caminhão pelo caminho real de entrada e confere
+  que ele atraca, e depois que um clique em tile livre chega exatamente lá; e
+  posição opcional de câmera no `--missiontest`. As capturas passaram a sair no
+  tamanho real do quadro.
+
+### 2026-11-06
+
+- **Os itens do `END MISSION` não faziam nada** — dois defeitos somados e três
+  divergências com o original. Ver a seção 5.7 do `PORT_STATUS.BR.md`.
+- **Cheats digitados na linha de conversa**, como no original, mais um extra do
+  porte para o quarto efeito. Ver a seção de cheats acima.
+- **Documentação em inglês**: `README.EN.md` e `PORT_STATUS.EN.md`. Os
+  originais em português viraram `README.BR.md` e `PORT_STATUS.BR.md`, e o
+  `README.md` é uma página de entrada para os dois idiomas.
 
 ---
 

@@ -228,6 +228,70 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
 
 ---
 
+## Recent changes
+
+### 2026-11-08
+
+- **The map view stops at the edges**, as in the original: only "around the
+  world" maps (512 tiles wide) wrap. Units, terrain and the demo camera follow
+  the same rule. `MapWrap=1` brings back wrapping on every map, the old
+  behaviour.
+- **A `Screen Mode` radio pair** — full screen or window — on **both**
+  preferences screens: `PREFERENCES` in the main menu, and the `PREFERENCES`
+  list in the in-game Options tab. It only takes effect on `ACCEPT`/`&APPLY`,
+  and writes `[Game] Fullscreen` to the INI.
+- **The in-game `PREFERENCES` list was hiding its own scroll arrows** behind
+  the buttons: nothing past the first page could be reached, and the pane was
+  even stealing the `L&ESS` button's click.
+- **The `L&ESS`/`&MORE` tooltips** are now the original's, one per item
+  ("Turn music volume down (L&ess)"), instead of one generic sentence.
+
+### 2026-11-07
+
+- **Right-click move hit the wrong tile and never docked.** The target came
+  from window coordinates instead of map-view coordinates, so units went to a
+  point 12 px right and 22 px below the click — usually one tile low. The path
+  also bypassed the original's move logic (`sub_451280`), so right-clicking a
+  building's dock never sent the dock order. It now uses the view coordinates
+  and the same path as the MOVE button.
+- **Agridome dock pad.** The Agridome has a truck dock (`BUILDING.TXT`:
+  Docking Truck = Y) but its art has no pad, so trucks parked on bare ground.
+  It now gets the same pad every other docked building carries in its art
+  (images 385-388, placed as in all 10 Structure Factory / Smelter / Spaceport
+  / GORF groups), for both colonies and only once the building is finished.
+- **The game screen follows the window size.** It used to be a fixed 640x480
+  image stretched to the window, so a bigger window only made everything
+  bigger. The game is now drawn at the real window size: the right column
+  (minimap, tabs, panel) keeps its 192 px pinned to the right edge, the map
+  view takes the rest, and resizing the window or toggling fullscreen re-lays
+  it out. The menus stay at 640x480 scaled, as in the original. The frame
+  reaches the real edge, and the save/load dialog and the "Success" box are
+  centred.
+- **A `MenuSkin` key** to choose the menu style. `0` (default) is the port's
+  own look — dark-blue panels, translucent main menu on the right. `1` is the
+  **original Outpost 2 dialog skin**, with all art read from the game's own
+  `OP2SHRES.DLL`: the navy "blueprint" background (bitmap 225), red border and
+  title bar with green bold Arial; buttons from the game's red button art
+  (bitmaps 235/236) with a bright outline on focus; black lists with a blue
+  selection; the main menu measured from the original (192x348). Without the
+  bitmaps every control falls back to the port's style.
+- New test modes: `--dockclicktest <DLL>`, which right-clicks an Agridome dock
+  with a cargo truck through the real input path and checks that it docks, then
+  that a plain move lands exactly on the clicked tile; and an optional camera
+  position for `--missiontest`. Screenshots now save at the real frame size.
+
+### 2026-11-06
+
+- **The `END MISSION` items did nothing** — two defects plus three divergences
+  from the original. See section 5.7 of `PORT_STATUS.BR.md`.
+- **Cheats typed into the chat line**, as in the original, plus one addition of
+  this port for the fourth effect. See the cheats section above.
+- **English documentation**: `README.EN.md` and `PORT_STATUS.EN.md`. The
+  Portuguese originals became `README.BR.md` and `PORT_STATUS.BR.md`, and
+  `README.md` is a landing page for both languages.
+
+---
+
 ## License
 
 This port's code is under the **MIT** license (see [`LICENSE`](LICENSE)).

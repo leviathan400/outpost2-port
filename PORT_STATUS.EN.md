@@ -6,8 +6,8 @@
 > the chat-line cheats (5.6), item 21, and sections **5.7** (the Options tab
 > fixes), **5.8** (the `Screen Mode` radio and the PREFERENCES scroll arrows)
 > and **5.9** (the per-item PREFERENCES table at `0x4E3118`, and the screen's
-> real structure, still open). The fork's own changes are in
-> [CHANGELOG.EN.md](CHANGELOG.EN.md).
+> real structure, still open). The recent changes are summarised in
+> [README.EN.md](README.EN.md).
 
 # Outpost 2: Divided Destiny — Modern Port (C++17/SDL2)
 
@@ -141,8 +141,8 @@ preferences screen; the original ignores keys it doesn't know.
 | `AudioVolume` | 0..100 | 50 | Master volume over the final mix (sounds and music). The original only has `MusicVol`/`SoundVol`, per channel and in 6 steps. |
 | `DemoCamera` | 0/1 | 1 | In the attract demo the camera tours the action spots (disaster, combat, units). 0 restores the original's static camera. |
 | `Fullscreen` | 0/1 | 1 | Opens fullscreen (no video mode change). Alt+Enter toggles at any time, and in game there is the **Screen Mode** radio pair at the end of the `PREFERENCES` list (see 5.8 in the BR status). |
-| `MenuSkin` | 0/1 | 0 | *(fork)* Menu style. 0 = the port's own look (dark-blue panels, main menu on the right); 1 = the original OP2 dialog skin (blueprint background, red frames, green text, art from `OP2SHRES.DLL`). |
-| `MapWrap` | 0/1 | 0 | *(fork)* Horizontal map wrap. 0 = as in the original: the view stops at the left/right edges of the map, and only "around the world" maps (512 tiles wide) wrap; 1 = every map wraps (the port's old behaviour). |
+| `MenuSkin` | 0/1 | 0 | Menu style. 0 = the port's own look (dark-blue panels, main menu on the right); 1 = the original OP2 dialog skin (blueprint background, red frames, green text, art from `OP2SHRES.DLL`). |
+| `MapWrap` | 0/1 | 0 | Horizontal map wrap. 0 = as in the original: the view stops at the left/right edges of the map, and only "around the world" maps (512 tiles wide) wrap; 1 = every map wraps (the port's old behaviour). |
 
 ---
 

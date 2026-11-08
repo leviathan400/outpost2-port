@@ -133,8 +133,8 @@ preferências; o original ignora chaves que não conhece.
 | `AudioVolume` | 0..100 | 50 | Volume mestre sobre a mistura final (sons e música). O original só tem `MusicVol`/`SoundVol`, por canal e em 6 degraus. |
 | `DemoCamera` | 0/1 | 1 | No demo de atração a câmera passeia pelos pontos de ação (desastre, combate, unidades). 0 devolve a câmera parada do original. |
 | `Fullscreen` | 0/1 | 1 | Abre em tela cheia (sem troca de modo de vídeo). Alt+Enter alterna a qualquer momento, e dentro do jogo há o par de rádio **Screen Mode** no fim da lista do `PREFERENCES` (ver 5.8). |
-| `MenuSkin` | 0/1 | 0 | *(fork)* Estilo dos menus. 0 = o visual do próprio porte (painéis azul-escuros, menu principal à direita); 1 = a pele de diálogo do OP2 original (fundo "blueprint", molduras vermelhas, texto verde, arte do `OP2SHRES.DLL`). |
-| `MapWrap` | 0/1 | 0 | *(fork)* Volta horizontal do mapa. 0 = como no original: a vista para nas bordas esquerda/direita do mapa, e só os mapas "around the world" (512 tiles de largura) dão a volta; 1 = todo mapa dá a volta (o comportamento antigo do porte). |
+| `MenuSkin` | 0/1 | 0 | Estilo dos menus. 0 = o visual do próprio porte (painéis azul-escuros, menu principal à direita); 1 = a pele de diálogo do OP2 original (fundo "blueprint", molduras vermelhas, texto verde, arte do `OP2SHRES.DLL`). |
+| `MapWrap` | 0/1 | 0 | Volta horizontal do mapa. 0 = como no original: a vista para nas bordas esquerda/direita do mapa, e só os mapas "around the world" (512 tiles de largura) dão a volta; 1 = todo mapa dá a volta (o comportamento antigo do porte). |
 
 ---
 
@@ -920,11 +920,10 @@ Três detalhes que fazem a coisa funcionar de verdade:
   `Fullscreen` — se aplicasse, qualquer `loadSettings` jogaria a janela de volta
   para o valor (velho) do arquivo.
 
-O outro pedido do fórum — **ver mais mapa de uma vez** — foi feito logo depois,
-e não por mim: veio do fork `leviathan400/outpost2-port` (commit `9480d5d`,
-incorporado no merge `a40b6bc`). O quadro do jogo passou a ter o tamanho da
-janela em vez de esticar 640×480, com o HUD se recolocando (`relayout`). O shell
-segue em 640×480 escalado, que era a saída prevista: é arte de tamanho fixo.
+O outro pedido do fórum — **ver mais mapa de uma vez** — foi feito logo depois:
+o quadro do jogo passou a ter o tamanho da janela em vez de esticar 640×480, com
+o HUD se recolocando (`relayout`). O shell segue em 640×480 escalado, que era a
+saída prevista: é arte de tamanho fixo.
 
 ### A lista não dava para rolar (consertado junto)
 
