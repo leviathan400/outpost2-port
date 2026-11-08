@@ -6,6 +6,21 @@ Changes in this fork since it was forked from
 [marcelomgoncalves/outpost2](https://github.com/marcelomgoncalves/outpost2)
 at commit `1697e7f` (2026-11-06). Newest first.
 
+## 2026-11-08
+
+### Fixed
+- **The map view stopped wrapping around every map.** The port let the view
+  scroll endlessly left and right on every map, repeating the map. The
+  original only does that on "around the world" maps (512 tiles wide); on
+  all the others the view stops at the map's left and right edges, like any
+  RTS. That is now the default. Units, terrain and the attract-mode camera
+  follow the same rule.
+
+### Added
+- **`MapWrap` setting** (`[Game]` section of `OUTPOST2.INI`):
+  - `MapWrap=0` (default): as in the original (see above).
+  - `MapWrap=1`: every map wraps, the port's old behaviour.
+
 ## 2026-11-07
 
 ### Fixed

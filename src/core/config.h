@@ -106,6 +106,10 @@ struct GameSettings {
     // main menu on the right); 1 = the original OP2 dialog skin (blueprint
     // background, red frames, green text -- see DialogSkin).
     int menuSkin = 0;
+    // Fork: "MapWrap". 0 = like the original: the map view stops at the map's
+    // left/right edges; only "around the world" maps (512 tiles wide) wrap.
+    // 1 = every map wraps horizontally (the port's old behaviour).
+    int mapWrap = 0;
 
     // [WindowInfo]
     int miniMapButtons = 0;

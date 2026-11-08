@@ -82,6 +82,15 @@ void GameState::loadSettings() {
     setNightDarkness(gs.nightDarkness);                // "NightDarkness" (idem)
     soundSetMasterVolume(gs.audioVolume);              // "AudioVolume" (idem)
     m_demoCam = gs.demoCamera != 0;                    // "DemoCamera" (idem)
+    m_mapWrapAll = gs.mapWrap != 0;                    // "MapWrap" (fork)
+}
+
+// Does the view wrap horizontally? The original only wraps "around the world"
+// maps (lgWidth >= 9, internal X offset 0); the others stop at their edges.
+// MapWrap=1 makes every map wrap, as this port used to.
+bool GameState::viewWraps() const {
+    if (m_mapWrapAll) return true;
+    return g_gameMap.ok() && g_gameMap.internalXOffset() == 0;
 }
 
 bool GameState::loadMap(const std::string& mapName) {
@@ -420,7 +429,7 @@ void GameState::demoCameraTick() {
     // Rola até o alvo. Em X o mapa dá a volta, então vai pelo lado mais curto.
     const int larguraPx = g_gameMap.ok() ? g_gameMap.width() * 32 : 0;
     int dx = m_demoTargX - (m_camX + viewportW() / 2);
-    if (larguraPx) {
+    if (larguraPx && viewWraps()) {
         while (dx > larguraPx / 2) dx -= larguraPx;
         while (dx < -larguraPx / 2) dx += larguraPx;
     }
@@ -428,7 +437,7 @@ void GameState::demoCameraTick() {
     auto anda = [&](int d) { return d > kPasso ? kPasso : (d < -kPasso ? -kPasso : d); };
     m_camX += anda(dx);
     m_camY += anda(dy);
-    if (larguraPx) {
+    if (larguraPx && viewWraps()) {
         while (m_camX < 0) m_camX += larguraPx;
         while (m_camX >= larguraPx) m_camX -= larguraPx;
     }
@@ -526,7 +535,17 @@ void GameState::drawChatLine(uint32_t* fb, int vw, int vh) const {
 void GameState::clampCamera() {
     if (m_camY < 0) m_camY = 0;
     if (m_camY > m_maxY) m_camY = m_maxY;
-    // X faz wrap no engine; deixamos rolar livremente (terrain faz o wrap).
+    if (!g_gameMap.ok()) return;
+    const int worldW = g_gameMap.width() * 32;
+    if (viewWraps()) {
+        // Wrapping map: scroll freely, kept in [0, worldW) (terrain wraps).
+        if (worldW > 0) m_camX = ((m_camX % worldW) + worldW) % worldW;
+        return;
+    }
+    // Like OP2: the view stops at the left and right edges of the map.
+    const int maxX = worldW - viewportW();
+    if (m_camX > maxX) m_camX = maxX;
+    if (m_camX < 0) m_camX = 0;
 }
 
 void GameState::onActivate() {
@@ -705,7 +724,8 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     // exatamente como o teste de dword_56DEA4 la dentro.
     m_terrain.render(renderer.getFramebuffer(), m_fbW,
                      m_fbH, m_camX, m_camY,
-                     TethysGame::daylightEverywhere() ? nullptr : &GameState::tileDarkness);
+                     TethysGame::daylightEverywhere() ? nullptr : &GameState::tileDarkness,
+                     viewWraps());
 
     // Overlay de passabilidade (debug, tecla G): tinge de vermelho as células
     // impassáveis visíveis. Base visual para waypoints/pathfinding.
@@ -1478,7 +1498,7 @@ int GameState::miniButtonCount() const {
 
 int GameState::screenXOf(int worldPixelX) const {
     int sx = worldPixelX - m_camX;
-    if (!g_gameMap.ok()) return sx;
+    if (!g_gameMap.ok() || !viewWraps()) return sx;
     const int worldW = g_gameMap.width() * 32;       // largura do mapa em pixels
     if (worldW <= 0) return sx;
     sx = ((sx % worldW) + worldW) % worldW;           // [0, worldW)

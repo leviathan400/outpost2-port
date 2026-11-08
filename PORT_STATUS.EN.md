@@ -133,6 +133,7 @@ preferences screen; the original ignores keys it doesn't know.
 | `DemoCamera` | 0/1 | 1 | In the attract demo the camera tours the action spots (disaster, combat, units). 0 restores the original's static camera. |
 | `Fullscreen` | 0/1 | 1 | Opens fullscreen (no video mode change; the 640×480 view scaled with aspect ratio preserved). Alt+Enter toggles at any time. |
 | `MenuSkin` | 0/1 | 0 | *(fork)* Menu style. 0 = the port's own look (dark-blue panels, main menu on the right); 1 = the original OP2 dialog skin (blueprint background, red frames, green text, art from `OP2SHRES.DLL`). |
+| `MapWrap` | 0/1 | 0 | *(fork)* Horizontal map wrap. 0 = as in the original: the view stops at the left/right edges of the map, and only "around the world" maps (512 tiles wide) wrap; 1 = every map wraps (the port's old behaviour). |
 
 ---
 

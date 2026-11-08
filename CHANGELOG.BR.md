@@ -6,6 +6,21 @@ Mudanças deste fork desde que ele saiu de
 [marcelomgoncalves/outpost2](https://github.com/marcelomgoncalves/outpost2)
 no commit `1697e7f` (2026-11-06). As mais recentes primeiro.
 
+## 2026-11-08
+
+### Corrigido
+- **A vista do mapa parou de dar a volta em todo mapa.** O porte deixava a
+  vista rolar sem fim para a esquerda e a direita em qualquer mapa,
+  repetindo o mapa. O original só faz isso nos mapas "around the world" (512
+  tiles de largura); em todos os outros a vista para nas bordas esquerda e
+  direita do mapa, como em qualquer RTS. Agora esse é o padrão. Unidades,
+  terreno e a câmera do modo demonstração seguem a mesma regra.
+
+### Adicionado
+- **Chave `MapWrap`** (seção `[Game]` do `OUTPOST2.INI`):
+  - `MapWrap=0` (padrão): como no original (ver acima).
+  - `MapWrap=1`: todo mapa dá a volta, o comportamento antigo do porte.
+
 ## 2026-11-07
 
 ### Corrigido

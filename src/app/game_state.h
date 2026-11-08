@@ -73,7 +73,7 @@ public:
     void pickCancel() { clickCommand(kCmdPickCancel); }             // testes: desiste
     ResearchPane& researchPaneForTest() { return m_research; }
     void setMouse(int nx, int ny) { m_mouseNX = nx; m_mouseNY = ny; }
-    void setCamera(int x, int y) { m_camX = x; m_camY = y; }
+    void setCamera(int x, int y) { m_camX = x; m_camY = y; clampCamera(); }
     int camX() const { return m_camX; }
     int camY() const { return m_camY; }
     int shakeX() const { return m_shakeX; }
@@ -312,6 +312,8 @@ private:
     int screenXOf(int worldPixelX) const;
     void drawBeam(Renderer& renderer, const WeaponDrawOp& op);
     void clampCamera();
+    bool viewWraps() const;        // horizontal wrap of the view (MapWrap / world maps)
+    bool m_mapWrapAll = false;     // "[Game] MapWrap" (fork): wrap every map
     // A linha de conversa do jogo (o filtro de teclado sub_4115F0, instalado no
     // TFrame por sub_49AE60). Fechada, o Enter a abre; aberta, ela come as
     // teclas: Enter manda, Esc desiste, Backspace apaga e o resto entra ate
