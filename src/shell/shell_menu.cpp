@@ -121,7 +121,9 @@ namespace {
 // NEW CAMPAIGN / PREFERENCES / ABOUT
 namespace {
     constexpr int kNcX = 180, kNcY = 130, kNcW = 280, kNcH = 220;
-    constexpr int kPrX = 140, kPrY = 59, kPrW = 360, kPrH = 362;
+    // +28 de altura em relacao ao Dialog 142: a linha do modo de tela, que e
+    // acrescimo do porte (como ja eram o combo da IA e a barra do volume).
+    constexpr int kPrX = 140, kPrY = 59, kPrW = 360, kPrH = 390;
     constexpr int kAbX = 140, kAbY = 100, kAbW = 360, kAbH = 300;
 }
 
@@ -456,7 +458,20 @@ void ShellMenu::rebuildControls() {
         // e 1100 do Dialog 142); aqui e uma barra de 0 a 100 por cento.
         addSlider(1201, &m_prefAudioVolume, 0, 100,
                   kPrX + 24, kPrY + 290, kPrW - 48, 16);
-        addButton(1, "ACCEPT", kPrX + (kPrW - 100) / 2, kPrY + 320, 100, 26, true);
+        // Modo de tela: idem, so deste porte. Par de radio, como os de colonia
+        // e dificuldade do NEW CAMPAIGN -- o clique escolhe a opcao em que se
+        // clicou. O rotulo "Screen Mode:" sai no render.
+        {
+            Control c;
+            c.kind = CtrlKind::Radio; c.id = 1202; c.text = "Full Screen";
+            c.x = kPrX + 130; c.y = kPrY + 318; c.w = 100; c.h = 14;
+            c.radioTarget = &m_prefFullscreen; c.radioValue = 1;
+            m_controls.push_back(c);
+            c.id = 1203; c.text = "Window"; c.y = kPrY + 336; c.radioValue = 0;
+            m_controls.push_back(c);
+        }
+        m_prefSyncScreen = true;        // o render acerta com a janela de verdade
+        addButton(1, "ACCEPT", kPrX + (kPrW - 100) / 2, kPrY + 356, 100, 26, true);
         break;
     }
     case MenuState::About:
@@ -1456,6 +1471,18 @@ void ShellMenu::update(float dt) {
 // --------------------------------- render ---------------------------------
 
 void ShellMenu::render(Renderer& renderer) {
+    // O par de rádio do modo de tela: o Alt+Enter troca a janela sem gravar o
+    // INI, então ao abrir a tela o rádio é acertado com a janela DE VERDADE; e
+    // o ACCEPT, que não tem Renderer na mão, deixa o pedido marcado para aqui.
+    if (m_prefSyncScreen) {
+        m_prefSyncScreen = false;
+        m_prefFullscreen = renderer.fullscreen() ? 1 : 0;
+    }
+    if (m_prefApplyScreen) {
+        m_prefApplyScreen = false;
+        if (renderer.fullscreen() != (m_prefFullscreen != 0))
+            renderer.setFullscreen(m_prefFullscreen != 0);
+    }
     if (m_bgBitmap.getWidth() > 0)
         renderer.blitBitmap(m_bgBitmap, 0, 0);
     else
@@ -1782,6 +1809,7 @@ void ShellMenu::loadPrefs() {
     m_prefAiLevel = (gs.aiLevel >= 0 && gs.aiLevel <= 3) ? gs.aiLevel : 0;
     m_prefAudioVolume = gs.audioVolume < 0 ? 0 : (gs.audioVolume > 100 ? 100 : gs.audioVolume);
     m_prefAudioVolumeIni = m_prefAudioVolume;
+    m_prefFullscreen = gs.fullscreen ? 1 : 0;
 }
 
 void ShellMenu::savePrefs() {
@@ -1797,6 +1825,8 @@ void ShellMenu::savePrefs() {
     gs.scrollRate        = m_prefScrollRate;
     gs.aiLevel           = m_prefAiLevel;
     gs.audioVolume       = m_prefAudioVolume;
+    gs.fullscreen        = m_prefFullscreen;
+    m_prefApplyScreen    = true;                 // o render troca a janela
     m_prefAudioVolumeIni = m_prefAudioVolume;    // o ACCEPT é que torna isso o som gravado
     gs.saveTo(cfg);
     cfg.save();
@@ -1837,6 +1867,8 @@ void ShellMenu::renderPreferencesDialog(Renderer& renderer) {
     std::snprintf(pct, sizeof(pct), "%d%%", m_prefAudioVolume);
     SkinText::draw(fb, 640, 480, pct, kPrX + kPrW - 24 - SkinText::width(pct),
                    kPrY + 270, 0xFFFFD24A, true);
+    // Modo de tela (idem): o rótulo do par de rádio 1202/1203.
+    SkinText::draw(fb, 640, 480, "Screen Mode:", kPrX + 24, kPrY + 320, 0xFFD8E4F8, true);
 }
 
 // O botão HELP (1012) e a tecla F1 — no original, WM_HELP -> TApp::GetHelp,

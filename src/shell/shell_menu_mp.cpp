@@ -39,6 +39,7 @@
 //   bits 6-8 (0x1C0)  maximo de jogadores
 //   bits 17-20        combo 1018 "Initial Vehicles"
 
+#include <fstream>
 #include "shell_menu.h"
 
 #include <algorithm>
@@ -343,6 +344,66 @@ bool ShellMenu::prefsTest(std::string& report) {
         if (gs.gameSpeed != 1) { report += "sair sem ACCEPT gravou"; return false; }
     }
     step("sair sem ACCEPT nao gravou");
+
+    // --- o par de radio do modo de tela (acrescimo do porte) --------------
+    // Pelo mouse, como o jogador. Radio e nao alternancia: o clique escolhe a
+    // linha em que se clicou, e clicar duas vezes na mesma nao inverte.
+    showPreferences();
+    // Guardo as COORDENADAS, nao ponteiros: o activateControl pode reconstruir
+    // a lista de controles e o ponteiro ficaria solto.
+    int xCheia = -1, yCheia = -1, xJanela = -1, yJanela = -1;
+    for (const Control& c : m_controls) {
+        if (c.id == 1202) { xCheia = c.x + 8; yCheia = c.y + c.h / 2; }
+        if (c.id == 1203) { xJanela = c.x + 8; yJanela = c.y + c.h / 2; }
+    }
+    if (xCheia < 0 || xJanela < 0) { report += "nao achei o par de radio do modo de tela"; return false; }
+    // O radio, como os botoes, so age ao SOLTAR (activateControl vem do
+    // handleMouseUp) -- apertar sozinho nao escolhe nada.
+    auto clica = [&](int x, int y) {
+        handleMouseDown(x, y, SDL_BUTTON_LEFT);
+        handleMouseUp(x, y, SDL_BUTTON_LEFT);
+    };
+    clica(xJanela, yJanela);
+    if (m_prefFullscreen != 0) { report += "clicar em Window nao escolheu janela"; return false; }
+    clica(xJanela, yJanela);
+    if (m_prefFullscreen != 0) { report += "o radio inverteu no segundo clique na mesma linha"; return false; }
+    clica(xCheia, yCheia);
+    if (m_prefFullscreen != 1) { report += "clicar em Full Screen nao escolheu tela cheia"; return false; }
+    step("o radio do modo de tela escolhe, nao alterna");
+
+    // O INI: guardo o arquivo em bytes e devolvo no fim, aconteca o que
+    // acontecer. Antes de medir, ponho a chave no valor OPOSTO -- senao o caso
+    // passa de graca quando o INI do usuario ja esta no valor esperado.
+    std::string iniAntes;
+    {
+        std::ifstream f("OUTPOST2.INI", std::ios::binary);
+        if (f) iniAntes.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+    }
+    auto poe = [](int v) { Config c("OUTPOST2.INI"); c.load(); c.setInt("Game", "Fullscreen", v); c.save(); };
+    auto le = []() { Config c("OUTPOST2.INI"); return c.load() ? c.getInt("Game", "Fullscreen", -1) : -1; };
+    auto devolve = [&]() {
+        if (iniAntes.empty()) return;
+        std::ofstream f("OUTPOST2.INI", std::ios::binary | std::ios::trunc);
+        f.write(iniAntes.data(), static_cast<std::streamsize>(iniAntes.size()));
+    };
+
+    poe(0);
+    clica(xCheia, yCheia);
+    showMainMenu();                     // saiu SEM ACCEPT
+    const int semAccept = le();
+    showPreferences();
+    clica(xCheia, yCheia);
+    dispatchButton(1);                  // ACCEPT
+    const int comAccept = le();
+    devolve();
+
+    if (semAccept != 0) { report += "sair sem ACCEPT gravou o modo de tela"; return false; }
+    if (comAccept != 1) {
+        report += "o ACCEPT nao gravou Fullscreen=1 (deu " + std::to_string(comAccept) + ")";
+        return false;
+    }
+    step("o modo de tela so vai para o INI no ACCEPT");
+
     showMainMenu();
     return true;
 }

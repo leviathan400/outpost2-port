@@ -287,6 +287,14 @@ private:
     // fica em m_prefAudioVolumeIni, e sair sem ACCEPT devolve o som a ele.
     int  m_prefAudioVolume = 50;
     int  m_prefAudioVolumeIni = 50;
+    // "Fullscreen" (0/1): o mesmo par de radio que a aba Options tem dentro do
+    // jogo, aqui no botao GAME PREFERENCES do menu -- que e por onde se procura
+    // isso. So vale no ACCEPT, como o resto da tela. Os dois pendentes existem
+    // porque quem mexe na janela e o Renderer, e nem o despacho dos botoes nem
+    // o setState tem um na mao: o render(), que tem, resolve no quadro seguinte.
+    int  m_prefFullscreen = 1;
+    bool m_prefSyncScreen = false;    // ler a janela de verdade ao abrir a tela
+    bool m_prefApplyScreen = false;   // aplicar o escolhido (ACCEPT)
     void loadPrefs();   // le o [Game] do OUTPOST2.INI para a tela
     void savePrefs();   // grava de volta (botao ACCEPT)
 
