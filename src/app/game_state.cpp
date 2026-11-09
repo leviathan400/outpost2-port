@@ -635,16 +635,20 @@ void GameState::drawSuccessDialog(Renderer& renderer) {
 }
 
 bool GameState::simTick() {
-    TethysGame::advanceTick();
     TethysGame::noteTick();                  // p/ "Actual Game Speed"
-    netApplyTurn(static_cast<int>(TethysGame::tick()));
+    netApplyTurn(static_cast<int>(TethysGame::tick()) + 1);
     TethysGame::advanceDaylight(g_gameMap.internalWidth());   // início do turno (sub_489DD0)
     lavaTick();                              // sub_49DC20 (lava e micróbio)
-    m_lastRand = TethysGame::getRand(100);  // 1 consumo determinístico por tick
+    // The debug HUD's sample is read from the RNG's state, not drawn: the original draws no number per tick, and an
+    // extra draw would change every random outcome after it.
+    m_lastRand = static_cast<int>(TethysGame::rng().s1() % 100);
     tickColony();                            // economia de cada jogador (sub_471F30)
     missionTriggerTick(currentMission());    // triggers, AIProc, vitória/derrota (sub_403110)
     tickMovement();                          // move as unidades pela rota do pathfinder
     tickUnits();                             // predios + efeitos (sub_43AC30)
+    // The original raises the tick after the unit loop (ProcessGameCycle: call 0x43AD30 at 0x48A01B, then
+    // [GameImpl+0x84] += 1 at 0x48A020..0x48A02D): everything in the cycle sees the previous tick.
+    TethysGame::advanceTick();
     demoCameraTick();                        // só a vista; não mexe na simulação
     if ((TethysGame::tick() & 3) == 2) {     // sub_47EA60: listener = centro da vista
         soundSetListener(m_camX + viewportW() / 2, m_camY + viewportH() / 2);
