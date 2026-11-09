@@ -176,7 +176,7 @@ The game's `OUTPOST2.INI` file is respected. The port adds seven keys the
 original doesn't have — AI level, night darkness, volume, demo camera and
 fullscreen; they are documented in `PORT_STATUS.EN.md`.
 
-There are **97 command-line modes** for tests and captures, among them a
+There are **98 command-line modes** for tests and captures, among them a
 regression battery (`--savetest` proves save/reload determinism). The list is
 in `PORT_STATUS.EN.md`.
 
@@ -208,7 +208,7 @@ and what was checked and discarded from the cheat lists that circulate.
 
 ```
 src/
-  main.cpp        entry point + the 97 test/capture modes
+  main.cpp        entry point + the 98 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -245,6 +245,14 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
   even stealing the `L&ESS` button's click.
 - **The `L&ESS`/`&MORE` tooltips** are now the original's, one per item
   ("Turn music volume down (L&ess)"), instead of one generic sentence.
+- **Meteor Defenses no longer shoot down an ally's missile.** They only spared
+  the owner's own missile, so in an allied game a friend's defense shot down
+  the missile on its way to the enemy.
+- **Walls no longer fail to build** next to a wall under construction, Blight
+  or lava. A neighbouring building still blocks, as it should.
+- **A cap of 2048 live units.** There was no cap at all, and a unit id has to
+  fit in the 11 bits of the map cell's occupancy field (2047 max): going past
+  it would not report "full", it would silently truncate the occupancy.
 
 ### 2026-11-07
 

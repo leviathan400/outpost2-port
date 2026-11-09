@@ -48,7 +48,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 97 modos de teste/captura
+  main.cpp        entrada + os 98 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -1019,6 +1019,80 @@ então fica para quando for decidido.
 
 ---
 
+## 5.10. A lista de defeitos do OPUPatch, conferida no porte (2026-11-08)
+
+O **OPUPatch** é o patch de comunidade para o `OUTPOST2.EXE` original, e o
+changelog dele é a melhor lista pública de defeitos do jogo de 1997. Serve aqui
+como **documentação**, igual ao disassembly: nenhuma linha de código veio de lá
+(projeto separado, outra licença).
+
+Pela diretiva do porte — *achou defeito, conserta, não reproduz* —, cada item
+dessa lista é um lugar para conferir. Conferidos um a um no nosso código:
+
+| Defeito que eles corrigem | No nosso porte |
+|---|---|
+| Meteor Defense derruba míssil de **aliado** | **reproduzia** — `missile.cpp` pulava só o dono. **Corrigido** |
+| Muro falha num 3×3 em volta de muro em obra, Blight ou lava | **reproduzia** — `wallNeighborOk`. **Corrigido** |
+| Alerta de aliança dispara no início da partida | reproduz (`applyAlly`, sem guarda de tique) — **aberto** |
+| Alerta de transferência com IA/Gaia | reproduz (`applyTransfer`, só testa quem é o local) — **aberto** |
+| "Power Levels: Optimal" / "Storage Needed" repetindo | reproduz; só o filtro anti-repetição do original segura — **aberto** |
+| Limite de unidades | o porte não tinha limite nenhum. **Posto em 2048**, como eles |
+
+Não conferidos ainda, e por isso não afirmados: EMP que não pousa para Eden,
+Meteor Defense ignorando míssil em cima dela, perma-walls quando o Earthworker
+morre, destroços virando entulho, travamento ao transferir para Gaia, carga
+parcial do caminhão, `ForceMorale*` na 2ª chamada, `ScGroup::TakeUnit`,
+`DoInfect` com mais de um jogador.
+
+Fora do alcance por escolha, não por esquecimento: os cheats continuam valendo
+em multijogador (eles desligam; o original permite) e as mudanças de equilíbrio
+da lista deles (Light Tower avisando inimigo, EDWARD revelando balizas para
+aliados, animação das balizas por variante).
+
+### 1. A defesa e o míssil do aliado
+
+`sub_4802A0` varre os jogadores e pula **só o dono do míssil**:
+`if (p == ownerOf(...)) continue`. Numa partida aliada, a Meteor Defense do
+amigo abatia o míssil que ia no inimigo. O porte agora também pula quem é
+aliado, com a conta que o resto do combate usa (`candidateOk` em `weapon.cpp`:
+o bit de quem atira na máscara de quem leva, `sub_490C50`).
+
+Teste novo **`--mdtest <mapa>`**: Observatory + Meteor Defense do jogador 1,
+míssil do jogador 0 descendo ao lado. O observável é a flag `0x40000`, que o
+original põe em **qualquer** engajamento — assim o caso não depende do dado de
+50/75% da Observatory. Quatro casos, dois deles de controle: a defesa está
+operacional (senão o resto não mede nada) e **contra inimigo ela engaja**.
+Neutralizando a correção: 1 falha.
+
+### 2. O muro e os oito vizinhos
+
+`wallCellOk` testa as 8 células em volta (`unk_4E0C10`) com `sub_438D70`, que
+reprova a célula com qualquer bit de `0xA8000000`. Lendo o que cada bit é no
+nosso mapa, sobram exatamente três casos:
+
+| bit | o que é | por que não deve impedir |
+|---|---|---|
+| 31 | a **reserva** de um muro em obra (posta em `sub_4235E0`, tirada ao assentar) | dois Earthworkers lado a lado se travam — e o próprio veículo se barrava, porque a célula que ele acabou de reservar é vizinha da próxima |
+| 29 | a **praga** (`disaster.cpp` marca o tile infectado) | não se fecha uma linha de muro perto da praga |
+| 27 | a **lava** | idem perto de lava |
+
+Muro pronto sai antes (cellType 0x17–0x19) e tubo pronto é 0x1A, sem bit;
+prédio vizinho continua reprovando, pela linha do Guard Post. Cinco casos novos
+no `--walltest`, com os dois controles (vizinho limpo passa, prédio vizinho
+reprova). Voltando ao teste do original: **3 falhas**, uma por bit.
+
+### 3. O teto de unidades
+
+O porte **não tinha teto**: o pool é um `std::vector` que crescia sem limite.
+E não é detalhe: a ocupação da célula do mapa tem **11 bits**
+(`CELL_OCCUPANCY = 0x07FF0000`), então o maior id que cabe lá é **2047** —
+passar disso não daria "cheio", daria ocupação truncada, que é silenciosa e bem
+pior. O `createUnit` agora recusa em `kMaxLiveUnits = 2048`, o mesmo número do
+OPUPatch (que dobra o 1024 do original). Caso novo no `--unittest`: enche até
+recusar e confere que parou no id 2047.
+
+---
+
 ## 6. Build e execução
 
 **Toolchain:** CMake >= 3.15 + MSVC, C++17, SDL2 2.30.9 (em `third_party/`).
@@ -1040,7 +1114,7 @@ missão e os recursos originais do diretório de trabalho).
 
 ### Testes por linha de comando
 
-São 97 modos. Os que cobrem regressão de verdade:
+São 98 modos. Os que cobrem regressão de verdade:
 
 | Modo | O que prova |
 |---|---|

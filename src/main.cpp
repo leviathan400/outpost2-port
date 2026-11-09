@@ -83,7 +83,27 @@ static int runUnitTest() {
     op2::TethysGame::CreateUnit(v2, 2, op2::LOCATION{5, 5}, 0);
     std::printf("novo veiculo id=%d type=%d (novo slot, pois morta != removida)\n",
                 v2.id(), v2.GetType());
-    return 0;
+
+    // Teto de unidades (kMaxLiveUnits = 2048, como o OPUPatch). Nao e numero
+    // de gosto: o id precisa caber nos 11 bits da ocupacao da celula
+    // (CELL_OCCUPANCY = 0x07FF0000), entao o maior que cabe e 2047. Enche ate
+    // recusar e confere onde parou.
+    int criadas = 0;
+    bool recusou = false;
+    for (int k = 0; k < 4000; ++k) {
+        op2::Unit u;
+        if (!op2::TethysGame::CreateUnit(u, 1, op2::LOCATION{3 + (k % 60), 3 + (k / 60) % 60}, 0)) {
+            recusou = true;
+            break;
+        }
+        ++criadas;
+    }
+    const int ultimo = static_cast<int>(op2::g_units.size()) - 1;
+    const bool cabe = ultimo <= 0x7FF;
+    const bool tetoOk = recusou && ultimo == op2::kMaxLiveUnits - 1 && cabe;
+    std::printf("teto: criou mais %d, recusou=%d, maior id=%d (cabe nos 11 bits: %d) %s\n",
+                criadas, recusou ? 1 : 0, ultimo, cabe ? 1 : 0, tetoOk ? "ok" : "FALHOU");
+    return tetoOk ? 0 : 1;
 }
 
 // --playertest: exercita a API de _Player (wrapper de índice + array global).
@@ -4321,6 +4341,91 @@ static int runItem21Test(const std::string& dll) {
 // --walltest <map>: parede comum, de lava, de micróbio e um tubo lado a lado;
 // sub_4A23F0 (damageWall) com dano 1000 e depois 20, 6x cada, imprimindo o tile
 // e o tipo da célula — a parede comum passa pelos estágios +0x54/+0x74/+0x94.
+// --mdtest <mapa>: a Meteor Defense diante do missil de um ALIADO. O original
+// (sub_4802A0) so pula o PROPRIO dono da defesa, entao numa partida aliada a
+// defesa do amigo abatia o missil que ia no inimigo -- defeito que o porte
+// herdou e que esta corrigido em missile.cpp.
+//
+// O observavel e a flag 0x40000, posta em QUALQUER engajamento (derrubando ou
+// nao): assim o caso nao depende do dado de 50/75% da Observatory.
+static int runMdTest(const std::string& mapName) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 mdtest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    op2::resetUnits();
+    const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
+    for (int y = 0; y < H; ++y)
+        for (int x = 0; x < W; ++x) op2::g_gameMap.clearUnitOccupancy(x, y);
+
+    // Um canto passavel para os dois predios.
+    int bx = -1, by = -1;
+    for (int y = H / 2; y < H - 8 && bx < 0; ++y)
+        for (int x = W / 2; x < W - 12 && bx < 0; ++x) {
+            bool ok = true;
+            for (int dy = 0; dy < 4 && ok; ++dy)
+                for (int dx = 0; dx < 10 && ok; ++dx)
+                    if (!op2::g_gameMap.isPassable(op2::LOCATION{x + dx, y + dy})) ok = false;
+            if (ok) { bx = x; by = y; }
+        }
+    if (bx < 0) { renderer.shutdown(); SDL_Quit(); return 3; }
+
+    op2::g_playerData[0].isHuman = 1;
+    op2::g_playerData[1].isHuman = 1;
+
+    // Observatory (0x33) e Meteor Defense (0x2B) do jogador 1, operacionais.
+    op2::Unit obs, def;
+    op2::TethysGame::CreateUnit(obs, static_cast<op2::map_id>(0x33), op2::LOCATION{bx, by + 2}, 1);
+    op2::TethysGame::CreateUnit(def, static_cast<op2::map_id>(0x2B), op2::LOCATION{bx + 6, by + 2}, 1);
+    if (!obs.id() || !def.id()) { renderer.shutdown(); SDL_Quit(); return 4; }
+    // structureIsOperational (sub_483750) pede os TRES bits e a acao fora de
+    // obra; sem isso o sub_4802A0 pula a defesa e o teste nao mede nada.
+    for (int id : {obs.id(), def.id()}) {
+        op2::g_units[id].flags |= op2::UNIT_POWERED | op2::UNIT_WORKERS | op2::UNIT_SCIENTISTS;
+        op2::g_units[id].action = 0;
+        op2::g_units[id].damage = 0;
+    }
+    op2::g_colony[1].stats[op2::ST_OBSERVATORY / 4] = 1;
+    op2::g_colony[1].stats[op2::ST_METEOR_DEF / 4] = 1;
+
+    struct Caso { std::string nome; long long obtido, esperado; };
+    std::vector<Caso> casos;
+    // Sem isto o resto nao mede nada: o sub_4802A0 pula defesa nao operacional.
+    casos.push_back({"a defesa esta operacional", op2::structureOperational(op2::g_units[def.id()]) ? 1 : 0, 1});
+    casos.push_back({"a defesa entrou na lista da colonia",
+                     [&]{ for (int b : op2::colonyStructures(1)) if (b == def.id()) return 1; return 0; }(), 1});
+
+    // O missil do jogador 0 descendo ao lado da defesa (0x0C < [+0x3C] < 0x14).
+    auto engajou = [&](bool aliados) {
+        op2::g_playerData[0].allyMask = (1u << 0) | 0x40u | (aliados ? (1u << 1) : 0u);
+        const int m = op2::setEMPMissile(bx + 6, by + 6, 0, bx + 6, by + 2);
+        if (!m) return -1;
+        op2::g_units[m].field22 = 9;
+        op2::g_units[m].field3C = 0x10;
+        op2::missilePeriodicTick(m);
+        return (op2::g_units[m].flags & 0x40000u) ? 1 : 0;
+    };
+    casos.push_back({"inimigo: a defesa engaja o missil", engajou(false), 1});
+    casos.push_back({"ALIADO: a defesa nao engaja", engajou(true), 0});
+
+    int ruins = 0;
+    for (const Caso& c : casos) {
+        const bool ok = c.obtido == c.esperado;
+        if (!ok) ++ruins;
+        std::printf("[md] %-44s %lld (esperado %lld) %s%c", c.nome.c_str(), c.obtido,
+                    c.esperado, ok ? "ok" : "FALHOU", 10);
+    }
+    std::printf("[md] %d caso(s) com falha%c", ruins, 10);
+    std::fflush(stdout);
+    renderer.shutdown();
+    SDL_Quit();
+    return ruins ? 1 : 0;
+}
+
 static int runWallTest(const std::string& mapName) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
     op2::g_ResManager.init(".");
@@ -4388,9 +4493,62 @@ static int runWallTest(const std::string& mapName) {
         op2::g_units[tid].flags |= op2::UNIT_DEAD;     // tira da cena
     }
     op2::g_playerData[1].isHuman = 1;
+
+    // --- a vizinhanca do muro (sub_438D70) -------------------------------
+    // O teste dos 8 vizinhos nao pode reprovar por LAVA (bit 27), PRAGA (bit
+    // 29) nem por um muro EM OBRA (a reserva do bit 31). Mexo direto na celula
+    // vizinha, ponho o bit e pergunto ao wallCellOk; devolvo a celula depois.
+    bool vizOk = true;
+    {
+        int cx = -1, cy = -1;
+        for (int y = by - 2; y <= by + 2 && cx < 0; ++y)
+            for (int x = bx - 2; x <= bx + 6 && cx < 0; ++x) {
+                if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1) continue;
+                bool livre = true;
+                for (int dy = -1; dy <= 1 && livre; ++dy)
+                    for (int dx = -1; dx <= 1 && livre; ++dx)
+                        if (!op2::g_gameMap.isPassable(op2::LOCATION{x + dx, y + dy}) ||
+                            (op2::g_gameMap.rawCell(x + dx, y + dy) & 0xAFFF0000u)) livre = false;
+                if (livre) { cx = x; cy = y; }
+            }
+        op2::pfSetContext(0);
+        auto podeCom = [&](uint32_t bit) {
+            const uint32_t salvo = op2::g_gameMap.rawCell(cx + 1, cy);
+            op2::g_gameMap.setRawCell(cx + 1, cy, salvo | bit);
+            const bool r = op2::wallCellOk(cx, cy, 0x12);
+            op2::g_gameMap.setRawCell(cx + 1, cy, salvo);
+            return r;
+        };
+        struct V { const char* nome; uint32_t bit; bool esperado; };
+        const V vs[] = {
+            { "controle: vizinho limpo",        0u,          true  },
+            { "vizinho com LAVA (bit 27)",      0x08000000u, true  },
+            { "vizinho com PRAGA (bit 29)",     0x20000000u, true  },
+            { "vizinho com MURO EM OBRA (31)",  0x80000000u, true  },
+        };
+        if (cx < 0) { std::printf("[WallTest] vizinhanca: nao achei celula livre%c", 10); vizOk = false; }
+        for (const V& v : vs) {
+            if (cx < 0) break;
+            const bool r = podeCom(v.bit);
+            if (r != v.esperado) vizOk = false;
+            std::printf("[WallTest] vizinhanca %-32s pode=%d (esperado %d) %s%c",
+                        v.nome, r ? 1 : 0, v.esperado ? 1 : 0, r == v.esperado ? "ok" : "FALHOU", 10);
+        }
+        // Controle negativo: PREDIO vizinho que nao e Guard Post reprova.
+        if (cx >= 0) {
+            op2::Unit b;
+            if (op2::TethysGame::CreateUnit(b, op2::mapCommandCenter, op2::LOCATION{cx + 2, cy}, 0)) {
+                const bool r = op2::wallCellOk(cx, cy, 0x12);
+                if (r) vizOk = false;
+                std::printf("[WallTest] vizinhanca %-32s pode=%d (esperado 0) %s%c",
+                            "controle: PREDIO vizinho", r ? 1 : 0, r ? "FALHOU" : "ok", 10);
+            }
+        }
+    }
+
     std::fflush(stdout);
     renderer.shutdown(); SDL_Quit();
-    return fgOk ? 0 : 1;
+    return (fgOk && vizOk) ? 0 : 1;
 }
 
 // --quaketest <map>: terremoto de magnitude 3 no CC da cena demo; imprime o
@@ -4971,6 +5129,8 @@ int main(int argc, char* argv[]) {
             return runGarageCountTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--garagetest") == 0 && i + 1 < argc)
             return runGarageTest(argv[i + 1]);
+        if (std::strcmp(argv[i], "--mdtest") == 0 && i + 1 < argc)
+            return runMdTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--walltest") == 0 && i + 1 < argc)
             return runWallTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--quaketest") == 0 && i + 1 < argc)

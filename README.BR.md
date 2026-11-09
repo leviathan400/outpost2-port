@@ -178,7 +178,7 @@ que o original não tem — nível da IA, escuridão da noite, volume, câmera d
 demo, tela cheia, a pele dos menus (`MenuSkin`) e a volta horizontal do mapa
 (`MapWrap`); estão documentadas no `PORT_STATUS.BR.md`.
 
-Há **97 modos de linha de comando** para testes e capturas, entre eles uma
+Há **98 modos de linha de comando** para testes e capturas, entre eles uma
 bateria de regressão (`--savetest` prova o determinismo de salvar/recarregar).
 A lista está no `PORT_STATUS.BR.md`.
 
@@ -210,7 +210,7 @@ e descartado das listas de cheat que circulam por aí.
 
 ```
 src/
-  main.cpp        entrada + os 97 modos de teste/captura
+  main.cpp        entrada + os 98 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -248,6 +248,14 @@ cursores `.ANI`.
   o painel ainda roubava o clique do `L&ESS`.
 - **As dicas dos botões `L&ESS`/`&MORE`** passaram a ser as do original, uma
   por item ("Turn music volume down (L&ess)"), e não uma frase genérica.
+- **A Meteor Defense não derruba mais o míssil de um aliado.** Só poupava o
+  míssil do próprio dono, então numa partida aliada a defesa do amigo abatia o
+  míssil que ia no inimigo.
+- **O muro não falha mais** por ter perto dele um muro em obra, a praga ou
+  lava. Prédio vizinho continua impedindo, como deve.
+- **Teto de 2048 unidades vivas.** Não havia teto, e o id da unidade precisa
+  caber nos 11 bits da ocupação da célula do mapa (máximo 2047): passar disso
+  não daria "cheio", daria ocupação truncada.
 
 ### 2026-11-07
 

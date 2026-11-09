@@ -91,8 +91,15 @@ void launchPeriodic(int id) {
     if (m.field3C >= 0x14 || m.field3C <= 0x0C) { m.flags &= ~0x40000u; return; }
     const int mx = m.pixelX >> 5, my = m.pixelY >> 5;
     const int off = g_gameMap.internalXOffset();
+    const int dono = ownerOf(g_units[id]);
     for (int p = 0; p < TethysGame::noPlayers() && p < kMaxPlayers; ++p) {
-        if (p == ownerOf(g_units[id])) continue;
+        if (p == dono) continue;
+        // CORRECAO (o original nao faz): a defesa tambem nao derruba o missil
+        // de quem e ALIADO. O original so pula o dono, entao numa partida
+        // aliada a Meteor Defense do amigo abatia o missil que ia no inimigo.
+        // A conta e a mesma do candidateOk de weapon.cpp -- o bit de quem
+        // atira na mascara de quem leva (sub_490C50).
+        if (dono < kMaxPlayers && (g_playerData[dono].allyMask & (1u << p))) continue;
         const ColonyState& c = g_colony[p];
         if (!c.stat(ST_OBSERVATORY) || !c.stat(ST_METEOR_DEF)) continue;   // +0x10C / +0x110
         int found = 0, seen = 0;

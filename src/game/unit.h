@@ -7,6 +7,14 @@
 
 namespace op2 {
 
+// Teto de unidades vivas ao mesmo tempo. O original para em 1024; aqui vai a
+// 2048, como o OPUPatch -- e 2048 nao e numero escolhido a dedo: a OCUPACAO da
+// celula do mapa tem 11 bits (GameMap::CELL_OCCUPANCY = 0x07FF0000), entao o
+// maior id que cabe la e 2047. Passar disso nao daria "cheio": daria ocupacao
+// truncada, que e silenciosa e muito pior. Por isso o createUnit recusa.
+static constexpr int kMaxLiveUnits = 2048;
+
+
 // map_id — tipo de unidade do OP2. É o ÍNDICE da tabela de descritores
 // `off_4E1340[map_id]` do engine (CreateUnit @195141, sub_43ACA0 etc.) e bate 1:1
 // com o enum do SDK. NÃO é a ordem das linhas das planilhas .txt. Resolvido pela

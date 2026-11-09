@@ -276,6 +276,10 @@ bool createUnit(Unit& out, map_id type, LOCATION loc, int owner,
         }
     }
     if (slot < 0) {
+        // Teto de 2048 (ver kMaxLiveUnits): o id precisa caber nos 11 bits da
+        // ocupacao da celula. Sem isto o pool crescia sem limite e o id 2048
+        // entrava truncado no mapa.
+        if (static_cast<int>(g_units.size()) >= kMaxLiveUnits) return false;
         slot = static_cast<int>(g_units.size());
         g_units.emplace_back();
     }

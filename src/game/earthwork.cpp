@@ -61,11 +61,23 @@ static bool wallNeighborOk(int x, int y) {
         const int ct = static_cast<int>(c & 0x1F);
         if (ct >= 0x17 && ct <= 0x19) return true;           // outro muro
         const int occ = static_cast<int>((c & 0x7FF0000u) >> 16);
-        if (occ == g_pf.unitId) return (c & 0xA8000000u) == 0;
+        if (occ == g_pf.unitId) return true;                 // CORRECAO (ver abaixo)
         if (occ && valid(occ) && (g_units[occ].flags & UNIT_BUILDING))
             return g_units[occ].type == 0x17;                // Guard Post
     }
-    return (c & 0xA8000000u) == 0;
+    // CORRECAO -- o original devolve `(c & 0xA8000000) == 0` aqui e nas duas
+    // linhas acima. Chegando ate aqui, esses tres bits so podem ser:
+    //   bit 31  a RESERVA de um muro em obra (posta em sub_4235E0 e tirada ao
+    //           assentar; muro pronto sai antes, pelo cellType 0x17..0x19, e
+    //           tubo pronto e 0x1A, sem bit);
+    //   bit 29  a PRAGA (disaster.cpp marca o tile infectado);
+    //   bit 27  a LAVA.
+    // Nenhum dos tres deve impedir um muro VIZINHO: com o teste do original
+    // nao se fecha uma linha de muro perto de lava, da praga, nem com dois
+    // Earthworkers trabalhando lado a lado -- e ate o proprio veiculo se
+    // barrava, porque a celula que ele acabou de reservar e vizinha da
+    // proxima. Predio vizinho continua reprovando (a linha do Guard Post).
+    return true;
 }
 
 bool wallCellOk(int x, int y, int wallType) {                // sub_438C60
