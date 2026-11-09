@@ -42,6 +42,17 @@ public:
     // sub_4893A0: DescBlock, mapa, jogadores, InitProc; triggers por turno.
     bool loadMission(const std::string& dllName, const GameStartInfo* gsi = nullptr,
                      const std::string* savePath = nullptr);
+    // Inicia uma missão já montada (DescBlock e InitProc em código, sem DLL):
+    // o mesmo caminho de loadMission depois de carregar a DLL. Usado pelo modo
+    // --harness (src/harness_mode.cpp).
+    bool startMission(std::unique_ptr<MissionScript> mission, const GameStartInfo* gsi = nullptr,
+                      const std::string* savePath = nullptr);
+    // Semente do RNG da próxima partida (o GameStartInfo do original a traz;
+    // sem ela vale 0x12345678).
+    void setSeed(uint32_t seed) { m_seed = seed; }
+    // Um tick de simulação, sem relógio nem desenho (o corpo do laço de onIdle).
+    // true = a partida acabou neste tick.
+    bool simTick();
     // Jogo salvo (TApp::SaveGame / LoadGame): grava a partida em andamento /
     // recarrega a DLL e o mapa da missão do arquivo e restaura o estado.
     bool saveToFile(const std::string& path, const std::string& description);
@@ -146,6 +157,7 @@ private:
     float m_tickAccum = 0.0f;     // acumulador p/ avançar o tick de simulação
     float m_tickPeriod = 0.05f;   // s/tick: 1/clamp(GameSpeed*4, 4, 40) (sub_49BF80)
     int m_lastRand = 0;           // última amostra do RNG (1 por tick), p/ o HUD
+    uint32_t m_seed = 0x12345678u; // semente da próxima partida (setSeed)
     bool m_showPassability = false; // overlay de debug (tecla G)
     bool m_showDebugHud = false;    // overlay de depuração (Tick/RNG/economia; tecla F3)
     bool m_stationaryShadows = false; // INI StationaryShadows (dword_575634)

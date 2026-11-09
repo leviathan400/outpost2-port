@@ -28,6 +28,7 @@ set(SDL2_DLL "${SDL2_ROOT}/lib/${SDL2_ARCH}/SDL2.dll")
 # Add source files (all 6 cpp files)
 add_executable(outpost2_modern
     src/main.cpp
+    src/harness_mode.cpp
     src/shell/shell_menu.cpp
     src/shell/rtf_text.cpp
     src/shell/scores.cpp

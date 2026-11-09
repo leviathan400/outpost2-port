@@ -38,6 +38,7 @@
 #include "game/messages.h"
 #include "game/pinwheel.h"
 #include "mission/mission.h"
+#include "harness_mode.h"
 #include "game/research.h"
 #include "game/start_info.h"
 #include "game/save_game.h"
@@ -4358,6 +4359,8 @@ int main(int argc, char* argv[]) {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     // Modos utilitários (sem o loop interativo).
     for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--harness") == 0)
+            return op2::runHarness(argc, argv);
         if (std::strcmp(argv[i], "--extract") == 0 && i + 2 < argc)
             return runExtract(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--rendermap") == 0 && i + 2 < argc)

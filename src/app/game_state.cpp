@@ -199,7 +199,6 @@ bool GameState::loadSavedGame(const std::string& path) {
 }
 
 bool GameState::loadMission(const std::string& dllName, const GameStartInfo* gsi, const std::string* savePath) {
-    loadSettings();
     if (m_mission) { setCurrentMission(nullptr); m_mission.reset(); }
     resetTriggers();
     auto mission = std::make_unique<MissionScript>();
@@ -208,6 +207,15 @@ bool GameState::loadMission(const std::string& dllName, const GameStartInfo* gsi
         std::cerr << "[GameState] nao carregou " << dllName << ": " << err << std::endl;
         return false;
     }
+    return startMission(std::move(mission), gsi, savePath);
+}
+
+bool GameState::startMission(std::unique_ptr<MissionScript> mission, const GameStartInfo* gsi,
+                             const std::string* savePath) {
+    loadSettings();
+    if (m_mission) { setCurrentMission(nullptr); m_mission.reset(); }
+    resetTriggers();
+    const std::string dllName = mission->dllName;
     const AIModDesc* d = mission->desc;
     std::cout << "[Mission] " << dllName << ": '" << mission->levelDesc << "' tipo=" << d->missionType
               << " jogadores=" << d->numPlayers << " tech=" << d->maxTechLevel
@@ -219,7 +227,7 @@ bool GameState::loadMission(const std::string& dllName, const GameStartInfo* gsi
     m_tab = 5;                                               // sub_4893A0: unk_565AC8 no início
     m_lastSel.clear();
 
-    TethysGame::reset(/*seed*/ 0x12345678u, d->numPlayers, /*localPlayer*/ 0);
+    TethysGame::reset(m_seed, d->numPlayers, /*localPlayer*/ 0);
     m_tickAccum = 0.0f;
     resetPlayers(d->numPlayers);
     // sub_4893A0: em MULTIJOGADOR todos os jogadores sao humanos — loc_489648
@@ -626,6 +634,26 @@ void GameState::drawSuccessDialog(Renderer& renderer) {
     renderer.drawButton(kSdX + 153, kSdY + 93, 75, 23, "Continue", successButtonAt(m_mouseNX, m_mouseNY) == 2, false);
 }
 
+bool GameState::simTick() {
+    TethysGame::advanceTick();
+    TethysGame::noteTick();                  // p/ "Actual Game Speed"
+    netApplyTurn(static_cast<int>(TethysGame::tick()));
+    TethysGame::advanceDaylight(g_gameMap.internalWidth());   // início do turno (sub_489DD0)
+    lavaTick();                              // sub_49DC20 (lava e micróbio)
+    m_lastRand = TethysGame::getRand(100);  // 1 consumo determinístico por tick
+    tickColony();                            // economia de cada jogador (sub_471F30)
+    missionTriggerTick(currentMission());    // triggers, AIProc, vitória/derrota (sub_403110)
+    tickMovement();                          // move as unidades pela rota do pathfinder
+    tickUnits();                             // predios + efeitos (sub_43AC30)
+    demoCameraTick();                        // só a vista; não mexe na simulação
+    if ((TethysGame::tick() & 3) == 2) {     // sub_47EA60: listener = centro da vista
+        soundSetListener(m_camX + viewportW() / 2, m_camY + viewportH() / 2);
+        soundUpdate();                       // sub_47F250: fila de vozes
+    }
+    // Fim de jogo (TethysGame +0x98): chegado o tick, sub_49C830.
+    return gameEndCode() && TethysGame::tick() >= gameEndTick();
+}
+
 void GameState::onIdle(Renderer& renderer, float dt) {
     // Fork: o quadro do jogo tem o tamanho da janela (1:1), não 640x480 esticado.
     renderer.fitToWindow(640, 480);
@@ -670,24 +698,9 @@ void GameState::onIdle(Renderer& renderer, float dt) {
             if (m_tickAccum > kTickPeriod) m_tickAccum = kTickPeriod;
             break;
         }
-        TethysGame::advanceTick();
-        TethysGame::noteTick();                  // p/ "Actual Game Speed"
-        netApplyTurn(static_cast<int>(TethysGame::tick()));
-        TethysGame::advanceDaylight(g_gameMap.internalWidth());   // início do turno (sub_489DD0)
-        lavaTick();                              // sub_49DC20 (lava e micróbio)
-        m_lastRand = TethysGame::getRand(100);  // 1 consumo determinístico por tick
-        tickColony();                            // economia de cada jogador (sub_471F30)
-        missionTriggerTick(currentMission());    // triggers, AIProc, vitória/derrota (sub_403110)
-        tickMovement();                          // move as unidades pela rota do pathfinder
-        tickUnits();                             // predios + efeitos (sub_43AC30)
-        demoCameraTick();                        // só a vista; não mexe na simulação
-        if ((TethysGame::tick() & 3) == 2) {     // sub_47EA60: listener = centro da vista
-            soundSetListener(m_camX + viewportW() / 2, m_camY + viewportH() / 2);
-            soundUpdate();                       // sub_47F250: fila de vozes
-        }
+        const bool ended = simTick();
         m_tickAccum -= kTickPeriod;
-        // Fim de jogo (TethysGame +0x98): chegado o tick, sub_49C830.
-        if (gameEndCode() && TethysGame::tick() >= gameEndTick()) {
+        if (ended) {
             beginGameEnd();
             if (!m_endPhase) return;
             break;
