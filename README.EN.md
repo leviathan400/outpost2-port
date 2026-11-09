@@ -232,26 +232,8 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
 
 ## Recent changes
 
-### 2026-11-08
+### 2026-11-09
 
-- **The map view stops at the edges**, as in the original: only "around the
-  world" maps (512 tiles wide) wrap. Units, terrain and the demo camera follow
-  the same rule. `MapWrap=1` brings back wrapping on every map, the old
-  behaviour.
-- **A `Screen Mode` radio pair** — full screen or window — on **both**
-  preferences screens: `PREFERENCES` in the main menu, and the `PREFERENCES`
-  list in the in-game Options tab. It only takes effect on `ACCEPT`/`&APPLY`,
-  and writes `[Game] Fullscreen` to the INI.
-- **The in-game `PREFERENCES` list was hiding its own scroll arrows** behind
-  the buttons: nothing past the first page could be reached, and the pane was
-  even stealing the `L&ESS` button's click.
-- **The `L&ESS`/`&MORE` tooltips** are now the original's, one per item
-  ("Turn music volume down (L&ess)"), instead of one generic sentence.
-- **Meteor Defenses no longer shoot down an ally's missile.** They only spared
-  the owner's own missile, so in an allied game a friend's defense shot down
-  the missile on its way to the enemy.
-- **Walls no longer fail to build** next to a wall under construction, Blight
-  or lava. A neighbouring building still blocks, as it should.
 - **ESC asks before abandoning a mission.** It used to drop straight back to
   the menu; now it first cancels whatever is pending (a command target, a
   dialog) and, with nothing pending, opens the game's own end-of-mission screen
@@ -280,10 +262,6 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
 - **The debug HUD drew a random number every tick**, shifting the generator's
   sequence — every roll after it (weapon damage, for one) came out different
   from the original. It now reads the generator's state instead of drawing.
-- **Dock pads, Magma Vents and the minimap zoom**: the pads of mines, storage
-  tanks and the Agridome now come from the original's ground-layer pass (with
-  damage states), Magma Vents are drawn at last, and the minimap opens fitted
-  to the whole map, as the game does.
 - **Cargo Trucks can be partially loaded.** The game only allowed loading
   with enough in storage to fill the truck, so the last 900 units of metal were
   stuck there. Along with it, objectives like "have 5 trucks of common metal"
@@ -299,6 +277,45 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
   left the cell reserved forever, blocking the path with nothing to show.
 - **Walls are no longer laid on top of a unit standing on the tile**: the
   operation is cancelled and the metal refunded, as it already was for tubes.
+- **A `--harness` test mode**: plays a scenario script headless (spawn,
+  move, dock, attack, patrol, lights and so on) and writes a `trace.jsonl` in
+  the field names of the op2-rs harness, plus screenshots, so the port can be
+  compared tick by tick with the original game running the same script. It is
+  what found the two simulation divergences above.
+
+### 2026-11-08
+
+- **The map view stops at the edges**, as in the original: only "around the
+  world" maps (512 tiles wide) wrap. Units, terrain and the demo camera follow
+  the same rule. `MapWrap=1` brings back wrapping on every map, the old
+  behaviour.
+- **A `Screen Mode` radio pair** — full screen or window — on **both**
+  preferences screens: `PREFERENCES` in the main menu, and the `PREFERENCES`
+  list in the in-game Options tab. It only takes effect on `ACCEPT`/`&APPLY`,
+  and writes `[Game] Fullscreen` to the INI.
+- **The in-game `PREFERENCES` list was hiding its own scroll arrows** behind
+  the buttons: nothing past the first page could be reached, and the pane was
+  even stealing the `L&ESS` button's click.
+- **The `L&ESS`/`&MORE` tooltips** are now the original's, one per item
+  ("Turn music volume down (L&ess)"), instead of one generic sentence.
+- **Meteor Defenses no longer shoot down an ally's missile.** They only spared
+  the owner's own missile, so in an allied game a friend's defense shot down
+  the missile on its way to the enemy.
+- **Walls no longer fail to build** next to a wall under construction, Blight
+  or lava. A neighbouring building still blocks, as it should.
+- **Dock pads, Magma Vents and the minimap zoom**: the pads of mines, storage
+  tanks and the Agridome now come from the original's ground-layer pass (with
+  damage states), Magma Vents are drawn at last, and the minimap opens fitted
+  to the whole map, as the game does.
+- **Right-clicking a dock always sends the truck there.** The original ignored
+  a right-click on a dock when the selected vehicle couldn't use it — a loaded
+  truck on a mine, which only takes empty ones — so the truck didn't move. It
+  now drives onto the dock tile with a plain move; a vehicle that can use the
+  dock still gets the dock order, as before. (Deliberate difference from the
+  original.)
+- `--dockclicktest <DLL> [type]` takes an optional building type (hex, default
+  `27` = Agridome; `15`/`16`/`2A` for the mines, `19`/`1A` for the storage
+  tanks), and also checks that a loaded truck reaches the dock.
 - **Savant alerts that would not stop repeating.** "Power Levels: Optimal"
   and "Storage Needed" fired on every colony recalculation; they now fire on
   state change only. Shortage warnings still insist, as they should.

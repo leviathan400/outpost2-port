@@ -235,26 +235,8 @@ cursores `.ANI`.
 
 ## Mudanças recentes
 
-### 2026-11-08
+### 2026-11-09
 
-- **A vista do mapa para nas bordas**, como no original: só os mapas "around
-  the world" (512 tiles de largura) dão a volta. Unidades, terreno e a câmera
-  do modo demonstração seguem a mesma regra. `MapWrap=1` devolve a volta em
-  todo mapa, que era o comportamento antigo.
-- **Par de rádio `Screen Mode`** — tela cheia ou janela — nas **duas** telas de
-  preferências: a `PREFERENCES` do menu principal e a lista do `PREFERENCES` da
-  aba Options, dentro do jogo. Só vale no `ACCEPT`/`&APPLY`, e grava
-  `[Game] Fullscreen` no INI.
-- **A lista do `PREFERENCES` de dentro do jogo escondia as próprias setas de
-  rolagem** atrás dos botões: nada depois da primeira página era alcançável, e
-  o painel ainda roubava o clique do `L&ESS`.
-- **As dicas dos botões `L&ESS`/`&MORE`** passaram a ser as do original, uma
-  por item ("Turn music volume down (L&ess)"), e não uma frase genérica.
-- **A Meteor Defense não derruba mais o míssil de um aliado.** Só poupava o
-  míssil do próprio dono, então numa partida aliada a defesa do amigo abatia o
-  míssil que ia no inimigo.
-- **O muro não falha mais** por ter perto dele um muro em obra, a praga ou
-  lava. Prédio vizinho continua impedindo, como deve.
 - **O ESC pergunta antes de largar a missão.** Antes ele voltava ao menu na
   hora; agora desiste primeiro do que estiver no ar (uma mira de comando, um
   diálogo) e, se não houver nada, abre a tela de fim de missão do próprio jogo
@@ -283,10 +265,6 @@ cursores `.ANI`.
 - **O HUD de depuração sorteava um número por tique**, deslocando a sequência
   do gerador — todo sorteio seguinte (dano de arma, por exemplo) saía diferente
   do original. Agora ele lê o estado do gerador em vez de sortear.
-- **Plataformas de doca, respiradouros de magma e o zoom do minimapa**: as
-  plataformas das minas, tanques e Agridome passaram a sair do passe de camada
-  de chão do original (com dano), os respiradouros de magma passaram a ser
-  desenhados, e o minimapa abre encaixando o mapa inteiro, como no jogo.
 - **Caminhão carrega carga parcial.** O jogo só deixava carregar com estoque
   para encher o caminhão, então os últimos 900 de metal ficavam presos no
   depósito. Junto disso, objetivos do tipo "ter 5 caminhões de metal" passaram
@@ -302,6 +280,45 @@ cursores `.ANI`.
   deixava a célula reservada para sempre, bloqueando o caminho sem aparecer.
 - **O muro deixou de ser assentado por cima de quem está no tile**: agora
   cancela e devolve o metal, como já fazia com o tubo.
+- **Modo de teste `--harness`**: roda sem janela um roteiro de cenário
+  (criar unidade, mover, atracar, atacar, patrulhar, faróis etc.) e grava um
+  `trace.jsonl` com os nomes de campo do banco de provas op2-rs, mais capturas,
+  para comparar o porte tique a tique com o jogo original rodando o mesmo
+  roteiro. Foi ele que achou as duas divergências de simulação acima.
+
+### 2026-11-08
+
+- **A vista do mapa para nas bordas**, como no original: só os mapas "around
+  the world" (512 tiles de largura) dão a volta. Unidades, terreno e a câmera
+  do modo demonstração seguem a mesma regra. `MapWrap=1` devolve a volta em
+  todo mapa, que era o comportamento antigo.
+- **Par de rádio `Screen Mode`** — tela cheia ou janela — nas **duas** telas de
+  preferências: a `PREFERENCES` do menu principal e a lista do `PREFERENCES` da
+  aba Options, dentro do jogo. Só vale no `ACCEPT`/`&APPLY`, e grava
+  `[Game] Fullscreen` no INI.
+- **A lista do `PREFERENCES` de dentro do jogo escondia as próprias setas de
+  rolagem** atrás dos botões: nada depois da primeira página era alcançável, e
+  o painel ainda roubava o clique do `L&ESS`.
+- **As dicas dos botões `L&ESS`/`&MORE`** passaram a ser as do original, uma
+  por item ("Turn music volume down (L&ess)"), e não uma frase genérica.
+- **A Meteor Defense não derruba mais o míssil de um aliado.** Só poupava o
+  míssil do próprio dono, então numa partida aliada a defesa do amigo abatia o
+  míssil que ia no inimigo.
+- **O muro não falha mais** por ter perto dele um muro em obra, a praga ou
+  lava. Prédio vizinho continua impedindo, como deve.
+- **Plataformas de doca, respiradouros de magma e o zoom do minimapa**: as
+  plataformas das minas, tanques e Agridome passaram a sair do passe de camada
+  de chão do original (com dano), os respiradouros de magma passaram a ser
+  desenhados, e o minimapa abre encaixando o mapa inteiro, como no jogo.
+- **Clicar com o botão direito numa doca sempre manda o caminhão até lá.** O
+  original ignorava o clique direito na doca quando o veículo selecionado não
+  podia usá-la — um caminhão carregado numa mina, que só aceita vazios — e o
+  caminhão não saía do lugar. Agora ele vai até o tile da doca com um mover
+  simples; um veículo que pode usar a doca continua recebendo a ordem de
+  atracar, como antes. (Diferença proposital do original.)
+- `--dockclicktest <DLL> [tipo]` aceita um tipo de prédio opcional (hex,
+  padrão `27` = Agridome; `15`/`16`/`2A` para as minas, `19`/`1A` para os
+  tanques), e também confere que um caminhão carregado chega à doca.
 - **Avisos do Savant que não param de repetir.** "Power Levels: Optimal" e
   "Storage Needed" saíam a cada recálculo da colônia; agora só na mudança de
   estado. Os avisos de falta continuam insistindo, como devem.
