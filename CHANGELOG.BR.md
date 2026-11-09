@@ -40,6 +40,13 @@ no commit `1697e7f` (2026-11-06). As mais recentes primeiro.
   inteira do original e a deixava mais escura que o chão em volta), e
   escondida quando há um Magma Well em cima.
 
+- **Zoom do minimapa.** O minimapa abria no zoom 1 (um pixel por tile),
+  então um mapa pequeno ficava como um quadradinho no meio da caixa. O
+  original volta o zoom para 0 a cada mapa carregado
+  (`MiniMap::InitializeForMap`), a escala de "encaixe" que estica o mapa
+  inteiro sobre o minimapa; em mapas grandes demais para isso, fica em 1.
+  Agora o porte faz o mesmo.
+
 ### Alterado
 - **Clicar com o botão direito numa doca sempre manda o caminhão até lá.** No
   original, o clique direito na doca de um prédio com um veículo que não pode

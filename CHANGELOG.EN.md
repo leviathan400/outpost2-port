@@ -37,6 +37,12 @@ at commit `1697e7f` (2026-11-06). Newest first.
   sprite shading used the original's full ramp and drew it darker than the
   ground around it), and hidden once a Magma Well stands on it.
 
+- **Minimap zoom.** The minimap opened at zoom 1 (one pixel per tile), so
+  a small map sat as a little square in the middle of the box. The original
+  resets the zoom to 0 on every map load (`MiniMap::InitializeForMap`), the
+  "fit" scale that stretches the whole map over the minimap; on maps too big
+  for that it goes to 1. The port now does the same.
+
 ### Changed
 - **Right-clicking a dock always sends the truck there.** In the original,
   right-clicking a building's dock with a vehicle that can't use it -- for

@@ -112,6 +112,7 @@ bool GameState::loadMap(const std::string& mapName) {
     m_camX = g_gameMap.clipRect().x1 * 32;
     m_camY = g_gameMap.clipRect().y1 * 32;
     clampCamera();
+    m_mini.resetForMap();                        // InitializeForMap: zoom 0 (fit)
     m_mini.configure(kColW, kMiniMapH);          // sub_48E7F0 com a janela 192x128
     // Sem o 4o botao nao ha globo: sub_458930 zera dword_5748A0 nesse caso.
     if (g_gameMap.internalXOffset()) m_mini.setGlobe(false);
