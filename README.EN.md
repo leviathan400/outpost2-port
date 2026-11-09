@@ -176,7 +176,7 @@ The game's `OUTPOST2.INI` file is respected. The port adds seven keys the
 original doesn't have — AI level, night darkness, volume, demo camera and
 fullscreen; they are documented in `PORT_STATUS.EN.md`.
 
-There are **101 command-line modes** for tests and captures, among them a
+There are **103 command-line modes** for tests and captures, among them a
 regression battery (`--savetest` proves save/reload determinism). The list is
 in `PORT_STATUS.EN.md`.
 
@@ -210,7 +210,7 @@ and what was checked and discarded from the cheat lists that circulate.
 
 ```
 src/
-  main.cpp        entry point + the 101 test/capture modes
+  main.cpp        entry point + the 103 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -252,6 +252,10 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
   the missile on its way to the enemy.
 - **Walls no longer fail to build** next to a wall under construction, Blight
   or lava. A neighbouring building still blocks, as it should.
+- **The game's own cursors are in.** Move, attack, dock, repair, reprogram,
+  bulldoze, guard, patrol, salvage and self-destruct now use Outpost 2's
+  animated cursors, each with its "can't do that" variant — the port used the
+  system arrow for everything.
 - **Clicking anywhere on a building selects it.** Only its middle used to
   answer — the click used a 20 px radius from the centre for everything, which
   left most of a 3x2-tile building dead.

@@ -11,6 +11,7 @@
 #include "../game/tethys_game.h"
 #include "../net/net_game.h"
 #include "../net/net_lobby.h"
+#include "cursors.h"
 
 namespace op2 {
 
@@ -30,6 +31,7 @@ void ShellState::onActivate() {
 }
 
 void ShellState::onIdle(Renderer& renderer, float dt) {
+    cursorSet(CUR_ARROW);                         // fora do jogo, a seta
     m_menu.update(dt);
 
     // Fork: o shell continua em 640x480 escalado (o jogo muda o quadro para o

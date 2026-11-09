@@ -51,6 +51,7 @@
 #include "../mission/mission.h"
 #include "../gfx/artfile.h"
 #include "../gfx/art_blit.h"
+#include "cursors.h"
 #include "../game/docking.h"
 
 namespace op2 {
@@ -137,6 +138,63 @@ void GameState::applyScreenMode(Renderer& renderer) {
 // Diferenca consciente: so rola com o ponteiro DENTRO da janela (o original usa
 // GetCursorPos e rola ate com a janela atras de outra) e nao rola no demo de
 // atracao, onde a camera ja e de quem passeia.
+// A tabela 0x4E9840 do original dá o cursor de cada comando, em pares: o
+// "pode" e o "não pode", escolhidos pelo teste de validade (no original um
+// `cmp eax,1 / adc`, ex. sub_4515xx escolhendo dock/nodock). Aqui o teste é o
+// mesmo que o comando já usa: `uiCommandCellOk` nos comandos de área, a
+// unidade sob o ponteiro nos que miram unidade, e a doca para o mover.
+int GameState::cursorForHover() const {
+    if (!m_mission && !g_gameMap.ok()) return CUR_ARROW;
+    const int vx = m_mouseNX - kViewX, vy = m_mouseNY - kViewY;
+    if (vx < 0 || vy < 0 || vx >= viewportW() || vy >= viewportH()) return CUR_ARROW;
+    if (m_targetCmd < 0) return CUR_ARROW;
+
+    const int wm = g_gameMap.ok() ? (g_gameMap.width() - 1) : 0;
+    const int tx = ((m_camX + vx) >> 5) & wm, ty = (m_camY + vy) >> 5;
+
+    // Comandos de área (muro, tubo, kit, mina, terraplanar, recolher): vale o
+    // mesmo teste de célula que pinta o retângulo do arrasto.
+    if (uiCommandIsArea(m_targetCmd)) {
+        const bool ok = uiCommandCellOk(m_targetCmd, m_selected, tx, ty);
+        switch (m_targetCmd) {
+            case UC_BULLDOZE: return CUR_BULLDOZE;
+            case UC_SALVAGE:  return CUR_SALVAGE;
+            default:          return ok ? CUR_BUILD : CUR_NOBUILD;
+        }
+    }
+
+    const int sob = unitAtBox(vx, vy, /*meusApenas*/ false);
+    const int me = TethysGame::localPlayer();
+    auto inimigo = [&](int id) {
+        if (!id) return false;
+        const int o = g_units[id].owner & 0x0F;
+        return o != me && !(o < kMaxPlayers && (g_playerData[o].allyMask & (1u << me)));
+    };
+
+    switch (m_targetCmd) {
+        case UC_ATTACK:    return inimigo(sob) ? CUR_ATTACK : CUR_NOATTACK;
+        case UC_TAKE_OVER: return inimigo(sob) ? CUR_REPROG : CUR_NOREPROG;
+        case UC_REPAIR: {
+            if (!sob || (g_units[sob].owner & 0x0F) != me) return CUR_NOREPAIR;
+            return g_units[sob].damage > 0 ? CUR_REPAIR : CUR_NOREPAIR;
+        }
+        case UC_GUARD:     return CUR_GUARD;
+        case UC_PATROL:    return CUR_WAYPOINT;
+        case UC_SELF_DESTRUCT: return CUR_DESTRUCT;
+        case UC_MOVE: {
+            // Sobre a doca de um prédio, o mover vira atracar -- e o cursor
+            // diz se aquele veículo pode usá-la (o par 13/14 do original).
+            if (sob && (g_units[sob].flags & UNIT_BUILDING) && !m_selected.empty()) {
+                int dx = 0, dy = 0;
+                if (dockCell(sob, dx, dy) && dx == tx && dy == ty)
+                    return vehicleCanDock(m_selected[0], sob, true) ? CUR_DOCK : CUR_NODOCK;
+            }
+            return g_gameMap.isPassable(LOCATION{tx, ty}) ? CUR_MOVE : CUR_NOMOVE;
+        }
+        default: return CUR_ARROW;
+    }
+}
+
 int GameState::scrollStep() const {
     const int p = (m_frameSkip * m_scrollRate * 20) / (m_gameSpeedValue > 0 ? m_gameSpeedValue : 1);
     return p < 1 ? 1 : p;
@@ -806,6 +864,8 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         else { finishGameEnd(); return; }
     }
     scrollView(renderer);                    // sub_407A10: borda da janela e setas
+    cursorSet(static_cast<CursorKind>(cursorForHover()));   // .ANI de comando
+    cursorAnimate();
 
     TethysGame::noteFrame();                     // p/ "Actual Update Rate"
     // Avança o relógio de simulação na cadência do GameSpeed (m_tickPeriod).

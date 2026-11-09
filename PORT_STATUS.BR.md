@@ -48,7 +48,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 101 modos de teste/captura
+  main.cpp        entrada + os 103 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -1572,6 +1572,73 @@ venha o INI como vier.
 
 ---
 
+## 5.19. Os cursores de comando (2026-11-09)
+
+Os 17 `.ANI` da pasta do jogo estavam decodificados desde setembro e **nunca
+tinham sido usados**: o porte jogava com a seta do sistema em tudo. Agora eles
+estão no lugar.
+
+### De onde vem o "qual cursor"
+
+Do `sub_488900`, que carrega a tabela de **`0x4E9840`**: as três primeiras
+entradas são cursores do Windows (`0x7F02` WAIT, `0x7F03`, `0x7F00` ARROW) e o
+resto são os arquivos, achados pelo `ResManager::GetFilePath` e com a seta como
+recuo quando faltam. A ordem da tabela é o que diz qual cursor é de qual
+comando:
+
+| 3 | 5 / 6 | 7 / 8 | 9 | 11 / 12 | 13 / 14 | 15 / 16 | 17 / 18 | 19 | 22 | 24 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| destruct | move / no_move | attack / noattack | bulldoze | build / nobuild | dock / nodock | repair / norepair | reprog / no_repro | guard | salvage | waypoint |
+
+Quase todos vêm em **par**: o "pode" e o "não pode". No original a escolha é um
+`cmp eax,1 / adc` sobre o teste de validade — por exemplo o `sub_4515xx` pega
+13 (`dock`) ou 14 (`nodock`) conforme o veículo poder usar aquela doca. Aqui o
+teste é o **mesmo que o comando já usa**: `uiCommandCellOk` nos comandos de
+área, a unidade sob o ponteiro nos que miram unidade, e o `vehicleCanDock` na
+doca.
+
+### O leitor
+
+Os `.ANI` são cursores animados do Windows, formato público RIFF/ACON: `anih`
+(cadência), `rate` (por passo), `seq ` (ordem) e uma LIST `fram` de chunks
+`icon`, cada um um `.CUR` inteiro (ICONDIR + BITMAPINFOHEADER + máscara XOR +
+máscara AND). `src/res/ani_cursor.cpp` lê isso e devolve os quadros em ARGB,
+com o ponto quente. Nada aqui é engenharia reversa — o que veio do disassembly
+foi só a tabela acima.
+
+Os 17 lidos: todos 32×32, de 2 a 8 quadros, pontos quentes onde se espera
+(ataque no centro `(16,16)`, bulldoze no canto `(1,27)`, doca em `(13,9)`), e
+cinco deles (ataque, reparo, waypoint e os "no") usam o `seq ` para repetir
+quadros fora de ordem.
+
+### Os testes
+
+- **`--anitest`**: lê os 17 e exige de cada um tamanho e ponto quente sãos,
+  pixel **opaco** *e* pixel **transparente** em cada quadro, e todo passo
+  caindo no quadro que o `seq ` do arquivo manda.
+- **`--cursortest <mapa>`**: o cursor que aparece em cada situação — mover em
+  chão livre e em chão fechado, atacar sobre inimigo e sobre o vazio, reparar o
+  meu machucado e o meu inteiro, reprogramar, terraplanar, guardar, patrulhar,
+  autodestruir e erguer muro.
+
+Neutralizando: o par do ataque virando só "attack" **1** falha; a máscara AND
+do `.CUR` ignorada **17** (todo cursor vira um quadrado sólido); o `seq `
+ignorado **5** (os cinco arquivos que têm mais passos que quadros).
+
+> As duas últimas só passaram a ser pegas depois de endurecer o `--anitest`: a
+> primeira versão só exigia "um pixel opaco por quadro", e as duas mutações
+> passavam. O `frameOfStep` tranca em zero o índice inválido, então conferir
+> que o quadro *existe* não vê um `seq` ignorado — é preciso comparar com a
+> sequência do arquivo.
+
+### O que ficou de fora
+
+O cursor de espera (`0x7F02`) nas trocas de tela e o `0x7F03`; e o `salvage`,
+que já tem comando de área mas cujo cursor o porte ainda não distingue do
+`bulldoze` em todas as situações.
+
+---
+
 ## 6. Build e execução
 
 **Toolchain:** CMake >= 3.15 + MSVC, C++17, SDL2 2.30.9 (em `third_party/`).
@@ -1593,7 +1660,7 @@ missão e os recursos originais do diretório de trabalho).
 
 ### Testes por linha de comando
 
-São 101 modos. Os que cobrem regressão de verdade:
+São 103 modos. Os que cobrem regressão de verdade:
 
 | Modo | O que prova |
 |---|---|

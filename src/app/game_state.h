@@ -24,6 +24,7 @@
 #include "game_options_pane.h"
 #include "minimap.h"
 #include "globe.h"
+#include "cursors.h"
 
 namespace op2 {
 
@@ -128,6 +129,10 @@ private:
     // desacelera quando ninguem pede. O minimapa acompanha sozinho: ele e
     // redesenhado da camera a cada quadro.
     void scrollView(Renderer& renderer);
+    // Qual cursor de comando mostrar agora: o par "pode"/"não pode" do comando
+    // em mira, testado na célula (ou na unidade) sob o ponteiro. Fora de
+    // qualquer mira, a seta. Ver cursors.h.
+    int cursorForHover() const;
     // A conta, sem SDL: quem le a borda e o teclado e o scrollView. Separada
     // para o --scrolltest poder exercita-la sem mouse nem janela.
     void scrollApply(bool esq, bool dir, bool cima, bool baixo);
@@ -276,6 +281,13 @@ public:
         return (i >= 0 && i < static_cast<int>(m_selected.size())) ? m_selected[i] : 0;
     }
     int debugUnitAtView(int vx, int vy) const { return unitAtView(vx, vy); }
+    // --cursortest: o cursor que apareceria com o ponteiro na vista em
+    // (vx,vy) e o comando `cmd` em mira (-1 = nenhum).
+    int debugCursor(int vx, int vy, int cmd) {
+        setMouse(vx + kViewX, vy + kViewY);
+        m_targetCmd = cmd;
+        return cursorForHover();
+    }
     // --scrolltest: um quadro de rolagem com os pedidos dados na mao, sem
     // mouse nem janela, e os valores que o caso mede.
     void debugScrollFrame(bool esq, bool dir, bool cima, bool baixo) {

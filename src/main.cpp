@@ -15,6 +15,8 @@
 #include "gfx/pbmp.h"
 #include "res/res_manager.h"
 #include "res/winhelp.h"
+#include "res/ani_cursor.h"
+#include "app/cursors.h"
 #include "game/game_map.h"
 #include "game/walls.h"
 #include "game/garage.h"
@@ -4944,6 +4946,160 @@ static int runSelectTest(const std::string& mapName) {
     return ruins ? 1 : 0;
 }
 
+// --anitest: le os cursores .ANI da pasta do jogo (RIFF/ACON) e confere o que
+// saiu de cada um: quadros, tamanho, ponto quente e cadencia. O original os
+// carrega com LoadCursorFromFileA (sub_488900) pela tabela de 0x4E9840.
+static int runAniTest() {
+    op2::g_ResManager.init(".");
+    static const char* kNomes[] = {
+        "move.ani", "no_move.ani", "attack.ani", "noattack.ani", "bulldoze.ani",
+        "build.ani", "nobuild.ani", "dock.ani", "nodock.ani", "repair.ani",
+        "norepair.ani", "reprog.ani", "no_repro.ani", "guard.ani", "salvage.ani",
+        "waypoint.ani", "destruct.ani",
+    };
+    int lidos = 0, ruins = 0;
+    for (const char* nome : kNomes) {
+        auto st = op2::g_ResManager.openStream(nome);
+        if (!st) {
+            std::printf("[ani] %-14s NAO ACHEI o arquivo%c", nome, 10);
+            ++ruins;
+            continue;
+        }
+        op2::AniCursor cur;
+        const bool ok = op2::aniLoad(st->data(), st->size(), cur);
+        const bool sano = ok && cur.width > 0 && cur.height > 0 &&
+                          !cur.frames.empty() &&
+                          cur.hotX >= 0 && cur.hotX < cur.width &&
+                          cur.hotY >= 0 && cur.hotY < cur.height;
+        // Cada quadro precisa de pixel OPACO (senao o cursor some) e de pixel
+        // TRANSPARENTE (senao virou um quadrado solido -- e assim que se
+        // percebe a mascara AND do .CUR ignorada).
+        bool temPixel = sano;
+        for (const auto& f : cur.frames) {
+            bool opaco = false, vazio = false;
+            for (uint32_t c : f) {
+                if (c >> 24) opaco = true; else vazio = true;
+                if (opaco && vazio) break;
+            }
+            if (!opaco || !vazio) temPixel = false;
+        }
+        // Todo passo tem de cair num quadro que existe; e quando ha mais passos
+        // que quadros (attack, repair, waypoint...), o `seq ` e que diz a ordem
+        // -- sem ele a conta estoura ou repete errado.
+        bool seqOk = sano;
+        for (int i = 0; i < cur.steps(); ++i) {
+            // Compara com a sequencia DO ARQUIVO: so olhar se o quadro existe
+            // nao basta, porque o frameOfStep tranca em 0 o indice invalido --
+            // e ai um `seq` ignorado passaria batido.
+            const int esperado = cur.seq.empty() ? (i % static_cast<int>(cur.frames.size()))
+                                                 : cur.seq[static_cast<size_t>(i)];
+            const int f = cur.frameOfStep(i);
+            if (f < 0 || f >= static_cast<int>(cur.frames.size())) seqOk = false;
+            if (esperado >= 0 && esperado < static_cast<int>(cur.frames.size()) && f != esperado)
+                seqOk = false;
+        }
+        if (cur.steps() > static_cast<int>(cur.frames.size()) && cur.seq.empty()) seqOk = false;
+        if (sano && temPixel && seqOk) ++lidos; else ++ruins;
+        std::printf("[ani] %-14s %dx%d quadros=%d passos=%d quente=(%d,%d) jiffies=%d %s%c",
+                    nome, cur.width, cur.height, (int)cur.frames.size(), cur.steps(),
+                    cur.hotX, cur.hotY, cur.jiffies,
+                    (sano && temPixel && seqOk) ? "ok" : "FALHOU", 10);
+    }
+    std::printf("[ani] %d de %d cursores lidos%c", lidos, (int)(sizeof(kNomes) / sizeof(kNomes[0])), 10);
+    std::fflush(stdout);
+    return ruins ? 1 : 0;
+}
+
+// --cursortest <mapa>: o cursor de comando que aparece em cada situacao. A
+// tabela do original (0x4E9840) da os PARES "pode"/"nao pode" e o porte
+// escolhe com o mesmo teste que o comando usa -- ver GameState::cursorForHover.
+static int runCursorTest(const std::string& mapName) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 cursortest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::cursorsInit();
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    op2::resetUnits();
+    const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
+    for (int y = 0; y < H; ++y)
+        for (int x = 0; x < W; ++x) op2::g_gameMap.clearUnitOccupancy(x, y);
+
+    struct Caso { std::string nome; long long obtido, esperado; };
+    std::vector<Caso> casos;
+    casos.push_back({"os 17 .ANI entraram", op2::cursorsLoaded(), 17});
+
+    // Um canto livre e um tile intransponivel, para os dois lados do par.
+    int lx = -1, ly = -1, bx = -1, by = -1;
+    for (int y = 4; y < H - 6 && lx < 0; ++y)
+        for (int x = 4; x < W - 10 && lx < 0; ++x) {
+            bool ok = true;
+            for (int dy = 0; dy < 4 && ok; ++dy)
+                for (int dx = 0; dx < 10 && ok; ++dx)
+                    if (!op2::g_gameMap.isPassable(op2::LOCATION{x + dx, y + dy})) ok = false;
+            if (ok) { lx = x; ly = y; }
+        }
+    // Um tile FECHADO ao lado da faixa: procurar um no mapa daria um tile longe
+    // da camera, e fora da vista o cursor e a seta -- com razao.
+    if (lx >= 0) {
+        bx = lx + 1; by = ly + 3;
+        op2::createWallOrTube(bx, by, 0x12);
+    }
+    if (lx < 0) { renderer.shutdown(); SDL_Quit(); return 3; }
+
+    // A camera perto da faixa livre: ela pode comecar longe da origem, e ai os
+    // tiles do teste caem FORA da vista -- onde o cursor e a seta, com razao.
+    gs.setCamera((lx << 5) - 64, (ly << 5) - 64);
+    auto emTile = [&](int tx, int ty, int cmd) {
+        return gs.debugCursor((tx << 5) + 16 - gs.camX(), (ty << 5) + 16 - gs.camY(), cmd);
+    };
+
+    casos.push_back({"sem mira: a seta", emTile(lx, ly, -1), op2::CUR_ARROW});
+    casos.push_back({"MOVE em chao livre: move", emTile(lx, ly, op2::UC_MOVE), op2::CUR_MOVE});
+    if (bx >= 0)
+        casos.push_back({"MOVE em chao fechado: no_move", emTile(bx, by, op2::UC_MOVE), op2::CUR_NOMOVE});
+    casos.push_back({"BULLDOZE: bulldoze", emTile(lx, ly, op2::UC_BULLDOZE), op2::CUR_BULLDOZE});
+    casos.push_back({"GUARD: guard", emTile(lx, ly, op2::UC_GUARD), op2::CUR_GUARD});
+    casos.push_back({"PATROL: waypoint", emTile(lx, ly, op2::UC_PATROL), op2::CUR_WAYPOINT});
+    casos.push_back({"SELF-DESTRUCT: destruct", emTile(lx, ly, op2::UC_SELF_DESTRUCT), op2::CUR_DESTRUCT});
+    casos.push_back({"MURO em celula livre: build", emTile(lx, ly, op2::UC_WALL), op2::CUR_BUILD});
+
+    // Inimigo sob o ponteiro: atacar pode; chao vazio, nao.
+    op2::Unit ini;
+    op2::TethysGame::CreateUnit(ini, op2::mapLynx, op2::LOCATION{lx + 4, ly}, 1, 0x3D);
+    casos.push_back({"ATTACK sobre inimigo: attack",
+                     emTile(lx + 4, ly, op2::UC_ATTACK), op2::CUR_ATTACK});
+    casos.push_back({"ATTACK em chao vazio: noattack",
+                     emTile(lx, ly, op2::UC_ATTACK), op2::CUR_NOATTACK});
+    casos.push_back({"TAKE OVER sobre inimigo: reprog",
+                     emTile(lx + 4, ly, op2::UC_TAKE_OVER), op2::CUR_REPROG});
+
+    // Reparar: o meu, machucado, pode; inteiro, nao.
+    op2::Unit meu;
+    op2::TethysGame::CreateUnit(meu, op2::mapLynx, op2::LOCATION{lx + 7, ly}, 0, 0x3D);
+    op2::g_units[meu.id()].damage = 50;
+    casos.push_back({"REPAIR sobre o meu machucado: repair",
+                     emTile(lx + 7, ly, op2::UC_REPAIR), op2::CUR_REPAIR});
+    op2::g_units[meu.id()].damage = 0;
+    casos.push_back({"REPAIR sobre o meu inteiro: norepair",
+                     emTile(lx + 7, ly, op2::UC_REPAIR), op2::CUR_NOREPAIR});
+
+    int ruins = 0;
+    for (const Caso& c : casos) {
+        const bool ok = c.obtido == c.esperado;
+        if (!ok) ++ruins;
+        std::printf("[cur] %-40s %lld (esperado %lld) %s%c", c.nome.c_str(), c.obtido,
+                    c.esperado, ok ? "ok" : "FALHOU", 10);
+    }
+    std::printf("[cur] %d caso(s) com falha%c", ruins, 10);
+    std::fflush(stdout);
+    renderer.shutdown(); SDL_Quit();
+    return ruins ? 1 : 0;
+}
+
 static int runWallTest(const std::string& mapName) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
     op2::g_ResManager.init(".");
@@ -5718,6 +5874,10 @@ int main(int argc, char* argv[]) {
             return runGarageTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--mdtest") == 0 && i + 1 < argc)
             return runMdTest(argv[i + 1]);
+        if (std::strcmp(argv[i], "--cursortest") == 0 && i + 1 < argc)
+            return runCursorTest(argv[i + 1]);
+        if (std::strcmp(argv[i], "--anitest") == 0)
+            return runAniTest();
         if (std::strcmp(argv[i], "--selecttest") == 0 && i + 1 < argc)
             return runSelectTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--scrolltest") == 0 && i + 1 < argc)

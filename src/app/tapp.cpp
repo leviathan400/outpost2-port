@@ -12,6 +12,7 @@
 #include "../res/res_manager.h"
 #include "../audio/sound.h"
 #include "../audio/music.h"
+#include "cursors.h"
 
 namespace op2 {
 
@@ -45,6 +46,7 @@ bool TApp::init() {
     }
     m_sdlReady = true;
     soundInit();                                  // sub_47E020 (unk_56C610)
+    cursorsInit();                                // os .ANI de comando
 
     std::cout << "[TApp] video: " << (settings.fullscreen ? "tela cheia" : "janela")
               << " (\"[Game] Fullscreen\"; Alt+Enter alterna)" << std::endl;
