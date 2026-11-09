@@ -522,6 +522,20 @@ static bool compareCount(int mode, int target, int n) {
 // A regra de carga sai de byte_493FD4[tipo−1]: tipo 1 (caminhão) compara o
 // nibble baixo de [+0x24], os tipos 2 (ConVec), 5..7 (Lynx/Panther/Tiger) e
 // 0x0D (transporte) a palavra inteira, e os demais NÃO contam quando há filtro.
+// Com a CARGA PARCIAL, contar CAMINHOES nao serve mais para o objetivo: cinco
+// caminhoes podem ter 4900 de minerio. Como no OPUPatch, o objetivo passa a
+// valer pela QUANTIDADE -- o `count` pedido pela missao vale em caminhoes
+// CHEIOS, entao a conta e `soma das cargas / capacidade do caminhao`. Cinco
+// caminhoes com 4900 dao 4, e nao 5.
+static int truckCapacityOf(int p) {
+    const VehPlayerStats* vs = vehicleSheet(mapCargoTruck, p);
+    const int c = vs ? vs->cargo : 0;
+    return c > 0 ? c : 1000;
+}
+static int truckCargoSum(const UnitRecord& r, int cargo) {
+    return (static_cast<int>(r.cargo) & 0xF) == cargo ? (static_cast<int>(r.cargo) >> 4) & 0xFFF : 0;
+}
+
 static bool cargoMatches(const UnitRecord& r, int type, int cargo) {
     if (cargo == -1) return true;
     if (type == 1) return (r.cargo & 0xF) == cargo;
@@ -563,6 +577,17 @@ static int countForPlayer(int p, int type, int cargo) {
         }
         return playerSpaceHas(p, type);
     }
+    if (type == mapCargoTruck && cargo != -1) {      // ver truckCargoSum
+        int soma = 0;
+        for (int v : colonyVehicles(p)) soma += truckCargoSum(g_units[v], cargo);
+        for (int b : colonyStructures(p)) {
+            const UnitRecord& g = g_units[b];
+            if (g.type != 0x29) continue;
+            for (int i = 0; i < 6; ++i)
+                if (const int v = g.garageSlot[i]) soma += truckCargoSum(g_units[v], cargo);
+        }
+        return soma / truckCapacityOf(p);
+    }
     for (int v : colonyVehicles(p)) {
         const UnitRecord& r = g_units[v];
         if (r.type == type && cargoMatches(r, type, cargo)) ++n;
@@ -587,6 +612,11 @@ static int countAccumulate(int p, int type, int cargo, int acc) {
         if (type == 0x58 || type == 0x59 || type == 0x6A) return playerSpaceCount(p, type);
         if (type == 0x69 || type == 0x6B) return acc;
         return playerSpaceHas(p, type);
+    }
+    if (type == mapCargoTruck && cargo != -1) {      // idem, somando a carga
+        int soma = 0;
+        for (int v : colonyVehicles(p)) soma += truckCargoSum(g_units[v], cargo);
+        return acc + soma / truckCapacityOf(p);
     }
     for (int v : colonyVehicles(p)) {
         const UnitRecord& r = g_units[v];

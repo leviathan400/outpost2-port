@@ -2023,6 +2023,7 @@ static int runOreTest(const std::string& mapName, const std::string& prefix) {
         }
     }
     // STORAGE de recursos: 2º caminhão parado na doca do smelter → LOAD / UNLOAD.
+    bool parcialOk = true;
     {
         op2::UnitRecord& t1 = op2::g_units[truck.id()];
         t1.action = 0; t1.field20 = 0; t1.field22 = 0; t1.hasOrder = false;   // tira o 1º da rota
@@ -2068,12 +2069,30 @@ static int runOreTest(const std::string& mapName, const std::string& prefix) {
         for (k = 0; k < 600 && (tt.action == 0x0E || k == 0); ++k) gs.onIdle(renderer, 0.2501f / 4.0f);
         std::printf("[Ore] despejo (t=%d): carga=%d acao=%d estoque=%d (antes %d)\n", k, (tt.cargo >> 4) & 0xFFF,
                     tt.action, pd.ore, s1);
+        // --- carga parcial (como no OPUPatch) --------------------------------
+        // O original so deixa carregar com estoque para ENCHER o caminhao, entao
+        // os ultimos 900 ficavam presos no deposito. Agora leva o que tem.
+        {
+            const int cap = op2::vehicleSheet(op2::mapCargoTruck, 0)->cargo;
+            pd.ore = cap / 2;                       // metade de um caminhao
+            const int antes = pd.ore;
+            const bool acendeu = op2::storageLoadAvailable(sm.id());
+            op2::applyLoadCargo(0, sm.id());
+            for (int k = 0; k < 600 && (tt.field22 == 0x0D || k == 0); ++k)
+                gs.onIdle(renderer, 0.2501f / 4.0f);
+            const int carga = (tt.cargo >> 4) & 0xFFF;
+            parcialOk = acendeu && carga == antes && pd.ore == 0;
+            std::printf("[Ore] parcial: L&OAD aceso=%d carga=%d (esperado %d) estoque=%d (esperado 0) %s\n",
+                        acendeu ? 1 : 0, carga, antes, pd.ore, parcialOk ? "ok" : "FALHOU");
+        }
+
     }
     std::printf("[Ore] fim: estoque %d -> %d, cargas da mina=%d, caminhao acao=0x%X\n\n", ore0, pd.ore,
                 op2::g_units[mine].mineLink, tr.action);
+
     renderer.shutdown();
     SDL_Quit();
-    return 0;
+    return parcialOk ? 0 : 1;
 }
 
 static int runProduceTest(const std::string& mapName, const std::string& prefix) {
@@ -3787,6 +3806,30 @@ static int runGarageCountTest(const std::string& dll) {
     // 10. EvacTrigger (sub_494600, loc_49469F): transporte guardado evacua.
     casos.push_back({"EvacTrigger com 1 colono",
                      gatilho(op2::createEvacTrigger(1, 0, 0, "AIProc")), 1});
+
+    // POR ULTIMO: o objetivo de carga passa a valer pela QUANTIDADE (como no OPUPatch):
+    // com a carga parcial, cinco caminhoes podem somar 4900 -- e "ter 5
+    // caminhoes de metal" quer dizer cinco CHEIOS. A conta e
+    // soma/capacidade, entao 4900 da 4 e nao dispara; completando, dispara.
+    {
+        const int cap = op2::vehicleSheet(op2::mapCargoTruck, 0)->cargo;
+        std::vector<int> frota;
+        for (int i = 0; i < 5; ++i) {
+            op2::Unit c;
+            if (!op2::TethysGame::CreateUnit(c, op2::mapCargoTruck,
+                                             op2::LOCATION{3 + i, 3}, 0)) break;
+            op2::unitSetTruckCargo(c.id(), 4, i == 0 ? cap - 100 : cap);   // a um falta 100
+            frota.push_back(c.id());
+        }
+        const int t5 = op2::createCountTrigger(1, 0, 0, op2::mapCargoTruck, 4, 5, 0, "AIProc");
+        casos.push_back({"frota de 5 caminhoes criada", (int)frota.size(), 5});
+        casos.push_back({"objetivo com 4900: NAO dispara", gatilho(t5), 0});
+        if (!frota.empty()) op2::unitSetTruckCargo(frota[0], 4, cap);      // completa os 5000
+        casos.push_back({"objetivo com 5000: dispara", gatilho(t5), 1});
+        for (int id : frota) op2::g_units[id].flags |= op2::UNIT_DEAD;     // some com a frota
+    }
+
+
 
     bool ok = true;
     for (const Caso& c : casos) {

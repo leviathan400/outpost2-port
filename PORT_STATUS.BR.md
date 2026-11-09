@@ -1292,6 +1292,64 @@ original: carga 6 e o tile terraplanado para 0x15.
 
 ---
 
+## 5.14. Carga parcial do caminhão (2026-11-09)
+
+A última da lista do OPUPatch, e a única que era **decisão de jogo** e não
+conserto. Decidida: fazer como o patch.
+
+### Carregar o que houver
+
+O original só deixa carregar o caminhão **cheio**: o `L&OAD` do painel STORAGE
+pede `truckCap(v) <= estoque`, e o `sub_423F70` repete a conta. Com 900 de
+metal no depósito e um caminhão de 1000, não havia como tirar aquilo de lá.
+
+Agora o botão acende com qualquer estoque e o pedido é `min(capacidade,
+estoque)`. Três lugares, porque o caminho tem três conferências:
+
+| onde | o que mudou |
+|---|---|
+| `storageLoadAvailable` | acende com `estoque > 0` |
+| `applyLoadCargo` | pede `min(cap, estoque)` |
+| `truckDockExchange` | se o estoque caiu entre a ordem e a atracação, leva o que sobrou em vez de **zerar** a carga |
+
+A comida, no Agridome, seguia o mesmo caminho e recebeu o mesmo tratamento.
+
+### O objetivo passa a valer pela quantidade
+
+Com carga parcial, **contar caminhões não serve mais**: cinco caminhões podem
+somar 4900. Como no patch, o gatilho de contagem para caminhões com filtro de
+carga passa a valer pela quantidade — o `count` que a missão pede vale em
+caminhões **cheios**:
+
+```
+contagem = soma das cargas / capacidade do caminhão
+```
+
+Cinco caminhões com 4900 dão **4**, e o objetivo não fecha; completando os 100
+que faltam, dá 5 e fecha. É exatamente o exemplo do changelog deles. Vale nos
+dois contadores (`countForPlayer`, que também olha as garagens, e
+`countAccumulate`); sem filtro de carga (`cargo == -1`) nada muda, continua
+contando caminhões.
+
+### Os testes
+
+- `--oretest`: depósito com meio caminhão de metal — o `L&OAD` acende, o
+  caminhão sai com exatamente aquilo e o estoque vai a zero.
+- `--garagecounttest`: cinco caminhões somando 4900 **não** disparam o
+  objetivo de "5 caminhões de metal comum"; completando para 5000, dispara.
+  O caso fica por **último** no teste: cinco caminhões a mais mudariam a
+  contagem do `VehicleCountTrigger`, que vem antes.
+
+Neutralizando: `L&OAD` exigindo caminhão cheio **1** falha; objetivo voltando a
+contar caminhões **1**.
+
+> O gatilho só nasce com **missão** carregada — `createFuncRef` precisa
+> resolver o nome da função no script. Num teste que abre só o mapa ele devolve
+> `0xFF` e o `triggerCheck` responde `false` para sempre: foi por isso que o
+> caso do objetivo mudou de casa.
+
+---
+
 ## 6. Build e execução
 
 **Toolchain:** CMake >= 3.15 + MSVC, C++17, SDL2 2.30.9 (em `third_party/`).

@@ -313,11 +313,17 @@ void truckDockExchange(int truckId) {                        // sub_406610
     const int p = ownerOf(u);
     PlayerData& pd = g_playerData[p];
     auto loadMetal = [&](bool rare) {                         // tipo 0: tira do estoque
-        u.cargo = u.cargoRequest;
-        const int want = cargoAmount(u);
+        // CARGA PARCIAL: o original zerava a carga quando o estoque tinha
+        // caido abaixo do pedido entre a ordem e a atracacao. Agora leva o que
+        // houver.
         int& stock = rare ? pd.rareOre : pd.ore;
-        if (want > stock) u.cargo = 0;
-        stock -= cargoAmount(u);
+        u.cargo = u.cargoRequest;
+        int want = cargoAmount(u);
+        if (want > stock) {
+            want = stock;
+            u.cargo = static_cast<uint16_t>((want << 4) | (u.cargoRequest & 0x0F));
+        }
+        stock -= want;
     };
     auto unloadMetal = [&](bool rare) {                       // tipo 4/5: põe no estoque
         int& stock = rare ? pd.rareOre : pd.ore;
@@ -352,8 +358,9 @@ void truckDockExchange(int truckId) {                        // sub_406610
                 u.cargo = 0;
             } else {                                          // (qualquer outro tipo)
                 const VehPlayerStats* vs = vehicleSheet(u.type, statsOf(u));
-                const int cap = vs ? vs->cargo : 0;
-                if (cap > pd.foodStored) { u.cargo = 0; break; }
+                int cap = vs ? vs->cargo : 0;
+                if (cap > pd.foodStored) cap = pd.foodStored;   // CARGA PARCIAL
+                if (cap <= 0) { u.cargo = 0; break; }
                 pd.foodStored -= cap;
                 u.cargo = static_cast<uint16_t>((cap << 4) | 1);
             }
@@ -468,10 +475,13 @@ bool storageLoadAvailable(int b) {                             // sub_456EC0
     if (!vehicleCanDock(vid, b, true)) return false;
     const UnitRecord& bl = g_units[b];
     const PlayerData& pd = g_playerData[TethysGame::localPlayer()];
+    // CARGA PARCIAL: o original so acende o L&OAD com estoque para ENCHER o
+    // caminhao (`truckCap(v) <= estoque`), entao os ultimos 900 de minerio
+    // ficavam presos no deposito sem jeito de tirar. Agora basta ter algo.
     switch (bl.type) {
-        case 0x27: return truckCap(v) <= pd.foodStored;
-        case 0x36: return truckCap(v) <= pd.ore;
-        case 0x38: return truckCap(v) <= pd.rareOre;
+        case 0x27: return pd.foodStored > 0;
+        case 0x36: return pd.ore > 0;
+        case 0x38: return pd.rareOre > 0;
         default: return structureOperational(bl);
     }
 }
@@ -525,10 +535,16 @@ void applyLoadCargo(int owner, int b) {                        // sub_423F70
     UnitRecord& v = g_units[vid];
     const PlayerData& pd = g_playerData[ownerOf(g_units[b])];
     const int cap = truckCap(v);
+    // CARGA PARCIAL: pede o que couber -- `min(capacidade, estoque)` -- em vez
+    // de so aceitar carga cheia.
+    auto pede = [&](int kind, int estoque) {
+        const int amt = cap < estoque ? cap : estoque;
+        if (amt > 0) truckDockBegin(v, kind, amt, 0);
+    };
     switch (g_units[b].type) {
-        case 0x19: case 0x36: if (cap <= pd.ore) truckDockBegin(v, 4, cap, 0); break;
-        case 0x1A: case 0x38: if (cap <= pd.rareOre) truckDockBegin(v, 5, cap, 0); break;
-        case 0x27: if (cap <= pd.foodStored) truckDockBegin(v, 1, cap, 0); break;
+        case 0x19: case 0x36: pede(4, pd.ore); break;
+        case 0x1A: case 0x38: pede(5, pd.rareOre); break;
+        case 0x27: pede(1, pd.foodStored); break;
         default: break;
     }
 }

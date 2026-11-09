@@ -250,6 +250,10 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
   the missile on its way to the enemy.
 - **Walls no longer fail to build** next to a wall under construction, Blight
   or lava. A neighbouring building still blocks, as it should.
+- **Cargo Trucks can be partially loaded.** The game only allowed loading
+  with enough in storage to fill the truck, so the last 900 units of metal were
+  stuck there. Along with it, objectives like "have 5 trucks of common metal"
+  now count by **amount**: five trucks adding up to 4900 do not complete it.
 - **The Blight never infected a structure from a mission call**: `DoInfect`
   returned without doing anything whenever the game had more than one player —
   that is, in nearly every campaign mission.

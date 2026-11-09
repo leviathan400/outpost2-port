@@ -253,6 +253,10 @@ cursores `.ANI`.
   míssil que ia no inimigo.
 - **O muro não falha mais** por ter perto dele um muro em obra, a praga ou
   lava. Prédio vizinho continua impedindo, como deve.
+- **Caminhão carrega carga parcial.** O jogo só deixava carregar com estoque
+  para encher o caminhão, então os últimos 900 de metal ficavam presos no
+  depósito. Junto disso, objetivos do tipo "ter 5 caminhões de metal" passaram
+  a valer pela **quantidade**: cinco caminhões somando 4900 não fecham.
 - **A praga nunca infectava prédio por chamada de missão**: o `DoInfect`
   saía sem fazer nada quando a partida tinha mais de um jogador — ou seja, em
   quase toda missão de campanha.
