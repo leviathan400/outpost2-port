@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "artfile.h"
+#include "pbmp.h"
 
 namespace op2 {
 
@@ -10,22 +11,26 @@ static bool s_shadows = true;   // dword_575630
 void setArtShadows(bool on) { s_shadows = on; }
 
 // Rampa do ciclo dia/noite (sub_4A9BF0 com N = 32), por canal de 8 bits.
+// Fork: the same scale as the terrain (nightShadeMul, i.e. the NightDarkness
+// setting, and no 5-bit truncation) -- with the original's full ramp the
+// few sprites that darken (the Magma Vent) came out darker than the ground
+// under them. Rebuilt when the setting changes.
 static uint8_t s_shadeLut[32][256];
-static bool s_shadeLutReady = false;
+static int s_shadeLutGen = -1;
 
 static void buildShadeLut() {
     for (int d = 0; d < 32; ++d) {
-        const int mult = (32 - d + 4) < 32 ? (32 - d + 4) : 32;
+        const int mult = nightShadeMul(d);
         for (int v = 0; v < 256; ++v)
-            s_shadeLut[d][v] = static_cast<uint8_t>(((v * mult) / 32) & 0xF8);
+            s_shadeLut[d][v] = static_cast<uint8_t>((v * mult) / 32);
     }
-    s_shadeLutReady = true;
+    s_shadeLutGen = nightDarkness();
 }
 
 uint32_t shadeArgb(uint32_t argb, int darkness) {
     if (darkness <= 0) return argb;
     if (darkness > 31) darkness = 31;
-    if (!s_shadeLutReady) buildShadeLut();
+    if (s_shadeLutGen != nightDarkness()) buildShadeLut();
     const uint8_t* t = s_shadeLut[darkness];
     return (argb & 0xFF000000u) | (static_cast<uint32_t>(t[(argb >> 16) & 0xFF]) << 16)
                                 | (static_cast<uint32_t>(t[(argb >> 8) & 0xFF]) << 8)

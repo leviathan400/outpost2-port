@@ -30,6 +30,13 @@ at commit `1697e7f` (2026-11-06). Newest first.
 
   Hidden while the building is being built or destroyed, as in the original.
 
+- **Magma Vents were invisible.** The vent a GeoCon builds a Magma Well on
+  (unit type `0x52`) was never drawn. It is part of the same ground-layer
+  pass: animation `0x2A2` (`sub_4057F0`), animated, shaded by the day/night
+  cycle on the same scale as the terrain (the `NightDarkness` setting --
+  sprite shading used the original's full ramp and drew it darker than the
+  ground around it), and hidden once a Magma Well stands on it.
+
 ### Changed
 - **Right-clicking a dock always sends the truck there.** In the original,
   right-clicking a building's dock with a vehicle that can't use it -- for

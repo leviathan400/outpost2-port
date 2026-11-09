@@ -817,7 +817,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
                 drawSprite(op.anim, op.frame, screenXOf(op.x), op.y - m_camY, -1);
     }
 
-    // Fork: building ground layer (vt[30] "DrawGroundLayer", pass 1 of the
+    // Fork: ground layer (vt[30] "DrawGroundLayer", pass 1 of the
     // original renderer, under every unit body). The pads of the buildings whose
     // art carries none: Agridome sub_401970 (0x87E/0x87F/0x880 by state), both
     // Storage Tanks sub_409590 / sub_409840 (0x881/0x882/0x883), and the mines
@@ -827,6 +827,23 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     setArtShadows(m_stationaryShadows);
     for (size_t i = 1; i < g_units.size(); ++i) {
         const UnitRecord& r = g_units[i];
+        if (r.id != -1 && r.type == 0x52) {
+            // Magma Vent (sub_4057F0): animation 0x2A2, frame tick % last frame,
+            // shaded by day/night like the terrain; hidden once a Magma Well
+            // (0x2A) stands on its tile.
+            const int tx = (unitOX(r) >> 5) & (g_gameMap.width() - 1), ty = unitOY(r) >> 5;
+            const int occ = g_gameMap.cellOccupant(tx, ty);
+            if (occ > 0 && occ < static_cast<int>(g_units.size()) && g_units[occ].id != -1 &&
+                g_units[occ].type == 0x2A) continue;
+            const int anim = 0x2A2 - 0x65;
+            if (!g_art.ok() || anim >= g_art.numAnimations()) continue;
+            const int last = static_cast<int>(g_art.animation(anim).frames.size()) - 1;
+            const int dark = TethysGame::daylightEverywhere() ? 0 : tileDarkness(tx);
+            blitArtFrame(renderer.getFramebuffer(), m_fbW, m_fbH, anim,
+                         last > 0 ? static_cast<int>(TethysGame::tick() % last) : 0,
+                         screenXOf(unitOX(r)), unitOY(r) - m_camY, -1, 0, 0, viewportW(), viewportH(), dark);
+            continue;
+        }
         if (r.id == -1 || (r.flags & UNIT_DEAD) || !(r.flags & UNIT_BUILDING)) continue;
         if (r.action == 0x2F || r.action == 0x21) continue;
         const int st = static_cast<int>((r.state34 >> 16) & 0xFFFF);

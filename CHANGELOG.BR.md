@@ -32,6 +32,14 @@ no commit `1697e7f` (2026-11-06). As mais recentes primeiro.
   Some enquanto o prédio está sendo construído ou destruído, como no
   original.
 
+- **Os respiradouros de magma (Magma Vent) não apareciam.** O respiradouro
+  onde a GeoCon constrói o Magma Well (unidade tipo `0x52`) nunca era
+  desenhado. Ele faz parte do mesmo passe de camada de chão: animação `0x2A2`
+  (`sub_4057F0`), animada, escurecida pelo ciclo dia/noite na mesma escala do terreno
+  (a chave `NightDarkness` -- o escurecimento dos sprites usava a rampa
+  inteira do original e a deixava mais escura que o chão em volta), e
+  escondida quando há um Magma Well em cima.
+
 ### Alterado
 - **Clicar com o botão direito numa doca sempre manda o caminhão até lá.** No
   original, o clique direito na doca de um prédio com um veículo que não pode
