@@ -250,6 +250,11 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
   the missile on its way to the enemy.
 - **Walls no longer fail to build** next to a wall under construction, Blight
   or lava. A neighbouring building still blocks, as it should.
+- **The Blight never infected a structure from a mission call**: `DoInfect`
+  returned without doing anything whenever the game had more than one player —
+  that is, in nearly every campaign mission.
+- **Ship wreckage placed on rubble was collected as rubble**, and the tile was
+  then bulldozed, taking the wreckage with it.
 - **Missions' `ForceMorale*` only took effect on the second call**, and the
   first one left the colony at `Great` instead of the level asked for.
 - **Invisible "perma-walls"**: an Earthworker that died while building a wall

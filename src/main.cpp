@@ -2464,7 +2464,32 @@ static int runColonyTest(const std::string& mapName) {
                     vazio, encheu, repetiu, estoqueOk ? "ok" : "FALHOU");
     }
     renderer.shutdown(); SDL_Quit();
-    return (avisoOk && moralOk) ? 0 : 1;
+    // Item 9 da lista do OPUPatch: o DoInfect das missoes nao fazia NADA
+    // quando a partida tinha mais de um jogador (o original sai com
+    // `cmp dword_56DEC0, 1 / jg`), e quase toda missao de campanha tem dois ou
+    // tres. O controle aqui e o numero de jogadores: sem ele o caso nao
+    // mediria nada.
+    bool infectOk = true;
+    {
+        op2::resetPlayers(3);
+        const int jogadores = op2::TethysGame::noPlayers();
+        op2::Unit alvo;
+        op2::TethysGame::CreateUnit(alvo, 0x1E /*RESIDENCE*/, op2::LOCATION{bx + 6, by + 4}, 0);
+        const int id = alvo.id();
+        bool pegou = false;
+        if (id) {
+            op2::g_units[id].action = 0;
+            op2::g_units[id].damage = 0;
+            const int antes = op2::g_units[id].damage;
+            op2::unitDoInfect(id);
+            pegou = op2::g_units[id].damage > antes &&
+                    (op2::g_units[id].flags & 0x40000u) != 0;
+        }
+        infectOk = jogadores > 1 && pegou;
+        std::printf("[Colony] DoInfect com %d jogadores: pegou=%d (esperado 1) %s\n",
+                    jogadores, pegou ? 1 : 0, infectOk ? "ok" : "FALHOU");
+    }
+    return (avisoOk && moralOk && infectOk) ? 0 : 1;
 }
 
 // --combattest <map> <prefix> [w0 w1 w2 w3]: Laser Lynx + Rail Gun Tiger
@@ -3149,6 +3174,29 @@ static int runSalvageTest(const std::string& mapName) {
     const uint32_t c = op2::g_gameMap.rawCell(rx, ry);
     std::printf("[Salvage] entulho: carga tipo %d qtd %d; tile agora tipo 0x%X\n", op2::g_units[t2.id()].cargo & 0xF,
                 (op2::g_units[t2.id()].cargo >> 4) & 0xFFF, c & 0x1F);
+
+    // Destroco EM CIMA de entulho: o original testava o entulho primeiro e
+    // carregava entulho, terraplanando o tile -- o destroco ia junto. Agora o
+    // destroco vem antes. Controle: o caso de cima, so entulho, segue dando 6.
+    bool wreckOk = true;
+    {
+        const int wx = bx + 9, wy = by + 9;
+        if (!types.empty()) op2::g_gameMap.setTileAndCellType(wx, wy, types[0].word(6), 0x16);
+        op2::Unit wk;                       // o que o T_CreateWreck faz: tipo 0x54, dono 6
+        op2::TethysGame::CreateUnit(wk, static_cast<op2::map_id>(0x54), op2::LOCATION{wx, wy}, 6);
+        op2::g_units[wk.id()].wreckTech = 0x1F4A;
+        op2::wreckDiscover(wk.id(), 0);
+        op2::Unit t3;
+        op2::TethysGame::CreateUnit(t3, op2::mapCargoTruck, op2::LOCATION{wx, wy}, 0);
+        op2::unitArrived(t3.id());
+        tick(40);
+        const int tipo = op2::g_units[t3.id()].cargo & 0xF;
+        const int celula = static_cast<int>(op2::g_gameMap.rawCell(wx, wy) & 0x1F);
+        const int entulhoSo = op2::g_units[t2.id()].cargo & 0xF;
+        wreckOk = (tipo == 9) && (celula == 0x16) && (entulhoSo == 6);
+        std::printf("[Salvage] destroco sobre entulho: carga tipo=%d (esperado 9) tile=0x%X (esperado 0x16) | controle entulho=%d (esperado 6) %s\n",
+                    tipo, celula, entulhoSo, wreckOk ? "ok" : "FALHOU");
+    }
     // Beacon + Robo-Surveyor.
     const int beacon = op2::createBeacon(0x51, bx + 2, by + 8, 0, 1, 1);
     op2::Unit sv;
@@ -3194,7 +3242,9 @@ static int runSalvageTest(const std::string& mapName) {
     std::printf("[Salvage] REGIAO: entulho restante %d/9; minerio entregue ao GORF +%d; caminhao carga %d acao 0x%X\n",
                 rubbleLeft, delivered, op2::g_units[st.id()].cargo, op2::g_units[st.id()].action);
     renderer.shutdown(); SDL_Quit();
-    return 0;
+    // (antes devolvia 0 sempre: teste que imprime FALHOU e nao reprova nao
+    //  protege nada -- a mesma armadilha do --chattest)
+    return wreckOk ? 0 : 1;
 }
 
 // --panetest <DLL> <prefix>: carrega a missão, roda 300 ticks e grava o quadro
@@ -3359,9 +3409,25 @@ static int runTransferTest(const std::string& dll) {
                     calouPC ? 1 : 0, avisouHumano ? 1 : 0, avisoOk ? "ok" : "FALHOU");
     }
 
+    // Item 6 da lista do OPUPatch: no original, transferir unidade para a
+    // GAIA (jogador 6, dono dos projeteis e efeitos) trava o jogo. Aqui o
+    // caminho e o mesmo dos outros jogadores e os vetores tem kMaxPlayers=7
+    // posicoes, entao 6 e indice valido -- o caso existe para travar isso.
+    bool gaiaOk = true;
+    {
+        const int alvo = meus[0];
+        op2::applyTransfer(me, {alvo}, 6);
+        const int dono = op2::g_units[alvo].owner & 0x0F;
+        // E ainda tem de ser possivel seguir simulando sem quebrar.
+        for (int t = 0; t < 60; ++t) { op2::TethysGame::advanceTick(); op2::tickColony(); }
+        gaiaOk = (dono == 6) && op2::g_units[alvo].id != -1;
+        std::printf("[Transfer] para a Gaia: dono=%d (esperado 6) e o jogo seguiu %s\n",
+                    dono, gaiaOk ? "ok" : "FALHOU");
+    }
+
     renderer.shutdown();
     SDL_Quit();
-    return avisoOk ? 0 : 1;
+    return (avisoOk && gaiaOk) ? 0 : 1;
 }
 static int runPaneTest(const std::string& dll, const std::string& prefix) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
@@ -4503,6 +4569,22 @@ static int runMdTest(const std::string& mapName) {
     };
     casos.push_back({"inimigo: a defesa engaja o missil", engajou(false), 1});
     casos.push_back({"ALIADO: a defesa nao engaja", engajou(true), 0});
+
+    // Item 2 da lista do OPUPatch: no original, missil mirado EM CIMA de uma
+    // Meteor Defense passava batido pelas defesas vizinhas. Aqui a conta de
+    // distancia e feita da posicao do MISSIL, entao em cima da defesa da zero
+    // e ela engaja -- o caso trava isso.
+    {
+        op2::g_playerData[0].allyMask = (1u << 0) | 0x40u;        // inimigos
+        const int m = op2::setEMPMissile(bx + 6, by + 2, 0, bx + 6, by + 2);  // o tile DA defesa
+        if (m) {
+            op2::g_units[m].field22 = 9;
+            op2::g_units[m].field3C = 0x10;
+            op2::missilePeriodicTick(m);
+            casos.push_back({"missil EM CIMA da defesa: ela engaja",
+                             (op2::g_units[m].flags & 0x40000u) ? 1 : 0, 1});
+        }
+    }
 
     int ruins = 0;
     for (const Caso& c : casos) {

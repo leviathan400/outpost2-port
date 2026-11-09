@@ -189,13 +189,17 @@ bool salvageActionTick(int id) {
         const uint32_t cell = g_gameMap.rawCell(x, y);
         const int tile = static_cast<int>((cell >> 5) & 0x7FF);
         int kind = 0, amount = 0;
-        if (rubbleTile(tile, false)) { kind = 6; amount = 0xD7; }
-        else if (rubbleTile(tile, true)) { kind = 7; amount = 0xFA; }
-        else if (const int w = wreckAtTile(u)) {
+        // CORRECAO: o original testa o ENTULHO primeiro, entao um destroco
+        // posto num tile de entulho era carregado como entulho -- e o tile
+        // ainda era terraplanado, levando o destroco junto. Destroco e peca
+        // unica de missao; entulho tem em todo canto: o destroco vem antes.
+        if (const int w = wreckAtTile(u)) {
             kind = 9;
             amount = g_units[w].wreckTech - 0x1F40;
             g_units[w].field22 = SUB_REMOVE;
         }
+        else if (rubbleTile(tile, false)) { kind = 6; amount = 0xD7; }
+        else if (rubbleTile(tile, true)) { kind = 7; amount = 0xFA; }
         truckSetCargo(id, kind, amount, 0);                   // vt[0x94]
         UnitRecord& t = g_units[id];
         if (kind != 9) {                                      // entulho → terraplanado

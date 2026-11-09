@@ -8,7 +8,7 @@
 > **5.9** (the per-item PREFERENCES table at `0x4E3118`, and the screen's
 > real structure, still open) **5.10** (the OPUPatch defect list checked
 > against this port) and **5.11** (the Savant alerts, and a message-filter
-> defect of this port's own) and **5.12** (three more from the OPUPatch list). The recent changes are summarised in
+> defect of this port's own) **5.12** and **5.13** (the rest of the OPUPatch list, now closed). The recent changes are summarised in
 > [README.EN.md](README.EN.md).
 
 # Outpost 2: Divided Destiny — Modern Port (C++17/SDL2)

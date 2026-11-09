@@ -1228,6 +1228,70 @@ mudança de jogo: fica para quando for decidido.
 
 ---
 
+## 5.13. Os últimos da lista do OPUPatch (2026-11-09)
+
+Com estes, **os nove que faltavam conferir estão fechados**. Nenhum ficou por
+afirmar sem abrir o mecanismo.
+
+### `DoInfect` não fazia nada com mais de um jogador
+
+```asm
+mov     eax, dword_56DEC0
+cmp     eax, 1
+jg      loc_476C3F          ; mais de um jogador -> sai
+```
+
+O porte transcreveu isso fielmente. Como **quase toda missão de campanha tem
+dois ou três jogadores**, o `DoInfect` das missões era um `return` disfarçado —
+a praga nunca infectava prédio nenhum por chamada de script. Nada no corpo da
+função depende de haver só um jogador: a guarda saiu.
+
+Caso novo no `--colonytest`, com o número de jogadores como **controle**: sem
+ele o caso não mediria nada. Repondo a guarda: 1 falha.
+
+### O destroço virava entulho
+
+Na coleta (ação 0x0F), o original testa o **entulho primeiro**:
+
+```c
+if (rubbleTile(tile, false))      { kind = 6; ... }   // entulho comum
+else if (rubbleTile(tile, true))  { kind = 7; ... }   // entulho raro
+else if (wreckAtTile(u))          { kind = 9; ... }   // destroço
+```
+
+Um destroço posto num tile de entulho era carregado **como entulho** — e pior,
+o tile era terraplanado em seguida (`kind != 9`), levando o destroço junto.
+Destroço é peça única de missão e entulho tem em todo canto: o destroço passou
+a vir antes.
+
+Caso novo no `--salvagetest`: destroço sobre entulho dá carga tipo 9 e o tile
+**continua** 0x16; o controle (só entulho) segue dando 6. Com a ordem do
+original: carga 6 e o tile terraplanado para 0x15.
+
+> O `--salvagetest` **devolvia 0 sempre**. Imprimia o `FALHOU` e passava — a
+> mesma armadilha que o `--chattest` já tinha pregado. Agora reprova.
+
+### Os dois que não se aplicam, agora com teste
+
+- **Míssil mirado em cima de uma Meteor Defense**: no original as defesas
+  vizinhas o ignoravam. Aqui a distância é medida da posição do **míssil**,
+  então em cima da defesa dá zero e ela engaja. Caso novo no `--mdtest`.
+- **Transferir unidade para a Gaia** (jogador 6): trava o original. Aqui o
+  caminho é o mesmo dos outros jogadores e os vetores têm `kMaxPlayers = 7`
+  posições, então 6 é índice válido. Caso novo no `--transfertest`, que
+  confere o dono **e** que a simulação segue depois.
+
+### O placar da lista
+
+| | |
+|---|---|
+| Corrigidos | míssil de aliado, muro no 3×3, perma-wall, muro sobre unidade, `ForceMorale*`, `DoInfect`, destroço virando entulho, avisos de transferência e de energia/estoque |
+| Não se aplicam ao porte | EMP para Eden, míssil em cima da defesa, `ScGroup::TakeUnit`, transferir para a Gaia, alerta de aliança no início |
+| Achado nosso, não deles | o relógio do filtro de mensagens (5.11) e a ausência de teto de unidades (5.10) |
+| Decisão de jogo, em aberto | carga parcial do caminhão; cheats em multijogador (mantidos); mudanças de equilíbrio |
+
+---
+
 ## 6. Build e execução
 
 **Toolchain:** CMake >= 3.15 + MSVC, C++17, SDL2 2.30.9 (em `third_party/`).

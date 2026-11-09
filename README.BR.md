@@ -253,6 +253,11 @@ cursores `.ANI`.
   míssil que ia no inimigo.
 - **O muro não falha mais** por ter perto dele um muro em obra, a praga ou
   lava. Prédio vizinho continua impedindo, como deve.
+- **A praga nunca infectava prédio por chamada de missão**: o `DoInfect`
+  saía sem fazer nada quando a partida tinha mais de um jogador — ou seja, em
+  quase toda missão de campanha.
+- **Destroço de nave posto sobre entulho era recolhido como entulho**, e o
+  tile ainda era terraplanado, levando o destroço junto.
 - **`ForceMorale*` das missões só pegava na segunda chamada**, e a primeira
   deixava a colônia em `Great` em vez do nível pedido.
 - **"Perma-walls" invisíveis**: o Earthworker que morria levantando um muro

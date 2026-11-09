@@ -529,7 +529,10 @@ static int buildingMaxHP(const UnitRecord& r) {
 void unitDoInfect(int id) {                                  // ?DoInfect
     UnitRecord& r = g_units[id];
     if (r.id == -1 || (r.flags & UNIT_DEAD) || !(r.flags & UNIT_BUILDING)) return;
-    if (TethysGame::noPlayers() > 1) return;
+    // CORRECAO: o original sai aqui quando a partida tem mais de um jogador
+    // (`cmp dword_56DEC0, 1 / jg`). Como quase toda missao de campanha tem dois
+    // ou tres jogadores, isso deixava o DoInfect das missoes sem fazer NADA --
+    // nada no corpo abaixo depende de haver so um jogador.
     soundPlayAt(unitOX(r), unitOY(r), 0x53);
     colonyStaffKilled(id);
     UnitRecord& b = g_units[id];
