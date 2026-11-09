@@ -38,6 +38,7 @@
 #include "game/messages.h"
 #include "game/pinwheel.h"
 #include "mission/mission.h"
+#include "harness_mode.h"
 #include "game/research.h"
 #include "game/start_info.h"
 #include "game/save_game.h"
@@ -2898,7 +2899,7 @@ static int runPinwheelTest(const std::string& dll, int calls, int ticks) {
 // em coordenadas do quadro e não da vista, caía no tile de baixo) e confere que
 // o caminhão ATRACA; depois clica num tile livre e confere que ele chega
 // exatamente lá. Sai 0 se os dois casos passam.
-static int runDockClickTest(const std::string& dll) {
+static int runDockClickTest(const std::string& dll, int bldType = 0x27) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
     op2::g_ResManager.init(".");
     op2::g_art.load();
@@ -2913,7 +2914,7 @@ static int runDockClickTest(const std::string& dll) {
     for (size_t i = 1; i < op2::g_units.size(); ++i) {
         const op2::UnitRecord& r = op2::g_units[i];
         if (r.id == -1 || (r.owner & 0x0F) != me) continue;
-        if (!agri && r.type == 0x27) agri = static_cast<int>(i);
+        if (!agri && r.type == bldType) agri = static_cast<int>(i);
     }
     // Um caminhão que PODE atracar no Agridome (vazio ou com comida, sub_44DA80);
     // com outra carga o original não faz nada ao clicar na doca.
@@ -2927,7 +2928,7 @@ static int runDockClickTest(const std::string& dll) {
     }
     int dx = 0, dy = 0;
     if (!agri || !truck || !op2::dockCell(agri, dx, dy)) {
-        std::printf("[DockClick] sem Agridome/caminhao/doca (agri=%d truck=%d)\n", agri, truck);
+        std::printf("[DockClick] sem predio 0x%02X/caminhao/doca (bld=%d truck=%d)\n", bldType, agri, truck);
         renderer.shutdown(); SDL_Quit(); return 3;
     }
     auto tileOf = [](int id, int& x, int& y) {
@@ -2950,14 +2951,25 @@ static int runDockClickTest(const std::string& dll) {
     int tx, ty;
     tileOf(truck, tx, ty);
     const int sx0 = tx, sy0 = ty;                    // tile de partida (fica livre)
-    std::printf("[DockClick] Agridome %d doca (%d,%d); caminhao %d em (%d,%d)\n", agri, dx, dy, truck, tx, ty);
+    std::printf("[DockClick] predio 0x%02X %d doca (%d,%d); caminhao %d em (%d,%d)\n", bldType, agri, dx, dy, truck, tx, ty);
 
     // 1) doca: clique 26 px abaixo do topo do tile (parte de baixo).
     gs.setSelection({truck});
     rightClick(dx * 32 + 16, dy * 32 + 26);
     int docked = 0;
-    for (int k = 0; k < 1200 && !docked; k += 25) { run(25); docked = op2::dockedVehicle(agri) == truck; }
+    // Atracou = ficou na doca (dockedVehicle) ou já carregou nela: na mina o
+    // caminhão sai cheio de minério, e aí dockedVehicle (só aceita vazio) é 0.
+    const uint16_t cargo0 = op2::g_units[truck].cargo;
+    for (int k = 0; k < 1200 && !docked; k += 25) {
+        run(25);
+        docked = op2::dockedVehicle(agri) == truck || op2::g_units[truck].cargo != cargo0;
+    }
     tileOf(truck, tx, ty);
+    std::printf("[DockClick] carga final '%s' acao %d\n", op2::truckCargoName(op2::g_units[truck]),
+                op2::g_units[truck].action);
+    // A animação de carga ([+0x22] = 0x0D) trava o caminhão, como no original;
+    // espera ela acabar antes do próximo clique.
+    for (int k = 0; k < 400 && op2::g_units[truck].field22 == 0x0D; ++k) run(1);
     const bool okDock = docked != 0;
     std::printf("[DockClick] doca: caminhao em (%d,%d), atracado=%s -> %s\n", tx, ty, docked ? "sim" : "nao",
                 okDock ? "PASSOU" : "FALHOU");
@@ -2969,8 +2981,26 @@ static int runDockClickTest(const std::string& dll) {
     for (int k = 0; k < 1200 && !arrived; k += 25) { run(25); tileOf(truck, tx, ty); arrived = tx == gx && ty == gy; }
     std::printf("[DockClick] mover p/ (%d,%d): caminhao em (%d,%d) -> %s\n", gx, gy, tx, ty,
                 arrived ? "PASSOU" : "FALHOU");
+
+    // 3) fork: um caminhão que NÃO pode atracar (carregado) vai até a doca
+    // mesmo assim (o original ignorava o clique).
+    int other = 0;
+    for (size_t i = 1; i < op2::g_units.size() && !other; ++i) {
+        const op2::UnitRecord& r = op2::g_units[i];
+        if (r.id != -1 && (r.owner & 0x0F) == me && r.type == op2::mapCargoTruck &&
+            !op2::vehicleCanDock(static_cast<int>(i), agri, true)) other = static_cast<int>(i);
+    }
+    bool reached = true;
+    if (other) {
+        gs.setSelection({other});
+        rightClick(dx * 32 + 16, dy * 32 + 16);
+        reached = false;
+        for (int k = 0; k < 1600 && !reached; k += 25) { run(25); tileOf(other, tx, ty); reached = tx == dx && ty == dy; }
+        std::printf("[DockClick] carregado '%s' p/ a doca: em (%d,%d) -> %s\n",
+                    op2::truckCargoName(op2::g_units[other]), tx, ty, reached ? "PASSOU" : "FALHOU");
+    }
     renderer.shutdown(); SDL_Quit();
-    return (okDock && arrived) ? 0 : 4;
+    return (okDock && arrived && reached) ? 0 : 4;
 }
 
 static int runMissionTest(const std::string& dll, const std::string& outPath, int ticks,
@@ -5315,6 +5345,8 @@ int main(int argc, char* argv[]) {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     // Modos utilitários (sem o loop interativo).
     for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--harness") == 0)
+            return op2::runHarness(argc, argv);
         if (std::strcmp(argv[i], "--extract") == 0 && i + 2 < argc)
             return runExtract(argv[i + 1], argv[i + 2]);
         if (std::strcmp(argv[i], "--rendermap") == 0 && i + 2 < argc)
@@ -5436,7 +5468,7 @@ int main(int argc, char* argv[]) {
         if (std::strcmp(argv[i], "--pinwheeltest") == 0 && i + 3 < argc)
             return runPinwheelTest(argv[i + 1], atoi(argv[i + 2]), atoi(argv[i + 3]));
         if (std::strcmp(argv[i], "--dockclicktest") == 0 && i + 1 < argc)
-            return runDockClickTest(argv[i + 1]);
+            return runDockClickTest(argv[i + 1], i + 2 < argc ? (int)std::strtol(argv[i + 2], nullptr, 16) : 0x27);
         if (std::strcmp(argv[i], "--missiontest") == 0 && i + 2 < argc)
             return runMissionTest(argv[i + 1], argv[i + 2], i + 3 < argc ? atoi(argv[i + 3]) : 200,
                                   i + 5 < argc ? atoi(argv[i + 4]) : -1,

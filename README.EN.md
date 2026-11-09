@@ -176,7 +176,7 @@ The game's `OUTPOST2.INI` file is respected. The port adds seven keys the
 original doesn't have — AI level, night darkness, volume, demo camera and
 fullscreen; they are documented in `PORT_STATUS.EN.md`.
 
-There are **98 command-line modes** for tests and captures, among them a
+There are **99 command-line modes** for tests and captures, among them a
 regression battery (`--savetest` proves save/reload determinism). The list is
 in `PORT_STATUS.EN.md`.
 
@@ -208,7 +208,7 @@ and what was checked and discarded from the cheat lists that circulate.
 
 ```
 src/
-  main.cpp        entry point + the 98 test/capture modes
+  main.cpp        entry point + the 99 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -250,6 +250,16 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
   the missile on its way to the enemy.
 - **Walls no longer fail to build** next to a wall under construction, Blight
   or lava. A neighbouring building still blocks, as it should.
+- **The simulation clock was raised too early.** The game raises its tick
+  counter only at the end of the cycle, after the unit loop; the port raised it
+  first, so everything gated on `(id ^ tick)` ran a tick out of phase.
+- **The debug HUD drew a random number every tick**, shifting the generator's
+  sequence — every roll after it (weapon damage, for one) came out different
+  from the original. It now reads the generator's state instead of drawing.
+- **Dock pads, Magma Vents and the minimap zoom**: the pads of mines, storage
+  tanks and the Agridome now come from the original's ground-layer pass (with
+  damage states), Magma Vents are drawn at last, and the minimap opens fitted
+  to the whole map, as the game does.
 - **Cargo Trucks can be partially loaded.** The game only allowed loading
   with enough in storage to fill the truck, so the last 900 units of metal were
   stuck there. Along with it, objectives like "have 5 trucks of common metal"

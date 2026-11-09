@@ -48,7 +48,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 98 modos de teste/captura
+  main.cpp        entrada + os 99 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -1350,6 +1350,69 @@ contar caminhões **1**.
 
 ---
 
+## 5.15. O relógio do tique, e o HUD que sorteava (2026-11-09)
+
+Duas divergências de **simulação** do porte, achadas comparando-o com o
+original cena a cena num banco de provas (`--harness`, que lê um roteiro, roda
+a partida sem janela e grava `trace.jsonl` com os mesmos campos do original).
+
+### O tique subia cedo demais
+
+O original levanta o contador **no fim** do `ProcessGameCycle`, depois do laço
+de unidades:
+
+```asm
+call    sub_43AD30          ; 0x48A01B  o laço das unidades
+...
+inc     [GameImpl+0x84]     ; 0x48A020..0x48A02D  só agora o tique sobe
+```
+
+Ou seja: economia, gatilhos, pacotes de comando e unidades **todos veem o tique
+anterior**. O porte subia primeiro, então cada porta do tipo `(id ^ tick) & 7`
+abria um tique adiantada — a varredura das torres ociosas ficava fora de fase e,
+num duelo, o outro tanque procurava alvo antes. O `advanceTick` foi para depois
+do laço, e o `netApplyTurn` passou a receber `tique + 1` para o número do turno
+não mudar.
+
+### O HUD de depuração sorteava um número por tique
+
+O campo "Rand" do HUD chamava `getRand(100)` **a cada tique**. O original não
+sorteia nada ali — e cada sorteio desloca a sequência inteira, então todo
+número tirado depois (dano de arma, por exemplo) saía diferente do original. O
+HUD agora **lê o estado** do gerador em vez de sortear.
+
+Com as duas, os oito duelos do banco batem com o original em todos os campos
+rastreados e no RNG, tique a tique; no `line_fast` a única diferença que resta é
+o tique em que o estado da rota é liberado (731 aqui, 732 lá).
+
+> Nenhum `--savetest` pegaria isto: ele compara o porte **com ele mesmo**, e as
+> duas divergências são coerentes consigo. Só a comparação com o jogo de 1997
+> mostra.
+
+### No mesmo lote
+
+- **As plataformas de doca** das minas, do Magma Well, dos tanques e do
+  Agridome passaram a sair do passe de "camada de chão" do original (slot 30 da
+  vtable do prédio), com a animação certa por tipo e por dano — no lugar da
+  plataforma posta à mão em 2026-11-07, que não mostrava dano.
+- **Os respiradouros de magma** (tipo `0x52`) nunca eram desenhados; entram no
+  mesmo passe (animação `0x2A2`), e somem quando há um Magma Well em cima.
+- **A escala de noite dos sprites** usava a rampa inteira do original enquanto o
+  terreno segue a chave `NightDarkness` — o respiradouro saía mais escuro que o
+  chão em volta. Agora os dois usam a mesma escala.
+- **O minimapa abre no zoom 0** (encaixe) a cada mapa carregado, como o
+  `MiniMap::InitializeForMap`; antes abria no 1 e um mapa pequeno virava um
+  quadradinho no meio da caixa.
+- **Clique direito numa doca sempre leva o veículo até lá.** No original, com
+  um veículo que não pode usá-la (um caminhão carregado numa mina, que só
+  aceita vazios), o clique era ignorado e o caminhão não saía do lugar.
+- O `--dockclicktest` ganhou o tipo de prédio como argumento (`15`/`16`/`2A`
+  para as minas, `19`/`1A` para os tanques, `27` para o Agridome — o padrão).
+  Vale lembrar que ele sai com **3** quando a missão escolhida não tem aquele
+  prédio: é premissa, não falha.
+
+---
+
 ## 6. Build e execução
 
 **Toolchain:** CMake >= 3.15 + MSVC, C++17, SDL2 2.30.9 (em `third_party/`).
@@ -1371,7 +1434,7 @@ missão e os recursos originais do diretório de trabalho).
 
 ### Testes por linha de comando
 
-São 98 modos. Os que cobrem regressão de verdade:
+São 99 modos. Os que cobrem regressão de verdade:
 
 | Modo | O que prova |
 |---|---|

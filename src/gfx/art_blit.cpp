@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "artfile.h"
+#include "pbmp.h"
 
 namespace op2 {
 
@@ -10,22 +11,26 @@ static bool s_shadows = true;   // dword_575630
 void setArtShadows(bool on) { s_shadows = on; }
 
 // Rampa do ciclo dia/noite (sub_4A9BF0 com N = 32), por canal de 8 bits.
+// Fork: the same scale as the terrain (nightShadeMul, i.e. the NightDarkness
+// setting, and no 5-bit truncation) -- with the original's full ramp the
+// few sprites that darken (the Magma Vent) came out darker than the ground
+// under them. Rebuilt when the setting changes.
 static uint8_t s_shadeLut[32][256];
-static bool s_shadeLutReady = false;
+static int s_shadeLutGen = -1;
 
 static void buildShadeLut() {
     for (int d = 0; d < 32; ++d) {
-        const int mult = (32 - d + 4) < 32 ? (32 - d + 4) : 32;
+        const int mult = nightShadeMul(d);
         for (int v = 0; v < 256; ++v)
-            s_shadeLut[d][v] = static_cast<uint8_t>(((v * mult) / 32) & 0xF8);
+            s_shadeLut[d][v] = static_cast<uint8_t>((v * mult) / 32);
     }
-    s_shadeLutReady = true;
+    s_shadeLutGen = nightDarkness();
 }
 
 uint32_t shadeArgb(uint32_t argb, int darkness) {
     if (darkness <= 0) return argb;
     if (darkness > 31) darkness = 31;
-    if (!s_shadeLutReady) buildShadeLut();
+    if (s_shadeLutGen != nightDarkness()) buildShadeLut();
     const uint8_t* t = s_shadeLut[darkness];
     return (argb & 0xFF000000u) | (static_cast<uint32_t>(t[(argb >> 16) & 0xFF]) << 16)
                                 | (static_cast<uint32_t>(t[(argb >> 8) & 0xFF]) << 8)
@@ -73,31 +78,6 @@ bool blitArtFrame(uint32_t* fb, int fbW, int fbH, int animIdx, int frameIdx,
                     d = shadeArgb(c | 0xFF000000u, darkness);
                 }
             }
-        }
-    }
-    return true;
-}
-
-bool blitArtImage(uint32_t* fb, int fbW, int fbH, int imageIdx, int x, int y,
-                  int playerColor, int clipX0, int clipY0, int clipX1, int clipY1) {
-    if (!g_art.ok() || imageIdx < 0 || imageIdx >= g_art.numImages()) return false;
-    if (clipX0 < 0) clipX0 = 0;
-    if (clipY0 < 0) clipY0 = 0;
-    if (clipX1 > fbW) clipX1 = fbW;
-    if (clipY1 > fbH) clipY1 = fbH;
-    const ArtImage& m = g_art.image(imageIdx);
-    if (m.isShadow()) return false;
-    std::vector<uint32_t> px;
-    g_art.decode(imageIdx, px, /*transparent*/ true, /*palOverride*/ -1, playerColor);
-    for (uint32_t yy = 0; yy < m.height; ++yy) {
-        const int py = y + static_cast<int>(yy);
-        if (py < clipY0 || py >= clipY1) continue;
-        for (uint32_t xx = 0; xx < m.width; ++xx) {
-            const uint32_t c = px[yy * m.width + xx];
-            if (!(c >> 24)) continue;
-            const int pxs = x + static_cast<int>(xx);
-            if (pxs < clipX0 || pxs >= clipX1) continue;
-            fb[py * fbW + pxs] = c | 0xFF000000u;
         }
     }
     return true;

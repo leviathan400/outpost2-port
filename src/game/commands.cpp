@@ -701,7 +701,8 @@ UiClick uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int til
     }
     if (cmd != UC_MOVE) return UiClick::NOT_PORTED;
     // sub_451280: na célula da doca de um prédio → pacote 3 (ou 4 na garagem de
-    // Eden) se o 1º selecionado pode atracar (sub_44DA80); se não pode, nada.
+    // Eden) se o 1º selecionado pode atracar (sub_44DA80); se não pode, nada
+    // no original (aqui, fork: mover simples até a doca).
     // Fora da doca → pacote 2 (mover).
     const int me = TethysGame::localPlayer();
     CommandPacket pkt;
@@ -711,10 +712,15 @@ UiClick uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int til
         int dx, dy;
         if (occ > 0 && occ < static_cast<int>(g_units.size()) && (g_units[occ].flags & UNIT_BUILDING) &&
             dockCell(occ, dx, dy) && (dx & (g_gameMap.width() - 1)) == (tileX & (g_gameMap.width() - 1)) && dy == tileY) {
-            if (sel.empty() || !vehicleCanDock(sel[0], occ, true)) return UiClick::DONE;
-            const UnitRecord& b = g_units[occ];
-            const bool edenBld = (b.owner & 0x0F) < kMaxPlayers && g_playerData[b.owner & 0x0F].isEden;
-            pkt.type = (b.type == 0x29 && edenBld) ? 4 : 3;
+            // Fork: the original returns here, sending nothing, when the first
+            // selected vehicle can't use this dock (e.g. a loaded truck on a
+            // mine, which only takes empty ones), so the truck just ignored the
+            // click. Here it drives onto the dock tile with a plain move instead.
+            if (!sel.empty() && vehicleCanDock(sel[0], occ, true)) {
+                const UnitRecord& b = g_units[occ];
+                const bool edenBld = (b.owner & 0x0F) < kMaxPlayers && g_playerData[b.owner & 0x0F].isEden;
+                pkt.type = (b.type == 0x29 && edenBld) ? 4 : 3;
+            }
         }
     }
     pkt.waypoints.push_back(packLocation(tileX, tileY));

@@ -178,7 +178,7 @@ que o original não tem — nível da IA, escuridão da noite, volume, câmera d
 demo, tela cheia, a pele dos menus (`MenuSkin`) e a volta horizontal do mapa
 (`MapWrap`); estão documentadas no `PORT_STATUS.BR.md`.
 
-Há **98 modos de linha de comando** para testes e capturas, entre eles uma
+Há **99 modos de linha de comando** para testes e capturas, entre eles uma
 bateria de regressão (`--savetest` prova o determinismo de salvar/recarregar).
 A lista está no `PORT_STATUS.BR.md`.
 
@@ -210,7 +210,7 @@ e descartado das listas de cheat que circulam por aí.
 
 ```
 src/
-  main.cpp        entrada + os 98 modos de teste/captura
+  main.cpp        entrada + os 99 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -253,6 +253,16 @@ cursores `.ANI`.
   míssil que ia no inimigo.
 - **O muro não falha mais** por ter perto dele um muro em obra, a praga ou
   lava. Prédio vizinho continua impedindo, como deve.
+- **O relógio da simulação subia cedo demais.** O jogo levanta o contador de
+  tiques só no fim do ciclo, depois do laço de unidades; o porte levantava
+  antes, e tudo que depende de `(id ^ tique)` ficava um tique fora de fase.
+- **O HUD de depuração sorteava um número por tique**, deslocando a sequência
+  do gerador — todo sorteio seguinte (dano de arma, por exemplo) saía diferente
+  do original. Agora ele lê o estado do gerador em vez de sortear.
+- **Plataformas de doca, respiradouros de magma e o zoom do minimapa**: as
+  plataformas das minas, tanques e Agridome passaram a sair do passe de camada
+  de chão do original (com dano), os respiradouros de magma passaram a ser
+  desenhados, e o minimapa abre encaixando o mapa inteiro, como no jogo.
 - **Caminhão carrega carga parcial.** O jogo só deixava carregar com estoque
   para encher o caminhão, então os últimos 900 de metal ficavam presos no
   depósito. Junto disso, objetivos do tipo "ter 5 caminhões de metal" passaram

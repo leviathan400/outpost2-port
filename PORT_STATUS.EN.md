@@ -8,7 +8,9 @@
 > **5.9** (the per-item PREFERENCES table at `0x4E3118`, and the screen's
 > real structure, still open) **5.10** (the OPUPatch defect list checked
 > against this port) and **5.11** (the Savant alerts, and a message-filter
-> defect of this port's own) **5.12**, **5.13** and **5.14** (the rest of the OPUPatch list, now closed). The recent changes are summarised in
+> defect of this port's own) **5.12**, **5.13** and **5.14** (the rest of the OPUPatch list, now closed)
+> and **5.15** (the tick raised too early, and the debug HUD drawing from the
+> RNG every tick). The recent changes are summarised in
 > [README.EN.md](README.EN.md).
 
 # Outpost 2: Divided Destiny — Modern Port (C++17/SDL2)
@@ -59,7 +61,7 @@ coverage by comparing the DLLs' import tables against the registry in
 
 ```
 src/
-  main.cpp        entry point + the 98 test/capture modes
+  main.cpp        entry point + the 99 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -641,7 +643,7 @@ mission DLLs and the original resources from the working directory).
 
 ### Command-line tests
 
-There are 98 modes. The ones that cover real regressions:
+There are 99 modes. The ones that cover real regressions:
 
 | Mode | What it proves |
 |---|---|

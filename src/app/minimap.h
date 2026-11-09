@@ -18,6 +18,11 @@ namespace op2 {
 class MiniMap {
 public:
     void configure(int winW, int winH);    // sub_48E7F0 (chamar ao carregar o mapa)
+    // Fork: MiniMap::InitializeForMap (0x0048C9C0 in the OPU-era exe) sets
+    // zoom = 0 on every map load before RecalcScale: the "fit" scale, which
+    // stretches the whole map over the window (RecalcScale then raises it to
+    // 1 when the map is bigger than the window). Call before configure().
+    void resetForMap() { m_zoom = 0; m_offX = 0; m_offY = 0; }
     void zoomIn();                         // sub_48E660: zoom + 1, no máximo 5
     void zoomOut();                        // sub_48E720: zoom − 1, no mínimo [+0x1050]
     int  zoom() const { return m_zoom; }
@@ -64,9 +69,10 @@ private:
     int m_winW = 0, m_winH = 0;
     int m_fitX = 0, m_fitY = 0;            // [+8] / [+0xC]
     int m_scale = 0;                       // [+0x10] = [+0x14]
-    // [+0x1054] vem do "Zoom" do [Game] (sub_49ACA0, padrão 1 — e o clamp de lá
-    // sempre acaba em 1); [+0x1050] é o mínimo calculado por sub_48E7F0.
-    int m_zoom = 1, m_minZoom = 0;
+    // [+0x1054]: 0 at every map load (resetForMap); the "Zoom" of [Game]
+    // (sub_49ACA0) only seeded it before. [+0x1050] é o mínimo calculado por
+    // sub_48E7F0.
+    int m_zoom = 0, m_minZoom = 0;
     int m_offX = 0, m_offY = 0;            // [+0x105C] / [+0x1058]
     bool m_tactical = false;               // [+0x104C]
     bool m_globe = false;                  // [+0x1088]
