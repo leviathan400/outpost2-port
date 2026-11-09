@@ -27,6 +27,11 @@ struct UnitRecord;
 
 // sub_438C60: a célula aceita muro/tubo do tipo? (contexto do pathfinder já setado)
 bool wallCellOk(int x, int y, int wallType);
+// CORRECAO (nao e do original): larga a celula reservada por um Earthworker que
+// estava levantando muro. Sem isto, morrer no meio da obra deixa a reserva do
+// bit 31 na celula para sempre -- um "perma-wall" invisivel que bloqueia o
+// caminho e nao aparece em lugar nenhum. Chamada na morte da unidade.
+void earthworkAbort(int id);
 // sub_438E50: a célula aceita terraplanagem (cursor)?
 bool dozeCellOk(int x, int y);
 

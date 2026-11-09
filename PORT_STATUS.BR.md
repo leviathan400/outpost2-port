@@ -1166,6 +1166,68 @@ antes e depois.
 
 ---
 
+## 5.12. Mais três da lista do OPUPatch (2026-11-09)
+
+Dos nove que faltavam conferir, três se confirmaram e foram corrigidos; dois
+**não se aplicam** ao porte e um é decisão de jogo, não conserto.
+
+### `ForceMorale*` só pegava na segunda chamada
+
+`sub_4229F0` (casos 21..25) faz `mascara ^= bit` nas **cinco** máscaras de nível
+e depois liga o bit na escolhida. Como o bit começa apagado, a primeira chamada
+o **liga nos cinco** — e quem lê (`sub_469730`) devolve o **primeiro** nível cuja
+máscara tem o bit, isto é `Great`, qualquer que tenha sido o pedido. Só a
+segunda chamada acertava, porque aí o XOR apagava os cinco antes do OR.
+
+Trocado por apagar o bit em todas e ligar na escolhida, que é o que o XOR
+queria dizer. O `--colonytest` agora exige que a **primeira** `ForceMoraleGood`
+já dê o nível 1; com o XOR de volta ela dá 0 (`Great`).
+
+### O "perma-wall": a reserva que ficava para sempre
+
+Ao começar um muro, o Earthworker marca o **bit 31** da célula (`sub_4235E0`) e
+só o tira ao assentar. Se ele morre no meio, ninguém tira: fica um bloqueio
+**invisível** na célula, para sempre. Era o único caminho no porte que escrevia
+esse bit sem par.
+
+Entrou `earthworkAbort(id)`, chamada no `killUnit`. Ela só larga a célula se a
+reserva ainda estiver lá **e** nada tiver sido assentado — se a célula já virou
+muro, o bit 31 é do muro e não pode sair. O teste tem esse controle.
+
+### O muro assentava por cima de quem estivesse no tile
+
+Na hora de assentar, o original só cancela e devolve o metal quando é **tubo**;
+o muro era posto por cima de outra unidade. Agora os dois cancelam. O teste do
+muro não pode ser o `wallCellOk` — a própria reserva do bit 31 já o reprovaria
+—, então o que vale é se **outra** unidade ocupa a célula.
+
+### Os testes
+
+Três casos novos no `--walltest`, pelos pontos de entrada de verdade
+(`killUnit` e `wallBuildTick`): a reserva sai na morte, o **muro pronto
+sobrevive** (controle) e o tile ocupado cancela, devolve o metal e larga a
+reserva. Neutralizando: sem o `earthworkAbort` **1** falha; com o cancelamento
+só do tubo, **1**. No `--colonytest`, a moral forçada dá **1**.
+
+### Os que NÃO se aplicam
+
+- **Míssil que não pousa para Eden**: as duas entradas Eden do míssil EMP na
+  tabela de animação (`dword_4E3FE0`) são **0**, e é daí que vem o defeito
+  deles. O porte já atravessa isso: `lastFrameOr1` devolve 1 quadro quando a
+  animação é 0, então a contagem desce e o míssil pousa.
+- **Overflow em `ScGroup::TakeUnit`**: o `aiTakeUnit` já tem a guarda dos 32 com
+  `std::vector`, e manda a unidade para fora do mapa quando o grupo está cheio,
+  que é o que o original quer fazer.
+
+### Decisão, não conserto
+
+**Carga parcial do caminhão.** Hoje o `L&OAD` só aparece com estoque suficiente
+para encher o caminhão (`truckCap(v) <= pd.ore`). O OPUPatch deixa carregar
+parcial e, com isso, muda como os objetivos de missão contam a carga. É
+mudança de jogo: fica para quando for decidido.
+
+---
+
 ## 6. Build e execução
 
 **Toolchain:** CMake >= 3.15 + MSVC, C++17, SDL2 2.30.9 (em `third_party/`).

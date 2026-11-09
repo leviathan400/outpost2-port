@@ -822,7 +822,13 @@ void colonyForceMorale(int player, int level) {      // sub_4229F0 cases 21..25
         s_forceMask[level] = 0xFFFF;
     } else {
         const uint32_t bit = 1u << player;
-        for (auto& m : s_forceMask) m ^= bit;
+        // CORRECAO: o original faz `m ^= bit` nas CINCO mascaras. Como o bit
+        // comeca apagado, a primeira chamada LIGA o jogador em todos os cinco
+        // niveis -- e quem le (sub_469730) pega o PRIMEIRO nivel cuja mascara
+        // tem o bit, ou seja Great, qualquer que tenha sido o pedido. So a
+        // segunda chamada acerta, porque ai o XOR apaga os cinco antes do OR.
+        // Limpar e o que o XOR queria dizer.
+        for (auto& m : s_forceMask) m &= ~bit;
         s_forceMask[level] |= bit;
     }
     dirtyAll();

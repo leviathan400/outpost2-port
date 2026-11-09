@@ -250,6 +250,12 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
   the missile on its way to the enemy.
 - **Walls no longer fail to build** next to a wall under construction, Blight
   or lava. A neighbouring building still blocks, as it should.
+- **Missions' `ForceMorale*` only took effect on the second call**, and the
+  first one left the colony at `Great` instead of the level asked for.
+- **Invisible "perma-walls"**: an Earthworker that died while building a wall
+  left the cell reserved forever, blocking the path with nothing to show.
+- **Walls are no longer laid on top of a unit standing on the tile**: the
+  operation is cancelled and the metal refunded, as it already was for tubes.
 - **Savant alerts that would not stop repeating.** "Power Levels: Optimal"
   and "Storage Needed" fired on every colony recalculation; they now fire on
   state change only. Shortage warnings still insist, as they should.

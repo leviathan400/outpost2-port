@@ -2378,10 +2378,16 @@ static int runColonyTest(const std::string& mapName) {
         std::printf("[Colony]   ciclo %2d: moral valor=%d nivel=%d tendencia=%+d  eventos=%d lotacao=%d comida=%d deslig=%d\n",
                     k + 1, m.moraleValue, pd.morale, m.moraleTrend, m.moraleEvents, m.crowding, m.foodState, m.disabledPct);
     }
-    {   // Moral forcada (fiel, com o XOR do original): Good sozinho vale Great.
+    bool moralOk = true;
+    {   // Moral forcada. O original liga o bit do jogador nos CINCO niveis na
+        // primeira chamada (XOR) e quem le pega o primeiro, entao um
+        // ForceMoraleGood sozinho valia GREAT e so a segunda chamada acertava.
+        // Corrigido: a PRIMEIRA chamada ja da o nivel pedido (1 = Good).
         op2::TethysGame::ForceMoraleGood(0);
         for (int t = 0; t < 256; ++t) { op2::TethysGame::advanceTick(); op2::tickColony(); }
-        std::printf("[Colony] ForceMoraleGood: valor=%d nivel=%d\n", op2::g_colony[0].moraleValue, pd.morale);
+        moralOk = (pd.morale == 1);
+        std::printf("[Colony] ForceMoraleGood: valor=%d nivel=%d (esperado 1) %s\n",
+                    op2::g_colony[0].moraleValue, pd.morale, moralOk ? "ok" : "FALHOU");
         op2::TethysGame::FreeMoraleLevel(0);
         for (int t = 0; t < 256; ++t) { op2::TethysGame::advanceTick(); op2::tickColony(); }
         std::printf("[Colony] FreeMoraleLevel:  valor=%d nivel=%d\n", op2::g_colony[0].moraleValue, pd.morale);
@@ -2458,7 +2464,7 @@ static int runColonyTest(const std::string& mapName) {
                     vazio, encheu, repetiu, estoqueOk ? "ok" : "FALHOU");
     }
     renderer.shutdown(); SDL_Quit();
-    return avisoOk ? 0 : 1;
+    return (avisoOk && moralOk) ? 0 : 1;
 }
 
 // --combattest <map> <prefix> [w0 w1 w2 w3]: Laser Lynx + Rail Gun Tiger
@@ -4632,9 +4638,76 @@ static int runWallTest(const std::string& mapName) {
         }
     }
 
+    // --- a reserva da celula do muro -------------------------------------
+    // O Earthworker marca o bit 31 da celula quando comeca a levantar o muro e
+    // so o tira ao assentar. Dois buracos vinham dai: morrer no meio deixava a
+    // reserva para sempre (um bloqueio invisivel), e o muro era assentado por
+    // cima de quem estivesse no tile, sem devolver o metal.
+    bool resOk = true;
+    {
+        int wx = -1, wy = -1;
+        for (int y = by + 3; y < H - 3 && wx < 0; ++y)
+            for (int x = bx; x < bx + 8 && wx < 0; ++x)
+                if (op2::g_gameMap.isPassable(op2::LOCATION{x, y}) &&
+                    !(op2::g_gameMap.rawCell(x, y) & 0xAFFF0000u) &&
+                    op2::g_gameMap.isPassable(op2::LOCATION{x, y + 1})) { wx = x; wy = y; }
+        auto temReserva = [&]() { return (op2::g_gameMap.rawCell(wx, wy) & 0x80000000u) != 0; };
+        auto novoEw = [&](int tx, int ty) {
+            op2::Unit u;
+            op2::TethysGame::CreateUnit(u, op2::mapEarthworker, op2::LOCATION{tx, ty}, 0);
+            return u.id();
+        };
+        auto reserva = [&](int id) {
+            op2::g_gameMap.setRawCell(wx, wy, op2::g_gameMap.rawCell(wx, wy) | 0x80000000u);
+            op2::g_units[id].wallCurX = static_cast<int16_t>(wx);
+            op2::g_units[id].wallCurY = static_cast<int16_t>(wy);
+        };
+
+        // (3) morrer no meio da obra larga a celula.
+        const int ew1 = novoEw(wx, wy + 1);
+        reserva(ew1);
+        const bool antes = temReserva();
+        op2::killUnit(ew1, 0);
+        const bool depois = temReserva();
+        if (!antes || depois) resOk = false;
+        std::printf("[WallTest] reserva: antes da morte=%d depois=%d (esperado 1/0) %s\n",
+                    antes ? 1 : 0, depois ? 1 : 0, (antes && !depois) ? "ok" : "FALHOU");
+
+        // Controle: se a celula JA virou muro, o bit 31 e do muro e tem de ficar.
+        op2::createWallOrTube(wx, wy, 0x12);
+        const int ew2 = novoEw(wx, wy + 1);
+        reserva(ew2);
+        op2::killUnit(ew2, 0);
+        const bool muroIntacto = temReserva() &&
+                                 (op2::g_gameMap.rawCell(wx, wy) & 0x1F) >= 0x17;
+        if (!muroIntacto) resOk = false;
+        std::printf("[WallTest] controle: muro pronto sobrevive a morte=%d (esperado 1) %s\n",
+                    muroIntacto ? 1 : 0, muroIntacto ? "ok" : "FALHOU");
+
+        // (4) o tile encheu na hora de assentar: cancela e DEVOLVE o metal.
+        op2::g_gameMap.setRawCell(wx, wy, op2::g_gameMap.rawCell(wx, wy) & 0xFFFF0000u);  // limpa o muro
+        op2::g_gameMap.clearUnitOccupancy(wx, wy);
+        const int ew3 = novoEw(wx, wy + 1);
+        reserva(ew3);
+        op2::g_units[ew3].cargo = 0x12;        // muro comum
+        op2::g_units[ew3].field23 = 0x0A;      // estado "assenta"
+        const int intruso = novoEw(wx + 3, wy + 3);
+        op2::g_gameMap.setUnitOccupancy(wx, wy, intruso);   // alguem no tile
+        const int oreAntes = op2::g_playerData[0].ore;
+        op2::wallBuildTick(ew3);
+        const int cell = static_cast<int>(op2::g_gameMap.rawCell(wx, wy) & 0x1F);
+        const bool naoAssentou = cell < 0x17 || cell > 0x1A;
+        const bool devolveu = op2::g_playerData[0].ore > oreAntes;
+        const bool largou = !temReserva();
+        if (!naoAssentou || !devolveu || !largou) resOk = false;
+        std::printf("[WallTest] tile ocupado: nao assentou=%d devolveu=%d largou a reserva=%d %s\n",
+                    naoAssentou ? 1 : 0, devolveu ? 1 : 0, largou ? 1 : 0,
+                    (naoAssentou && devolveu && largou) ? "ok" : "FALHOU");
+    }
+
     std::fflush(stdout);
     renderer.shutdown(); SDL_Quit();
-    return (fgOk && vizOk) ? 0 : 1;
+    return (fgOk && vizOk && resOk) ? 0 : 1;
 }
 
 // --quaketest <map>: terremoto de magnitude 3 no CC da cena demo; imprime o

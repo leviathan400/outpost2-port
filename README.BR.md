@@ -253,6 +253,12 @@ cursores `.ANI`.
   míssil que ia no inimigo.
 - **O muro não falha mais** por ter perto dele um muro em obra, a praga ou
   lava. Prédio vizinho continua impedindo, como deve.
+- **`ForceMorale*` das missões só pegava na segunda chamada**, e a primeira
+  deixava a colônia em `Great` em vez do nível pedido.
+- **"Perma-walls" invisíveis**: o Earthworker que morria levantando um muro
+  deixava a célula reservada para sempre, bloqueando o caminho sem aparecer.
+- **O muro deixou de ser assentado por cima de quem está no tile**: agora
+  cancela e devolve o metal, como já fazia com o tubo.
 - **Avisos do Savant que não param de repetir.** "Power Levels: Optimal" e
   "Storage Needed" saíam a cada recálculo da colônia; agora só na mudança de
   estado. Os avisos de falta continuam insistindo, como devem.

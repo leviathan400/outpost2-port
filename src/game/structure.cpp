@@ -166,6 +166,10 @@ void killUnit(int id, int delay) {
         cv.flags |= UNIT_DEAD;
         killUnit(r.builderId, 5);
     }
+    // CORRECAO: Earthworker que morre no meio de um muro larga a celula que
+    // tinha reservado -- senao fica um bloqueio invisivel para sempre (o
+    // "perma-wall"). Ver earthworkAbort.
+    earthworkAbort(id);
     r.action = ACT_DIE;
     r.field20 = 1;
     r.field3C = delay;

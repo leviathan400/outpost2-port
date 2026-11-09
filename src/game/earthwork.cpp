@@ -98,6 +98,23 @@ bool wallCellOk(int x, int y, int wallType) {                // sub_438C60
     return true;
 }
 
+// CORRECAO: ver earthwork.h. So larga a celula se a reserva ainda estiver la
+// (bit 31) e nada tiver sido assentado nela (cellType de muro/tubo e 0x17..0x1A
+// -- se ja virou muro, o bit 31 e do muro e nao pode sair).
+void earthworkAbort(int id) {
+    if (!valid(id)) return;
+    UnitRecord& u = g_units[id];
+    if (u.wallCurY < 0) return;
+    const int bx = u.wallCurX & wmask(), by = u.wallCurY;
+    if (by >= 0 && by < g_gameMap.height()) {
+        const uint32_t c = g_gameMap.rawCell(bx, by);
+        const int ct = static_cast<int>(c & 0x1F);
+        if ((c & 0x80000000u) && (ct < 0x17 || ct > 0x1A))
+            g_gameMap.setRawCell(bx, by, c & ~0x80000000u);
+    }
+    u.wallCurY = -1;
+}
+
 bool dozeCellOk(int x, int y) {                              // sub_438E50
     if (y < 0 || y >= g_gameMap.height()) return false;
     x &= wmask();
@@ -465,10 +482,21 @@ void wallBuildTick(int id) {                                 // jpt_43B312 case 
         const int bx = u.wallCurX & wmask(), by = u.wallCurY;
         const int type = static_cast<int16_t>(u.cargo);
         pfSetContext(id);
-        if (type == 0x11 && !wallCellOk(bx, by, 0x11)) {     // tubo: ficou ocupado → devolve
+        // CORRECAO: o original so devolve o metal do TUBO quando a celula
+        // encheu; o muro era assentado por cima de quem estivesse la. Agora os
+        // dois cancelam e devolvem. O teste do muro nao pode ser o wallCellOk:
+        // a propria reserva (bit 31) ja o reprovaria -- o que importa e se
+        // OUTRA unidade esta ocupando a celula.
+        const uint32_t cel = g_gameMap.rawCell(bx, by);
+        const int ocupante = static_cast<int>((cel & 0x7FF0000u) >> 16);
+        const bool encheu = (type == 0x11) ? !wallCellOk(bx, by, 0x11)
+                                           : (ocupante != 0 && ocupante != id);
+        if (encheu) {
             const StructSheetDesc* d = wallSheet(type);
             const int p = ownerOf(u);
             if (d) { g_playerData[p].rareOre += d->player[p].rareOre; g_playerData[p].ore += d->player[p].commonOre; }
+            if (type != 0x11)                                // larga a reserva
+                g_gameMap.setRawCell(bx, by, cel & ~0x80000000u);
         } else {
             if (type != 0x11)                                // tira a reserva antes de assentar
                 g_gameMap.setRawCell(bx, by, g_gameMap.rawCell(bx, by) & ~0x80000000u);
