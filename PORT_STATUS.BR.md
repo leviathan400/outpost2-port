@@ -48,7 +48,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 103 modos de teste/captura
+  main.cpp        entrada + os 104 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -1711,6 +1711,73 @@ nascendo sem o `fromOptions` **4 / 0**; e o `resetIdleClock` fora do
 
 ---
 
+## 5.21. O letreiro de fim de missão (2026-11-09)
+
+"MISSION ACCOMPLISHED" e "MISSION FAILED" saíam na **fontinha de depuração do
+porte**, amarelos e pequenos. No original são grandes e **vermelhos**.
+
+### De onde vem
+
+O texto é escolhido pelo `sub_49CAC0` (a tabela de códigos que o porte já
+tinha) e entregue ao controle **`TFrame+0x1F4`**, um filho transparente
+(`WS_EX_TRANSPARENT`) que serve de letreiro — é o mesmo que escreve
+*"Game Paused. Press CTRL+P to Resume"*. Quem desenha são duas rotinas:
+
+**`sub_4084D0`** cria a fonte uma única vez e a guarda em `[+0x130]`:
+
+| campo | valor |
+|---|---|
+| `lfHeight` | **0x30** (48) — positivo: é a altura da **célula** |
+| `lfWeight` | **0x2BC** (700, negrito) |
+| `lfFaceName` | `Arial` |
+| `lfCharSet` / `lfOutPrecision` / `lfPitchAndFamily` | 1 / 7 / 0x52 |
+
+Os mesmos três últimos das outras faces do jogo, que o porte já reproduz.
+
+**`sub_4085C0`** desenha. `SetBkMode(TRANSPARENT)`, um `DrawText` com
+`DT_CENTER|DT_WORDBREAK|DT_CALCRECT` para **medir** a altura, a centragem
+vertical pelo que ele mediu — e então **cinco passadas**:
+
+1. `SetTextColor(0)` — preto — e o texto nos quatro cantos diagonais de **±2
+   px** (o retângulo anda `+2,+2`, depois `+2,−2`, `−2,−2`, `−2,+2`). É o
+   contorno.
+2. `SetTextColor(0xFF)` — o `COLORREF` `0x0000FF`, ou seja **vermelho puro** —
+   e o texto de volta no lugar certo.
+
+O porte faz exatamente isso: uma sexta face no `UiFont` (`kBanner`, Arial
+negrito de célula 48) e as cinco passadas sobre a vista.
+
+### O teste
+
+`--bannertest <DLL> [saida.bmp]` mede o letreiro **no quadro desenhado**, e por
+**diferença**: desenha um quadro sem o letreiro, guarda, põe o código de fim e
+desenha outro. Só os pixels que mudaram são o letreiro — nem o terreno nem o
+painel entram na conta. Com `dt = 0` nenhum turno avança, e o primeiro caso
+confere justamente isso (dois quadros parados são idênticos), senão a diferença
+não mediria nada.
+
+Para os códigos 3 e 4: há pixels vermelhos; a caixa deles tem **30 px ou mais
+de altura** (a fonte do porte dava 10); a caixa preta é a vermelha **dilatada em
+exatamente 2 px** de cada lado, que é o que as quatro passadas produzem; não
+sobrou nenhum pixel do amarelo antigo; e a caixa está centrada na vista. O
+último caso compara os dois códigos: textos diferentes dão larguras diferentes.
+
+Neutralizando: o amarelo de volta **13** falhas; sem o contorno **2**; a face
+dos títulos no lugar da do letreiro **2**; o contorno a 3 px **2**; o letreiro
+fora do centro **2**; e a face do letreiro criada com corpo 16 **2**.
+
+> O tamanho do quadro só vale **depois** do primeiro `onIdle` — é o
+> `fitToWindow` que o acerta. Medindo antes, a varredura usava 640×480 num
+> quadro de 1280×960 e não via nada: os quatorze casos reprovaram com o
+> letreiro desenhado corretamente na tela.
+
+### O que ficou de fora
+
+O mesmo controle escreve *"Game Paused. Press CTRL+P to Resume"*, e o porte
+ainda não tem a pausa do `Ctrl+P`. Quando tiver, o letreiro já está pronto.
+
+---
+
 ## 6. Build e execução
 
 **Toolchain:** CMake >= 3.15 + MSVC, C++17, SDL2 2.30.9 (em `third_party/`).
@@ -1732,7 +1799,7 @@ missão e os recursos originais do diretório de trabalho).
 
 ### Testes por linha de comando
 
-São 103 modos. Os que cobrem regressão de verdade:
+São 104 modos. Os que cobrem regressão de verdade:
 
 | Modo | O que prova |
 |---|---|
@@ -1750,6 +1817,7 @@ São 103 modos. Os que cobrem regressão de verdade:
 | `--cheattest <DLL>` | os cheats do chat: os quatro hashes do executável e o efeito de cada um |
 | `--item21test <DLL>` | as vozes da plataforma, a arma no ícone do STORAGE e o anel anti-duplicata |
 | `--optmenutest <DLL>` | a aba Options: os botões do PREFERENCES, o rádio do modo de tela e a tela de fim de missão inteira |
+| `--bannertest <DLL> [bmp]` | o letreiro de fim de missão: cor, tamanho, contorno e centragem, medidos no quadro desenhado |
 | `--missiontest <DLL> <saida> <ticks>` | carrega e roda qualquer missão |
 | `--aitest <DLL campanha> <DLL multi>` | o `AILevel` chega ao jogador 0 e o multijogador fica intacto |
 | `--helptest [tópico]` | o leitor do `.HLP` e a navegação da tela do manual |

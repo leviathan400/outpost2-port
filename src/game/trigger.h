@@ -133,5 +133,8 @@ void endGameAborted();
 // O pacote 0x31 (case 49) para quem SAIU: em multijogador o codigo e 9, que
 // leva o shell a tela "MULTIPLAYER GAME STATISTICS"; fora dela, 6.
 void endGamePlayerQuit(int delay);
+// --bannertest: poe o codigo de fim na mao (e o tique de encerramento longe),
+// so para o teste poder desenhar o letreiro de cada codigo.
+void debugSetGameEnd(int code);
 
 } // namespace op2
