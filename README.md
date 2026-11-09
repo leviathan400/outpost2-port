@@ -3,6 +3,12 @@
 A reverse-engineered reimplementation of *Outpost 2: Divided Destiny* (1997)
 in C++17 + SDL2. Requires a legitimate installed copy of the original game.
 
+> [!IMPORTANT]
+> **This fork is an archive copy only.** The main, actively developed project
+> is **[marcelomgoncalves/outpost2](https://github.com/marcelomgoncalves/outpost2)**:
+> go there for the latest code, and send issues and pull requests there. The
+> changes made in this fork have been merged upstream.
+
 | | README | Port status |
 |---|---|---|
 | 🇬🇧 English | [README.EN.md](README.EN.md) | [PORT_STATUS.EN.md](PORT_STATUS.EN.md) |
