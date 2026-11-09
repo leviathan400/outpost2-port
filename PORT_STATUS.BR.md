@@ -1639,6 +1639,78 @@ que já tem comando de área mas cujo cursor o porte ainda não distingue do
 
 ---
 
+## 5.20. O ESC, e o relógio do demo de atração (2026-11-09)
+
+Duas coisas que o porte fazia e o jogo não faz.
+
+### O ESC largava a missão na hora
+
+`handleEvent` tinha uma linha só: `if (e.key.keysym.sym == SDLK_ESCAPE)
+gTApp.activateShell();`. Qualquer toque no ESC — com uma mira de comando em
+curso, com o diálogo de salvar aberto, no meio de uma campanha de duas horas —
+jogava direto no menu principal, **sem perguntar** e sem passar pelo caminho de
+saída do jogo (o pacote `0x31`, que é quem encerra a partida de quem sai).
+
+Agora o ESC é uma **cadeia de desistências**, da mais interna para a mais
+externa, e cada uma sai com `return`:
+
+| ordem | o que está no ar | o que o ESC faz |
+|---|---|---|
+| 1 | o diálogo de slots (Ctrl+S / Ctrl+L) | fecha |
+| 2 | uma confirmação `&YES`/`&NO` | fecha — é um "não" |
+| 3 | o escolhedor de jogador (transferir) | cancela |
+| 4 | uma mira de comando (mover, atacar...) | desiste da mira |
+| 5 | nada | **pergunta** se é para sair |
+
+A pergunta não é inventada: é a tela de fim de missão do próprio jogo. O ESC
+leva para a aba **Options**, abre o `ENDMISSION` e põe em cima a confirmação
+com a frase do executável — *"Are you sure you want to abort the mission?"* —
+ligada ao mesmo comando do `&BACK TO MAIN MENU`. Um `&YES` ali sai pelo caminho
+de sempre; um `&NO` (ou outro ESC) volta para a partida.
+
+Em **multijogador** não existe "voltar ao menu": a tela de fim de lá só tem
+`SELF-&DESTRUCT` e `&TRANSFER`. Então ali o ESC abre a tela e **não** pergunta
+nada.
+
+A confirmação nasce com o `fromOptions` ligado (o `[+0x15C] == unk_565AC8` do
+original): sem ele, ela morre sozinha no quadro seguinte por falta de seleção —
+era exatamente o defeito da seção 5.7.
+
+### O demo de atração entrava assim que o menu voltava
+
+`ShellMenu::update` chama o demo quando `SDL_GetTicks() - m_lastActivity >
+60000`. O `m_lastActivity` guardava o instante da **última mexida no menu** — e
+entrar numa missão não mexe no menu. Depois de um minuto jogando, voltar ao
+menu (pelo ESC ou pelo fim da partida) caía **direto** no demo, antes mesmo de
+dar para ler a tela.
+
+`ShellState::onActivate` agora começa com `m_menu.resetIdleClock()`: toda vez
+que o menu volta, o relógio recomeça do zero. O `setState` não zerava nada, e
+voltar de uma partida nem troca de estado (o menu já estava em `MainMenu`), por
+isso não havia nenhum outro ponto em que isso acontecesse por acaso.
+
+### Os testes
+
+- **`--optmenutest <DLL>`**: sete casos novos. O ESC entra pela **tecla de
+  verdade** (um `SDL_KEYDOWN` pelo `handleEvent`), não chamando a função por
+  dentro — sem isso, desligar o ESC no tratador passava despercebido. Mede: a
+  aba vira 5, o título é o da tela de fim certa para o tipo de partida, a
+  pergunta é a frase do executável, ela sobrevive ao quadro seguinte com
+  `&YES`/`&NO`, o segundo ESC a fecha, e com mira em curso o ESC só desiste da
+  mira. Em multijogador, o caso espelhado: abre a tela e não pergunta.
+- **`--demotest`**: monta um `ShellState` de verdade e mede os dois lados —
+  com o relógio velho e **sem** passar pelo `onActivate` o demo entra (senão o
+  caso não mediria nada); passando pelo `onActivate`, não entra.
+
+Neutralizando, uma peça de cada vez (solo / rede / demo): o ESC voltando a
+largar a partida **19 / 15 / 0**; o ESC abrindo a tela sem perguntar **4 / 0**
+(em rede é o comportamento certo, então zero); a mira não sendo desfeita
+**7 / 1**; a pergunta no ar deixando de ser um "não" **8 / 0**; a confirmação
+nascendo sem o `fromOptions` **4 / 0**; e o `resetIdleClock` fora do
+`onActivate` **0 / 0 / 1**.
+
+---
+
 ## 6. Build e execução
 
 **Toolchain:** CMake >= 3.15 + MSVC, C++17, SDL2 2.30.9 (em `third_party/`).

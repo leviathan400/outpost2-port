@@ -255,6 +255,13 @@ cursores `.ANI`.
   míssil que ia no inimigo.
 - **O muro não falha mais** por ter perto dele um muro em obra, a praga ou
   lava. Prédio vizinho continua impedindo, como deve.
+- **O ESC pergunta antes de largar a missão.** Antes ele voltava ao menu na
+  hora; agora desiste primeiro do que estiver no ar (uma mira de comando, um
+  diálogo) e, se não houver nada, abre a tela de fim de missão do próprio jogo
+  com a pergunta *"Are you sure you want to abort the mission?"*.
+- **O demo de atração não entra mais de surpresa.** O relógio do minuto de
+  ociosidade recomeça do zero toda vez que o menu volta — depois de um tempo
+  jogando, sair da partida caía direto no demo.
 - **Os cursores do jogo entraram.** Mover, atacar, atracar, reparar,
   reprogramar, terraplanar, guardar, patrulhar, recolher e autodestruir têm o
   cursor animado do Outpost 2, cada um com a sua versão de "não pode" — o porte

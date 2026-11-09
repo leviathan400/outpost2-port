@@ -63,6 +63,7 @@
 #include "gfx/artfile.h"
 #include "app/tapp.h"
 #include "app/game_state.h"
+#include "app/shell_state.h"
 #include "net/net_game.h"
 #include "net/net_lobby.h"
 
@@ -605,6 +606,36 @@ static int runDemoTest(const std::string& prefixo) {
     std::string relato;
     bool ok = menu.demoTest(relato);
     std::printf("[DemoTest] %s%c", relato.c_str(), 10);
+
+    // O relogio da ociosidade recomeca ao voltar ao menu. Ele guardava o
+    // instante de ANTES da partida, e depois de um minuto jogando o demo de
+    // atracao entrava assim que o menu voltava -- o ESC caia direto no demo.
+    {
+        op2::Config ini("OUTPOST2.INI");
+        ini.load();
+        const int gravado = ini.getInt("Game", "Demo", 0);
+        op2::ShellState sh;
+        sh.init("OP2SHRES.DLL");
+        const bool semVolta = sh.debugDemoWouldStart(false);
+        const bool comVolta = sh.debugDemoWouldStart(true);
+        std::printf("[DemoTest] relogio velho: sem voltar ao menu o demo %s; "
+                    "voltando ao menu %s%c",
+                    semVolta ? "entra" : "NAO entra",
+                    comVolta ? "AINDA entra" : "nao entra", 10);
+        if (!semVolta) {
+            std::printf("[DemoTest] FALHOU: o relogio velho nao chamou o demo "
+                        "(o caso nao mede nada)%c", 10);
+            ok = false;
+        }
+        if (comVolta) {
+            std::printf("[DemoTest] FALHOU: o demo entrou mesmo voltando ao menu%c", 10);
+            ok = false;
+        }
+        op2::Config volta("OUTPOST2.INI");
+        volta.load();
+        volta.setInt("Game", "Demo", gravado);
+        volta.save();
+    }
 
     // E agora o demo rodando de verdade: carrega, anda alguns tiques e e
     // interrompido por uma tecla, como os ganchos do original fazem.
@@ -4383,6 +4414,44 @@ static int runOptMenuTest(const std::string& dll) {
     }
     renderer.setFullscreen(false);
     gs.debugOptionsScreen(1);                        // volta ao PREFERENCES limpo
+
+    // ---- o ESC dentro da partida ----------------------------------------
+    // Ele largava a partida na HORA, sem perguntar. Agora desiste do que
+    // estiver no ar e, se nao houver nada, pergunta -- com a frase do proprio
+    // executavel e pelo caminho do "&BACK TO MAIN MENU".
+    {
+        gs.debugOptionsScreen(0);
+        gs.debugTab(0);
+        gs.debugEscape(renderer);
+        const bool pergunta = gs.debugConfirmOpen();
+        casos.push_back({"o ESC leva para a aba Options", gs.debugTabNow(), 5});
+        texto("... na tela de fim de missao", gs.debugOptTitle(),
+              rede ? "Game End: Multiplayer" : "Game End: Single Player");
+        // Em multijogador nao existe "voltar ao menu" (a tela de fim e outra,
+        // so com autodestruir e transferir): ali o ESC so abre a tela.
+        casos.push_back({rede ? "em rede o ESC nao pergunta" : "em jogo solo o ESC pergunta",
+                         pergunta ? 1 : 0, rede ? 0 : 1});
+        texto("a pergunta e a do executavel", gs.debugConfirmText(),
+              rede ? std::string() : std::string("Are you sure you want to abort the mission?"));
+        if (!rede) {
+            // A pergunta tem de sobreviver ao quadro seguinte, como a dos itens.
+            gs.debugPaneFrame();
+            casos.push_back({"... e continua no ar no quadro seguinte",
+                             gs.debugConfirmOpen() ? 1 : 0, 1});
+            const std::vector<std::string> yn = gs.debugOptLabels();
+            casos.push_back({"... com os botoes &YES/&NO",
+                             (yn.size() == 2 && yn[0] == "&YES" && yn[1] == "&NO") ? 1 : 0, 1});
+            // Com a pergunta no ar, o ESC e um "NAO".
+            gs.debugEscape(renderer);
+            casos.push_back({"o ESC de novo fecha a pergunta",
+                             gs.debugConfirmOpen() ? 1 : 0, 0});
+        }
+        // Com uma mira em curso, o ESC desiste DELA e nao pergunta nada.
+        gs.debugArmCommand(op2::UC_MOVE);
+        gs.debugEscape(renderer);
+        casos.push_back({"com mira em curso, o ESC so desiste dela",
+                         (gs.debugArmed() < 0 && !gs.debugConfirmOpen()) ? 1 : 0, 1});
+    }
 
     // ---- a tela de fim de missao ----------------------------------------
     gs.debugOptionsScreen(0);                        // o menu

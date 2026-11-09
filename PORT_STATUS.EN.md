@@ -13,7 +13,9 @@
 > RNG every tick), **5.16** (cheats are single-player only now) and **5.17** (edge-of-screen and
 > arrow-key view scrolling, ported from `sub_407A10`) **5.18** (the unit
 > click area: buildings answer on their whole footprint) and **5.19** (the
-> game's own command cursors, read from the `.ANI` files). The recent changes are summarised in
+> game's own command cursors, read from the `.ANI` files) and **5.20** (ESC
+> now asks before abandoning a mission, and the attract-demo idle clock
+> restarts whenever the menu comes back). The recent changes are summarised in
 > [README.EN.md](README.EN.md).
 
 # Outpost 2: Divided Destiny — Modern Port (C++17/SDL2)

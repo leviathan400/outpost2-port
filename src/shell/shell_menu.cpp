@@ -922,6 +922,7 @@ void ShellMenu::dispatchButton(int id) {
 // --------------------------------- input ---------------------------------
 
 void ShellMenu::noteActivity() { m_lastActivity = SDL_GetTicks(); }
+void ShellMenu::resetIdleClock() { noteActivity(); }
 
 // A mensagem 0x741 do shell (caso 33 da tabela em 0x13009028 do OP2SHELL.DLL).
 // O original:

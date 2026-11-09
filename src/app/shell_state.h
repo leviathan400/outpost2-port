@@ -15,6 +15,10 @@ public:
     bool init(const std::string& resDll = "OP2SHRES.DLL");
 
     void onActivate() override;
+    // --demotest: com o relogio da ociosidade velho, o demo entraria. Passando
+    // pelo onActivate (que e o que acontece ao voltar de uma partida) ele NAO
+    // pode entrar: o relogio recomeca do zero.
+    bool debugDemoWouldStart(bool pelaVoltaAoMenu);
     void onIdle(Renderer& renderer, float dt) override;
     void handleEvent(Renderer& renderer, const SDL_Event& e) override;
 

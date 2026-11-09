@@ -89,6 +89,7 @@ public:
         m_open = true; m_unit = unitId; m_msg = msg; m_cmd = cmd; m_fromOptions = fromOptions;
     }
     bool fromOptions() const { return m_fromOptions; }
+    const std::string& message() const { return m_msg; }
     int command() const { return m_cmd; }
     void close() { m_open = false; }
     void update(const std::vector<int>& sel);

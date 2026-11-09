@@ -161,6 +161,10 @@ public:
 
     // Abre diretamente uma sub-tela (usado pelo modo --screenshot para captura).
     void showTutorials() { setState(MenuState::Tutorials); }
+    // Voltando de uma partida, o relogio da ociosidade recomeca do zero: ele
+    // guardava o instante de ANTES da missao, e depois de alguns minutos
+    // jogando o demo de atracao entrava assim que o menu aparecia.
+    void resetIdleClock();
     void showMainMenu() { setState(MenuState::MainMenu); }
     void showNewCampaign() { setState(MenuState::NewCampaign); }
     void showPreferences() { setState(MenuState::Preferences); }
@@ -171,6 +175,10 @@ public:
     // Teste por linha de comando (--demotest): monta o pedido do demo de
     // atracao como a ociosidade faria, e devolve o relato.
     bool demoTest(std::string& report);
+    // --demotest: envelhece o relogio da ociosidade e apaga o pedido do demo,
+    // para o teste poder medir QUEM zera o relogio ao voltar ao menu.
+    void debugAgeIdleClock(uint32_t ms) { m_lastActivity = SDL_GetTicks() - ms; }
+    void debugClearLaunch() { m_launchRequested = false; }
     // Teste por linha de comando (--helptest): abre o manual e percorre a
     // lista e o texto pelo mesmo caminho do teclado e da roda.
     bool helpTest(std::string& report);

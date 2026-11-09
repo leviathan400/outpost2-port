@@ -20,6 +20,10 @@ bool ShellState::init(const std::string& resDll) {
 }
 
 void ShellState::onActivate() {
+    // O relogio da ociosidade recomeca do ZERO toda vez que o menu volta: ele
+    // guardava o instante de ANTES da partida, entao depois de alguns minutos
+    // jogando o demo de atracao entrava assim que o menu aparecia.
+    m_menu.resetIdleClock();
     // Volta do fim de uma partida: a tela depende do motivo (0x73a); senão
     // (ESC no jogo), o menu principal.
     if (m_hasReturn) {
@@ -28,6 +32,19 @@ void ShellState::onActivate() {
         return;
     }
     m_menu.showMainMenu();
+}
+
+bool ShellState::debugDemoWouldStart(bool pelaVoltaAoMenu) {
+    m_hasReturn = false;
+    m_menu.showMainMenu();
+    m_menu.debugClearLaunch();
+    m_menu.debugAgeIdleClock(120000u);        // "dois minutos parado"
+    if (pelaVoltaAoMenu) onActivate();        // o caminho de verdade
+    m_menu.update(0.0f);
+    std::string dll;
+    const bool entrou = m_menu.consumeLaunch(dll);
+    m_menu.debugClearLaunch();
+    return entrou;
 }
 
 void ShellState::onIdle(Renderer& renderer, float dt) {

@@ -1782,6 +1782,30 @@ int GameState::unitAtView(int vx, int vy) const {
     return unitAtBox(vx, vy, /*meusApenas*/ false);
 }
 
+// O ESC largava a partida na HORA, sem perguntar e sem passar pelo caminho de
+// saida do jogo (o pacote 0x31). Agora ele desiste do que estiver no ar e, se
+// nao houver nada, pergunta -- com a frase do proprio executavel e pelo mesmo
+// caminho do "&BACK TO MAIN MENU".
+void GameState::escapePressed() {
+    if (m_saveDlg.active()) { m_saveDlg.close(); return; }      // dialogo de slots
+    if (m_confirm.isOpen()) { m_confirm.close(); return; }      // ja perguntou: e um "NAO"
+    if (m_pickPlayer) { pickCancel(); return; }                 // escolhedor de jogador
+    if (m_targetCmd >= 0) { m_targetCmd = -1; return; }         // desiste da mira
+    if (!m_mission) { gTApp.activateShell(); return; }          // mapa solto (testes)
+
+    // A pergunta mora no painel, que e da aba Options: leva para la, abre a
+    // tela de fim de missao e poe a confirmacao em cima.
+    m_tab = 5;
+    m_gameOptions.open();
+    m_gameOptions.setMode(GameOptionsPane::ENDMISSION);
+    // Em multijogador nao existe "voltar ao menu" (a tela de fim e outra, so
+    // com autodestruir e transferir), entao ali o ESC so abre a tela.
+    if (multiplayerMission()) return;
+    m_confirm.open(m_selected.empty() ? 0 : m_selected[0],
+                   "Are you sure you want to abort the mission?", kCmdOptMainMenu,
+                   /*fromOptions*/ true);
+}
+
 void GameState::selectAt(int nx, int ny, bool additive) {
     // Seleciona a unidade do jogador sob o clique (coords da vista, entao o
     // wrap horizontal ja esta resolvido): predio pela pegada inteira, veiculo
@@ -1870,7 +1894,7 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
             m_saveDlg.open(SaveSlotsDialog::kLoad, "");
             return;
         }
-        if (e.key.keysym.sym == SDLK_ESCAPE) gTApp.activateShell();
+        if (e.key.keysym.sym == SDLK_ESCAPE) { escapePressed(); return; }
         if (e.key.keysym.sym == SDLK_g) m_showPassability = !m_showPassability;
         if (e.key.keysym.sym == SDLK_F3) m_showDebugHud = !m_showDebugHud;
         // DEPURACAO dos estados de predio (ainda nao ha armas/ConVec construindo):

@@ -335,6 +335,17 @@ public:
     void debugOptRow(int i) { m_gameOptions.debugRowClick(i); }
     bool debugWantFullscreen() const { return m_gameOptions.wantFullscreen(); }
     bool debugConfirmOpen() const { return m_confirm.isOpen(); }
+    // --optmenutest: o ESC pela mesma porta da tecla, o texto da pergunta que
+    // ele levanta, a aba em que o jogo ficou e a mira em curso.
+    std::string debugConfirmText() const { return m_confirm.message(); }
+    void debugEscape(Renderer& r) {
+        SDL_Event ev{};
+        ev.type = SDL_KEYDOWN;
+        ev.key.keysym.sym = SDLK_ESCAPE;
+        handleEvent(r, ev);
+    }
+    int debugTabNow() const { return m_tab; }
+    int debugArmed() const { return m_targetCmd; }
     // O quadro seguinte: é aqui que a confirmação se fechava sozinha.
     void debugPaneFrame() { m_confirm.update(m_selected); }
     void debugSetHover(int id) { m_hoverUnit = id; m_hoverStartTick = -1000; }  // só p/ --selshot
@@ -479,6 +490,11 @@ private:
     void leaveToMainMenu();         // entrega a colonia a IA e sai (pacote 0x31)
     void transferAndLeave();        // doa as unidades ao aliado e sai
     void selectAt(int nx, int ny, bool additive);
+    // O ESC dentro da partida. Ordem: desiste da mira, fecha o que estiver
+    // aberto e, por fim, pergunta se e para sair da missao -- com a pergunta do
+    // proprio jogo ("Are you sure you want to abort the mission?") e pelo mesmo
+    // caminho do "&BACK TO MAIN MENU" da tela END MISSION.
+    void escapePressed();
     // A area em que o clique (e o realce) acertam a unidade, em coordenadas da
     // VISTA. O predio responde na pegada INTEIRA -- a mesma que ele ocupa no
     // mapa --, e nao num circulo no meio dele; o veiculo responde numa caixa do

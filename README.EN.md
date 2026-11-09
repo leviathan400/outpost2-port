@@ -252,6 +252,13 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
   the missile on its way to the enemy.
 - **Walls no longer fail to build** next to a wall under construction, Blight
   or lava. A neighbouring building still blocks, as it should.
+- **ESC asks before abandoning a mission.** It used to drop straight back to
+  the menu; now it first cancels whatever is pending (a command target, a
+  dialog) and, with nothing pending, opens the game's own end-of-mission screen
+  with the question *"Are you sure you want to abort the mission?"*.
+- **The attract demo no longer ambushes you.** The one-minute idle clock
+  restarts every time the menu comes back — after a while in a mission,
+  leaving it dropped you straight into the demo.
 - **The game's own cursors are in.** Move, attack, dock, repair, reprogram,
   bulldoze, guard, patrol, salvage and self-destruct now use Outpost 2's
   animated cursors, each with its "can't do that" variant — the port used the
