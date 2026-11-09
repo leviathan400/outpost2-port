@@ -17,3 +17,5 @@ files are included; you need your own copy of the game.
 
 The [MIT licence](LICENSE) covers only the contributors' own work in this
 repository, not *Outpost 2* or any of its content.
+
+Reverse Engineering done by Claude Code!

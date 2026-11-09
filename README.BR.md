@@ -348,3 +348,5 @@ Os projetos **OPUPatch** e **TethysAPI**, da comunidade, foram usados como
 referência de documentação — para conferir nomes de classes, offsets e a lista
 de defeitos conhecidos do original. **Nenhum código deles foi copiado para
 cá**, por serem de licença distinta.
+
+Reverse Engineering done by Claude Code!
