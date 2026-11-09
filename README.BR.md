@@ -178,7 +178,7 @@ que o original não tem — nível da IA, escuridão da noite, volume, câmera d
 demo, tela cheia, a pele dos menus (`MenuSkin`) e a volta horizontal do mapa
 (`MapWrap`); estão documentadas no `PORT_STATUS.BR.md`.
 
-Há **99 modos de linha de comando** para testes e capturas, entre eles uma
+Há **100 modos de linha de comando** para testes e capturas, entre eles uma
 bateria de regressão (`--savetest` prova o determinismo de salvar/recarregar).
 A lista está no `PORT_STATUS.BR.md`.
 
@@ -212,7 +212,7 @@ e descartado das listas de cheat que circulam por aí.
 
 ```
 src/
-  main.cpp        entrada + os 99 modos de teste/captura
+  main.cpp        entrada + os 100 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -255,6 +255,11 @@ cursores `.ANI`.
   míssil que ia no inimigo.
 - **O muro não falha mais** por ter perto dele um muro em obra, a praga ou
   lava. Prédio vizinho continua impedindo, como deve.
+- **A vista rola pela borda da tela**, como em qualquer RTS: encostar o
+  ponteiro na beirada da janela move o mapa, com aceleração, e o minimapa
+  acompanha. As setas fazem o mesmo, pelo mesmo caminho — e a opção
+  *Scrolling Speed* do `PREFERENCES`, que o porte lia e não usava, finalmente
+  manda na velocidade.
 - **Os cheats passaram a valer só em jogo solo.** No original a frase funciona
   em qualquer partida, inclusive em rede — e lá um jogador enchendo o próprio
   estoque estraga a partida dos outros.

@@ -77,6 +77,10 @@ void GameState::loadSettings() {
     m_mobileShadows = gs.mobileShadows != 0;           // dword_575638
     m_overlay = gs.overlay != 0;                       // "Overlay" → dword_57562C
     m_frameSkip = gs.frameSkip;                        // Value (FrameSkip)
+    // "ScrollRate" (1..6): o porte lia do INI e nao usava. E um dos dois
+    // fatores do passo da rolagem, junto do FrameSkip -- ver scrollView.
+    m_scrollRate = gs.scrollRate < 1 ? 1 : (gs.scrollRate > 6 ? 6 : gs.scrollRate);
+    m_gameSpeedValue = speed * 4;
     m_aiLevel = gs.aiLevel;                            // "AILevel" (so deste porte)
     if (m_aiLevel < 0 || m_aiLevel > 3) m_aiLevel = 0;
     setNightDarkness(gs.nightDarkness);                // "NightDarkness" (idem)
@@ -114,6 +118,93 @@ void GameState::applyScreenMode(Renderer& renderer) {
     const bool cheia = m_screenModeWanted != 0;
     m_screenModeWanted = -1;
     if (renderer.fullscreen() != cheia) renderer.setFullscreen(cheia);
+}
+
+// sub_407A10: a rolagem da vista, por quadro.
+//
+// O passo base e `(FrameSkip * ScrollRate * 20) / (GameSpeed * 4)`, no minimo 1
+// -- `Value` e o FrameSkip e `dword_56DEA8` e o GameSpeed*4, os dois conferidos
+// no disassembly. Dai o original acelera: enquanto a borda ou a seta pedem, a
+// velocidade do eixo anda `passo` por quadro e satura em `passo * 32`; mudando
+// de lado, ela primeiro salta `passo * 4` na direcao do zero. Quando NINGUEM
+// pede (nos dois eixos -- o original usa um unico sinalizador para os dois),
+// ela volta para zero de `passo * 4` por quadro.
+//
+// A borda e a da JANELA com 2 px de margem (GetWindowRect menos 2), e nao a da
+// vista do mapa: no original o jogo ocupava a tela toda e era o canto do
+// monitor que rolava. As setas entram pelo mesmo teste, com GetAsyncKeyState.
+//
+// Diferenca consciente: so rola com o ponteiro DENTRO da janela (o original usa
+// GetCursorPos e rola ate com a janela atras de outra) e nao rola no demo de
+// atracao, onde a camera ja e de quem passeia.
+int GameState::scrollStep() const {
+    const int p = (m_frameSkip * m_scrollRate * 20) / (m_gameSpeedValue > 0 ? m_gameSpeedValue : 1);
+    return p < 1 ? 1 : p;
+}
+
+void GameState::scrollView(Renderer& renderer) {
+    if (demoGame() && m_demoCam) return;
+    int w = 0, h = 0;
+    SDL_GetWindowSize(renderer.getWindow(), &w, &h);
+    int mx = 0, my = 0;
+    SDL_GetMouseState(&mx, &my);
+    // Ponteiro DENTRO da janela e a janela em primeiro plano: janela atras de
+    // outra nao rola (o original usa GetCursorPos e rolaria mesmo assim).
+    const uint32_t jf = SDL_GetWindowFlags(renderer.getWindow());
+    const bool naJanela = (jf & SDL_WINDOW_MOUSE_FOCUS) && (jf & SDL_WINDOW_INPUT_FOCUS);
+    const Uint8* ks = SDL_GetKeyboardState(nullptr);
+
+    bool esq = false, dir = false, cima = false, baixo = false;
+    scrollWanted(mx, my, w, h, naJanela,
+                 ks[SDL_SCANCODE_LEFT] != 0, ks[SDL_SCANCODE_RIGHT] != 0,
+                 ks[SDL_SCANCODE_UP] != 0, ks[SDL_SCANCODE_DOWN] != 0,
+                 esq, dir, cima, baixo);
+    scrollApply(esq, dir, cima, baixo);
+}
+
+void GameState::scrollWanted(int mx, int my, int w, int h, bool naJanela,
+                             bool kEsq, bool kDir, bool kCima, bool kBaixo,
+                             bool& esq, bool& dir, bool& cima, bool& baixo) {
+    esq   = (naJanela && mx <= 2) || kEsq;
+    dir   = !esq  && ((naJanela && mx >= w - 3) || kDir);
+    cima  = (naJanela && my <= 2) || kCima;
+    baixo = !cima && ((naJanela && my >= h - 3) || kBaixo);
+}
+
+void GameState::scrollApply(bool esq, bool dir, bool cima, bool baixo) {
+    const int passo = scrollStep();
+    const int teto = passo * 32;
+    bool pediu = false;
+    auto acelera = [&](int& vel, bool neg, bool pos) {
+        if (neg) {
+            pediu = true;
+            if (vel >= 0) { vel -= passo * 4; if (vel < 0) vel = 0; }   // troca de lado
+            vel -= passo;
+            if (vel < -teto) vel = -teto;
+        } else if (pos) {
+            pediu = true;
+            if (vel <= 0) { vel += passo * 4; if (vel > 0) vel = 0; }
+            vel += passo;
+            if (vel > teto) vel = teto;
+        }
+    };
+    acelera(m_scrollVX, esq, dir);
+    acelera(m_scrollVY, cima, baixo);
+
+    // A rolagem soma o tremor acumulado no desenho anterior e zera.
+    m_camX += m_scrollVX + m_shakeX;
+    m_camY += m_scrollVY + m_shakeY;
+    m_shakeX = m_shakeY = 0;
+    clampCamera();
+
+    if (!pediu) {                                   // loc_407CF4
+        auto freia = [&](int& vel) {
+            if (vel > 0) { vel -= passo * 4; if (vel < 0) vel = 0; }
+            else if (vel < 0) { vel += passo * 4; if (vel > 0) vel = 0; }
+        };
+        freia(m_scrollVX);
+        freia(m_scrollVY);
+    }
 }
 
 bool GameState::loadMap(const std::string& mapName) {
@@ -714,17 +805,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         if (code == 3 && m_mission && m_mission->desc && m_mission->desc->missionType > 0) m_endPhase = 2;
         else { finishGameEnd(); return; }
     }
-    const Uint8* ks = SDL_GetKeyboardState(nullptr);
-    int speed = static_cast<int>(600 * dt);
-    if (speed < 1) speed = 1;
-    if (ks[SDL_SCANCODE_LEFT])  m_camX -= speed;
-    if (ks[SDL_SCANCODE_RIGHT]) m_camX += speed;
-    if (ks[SDL_SCANCODE_UP])    m_camY -= speed;
-    if (ks[SDL_SCANCODE_DOWN])  m_camY += speed;
-    // sub_407A10: a rolagem soma o tremor acumulado no desenho anterior e zera.
-    m_camX += m_shakeX; m_camY += m_shakeY;
-    m_shakeX = m_shakeY = 0;
-    clampCamera();
+    scrollView(renderer);                    // sub_407A10: borda da janela e setas
 
     TethysGame::noteFrame();                     // p/ "Actual Update Rate"
     // Avança o relógio de simulação na cadência do GameSpeed (m_tickPeriod).

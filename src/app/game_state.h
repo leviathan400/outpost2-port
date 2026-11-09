@@ -122,6 +122,28 @@ public:
 
 private:
     void loadSettings();
+    // sub_407A10: a rolagem da vista. A borda da janela (2 px, como o
+    // GetWindowRect do original) e as setas pedem a MESMA coisa, e a
+    // velocidade por eixo ([+0x14C] e [+0x148]) acelera enquanto alguem pede e
+    // desacelera quando ninguem pede. O minimapa acompanha sozinho: ele e
+    // redesenhado da camera a cada quadro.
+    void scrollView(Renderer& renderer);
+    // A conta, sem SDL: quem le a borda e o teclado e o scrollView. Separada
+    // para o --scrolltest poder exercita-la sem mouse nem janela.
+    void scrollApply(bool esq, bool dir, bool cima, bool baixo);
+    int scrollStep() const;
+public:
+    // A regra da borda do original: o ponteiro a 2 px ou menos do canto da
+    // JANELA (GetWindowRect menos 2) pede o mesmo que a seta, e a esquerda
+    // ganha da direita (o original testa um e so olha o outro se o primeiro
+    // nao pediu). Pura e estatica para o --scrolltest medir sem mouse.
+    static void scrollWanted(int mx, int my, int w, int h, bool naJanela,
+                             bool kEsq, bool kDir, bool kCima, bool kBaixo,
+                             bool& esq, bool& dir, bool& cima, bool& baixo);
+private:
+    int m_scrollVX = 0, m_scrollVY = 0;         // [+0x14C] / [+0x148]
+    int m_scrollRate = 4;                       // "ScrollRate" do INI (1..6)
+    int m_gameSpeedValue = 20;                  // TethysGame +0x50 (GameSpeed * 4)
     void enterPrefs();                          // PREFERENCES (sub_465830 modo 2)
     // Extra do porte (o radio "Screen Mode"): o clique nao tem o Renderer na
     // mao -- clickCommand recebe so o id do comando --, entao o pedido fica
@@ -246,6 +268,14 @@ public:
     }
     void debugOptSelect(int i) { m_gameOptions.debugSelect(i); }
     void debugOptScroll(int linha) { m_gameOptions.debugScroll(linha); }
+    // --scrolltest: um quadro de rolagem com os pedidos dados na mao, sem
+    // mouse nem janela, e os valores que o caso mede.
+    void debugScrollFrame(bool esq, bool dir, bool cima, bool baixo) {
+        scrollApply(esq, dir, cima, baixo);
+    }
+    int debugScrollStep() const { return scrollStep(); }
+    int debugScrollVX() const { return m_scrollVX; }
+    int debugScrollVY() const { return m_scrollVY; }
     // As setas de rolagem NAO podem cair debaixo de um botao: era isso que
     // tornava o fim da lista do PREFERENCES inalcancavel.
     bool debugOptArrowsClear() const {

@@ -4722,6 +4722,136 @@ static int runMdTest(const std::string& mapName) {
     return ruins ? 1 : 0;
 }
 
+// --scrolltest <mapa>: a rolagem da vista (sub_407A10). O passo base e
+// (FrameSkip * ScrollRate * 20) / (GameSpeed*4), no minimo 1; a velocidade
+// acelera de um passo por quadro ate passo*32, salta passo*4 na direcao do
+// zero ao trocar de lado, e volta a zero de passo*4 por quadro quando ninguem
+// pede. O minimapa segue sozinho -- ele e desenhado da camera --, e o ultimo
+// caso prova isso comparando os pixels do minimapa antes e depois.
+static int runScrollTest(const std::string& mapName) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 scrolltest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+
+    struct Caso { std::string nome; long long obtido, esperado; };
+    std::vector<Caso> casos;
+    const int passo = gs.debugScrollStep();
+    casos.push_back({"o passo sai da formula e e >= 1", passo >= 1 ? 1 : 0, 1});
+
+    // --- a regra da BORDA (2 px da janela) e das setas --------------------
+    {
+        const int W = 1280, H = 960;
+        struct B { const char* nome; int mx, my; bool naJanela, kE, kD, kC, kB;
+                   int esq, dir, cima, baixo; };
+        const B bs[] = {
+            { "meio da janela: nada",            640, 480, true,  0,0,0,0,  0,0,0,0 },
+            { "x=0: esquerda",                     0, 480, true,  0,0,0,0,  1,0,0,0 },
+            { "x=2: ainda esquerda (margem 2)",    2, 480, true,  0,0,0,0,  1,0,0,0 },
+            { "x=3: ja nao e borda",               3, 480, true,  0,0,0,0,  0,0,0,0 },
+            { "x=W-3: direita",             W - 3, 480, true,  0,0,0,0,  0,1,0,0 },
+            { "x=W-1: direita",             W - 1, 480, true,  0,0,0,0,  0,1,0,0 },
+            { "y=0: cima",                       640,   0, true,  0,0,0,0,  0,0,1,0 },
+            { "y=H-1: baixo",               640, H - 1, true,  0,0,0,0,  0,0,0,1 },
+            { "canto: esquerda e cima",            0,   0, true,  0,0,0,0,  1,0,1,0 },
+            { "ponteiro fora da janela: nada",     0,   0, false, 0,0,0,0,  0,0,0,0 },
+            { "seta esquerda, ponteiro no meio", 640, 480, true,  1,0,0,0,  1,0,0,0 },
+            { "seta direita",                    640, 480, true,  0,1,0,0,  0,1,0,0 },
+            { "setas cima e baixo juntas",       640, 480, true,  0,0,1,1,  0,0,1,0 },
+            { "borda esquerda ganha da seta direita", 0, 480, true, 0,1,0,0,  1,0,0,0 },
+        };
+        for (const B& b : bs) {
+            bool e = false, d = false, c = false, x = false;
+            op2::GameState::scrollWanted(b.mx, b.my, W, H, b.naJanela,
+                                         b.kE != 0, b.kD != 0, b.kC != 0, b.kB != 0,
+                                         e, d, c, x);
+            const int got = (e ? 1 : 0) | (d ? 2 : 0) | (c ? 4 : 0) | (x ? 8 : 0);
+            const int esp = b.esq | (b.dir << 1) | (b.cima << 2) | (b.baixo << 3);
+            casos.push_back({std::string("borda: ") + b.nome, got, esp});
+        }
+    }
+
+    // Um quadro pedindo ESQUERDA anda exatamente um passo.
+    // Longe das bordas: o clampCamera prende a camera no limite do mapa, e
+    // ai um passo nao anda nada (foi o que esta linha acusou na 1a rodada).
+    gs.setCamera(300, 300);
+    gs.debugScrollFrame(true, false, false, false);
+    casos.push_back({"um quadro a esquerda anda um passo", 300 - gs.camX(), passo});
+    casos.push_back({"... e a velocidade ficou negativa", gs.debugScrollVX(), -passo});
+
+    // Segurando, acelera e satura em passo*32.
+    for (int k = 0; k < 60; ++k) gs.debugScrollFrame(true, false, false, false);
+    casos.push_back({"segurando, satura em passo*32", gs.debugScrollVX(), -passo * 32});
+
+    // Trocando de lado, a velocidade salta passo*4 na direcao do zero antes
+    // de somar o passo -- freia rapido em vez de virar de uma vez.
+    const int antes = gs.debugScrollVX();
+    gs.debugScrollFrame(false, true, false, false);
+    casos.push_back({"trocando de lado, freia passo*4 + passo",
+                     gs.debugScrollVX(), antes + passo * 4 + passo});
+
+    // Soltando tudo, desacelera ate parar -- e a camera ainda desliza.
+    // Antes, deixa a vista PARAR: a velocidade vinha negativa do caso de cima,
+    // e os quadros a direita so freavam (foi o que este caso acusou).
+    for (int k = 0; k < 100 && gs.debugScrollVX() != 0; ++k)
+        gs.debugScrollFrame(false, false, false, false);
+    gs.setCamera(0, 0);
+    // Poucos quadros: com muitos a camera chega no limite do mapa e nao sobra
+    // para onde deslizar -- foi o que este caso acusou na 2a rodada.
+    for (int k = 0; k < 3; ++k) gs.debugScrollFrame(false, true, false, false);
+    const int xDeslize = gs.camX();
+    int quadros = 0;
+    while (gs.debugScrollVX() != 0 && quadros < 200) { gs.debugScrollFrame(false, false, false, false); ++quadros; }
+    casos.push_back({"soltando, a velocidade zera", gs.debugScrollVX(), 0});
+    casos.push_back({"... depois de deslizar mais um pouco", gs.camX() > xDeslize ? 1 : 0, 1});
+
+    // Os quatro sentidos.
+    gs.setCamera(300, 300);
+    gs.debugScrollFrame(false, false, true, false);
+    casos.push_back({"cima sobe", gs.camY() < 300 ? 1 : 0, 1});
+    gs.setCamera(300, 300);
+    gs.debugScrollFrame(false, false, false, true);
+    casos.push_back({"baixo desce", gs.camY() > 300 ? 1 : 0, 1});
+
+    // O MINIMAPA acompanha: desenha um quadro, rola bastante, desenha outro
+    // e compara os pixels da caixa do minimapa.
+    auto minimapa = [&]() {
+        gs.onIdle(renderer, 0.0f);
+        const uint32_t* fb = renderer.getFramebuffer();
+        const int W = renderer.getWidth();
+        std::vector<uint32_t> px;
+        // kColX e de instancia desde que o HUD passou a seguir a janela.
+        for (int y = op2::GameState::kMiniMapY; y < op2::GameState::kMiniMapY + op2::GameState::kMiniMapH; ++y)
+            for (int x = gs.kColX; x < gs.kColX + op2::GameState::kColW; ++x)
+                px.push_back(fb[y * W + x]);
+        return px;
+    };
+    gs.setCamera(0, 0);
+    const std::vector<uint32_t> antesMini = minimapa();
+    for (int k = 0; k < 60; ++k) gs.debugScrollFrame(false, true, false, true);
+    const std::vector<uint32_t> depoisMini = minimapa();
+    int diferentes = 0;
+    for (size_t i = 0; i < antesMini.size() && i < depoisMini.size(); ++i)
+        if (antesMini[i] != depoisMini[i]) ++diferentes;
+    casos.push_back({"o minimapa acompanha (pixels mudaram)", diferentes > 0 ? 1 : 0, 1});
+
+    int ruins = 0;
+    for (const Caso& c : casos) {
+        const bool ok = c.obtido == c.esperado;
+        if (!ok) ++ruins;
+        std::printf("[scroll] %-44s %lld (esperado %lld) %s%c", c.nome.c_str(), c.obtido,
+                    c.esperado, ok ? "ok" : "FALHOU", 10);
+    }
+    std::printf("[scroll] passo=%d  %d caso(s) com falha%c", passo, ruins, 10);
+    std::fflush(stdout);
+    renderer.shutdown(); SDL_Quit();
+    return ruins ? 1 : 0;
+}
+
 static int runWallTest(const std::string& mapName) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
     op2::g_ResManager.init(".");
@@ -5496,6 +5626,8 @@ int main(int argc, char* argv[]) {
             return runGarageTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--mdtest") == 0 && i + 1 < argc)
             return runMdTest(argv[i + 1]);
+        if (std::strcmp(argv[i], "--scrolltest") == 0 && i + 1 < argc)
+            return runScrollTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--walltest") == 0 && i + 1 < argc)
             return runWallTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--quaketest") == 0 && i + 1 < argc)

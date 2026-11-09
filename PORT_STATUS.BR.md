@@ -48,7 +48,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 99 modos de teste/captura
+  main.cpp        entrada + os 100 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -1456,6 +1456,75 @@ certa: a mudança só alcança a rede.
 
 ---
 
+## 5.17. A rolagem da vista: borda do mouse e setas (2026-11-09)
+
+O porte rolava a vista só pelas setas, a 600 px por segundo tirados do nada. O
+original tem a coisa inteira em **`sub_407A10`**, e é ela que está portada agora
+— **a borda da janela e as setas pedem a mesma coisa**, pelo mesmo caminho.
+
+### O passo
+
+```
+passo = (FrameSkip * ScrollRate * 20) / (GameSpeed * 4)     ; mínimo 1
+```
+
+`Value` é o **FrameSkip** e `dword_56DEA8` é o **GameSpeed × 4** — os dois
+conferidos no disassembly (`[esi+388h] = dword_56DEA8 / 4` é o que a tela
+`PREFERENCES` mostra como *Game Speed*). O `ScrollRate` é a chave do INI que o
+porte **lia e não usava**: agora é ela que manda, e a opção *Scrolling Speed*
+(1..6) do `PREFERENCES` finalmente faz efeito.
+
+### A aceleração
+
+Cada eixo tem a sua velocidade (`[+0x14C]` em X, `[+0x148]` em Y):
+
+| situação | o que acontece |
+|---|---|
+| alguém pede o lado | a velocidade anda `passo` por quadro e **satura em `passo × 32`** |
+| pede o lado contrário | antes de somar, ela **salta `passo × 4`** na direção do zero — freia rápido em vez de virar de uma vez |
+| ninguém pede | volta para zero de `passo × 4` por quadro, e a vista **ainda desliza** enquanto isso |
+
+Detalhe fiel: o original usa **um único** sinalizador de "houve pedido" para os
+dois eixos, então pedir um eixo segura a desaceleração do outro.
+
+### A borda
+
+É a da **janela** com 2 px de margem (`GetWindowRect` menos 2), não a da vista
+do mapa: no original o jogo ocupava a tela e era o canto do monitor que rolava.
+A esquerda ganha da direita e o cima ganha do baixo — o original testa um e só
+olha o outro se o primeiro não pediu. As setas entram pelo mesmo teste
+(`GetAsyncKeyState`), então valem junto com o mouse.
+
+**O minimapa acompanha sozinho**: ele é redesenhado a partir da câmera a cada
+quadro, e o retângulo da vista anda junto.
+
+### Duas diferenças conscientes
+
+- Só rola com o ponteiro **dentro** da janela e com ela em primeiro plano. O
+  original usa `GetCursorPos`, que rola até com a janela atrás de outra.
+- Não rola no demo de atração, onde a câmera já é de quem passeia.
+
+### O teste
+
+**`--scrolltest <mapa>`**, 24 casos, com a conta e a regra da borda separadas da
+leitura do SDL para poderem ser medidas sem mouse: a margem de 2 px (x=2 rola,
+x=3 não), os quatro sentidos, o canto pedindo dois eixos, ponteiro fora da
+janela, as setas, a esquerda ganhando da seta direita; e do lado da conta, o
+passo da fórmula, a saturação em `passo × 32`, o salto de `passo × 4` ao trocar
+de lado, o deslize depois de soltar e a parada. O último caso compara os
+**pixels do minimapa** antes e depois de rolar — é assim que se prova que ele
+acompanha.
+
+Neutralizando: margem de 2 px **1** falha, setas **1**, saturação **1**, câmera
+ignorando a velocidade **2**.
+
+> Duas premissas de teste que custaram rodada: a câmera posta em 2000/3000 num
+> mapa de 2048 px fica presa no `clampCamera` e não anda; e a velocidade
+> **sobra do caso anterior**, então o caso do deslize precisa deixar a vista
+> parar antes de começar.
+
+---
+
 ## 6. Build e execução
 
 **Toolchain:** CMake >= 3.15 + MSVC, C++17, SDL2 2.30.9 (em `third_party/`).
@@ -1477,7 +1546,7 @@ missão e os recursos originais do diretório de trabalho).
 
 ### Testes por linha de comando
 
-São 99 modos. Os que cobrem regressão de verdade:
+São 100 modos. Os que cobrem regressão de verdade:
 
 | Modo | O que prova |
 |---|---|
