@@ -178,7 +178,7 @@ que o original não tem — nível da IA, escuridão da noite, volume, câmera d
 demo, tela cheia, a pele dos menus (`MenuSkin`) e a volta horizontal do mapa
 (`MapWrap`); estão documentadas no `PORT_STATUS.BR.md`.
 
-Há **103 modos de linha de comando** para testes e capturas, entre eles uma
+Há **104 modos de linha de comando** para testes e capturas, entre eles uma
 bateria de regressão (`--savetest` prova o determinismo de salvar/recarregar).
 A lista está no `PORT_STATUS.BR.md`.
 
@@ -212,7 +212,7 @@ e descartado das listas de cheat que circulam por aí.
 
 ```
 src/
-  main.cpp        entrada + os 103 modos de teste/captura
+  main.cpp        entrada + os 104 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -255,6 +255,9 @@ cursores `.ANI`.
   míssil que ia no inimigo.
 - **O muro não falha mais** por ter perto dele um muro em obra, a praga ou
   lava. Prédio vizinho continua impedindo, como deve.
+- **"MISSION ACCOMPLISHED" e "MISSION FAILED" voltaram a ser o letreiro do
+  jogo:** Arial negrito grande, **vermelho**, com o contorno preto de 2 px —
+  o porte os escrevia com a fontinha de depuração, amarelos e pequenos.
 - **O ESC pergunta antes de largar a missão.** Antes ele voltava ao menu na
   hora; agora desiste primeiro do que estiver no ar (uma mira de comando, um
   diálogo) e, se não houver nada, abre a tela de fim de missão do próprio jogo

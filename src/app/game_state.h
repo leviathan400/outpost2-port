@@ -346,6 +346,11 @@ public:
     }
     int debugTabNow() const { return m_tab; }
     int debugArmed() const { return m_targetCmd; }
+    // --bannertest: a vista em coordenadas de TELA, para o teste saber onde o
+    // letreiro deveria estar centrado.
+    void debugViewRect(int& x, int& y, int& w, int& h) const {
+        x = kViewX; y = kViewY; w = viewportW(); h = viewportH();
+    }
     // O quadro seguinte: é aqui que a confirmação se fechava sozinha.
     void debugPaneFrame() { m_confirm.update(m_selected); }
     void debugSetHover(int id) { m_hoverUnit = id; m_hoverStartTick = -1000; }  // só p/ --selshot

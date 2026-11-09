@@ -15,7 +15,9 @@
 > click area: buildings answer on their whole footprint) and **5.19** (the
 > game's own command cursors, read from the `.ANI` files) and **5.20** (ESC
 > now asks before abandoning a mission, and the attract-demo idle clock
-> restarts whenever the menu comes back). The recent changes are summarised in
+> restarts whenever the menu comes back) and **5.21** (the end-of-mission
+> banner: big red Arial with a black outline, as `sub_4084D0`/`sub_4085C0`
+> draw it). The recent changes are summarised in
 > [README.EN.md](README.EN.md).
 
 # Outpost 2: Divided Destiny — Modern Port (C++17/SDL2)
@@ -66,7 +68,7 @@ coverage by comparing the DLLs' import tables against the registry in
 
 ```
 src/
-  main.cpp        entry point + the 103 test/capture modes
+  main.cpp        entry point + the 104 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -648,7 +650,7 @@ mission DLLs and the original resources from the working directory).
 
 ### Command-line tests
 
-There are 103 modes. The ones that cover real regressions:
+There are 104 modes. The ones that cover real regressions:
 
 | Mode | What it proves |
 |---|---|

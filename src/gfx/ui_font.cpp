@@ -29,7 +29,7 @@ struct FaceData {
     Glyph g[256];
 };
 
-FaceData s_face[5];
+FaceData s_face[6];
 bool s_init = false;
 
 #ifdef _WIN32
@@ -122,12 +122,13 @@ void init() {
     buildFace(s_face[2], FW_BOLD, 12);               // 700, barra de estado (sub_49B140)
     buildFace(s_face[3], FW_BOLD, -14);              // fork: titulo dos dialogos do shell (medido)
     buildFace(s_face[4], FW_NORMAL, -12);            // fork: texto dos dialogos do shell
+    buildFace(s_face[5], FW_BOLD, 48);               // 0x2BC/0x30: o letreiro (sub_4084D0)
 #endif
 }
 
 const FaceData& face(int i) {
     init();
-    if (i < 0 || i > 4) i = 0;
+    if (i < 0 || i > 5) i = 0;
     return s_face[i];
 }
 

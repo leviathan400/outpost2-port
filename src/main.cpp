@@ -4239,6 +4239,116 @@ static int runCheatTest(const std::string& dll) {
     return ok ? 0 : 1;
 }
 
+// --bannertest <DLL>: o letreiro de fim de missao ("MISSION ACCOMPLISHED",
+// "MISSION FAILED"). O porte o escrevia com a fontinha de depuracao, AMARELO e
+// pequeno; o original (sub_4084D0/sub_4085C0) usa Arial negrito de corpo 48,
+// VERMELHO, com contorno preto nos quatro cantos diagonais de +-2 px.
+//
+// A medicao e por DIFERENCA de quadros: desenha um quadro sem o letreiro,
+// guarda, poe o codigo de fim e desenha outro. So os pixels que MUDARAM sao o
+// letreiro -- assim nem o terreno nem o painel entram na conta.
+static int runBannerTest(const std::string& dll, const std::string& shot) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 bannertest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+
+    // O primeiro quadro e quem acerta o tamanho (o fitToWindow do onIdle):
+    // medir antes dele daria 640x480 e a varredura cairia no lugar errado.
+    gs.onIdle(renderer, 0.0f);
+    const int W = renderer.getWidth(), H = renderer.getHeight();
+    int vx = 0, vy = 0, vw = 0, vh = 0;
+    gs.debugViewRect(vx, vy, vw, vh);
+
+    struct Caixa { int l = 1 << 20, t = 1 << 20, r = -1, b = -1; int n = 0;
+        void add(int x, int y) { if (x < l) l = x; if (x > r) r = x;
+                                 if (y < t) t = y; if (y > b) b = y; ++n; }
+        int w() const { return n ? r - l + 1 : 0; }
+        int h() const { return n ? b - t + 1 : 0; }
+    };
+
+    std::vector<uint32_t> base(static_cast<size_t>(W) * H);
+    // dt = 0: nenhum turno avanca, entao dois quadros seguidos sao iguais --
+    // e o que torna a diferenca confiavel.
+    gs.onIdle(renderer, 0.0f);
+    std::memcpy(base.data(), renderer.getFramebuffer(), base.size() * sizeof(uint32_t));
+    gs.onIdle(renderer, 0.0f);
+    int instaveis = 0;
+    for (size_t i = 0; i < base.size(); ++i)
+        if (base[i] != renderer.getFramebuffer()[i]) ++instaveis;
+
+    struct Caso { std::string nome; long long obtido; long long esperado; };
+    std::vector<Caso> casos;
+    casos.push_back({"dois quadros parados sao iguais (premissa)", instaveis, 0});
+
+    Caixa anterior;
+    for (int code : {3, 4}) {
+        op2::debugSetGameEnd(code);
+        gs.onIdle(renderer, 0.0f);
+        const uint32_t* fb = renderer.getFramebuffer();
+        Caixa vermelho, preto, outros;
+        int amarelo = 0;
+        for (int y = 0; y < H; ++y)
+            for (int x = 0; x < W; ++x) {
+                const size_t i = static_cast<size_t>(y) * W + x;
+                if (fb[i] == base[i]) continue;              // nao mexeu: nao e o letreiro
+                if (fb[i] == 0xFFFF0000u) vermelho.add(x, y);
+                else if (fb[i] == 0xFF000000u) preto.add(x, y);
+                else { outros.add(x, y); if (fb[i] == 0xFFFFE070u) ++amarelo; }
+            }
+        const char* txt = op2::gameEndText(code);
+        std::printf("[Banner] codigo %d \"%s\": vermelho %dx%d em (%d,%d) %d px; "
+                    "preto %dx%d em (%d,%d); outras cores %d px\n",
+                    code, txt, vermelho.w(), vermelho.h(), vermelho.l, vermelho.t, vermelho.n,
+                    preto.w(), preto.h(), preto.l, preto.t, outros.n);
+
+        const std::string tag = std::string("codigo ") + std::to_string(code) + ": ";
+        casos.push_back({tag + "o letreiro e desenhado em VERMELHO", vermelho.n > 0 ? 1 : 0, 1});
+        // Arial negrito de corpo 48: as maiusculas passam de 30 px de altura.
+        // A fontinha do porte dava 10 -- e e isso que este caso pega.
+        casos.push_back({tag + "... com letras grandes (altura >= 30 px)",
+                         vermelho.h() >= 30 ? 1 : 0, 1});
+        // O contorno preto: a caixa preta e a vermelha dilatada em 2 px de cada
+        // lado, que e exatamente o que as quatro passadas de +-2 px produzem.
+        casos.push_back({tag + "... e o contorno preto 2 px em volta",
+                         (preto.n > 0 && preto.l == vermelho.l - 2 && preto.t == vermelho.t - 2 &&
+                          preto.r == vermelho.r + 2 && preto.b == vermelho.b + 2) ? 1 : 0, 1});
+        casos.push_back({tag + "nada do amarelo antigo", amarelo, 0});
+        // Centrado na vista, como o DT_CENTER num retangulo que e a superficie
+        // inteira e a centragem vertical pela altura medida.
+        casos.push_back({tag + "centrado na horizontal",
+                         std::abs((vermelho.l + vermelho.r) / 2 - (vx + vw / 2)) <= 3 ? 1 : 0, 1});
+        // Na vertical quem e centrado e a CELULA da fonte (o DT_CALCRECT do
+        // original devolve a altura da linha), e as maiusculas ocupam so uma
+        // parte dela -- por isso a folga de meia linha.
+        casos.push_back({tag + "centrado na vertical",
+                         std::abs((vermelho.t + vermelho.b) / 2 - (vy + vh / 2)) <=
+                             op2::UiFont::lineHeight(op2::UiFont::kBanner) / 2 ? 1 : 0, 1});
+        if (!shot.empty() && code == 3 && writeBmp32(shot, fb, W, H))
+            std::printf("[Banner] quadro salvo em %s\n", shot.c_str());
+        if (code == 4)
+            casos.push_back({"os dois codigos dao textos diferentes",
+                             vermelho.w() != anterior.w() ? 1 : 0, 1});
+        anterior = vermelho;
+    }
+
+    int ruins = 0;
+    for (const Caso& c : casos) {
+        const bool ok = c.obtido == c.esperado;
+        if (!ok) ++ruins;
+        std::printf("[Banner] %-52s %lld (esperado %lld) %s\n", c.nome.c_str(), c.obtido,
+                    c.esperado, ok ? "ok" : "FALHOU");
+    }
+    std::printf("[Banner] %d casos, %d falhas\n", (int)casos.size(), ruins);
+    renderer.shutdown();
+    SDL_Quit();
+    return ruins ? 1 : 0;
+}
+
 // --optmenutest <DLL>: a aba Options de ponta a ponta. Dois bugs moravam aqui:
 //   o L&ESS e o &MORE do PREFERENCES tinham o id de OUTRO comando (kCmdLabsCurrent
 //   e kCmdResStructures), cujo tratador vem antes e sai com `return`; e a tela de
@@ -5929,6 +6039,8 @@ int main(int argc, char* argv[]) {
             return runMusicTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--optmenutest") == 0 && i + 1 < argc)
             return runOptMenuTest(argv[i + 1]);
+        if (std::strcmp(argv[i], "--bannertest") == 0 && i + 1 < argc)
+            return runBannerTest(argv[i + 1], i + 2 < argc ? argv[i + 2] : "");
         if (std::strcmp(argv[i], "--item21test") == 0 && i + 1 < argc)
             return runItem21Test(argv[i + 1]);
         if (std::strcmp(argv[i], "--cheattest") == 0 && i + 1 < argc)

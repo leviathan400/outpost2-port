@@ -34,6 +34,11 @@ public:
     // Fork: texto dos dialogos do shell (listas, rotulos): Arial -12, com
     // linhas de 14 px como na lista de TUTORIALS do original.
     static constexpr int kDialogText = 4;
+    // O letreiro grande sobre a vista -- "MISSION ACCOMPLISHED", "MISSION
+    // FAILED", "Game Paused..." (sub_4084D0, o controle TFrame+0x1F4): Arial
+    // com lfHeight **+48** (0x30) e peso 0x2BC. O lfHeight POSITIVO e a altura
+    // da celula, como nas outras faces do original.
+    static constexpr int kBanner = 5;
 
     static void draw(uint32_t* fb, int fbW, int fbH, const std::string& text, int x, int y,
                      uint32_t color, int face = kText, int clipL = 0, int clipT = 0, int clipR = 1 << 20,

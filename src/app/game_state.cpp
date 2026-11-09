@@ -1461,12 +1461,25 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     }
 
     // Painel de comando (a "MAINE"): minimapa + info + botões.
-    // Fim de jogo (sub_49CAC0): letreiro sobre a vista até o tick de encerramento.
-    // (O original usa a fonte grande do quadro de detalhe — aqui a fonte do port.)
+    // Fim de jogo: o letreiro do controle TFrame+0x1F4, que o sub_49CAC0 enche
+    // com o texto do código e o sub_4085C0 desenha. Reproduzido como lá:
+    //   * a fonte é criada uma vez (sub_4084D0) com lfHeight **0x30** e peso
+    //     0x2BC — Arial negrito de corpo 48, não a fontinha de depuração;
+    //   * `SetBkMode(TRANSPARENT)` e `DrawText` com `DT_CENTER`, centrado
+    //     também na vertical pela altura medida com `DT_CALCRECT`;
+    //   * CINCO passadas: `SetTextColor(0)` e o texto nos quatro cantos
+    //     diagonais de ±2 px — que é o contorno —, e por fim
+    //     `SetTextColor(0xFF)`, ou seja **VERMELHO**, no lugar certo.
     if (gameEndCode()) {
-        const int cy = viewportH() / 2;
-        Font::drawTextCentered(renderer.getFramebuffer(), m_fbW, m_fbH,
-                               gameEndText(gameEndCode()), viewportW() / 2, cy, 0xFFFFE070, true);
+        const std::string msg = gameEndText(gameEndCode());
+        uint32_t* fb = renderer.getFramebuffer();
+        const int cx = viewportW() / 2;
+        const int y = (viewportH() - UiFont::lineHeight(UiFont::kBanner)) / 2;
+        for (int dx = -2; dx <= 2; dx += 4)
+            for (int dy = -2; dy <= 2; dy += 4)
+                UiFont::drawCentered(fb, m_fbW, m_fbH, msg, cx + dx, y + dy,
+                                     0xFF000000, UiFont::kBanner);
+        UiFont::drawCentered(fb, m_fbW, m_fbH, msg, cx, y, 0xFFFF0000, UiFont::kBanner);
     }
     // vt[6] do terremoto (sub_413560): tremor p/ o próximo quadro, pelo centro da vista.
     disasterShake(m_camX + (viewportW() / 32) * 16,

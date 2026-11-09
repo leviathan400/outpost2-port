@@ -983,6 +983,11 @@ void missionTriggerTick(MissionScript* mission) {          // sub_403110
 void setDemoGame(bool on) { s_demo = on; }
 bool demoGame() { return s_demo; }
 void endDemoGame() { if (s_demo) endGame(10, 0); }   // sub_49C720: 10, sem atraso
+void debugSetGameEnd(int code) {
+    s_endCode = code;
+    s_endTick = TethysGame::tick() + 1000000;        // longe: nada encerra no teste
+}
+
 void endGameAborted() { endGame(6, 0); }            // "MISSION ABORTED"
 void endGamePlayerQuit(int delay) { endGame(multiplayerMission() ? 9 : 6, delay); }
 

@@ -176,7 +176,7 @@ The game's `OUTPOST2.INI` file is respected. The port adds seven keys the
 original doesn't have — AI level, night darkness, volume, demo camera and
 fullscreen; they are documented in `PORT_STATUS.EN.md`.
 
-There are **103 command-line modes** for tests and captures, among them a
+There are **104 command-line modes** for tests and captures, among them a
 regression battery (`--savetest` proves save/reload determinism). The list is
 in `PORT_STATUS.EN.md`.
 
@@ -210,7 +210,7 @@ and what was checked and discarded from the cheat lists that circulate.
 
 ```
 src/
-  main.cpp        entry point + the 103 test/capture modes
+  main.cpp        entry point + the 104 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -252,6 +252,9 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
   the missile on its way to the enemy.
 - **Walls no longer fail to build** next to a wall under construction, Blight
   or lava. A neighbouring building still blocks, as it should.
+- **"MISSION ACCOMPLISHED" and "MISSION FAILED" are the game's banner
+  again:** large bold Arial, **red**, with the 2 px black outline — the port
+  wrote them in its small debug font, yellow and tiny.
 - **ESC asks before abandoning a mission.** It used to drop straight back to
   the menu; now it first cancels whatever is pending (a command target, a
   dialog) and, with nothing pending, opens the game's own end-of-mission screen
