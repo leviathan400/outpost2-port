@@ -1033,9 +1033,9 @@ dessa lista é um lugar para conferir. Conferidos um a um no nosso código:
 |---|---|
 | Meteor Defense derruba míssil de **aliado** | **reproduzia** — `missile.cpp` pulava só o dono. **Corrigido** |
 | Muro falha num 3×3 em volta de muro em obra, Blight ou lava | **reproduzia** — `wallNeighborOk`. **Corrigido** |
-| Alerta de aliança dispara no início da partida | reproduz (`applyAlly`, sem guarda de tique) — **aberto** |
-| Alerta de transferência com IA/Gaia | reproduz (`applyTransfer`, só testa quem é o local) — **aberto** |
-| "Power Levels: Optimal" / "Storage Needed" repetindo | reproduz; só o filtro anti-repetição do original segura — **aberto** |
+| Alerta de aliança dispara no início da partida | **não se aplica** aqui — ver 5.11 |
+| Alerta de transferência com IA/Gaia | reproduzia. **Corrigido** |
+| "Power Levels: Optimal" / "Storage Needed" repetindo | reproduzia. **Corrigido** |
 | Limite de unidades | o porte não tinha limite nenhum. **Posto em 2048**, como eles |
 
 Não conferidos ainda, e por isso não afirmados: EMP que não pousa para Eden,
@@ -1090,6 +1090,79 @@ passar disso não daria "cheio", daria ocupação truncada, que é silenciosa e 
 pior. O `createUnit` agora recusa em `kMaxLiveUnits = 2048`, o mesmo número do
 OPUPatch (que dobra o 1024 do original). Caso novo no `--unittest`: enche até
 recusar e confere que parou no id 2047.
+
+---
+
+## 5.11. Os avisos do Savant (2026-11-08)
+
+Os três que tinham ficado abertos na 5.10. Um deles **não existia**, e no lugar
+dele apareceu um defeito nosso, bem pior.
+
+### O alerta de aliança: não se aplica
+
+Eu tinha anotado "reproduz" olhando só o `applyAlly`, que de fato posta o aviso
+sem olhar o relógio. Seguindo o caminho até o começo da partida, não é por ali
+que as alianças iniciais passam: o `P_AllyWith` da ponte da API (o que as
+missões chamam no `InitProc`) mexe na máscara **direto, sem mensagem nenhuma**,
+e no porte **não há mais nenhum** lugar que escreva `allyMask` — só o reset e o
+pacote 0x32, que é a aliança pedida no jogo, e essa deve avisar mesmo.
+
+Fica o registro de método: a anotação da primeira passada estava errada porque
+foi feita pelo ponto de chegada, sem seguir quem chama.
+
+### A transferência de/para jogador de PC
+
+O escolhedor da UI só lista **humanos** (`m_pickPlayer` pula `!isHuman`), então
+o caminho que importa é o dos scripts: `U_DoTransfer` → pacote 0x18 →
+`applyTransfer`. Missão transfere unidade de e para jogador de PC o tempo todo,
+e cada uma virava um "Transfer completed to …" na cara de quem joga. Agora o
+aviso só sai quando o **outro lado é humano** — entre humanos ele continua,
+porque ali é o único jeito de saber que chegou alguma coisa.
+
+### Energia e estoque: só a mudança avisa
+
+`Power Levels: Optimal` e os dois `Storage Needed` saíam a **cada** recálculo da
+colônia. Agora valem por mudança de estado; os avisos de **falta**
+(`Shortage`/`Marginal`) seguem insistindo, que é o que se espera deles. A
+memória disso mora num `static` do `colony.cpp`, fora do `ColonyState`: é
+apresentação e só do jogador local, então **não entra no jogo salvo nem na
+simulação** — o lockstep fica intacto.
+
+### O defeito que o teste achou: o relógio do filtro
+
+Montando o caso, o controle "o aviso TEM de sair quando o estoque enche" dava
+**zero**. A causa não era a correção:
+
+```c
+static bool cooldownAllow(uint32_t& lastT, uint32_t span, uint32_t now) {
+    if (lastT + span >= now) return false;      // <- aqui
+```
+
+`lastT == 0` quer dizer "nunca avisou". No original isso se resolve sozinho,
+porque o relógio é o `timeGetTime` — tempo desde o **boot do Windows**, sempre
+enorme —, então `0 + 120000 >= now` é falso. O porte trocou por `SDL_GetTicks`,
+que começa em **zero com o processo**: a conta virava verdadeira e **barrava os
+avisos de armazenamento e de prédio desligado nos dois primeiros minutos de
+cada partida**, em silêncio. Na mesma função, o `now - 0x61A8` da janela de 25 s
+estoura por baixo pelo mesmo motivo; passou a somar do outro lado.
+
+Não é defeito do original: é do porte, nascido da troca de relógio. O
+`--colonytest` pega: neutralizando só essa linha, o controle volta a dar zero.
+
+### Os testes
+
+- `--transfertest <DLL>`: transferência para jogador de PC **cala** e para
+  humano **avisa**, pelo `applyTransfer` de verdade.
+- `--colonytest <mapa>`: três medidas para o estoque (vazio → nada; enche →
+  avisa; segue cheio → não repete) e três para a energia (desliga o gerador →
+  falta avisa; religa → "Optimal" sai; parado → não repete). Entre as medidas
+  o teste chama `resetMessages()`, que zera o filtro de tempo real: **sem isso
+  o caso passaria de graça**, porque o filtro sozinho já barra o repetido por
+  dois minutos — e o que eu mudei foi a colônia, não o filtro.
+
+Neutralizando, uma peça por vez: transferência **1**, estoque **1**, energia
+**1**, relógio do filtro **1** — cada uma com a sua assinatura, e a base em 0
+antes e depois.
 
 ---
 

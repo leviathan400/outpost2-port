@@ -26,12 +26,33 @@ static std::vector<int> s_vehicleList[kMaxPlayers];
 
 static int ownerOf(const UnitRecord& r) { return r.owner & 0x0F; }
 
+// CORRECAO: o "Power Levels: Optimal" e os dois "Storage Needed" saiam a CADA
+// recalculo da colonia -- so o filtro anti-repeticao do postMessage (tempo
+// real) segurava, e mal. Agora so a MUDANCA de estado avisa; os avisos de
+// falta (Shortage/Marginal) seguem repetindo, porque la a insistencia serve.
+// Isto e so apresentacao, e so do jogador local: mora fora do ColonyState,
+// entao nao entra no jogo salvo nem muda a simulacao (lockstep intacto).
+namespace {
+struct AvisoColonia { int8_t power = -1; int8_t ore = -1; int8_t rare = -1; };
+AvisoColonia s_aviso[kMaxPlayers];
+// Devolve true (e guarda) quando `agora` e diferente do que se avisou por
+// ultimo para aquele jogador.
+bool mudou(int8_t& memoria, int agora) {
+    if (memoria == agora) return false;
+    memoria = static_cast<int8_t>(agora);
+    return true;
+}
+}
+
 void colonyMarkDirty(int player) {
     if (player >= 0 && player < kMaxPlayers) g_colony[player].dirty = 1;
 }
 
 void colonyReset() {
-    for (int p = 0; p < kMaxPlayers; ++p) { s_structList[p].clear(); s_vehicleList[p].clear(); g_colony[p] = ColonyState{}; }
+    for (int p = 0; p < kMaxPlayers; ++p) {
+        s_structList[p].clear(); s_vehicleList[p].clear(); g_colony[p] = ColonyState{};
+        s_aviso[p] = AvisoColonia{};
+    }
 }
 
 const std::vector<int>& colonyStructures(int player) {
@@ -725,9 +746,12 @@ static void allocate(int p) {
     c.scientistsLeft = scientists;
     c.dirty = 0;
     if (local) {
-        if (c.powerGenerated < c.powerRequired) postMessage(-1, -1, "Power Levels: Shortage", 0x79);
-        else if (powerAvail < 0x32) postMessage(-1, -1, "Power Levels: Marginal", 0x78);
-        else postMessage(-1, -1, "Power Levels: Optimal", 0x77);
+        // Os dois primeiros sao avisos de falta e continuam insistindo; o
+        // "Optimal" so sai quando a energia ACABOU de ficar boa (ver mudou()).
+        const int estado = c.powerGenerated < c.powerRequired ? 0 : (powerAvail < 0x32 ? 1 : 2);
+        if (estado == 0) { s_aviso[p].power = 0; postMessage(-1, -1, "Power Levels: Shortage", 0x79); }
+        else if (estado == 1) { s_aviso[p].power = 1; postMessage(-1, -1, "Power Levels: Marginal", 0x78); }
+        else if (mudou(s_aviso[p].power, 2)) postMessage(-1, -1, "Power Levels: Optimal", 0x77);
     }
     // Capacidade de armazenamento (Smelters operando ou parados + Storages
     // operando) e corte do estoque. (dword_56DE58 → 100000; fica em 0.)
@@ -742,9 +766,13 @@ static void allocate(int p) {
     if (pd.ore > c.oreCapacity) pd.ore = c.oreCapacity;
     if (pd.rareOre > c.rareCapacity) pd.rareOre = c.rareCapacity;
     if (local) {
-        if (pd.canAccumulateOre && c.oreCapacity - 0x12C <= pd.ore)
+        // Idem: so quando o estoque ACABA de encher. Enquanto segue cheio, o
+        // aviso ja foi dado.
+        const int cheioComum = (pd.canAccumulateOre && c.oreCapacity - 0x12C <= pd.ore) ? 1 : 0;
+        const int cheioRaro  = (pd.canAccumulateRareOre && c.rareCapacity - 0x12C <= pd.rareOre) ? 1 : 0;
+        if (mudou(s_aviso[p].ore, cheioComum) && cheioComum)
             postMessage(-1, -1, "Common Metals Storage Needed", 0x81);
-        if (pd.canAccumulateRareOre && c.rareCapacity - 0x12C <= pd.rareOre)
+        if (mudou(s_aviso[p].rare, cheioRaro) && cheioRaro)
             postMessage(-1, -1, "Rare Metals Storage Needed", 0x82);
     }
     // ("Common/Rare Metals Storage Needed" — B3; moral sub_44E550 — B2.)

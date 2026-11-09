@@ -55,7 +55,15 @@ static bool groupAllow(int id, int& lastId, uint32_t& lastT, uint32_t now) {
     return true;
 }
 static bool cooldownAllow(uint32_t& lastT, uint32_t span, uint32_t now) {
-    if (lastT + span >= now) return false;
+    // CORRECAO: `lastT == 0` quer dizer "nunca avisou", e nunca-avisou tem de
+    // passar. No original isto se resolvia sozinho porque o relogio e o
+    // timeGetTime -- tempo desde o boot do Windows, sempre enorme --, entao
+    // `0 + span >= now` era falso. Aqui o relogio e o SDL_GetTicks, que comeca
+    // em ZERO com o processo: a conta ficava verdadeira e barrava os avisos de
+    // armazenamento e de predio desligado nos DOIS PRIMEIROS MINUTOS de cada
+    // partida, em silencio. (groupAllow nao tem o problema: ele ja trata o
+    // "primeiro" por lastId == 0.)
+    if (lastT != 0 && lastT + span >= now) return false;
     lastT = now;
     return true;
 }
@@ -69,7 +77,10 @@ static bool messageAllowed(int id, int x, int y) {
             const int mapW = g_gameMap.ok() ? g_gameMap.width() * 32 : 0;
             for (int i = 0; i < 0x32; ++i) {
                 Recent& r = s_recent[i];
-                if (r.time < now - 0x61A8) r = Recent{};    // > 25 s: esquece
+                // (o `now - 0x61A8` do original estoura por baixo nos
+                // primeiros 25 s com um relogio que comeca em zero; somar do
+                // outro lado da a mesma conta sem estourar)
+                if (r.id != 0 && r.time + 0x61A8 < now) r = Recent{};   // > 25 s: esquece
                 if (r.id == 0 && freeSlot < 0) freeSlot = i;
                 if (r.id != id) continue;
                 if (std::abs(r.y - y) >= 0x100) continue;

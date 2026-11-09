@@ -253,6 +253,15 @@ cursores `.ANI`.
   míssil que ia no inimigo.
 - **O muro não falha mais** por ter perto dele um muro em obra, a praga ou
   lava. Prédio vizinho continua impedindo, como deve.
+- **Avisos do Savant que não param de repetir.** "Power Levels: Optimal" e
+  "Storage Needed" saíam a cada recálculo da colônia; agora só na mudança de
+  estado. Os avisos de falta continuam insistindo, como devem.
+- **Transferência de/para jogador de PC não avisa mais.** Script de missão
+  transfere unidade o tempo todo, e cada uma virava um aviso na tela.
+- **Avisos sumidos nos dois primeiros minutos de partida** (defeito do porte,
+  não do original): o filtro anti-repetição comparava com um relógio que começa
+  em zero, e barrava o primeiro "Storage Needed" e o "Structure Disabled" de
+  cada partida.
 - **Teto de 2048 unidades vivas.** Não havia teto, e o id da unidade precisa
   caber nos 11 bits da ocupação da célula do mapa (máximo 2047): passar disso
   não daria "cheio", daria ocupação truncada.

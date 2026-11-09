@@ -2389,8 +2389,76 @@ static int runColonyTest(const std::string& mapName) {
     const op2::ColonyState& c = op2::g_colony[0];
     std::printf("[Colony] 10 ciclos: comida=%d (produz %d, come %d, saldo %d)  trab=%d cient=%d criancas=%d\n",
                 pd.foodStored, c.foodProduced, c.foodEaten, c.foodNet, pd.workers, pd.scientists, pd.kids);
+
+    // CORRECAO: o "Storage Needed" so sai quando o estoque ACABA de encher,
+    // e nao a cada recalculo. O filtro do log (messages.cpp) ja barra o
+    // repetido por DOIS MINUTOS de tempo real, entao um teste rapido passaria
+    // de graca: por isso o resetMessages() entre as medidas, que zera o filtro
+    // e deixa so a memoria da colonia em jogo -- que e o que eu mudei.
+    bool avisoOk = true;
+    {
+        auto conta = [](const char* txt) {
+            int n = 0;
+            for (int i = 0; i < op2::messageCount(); ++i)
+                if (op2::messageAt(i).text.find(txt) != std::string::npos) ++n;
+            return n;
+        };
+        auto roda = [&](int ticks) {
+            for (int t = 0; t < ticks; ++t) { op2::TethysGame::advanceTick(); op2::tickColony(); }
+        };
+        // Sem fundicao nao ha capacidade nem acumulo: a condicao do aviso
+        // (canAccumulateOre && cap-300 <= ore) nunca seria verdade, e o
+        // controle abaixo acusou isso na primeira rodada.
+        op2::Unit smelt;
+        op2::TethysGame::CreateUnit(smelt, static_cast<op2::map_id>(0x36), op2::LOCATION{bx + 6, by + 2}, 0);
+        pd.canAccumulateOre = 1;
+        for (int t = 0; t < 64; ++t) { op2::TethysGame::advanceTick(); op2::tickColony(); }
+        const int cap = op2::g_colony[0].oreCapacity;
+        // (a) estoque LONGE do teto: nada a avisar, e zera a memoria.
+        op2::resetMessages();
+        pd.ore = 0;
+        roda(300);    // a vez do jogador 0 vem a cada 256 ticks
+        const int vazio = conta("Common Metals Storage Needed");
+        // (b) enche: o aviso TEM de sair (controle -- sem isto o resto nao mede nada).
+        op2::resetMessages();
+        pd.ore = cap;
+        roda(300);    // a vez do jogador 0 vem a cada 256 ticks
+        const int encheu = conta("Common Metals Storage Needed");
+        // (c) segue cheio, com o filtro de tempo real LIMPO: nao repete.
+        op2::resetMessages();
+        pd.ore = cap;
+        roda(300);    // a vez do jogador 0 vem a cada 256 ticks
+        const int repetiu = conta("Common Metals Storage Needed");
+        const bool estoqueOk = (vazio == 0 && encheu >= 1 && repetiu == 0);
+        if (!estoqueOk) avisoOk = false;
+
+        // Mesma conta para a energia. Desligo os geradores (fica em
+        // Shortage, que CONTINUA insistindo -- aviso de falta deve
+        // insistir), religo (entra em Optimal: tem de avisar) e deixo
+        // parado com o filtro limpo (nao repete).
+        op2::structureDoIdle(tok.id());
+        op2::colonyMarkDirty(0);
+        roda(300);
+        op2::resetMessages();
+        roda(300);
+        const int faltando = conta("Power Levels");
+        op2::structureDoActivate(tok.id());
+        op2::colonyMarkDirty(0);
+        op2::resetMessages();
+        roda(300);
+        const int voltou = conta("Power Levels: Optimal");
+        op2::resetMessages();
+        roda(300);
+        const int repetiuPwr = conta("Power Levels: Optimal");
+        const bool pwrOk = faltando >= 1 && voltou >= 1 && repetiuPwr == 0;
+        if (!pwrOk) avisoOk = false;
+        std::printf("[Colony] energia: faltando=%d (esp >=1) voltou=%d (esp >=1) repetiu=%d (esp 0) %s\n",
+                    faltando, voltou, repetiuPwr, pwrOk ? "ok" : "FALHOU");
+        std::printf("[Colony] estoque: vazio=%d (esp 0) encheu=%d (esp >=1) repetiu=%d (esp 0) %s\n",
+                    vazio, encheu, repetiu, estoqueOk ? "ok" : "FALHOU");
+    }
     renderer.shutdown(); SDL_Quit();
-    return 0;
+    return avisoOk ? 0 : 1;
 }
 
 // --combattest <map> <prefix> [w0 w1 w2 w3]: Laser Lynx + Rail Gun Tiger
@@ -3267,9 +3335,27 @@ static int runTransferTest(const std::string& dll) {
     const std::string ultima = op2::messageCount() ? op2::messageAt(op2::messageCount() - 1).text : "";
     std::printf("[Transfer] aviso: %s\n", ultima.c_str());
 
+    // CORRECAO: transferencia de/para jogador de PC (ou Gaia) nao avisa. O
+    // escolhedor da UI so lista humanos, entao o caminho que importa e o dos
+    // scripts: U_DoTransfer -> pacote 0x18 -> applyTransfer.
+    bool avisoOk = true;
+    {
+        op2::resetMessages();
+        const int serie = op2::messageSerial();
+        op2::g_playerData[destino].isHuman = 0;              // vira PC
+        op2::applyTransfer(me, {meus[0]}, destino);
+        const bool calouPC = op2::messageSerial() == serie;
+        op2::g_playerData[destino].isHuman = 1;              // humano de novo
+        op2::applyTransfer(me, {meus[1]}, destino);
+        const bool avisouHumano = op2::messageSerial() > serie;
+        if (!calouPC || !avisouHumano) avisoOk = false;
+        std::printf("[Transfer] para PC: calou=%d | para humano: avisou=%d %s\n",
+                    calouPC ? 1 : 0, avisouHumano ? 1 : 0, avisoOk ? "ok" : "FALHOU");
+    }
+
     renderer.shutdown();
     SDL_Quit();
-    return 0;
+    return avisoOk ? 0 : 1;
 }
 static int runPaneTest(const std::string& dll, const std::string& prefix) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;

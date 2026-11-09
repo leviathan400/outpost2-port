@@ -250,6 +250,15 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
   the missile on its way to the enemy.
 - **Walls no longer fail to build** next to a wall under construction, Blight
   or lava. A neighbouring building still blocks, as it should.
+- **Savant alerts that would not stop repeating.** "Power Levels: Optimal"
+  and "Storage Needed" fired on every colony recalculation; they now fire on
+  state change only. Shortage warnings still insist, as they should.
+- **Transfers to/from AI players no longer alert.** Mission scripts transfer
+  units all the time, and each one raised a message on screen.
+- **Alerts lost in the first two minutes of a game** (a defect of this port,
+  not of the original): the anti-repeat filter compared against a clock that
+  starts at zero, which silently barred each game's first "Storage Needed" and
+  "Structure Disabled".
 - **A cap of 2048 live units.** There was no cap at all, and a unit id has to
   fit in the 11 bits of the map cell's occupancy field (2047 max): going past
   it would not report "full", it would silently truncate the occupancy.

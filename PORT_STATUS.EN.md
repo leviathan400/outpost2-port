@@ -6,8 +6,9 @@
 > the chat-line cheats (5.6), item 21, and sections **5.7** (the Options tab
 > fixes), **5.8** (the `Screen Mode` radio and the PREFERENCES scroll arrows)
 > **5.9** (the per-item PREFERENCES table at `0x4E3118`, and the screen's
-> real structure, still open) and **5.10** (the OPUPatch defect list checked
-> against this port). The recent changes are summarised in
+> real structure, still open) **5.10** (the OPUPatch defect list checked
+> against this port) and **5.11** (the Savant alerts, and a message-filter
+> defect of this port's own). The recent changes are summarised in
 > [README.EN.md](README.EN.md).
 
 # Outpost 2: Divided Destiny — Modern Port (C++17/SDL2)

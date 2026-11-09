@@ -155,12 +155,22 @@ void applyTransfer(int owner, const std::vector<int>& ids, int to) {
         vehicleTransfer(id, to);
     }
     const int me = TethysGame::localPlayer();
-    if ((owner & 0x0F) == me) {
+    const int de = owner & 0x0F;
+    // CORRECAO (o original avisa sempre): nada de aviso quando o OUTRO lado e
+    // jogador de PC ou a Gaia (6, que nunca e humana). Os scripts de missao
+    // transferem unidades de e para jogadores de PC o tempo todo (U_DoTransfer
+    // na ponte da API), e cada uma dessas virava um "Transfer completed to ..."
+    // na cara de quem joga. Transferencia entre humanos continua avisando --
+    // ali o aviso e o unico jeito de saber que chegou alguma coisa.
+    auto humano = [](int p) { return p >= 0 && p < kMaxPlayers && g_playerData[p].isHuman != 0; };
+    if (de == me) {
+        if (!humano(to)) return;
         const std::string t = "Transfer completed to " + playerName(to);
         postMessage(-1, -1, t.c_str(), 0xBE + to);
     } else if (to == me) {
-        const std::string t = "Transfer received from " + playerName(owner & 0x0F);
-        postMessage(-1, -1, t.c_str(), 0xC4 + (owner & 0x0F));
+        if (!humano(de)) return;
+        const std::string t = "Transfer received from " + playerName(de);
+        postMessage(-1, -1, t.c_str(), 0xC4 + de);
     }
 }
 
