@@ -4236,6 +4236,12 @@ static int runOptMenuTest(const std::string& dll) {
     gs.debugOptionsScreen(1);                        // PREFERENCES
     texto("o titulo do PREFERENCES", gs.debugOptTitle(), "Game Preferences");
     gs.debugOptSelect(2);                            // "Game Speed"
+    // O valor vem do INI do usuario, que pode estar no TETO (10) ou no piso --
+    // e ai o &MORE (ou o L&ESS) nao tem para onde ir e o caso reprova sem ter
+    // defeito nenhum. Leva ao piso e sobe um: dai os dois botoes tem folga,
+    // venha o INI como vier.
+    for (int k = 0; k < 12; ++k) gs.debugOptClick("L&ESS");
+    gs.debugOptClick("&MORE");
     const std::string antes = gs.debugOptItem(2);
     casos.push_back({"o &MORE existe e responde", gs.debugOptClick("&MORE") ? 1 : 0, 1});
     casos.push_back({"... e o valor do item mudou", gs.debugOptItem(2) != antes ? 1 : 0, 1});
@@ -4847,6 +4853,92 @@ static int runScrollTest(const std::string& mapName) {
                     c.esperado, ok ? "ok" : "FALHOU", 10);
     }
     std::printf("[scroll] passo=%d  %d caso(s) com falha%c", passo, ruins, 10);
+    std::fflush(stdout);
+    renderer.shutdown(); SDL_Quit();
+    return ruins ? 1 : 0;
+}
+
+// --selecttest <mapa>: a area em que o clique marca a unidade. O porte usava
+// um raio de 20 px do centro para tudo, entao num predio de 3x3 (96 px) so o
+// miolo respondia. Agora o predio responde na PEGADA inteira e o veiculo numa
+// caixa do tamanho do sprite -- ver GameState::unitHitBox.
+static int runSelectTest(const std::string& mapName) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 selecttest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    op2::resetUnits();
+    const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
+    for (int y = 0; y < H; ++y)
+        for (int x = 0; x < W; ++x) op2::g_gameMap.clearUnitOccupancy(x, y);
+
+    struct Caso { std::string nome; long long obtido, esperado; };
+    std::vector<Caso> casos;
+
+    // Um Command Center (pegada maior que um tile) num canto livre.
+    const int bx = 12, by = 12;
+    op2::Unit cc;
+    if (!op2::TethysGame::CreateUnit(cc, op2::mapCommandCenter, op2::LOCATION{bx, by}, 0)) {
+        renderer.shutdown(); SDL_Quit(); return 3;
+    }
+    int tw = 1, th = 1;
+    op2::buildingFootprint(op2::mapCommandCenter, tw, th);
+    casos.push_back({"o predio tem pegada maior que 1 tile", tw * th > 1 ? 1 : 0, 1});
+
+    // A camera no canto: a vista comeca no pixel (0,0) do mapa.
+    gs.setCamera(0, 0);
+    const int tlx = bx - (tw / 2), tly = by - (th / 2);
+
+    // Clicar em CADA tile da pegada tem de marcar o predio.
+    int acertos = 0;
+    for (int dy = 0; dy < th; ++dy)
+        for (int dx = 0; dx < tw; ++dx) {
+            gs.debugClearSelection();
+            gs.debugSelectAt(((tlx + dx) << 5) + 16, ((tly + dy) << 5) + 16);
+            if (gs.debugSelectedCount() == 1 && gs.debugSelectedId(0) == cc.id()) ++acertos;
+        }
+    casos.push_back({"clicar em qualquer tile do predio marca", acertos, tw * th});
+
+    // Um tile FORA da pegada nao marca nada (controle negativo).
+    gs.debugClearSelection();
+    gs.debugSelectAt(((tlx + tw + 1) << 5) + 16, ((tly) << 5) + 16);
+    casos.push_back({"controle: tile fora nao marca", gs.debugSelectedCount(), 0});
+
+    // O canto do predio tambem responde (era o que mais falhava).
+    gs.debugClearSelection();
+    gs.debugSelectAt((tlx << 5) + 2, (tly << 5) + 2);
+    casos.push_back({"o canto do predio marca", gs.debugSelectedCount(), 1});
+
+    // Veiculo: o centro e uma borda do sprite marcam.
+    op2::Unit lynx;
+    op2::TethysGame::CreateUnit(lynx, op2::mapLynx, op2::LOCATION{bx + 6, by}, 0, 0x3D);
+    const int vcx = ((bx + 6) << 5) + 16, vcy = (by << 5) + 16;
+    gs.debugClearSelection();
+    gs.debugSelectAt(vcx, vcy);
+    casos.push_back({"veiculo: o centro marca", gs.debugSelectedId(0) == lynx.id() ? 1 : 0, 1});
+    gs.debugClearSelection();
+    gs.debugSelectAt(vcx + 20, vcy + 20);
+    casos.push_back({"veiculo: a borda do sprite marca", gs.debugSelectedId(0) == lynx.id() ? 1 : 0, 1});
+    gs.debugClearSelection();
+    gs.debugSelectAt(vcx + 60, vcy + 60);
+    casos.push_back({"controle: longe do veiculo nao marca", gs.debugSelectedCount(), 0});
+
+    // O realce (hover) usa a mesma caixa.
+    casos.push_back({"o realce ve o predio no canto",
+                     gs.debugUnitAtView((tlx << 5) + 2, (tly << 5) + 2) == cc.id() ? 1 : 0, 1});
+
+    int ruins = 0;
+    for (const Caso& c : casos) {
+        const bool ok = c.obtido == c.esperado;
+        if (!ok) ++ruins;
+        std::printf("[sel] %-44s %lld (esperado %lld) %s%c", c.nome.c_str(), c.obtido,
+                    c.esperado, ok ? "ok" : "FALHOU", 10);
+    }
+    std::printf("[sel] pegada %dx%d; %d caso(s) com falha%c", tw, th, ruins, 10);
     std::fflush(stdout);
     renderer.shutdown(); SDL_Quit();
     return ruins ? 1 : 0;
@@ -5626,6 +5718,8 @@ int main(int argc, char* argv[]) {
             return runGarageTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--mdtest") == 0 && i + 1 < argc)
             return runMdTest(argv[i + 1]);
+        if (std::strcmp(argv[i], "--selecttest") == 0 && i + 1 < argc)
+            return runSelectTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--scrolltest") == 0 && i + 1 < argc)
             return runScrollTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--walltest") == 0 && i + 1 < argc)

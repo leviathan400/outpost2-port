@@ -48,7 +48,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 100 modos de teste/captura
+  main.cpp        entrada + os 101 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -1525,6 +1525,53 @@ ignorando a velocidade **2**.
 
 ---
 
+## 5.18. A área de clique das unidades (2026-11-09)
+
+Para marcar um prédio era preciso acertar um alvo pequeno no meio dele. A causa
+estava à vista no código: o clique **e** o realce usavam um **raio de 20 px do
+centro**, igual para tudo —
+
+```c
+int best = 0, bestD2 = 20 * 20;   // raio de tolerância
+```
+
+— então num Command Center, de **3×2 tiles** (96×64 px), só o miolo respondia.
+Medido: com o raio, **2 dos 6 tiles** marcavam o prédio, e o canto não marcava
+nunca.
+
+### A caixa certa
+
+Agora cada unidade tem a sua caixa (`GameState::unitHitBox`):
+
+| | área que responde |
+|---|---|
+| prédio | a **pegada inteira** — as mesmas `w × h` células que ele marca no mapa ao nascer (`createUnit` preenche a ocupação de `(cx − w/2, cy − h/2)` por `w × h`) |
+| veículo | 48 px em volta do centro, da ordem do sprite (o tile tem 32) |
+
+Quando duas caixas se sobrepõem — um caminhão parado sobre a doca, por exemplo
+— ganha a unidade cujo **centro** está mais perto do clique. O realce (`hover`)
+passou pelo mesmo caminho, então o que se destaca é o que vai ser marcado.
+
+### O teste
+
+**`--selecttest <mapa>`**: um Command Center num canto livre, e o clique no
+**centro de cada tile da pegada** tem de marcá-lo — mais o canto do prédio, que
+era o caso que nunca funcionava. Dois controles negativos (um tile fora da
+pegada e um ponto longe do veículo) e o realce vendo o prédio pelo canto.
+
+Voltando ao raio de 20 px: **4 falhas**, com os números do defeito à mostra
+(`clicar em qualquer tile do predio marca 2 (esperado 6)`).
+
+### Um teste que dependia do INI do usuário
+
+No caminho, o `--optmenutest` começou a reprovar em dois casos — e não por causa
+desta mudança: o `GameSpeed` do INI estava em **10**, o teto, e o `&MORE` não
+tinha para onde subir. O caso media o INI de quem roda, não o porte. Agora ele
+leva o valor ao piso e sobe um antes de medir, então os dois botões têm folga
+venha o INI como vier.
+
+---
+
 ## 6. Build e execução
 
 **Toolchain:** CMake >= 3.15 + MSVC, C++17, SDL2 2.30.9 (em `third_party/`).
@@ -1546,7 +1593,7 @@ missão e os recursos originais do diretório de trabalho).
 
 ### Testes por linha de comando
 
-São 100 modos. Os que cobrem regressão de verdade:
+São 101 modos. Os que cobrem regressão de verdade:
 
 | Modo | O que prova |
 |---|---|

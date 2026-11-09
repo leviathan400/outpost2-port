@@ -268,6 +268,14 @@ public:
     }
     void debugOptSelect(int i) { m_gameOptions.debugSelect(i); }
     void debugOptScroll(int linha) { m_gameOptions.debugScroll(linha); }
+    // --selecttest: o clique na vista e o que ficou marcado.
+    void debugSelectAt(int vx, int vy) { selectAt(vx, vy, false); }
+    void debugClearSelection() { m_selected.clear(); }
+    int debugSelectedCount() const { return static_cast<int>(m_selected.size()); }
+    int debugSelectedId(int i) const {
+        return (i >= 0 && i < static_cast<int>(m_selected.size())) ? m_selected[i] : 0;
+    }
+    int debugUnitAtView(int vx, int vy) const { return unitAtView(vx, vy); }
     // --scrolltest: um quadro de rolagem com os pedidos dados na mao, sem
     // mouse nem janela, e os valores que o caso mede.
     void debugScrollFrame(bool esq, bool dir, bool cima, bool baixo) {
@@ -459,6 +467,12 @@ private:
     void leaveToMainMenu();         // entrega a colonia a IA e sai (pacote 0x31)
     void transferAndLeave();        // doa as unidades ao aliado e sai
     void selectAt(int nx, int ny, bool additive);
+    // A area em que o clique (e o realce) acertam a unidade, em coordenadas da
+    // VISTA. O predio responde na pegada INTEIRA -- a mesma que ele ocupa no
+    // mapa --, e nao num circulo no meio dele; o veiculo responde numa caixa do
+    // tamanho do sprite em volta do seu centro. Empate: o centro mais perto.
+    void unitHitBox(int id, int& x, int& y, int& w, int& h) const;
+    int unitAtBox(int vx, int vy, bool meusApenas) const;
     void selectBox(int x0, int y0, int x1, int y1);
     void renderPanel(Renderer& renderer);
 };

@@ -1666,35 +1666,68 @@ int GameState::screenXOf(int worldPixelX) const {
     return sx;
 }
 
-int GameState::unitAtView(int vx, int vy) const {
-    // Hit-test do hover: unidade mais próxima do cursor (qualquer dono), no mesmo
-    // raio do clique. O original testa o sprite; aqui basta a proximidade.
-    int best = 0, bestD2 = 20 * 20;
+// A caixa que o clique acerta, em coordenadas da vista.
+//
+// O PREDIO responde na pegada inteira: as mesmas `w x h` celulas que ele marca
+// no mapa ao nascer (ver createUnit, que preenche a ocupacao de
+// `(cx - w/2, cy - h/2)` por `w x h`). Antes o porte usava um raio de 20 px do
+// centro para tudo, entao num predio de 3x3 (96 px) so o miolo respondia -- era
+// preciso acertar um alvo pequeno no meio da construcao.
+//
+// O VEICULO responde numa caixa de 48 px em volta do centro, que e da ordem do
+// sprite dele (o tile tem 32).
+void GameState::unitHitBox(int id, int& x, int& y, int& w, int& h) const {
+    const UnitRecord& r = g_units[id];
+    if (r.flags & UNIT_BUILDING) {
+        int tw = 1, th = 1;
+        buildingFootprint(static_cast<map_id>(r.type), tw, th);
+        if (tw < 1) tw = 1;
+        if (th < 1) th = 1;
+        const int tlx = (r.pixelX >> 5) - (tw >> 1);
+        const int tly = (r.pixelY >> 5) - (th >> 1);
+        x = screenXOf(tlx << 5);
+        y = (tly << 5) - m_camY;
+        w = tw << 5;
+        h = th << 5;
+        return;
+    }
+    x = screenXOf(unitOX(r) - 24);
+    y = unitOY(r) - 24 - m_camY;
+    w = 48;
+    h = 48;
+}
+
+// A unidade sob o ponto: a de caixa acertada cujo CENTRO esta mais perto (duas
+// caixas podem se sobrepor).
+int GameState::unitAtBox(int vx, int vy, bool meusApenas) const {
+    const int me = TethysGame::localPlayer();
+    int best = 0;
+    long long bestD2 = 0;
     for (int i = 1; i < static_cast<int>(g_units.size()); ++i) {
         const UnitRecord& r = g_units[i];
         if (r.id == -1 || (r.flags & UNIT_DEAD)) continue;
         if (!(r.flags & (UNIT_VEHICLE | UNIT_BUILDING))) continue;   // efeitos não
-        int ucx = screenXOf(unitOX(r)), ucy = unitOY(r) - m_camY;
-        int dx = ucx - vx, dy = ucy - vy, d2 = dx * dx + dy * dy;
-        if (d2 < bestD2) { bestD2 = d2; best = i; }
+        if (meusApenas && (r.owner & 0x0F) != me) continue;
+        int bx, by, bw, bh;
+        unitHitBox(i, bx, by, bw, bh);
+        if (vx < bx || vx >= bx + bw || vy < by || vy >= by + bh) continue;
+        const long long dx = bx + bw / 2 - vx, dy = by + bh / 2 - vy;
+        const long long d2 = dx * dx + dy * dy;
+        if (!best || d2 < bestD2) { bestD2 = d2; best = i; }
     }
     return best;
 }
 
+int GameState::unitAtView(int vx, int vy) const {
+    return unitAtBox(vx, vy, /*meusApenas*/ false);
+}
+
 void GameState::selectAt(int nx, int ny, bool additive) {
-    // Seleciona a unidade do jogador mais próxima do clique (em coords de tela,
-    // então o wrap horizontal já está resolvido), dentro de um raio.
-    int me = TethysGame::localPlayer();
+    // Seleciona a unidade do jogador sob o clique (coords da vista, entao o
+    // wrap horizontal ja esta resolvido): predio pela pegada inteira, veiculo
+    // pelo sprite -- ver unitHitBox.
     if (!additive) m_selected.clear();
-    int best = 0, bestD2 = 20 * 20;   // raio de tolerância
-    for (int i = 1; i < static_cast<int>(g_units.size()); ++i) {
-        const UnitRecord& r = g_units[i];
-        if (r.id == -1 || (r.flags & UNIT_DEAD)) continue;
-        if ((r.owner & 0x0F) != me) continue;
-        int ucx = screenXOf(unitOX(r)), ucy = unitOY(r) - m_camY;
-        int dx = ucx - nx, dy = ucy - ny, d2 = dx * dx + dy * dy;
-        if (d2 < bestD2) { bestD2 = d2; best = i; }
-    }
+    const int best = unitAtBox(nx, ny, /*meusApenas*/ true);
     if (best && m_selected.size() < 0x20) {               // sub_41A9E0: teto de 32
         m_selected.push_back(best);
         soundPlay(unitSelectSound(g_units[best].type));   // sub_41AAA0: desc+0x1F0

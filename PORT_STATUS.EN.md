@@ -11,7 +11,8 @@
 > defect of this port's own) **5.12**, **5.13** and **5.14** (the rest of the OPUPatch list, now closed)
 > and **5.15** (the tick raised too early, and the debug HUD drawing from the
 > RNG every tick), **5.16** (cheats are single-player only now) and **5.17** (edge-of-screen and
-> arrow-key view scrolling, ported from `sub_407A10`). The recent changes are summarised in
+> arrow-key view scrolling, ported from `sub_407A10`) and **5.18** (the unit
+> click area: buildings answer on their whole footprint). The recent changes are summarised in
 > [README.EN.md](README.EN.md).
 
 # Outpost 2: Divided Destiny — Modern Port (C++17/SDL2)
@@ -62,7 +63,7 @@ coverage by comparing the DLLs' import tables against the registry in
 
 ```
 src/
-  main.cpp        entry point + the 100 test/capture modes
+  main.cpp        entry point + the 101 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -644,7 +645,7 @@ mission DLLs and the original resources from the working directory).
 
 ### Command-line tests
 
-There are 100 modes. The ones that cover real regressions:
+There are 101 modes. The ones that cover real regressions:
 
 | Mode | What it proves |
 |---|---|
