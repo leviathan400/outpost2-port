@@ -78,31 +78,6 @@ bool blitArtFrame(uint32_t* fb, int fbW, int fbH, int animIdx, int frameIdx,
     return true;
 }
 
-bool blitArtImage(uint32_t* fb, int fbW, int fbH, int imageIdx, int x, int y,
-                  int playerColor, int clipX0, int clipY0, int clipX1, int clipY1) {
-    if (!g_art.ok() || imageIdx < 0 || imageIdx >= g_art.numImages()) return false;
-    if (clipX0 < 0) clipX0 = 0;
-    if (clipY0 < 0) clipY0 = 0;
-    if (clipX1 > fbW) clipX1 = fbW;
-    if (clipY1 > fbH) clipY1 = fbH;
-    const ArtImage& m = g_art.image(imageIdx);
-    if (m.isShadow()) return false;
-    std::vector<uint32_t> px;
-    g_art.decode(imageIdx, px, /*transparent*/ true, /*palOverride*/ -1, playerColor);
-    for (uint32_t yy = 0; yy < m.height; ++yy) {
-        const int py = y + static_cast<int>(yy);
-        if (py < clipY0 || py >= clipY1) continue;
-        for (uint32_t xx = 0; xx < m.width; ++xx) {
-            const uint32_t c = px[yy * m.width + xx];
-            if (!(c >> 24)) continue;
-            const int pxs = x + static_cast<int>(xx);
-            if (pxs < clipX0 || pxs >= clipX1) continue;
-            fb[py * fbW + pxs] = c | 0xFF000000u;
-        }
-    }
-    return true;
-}
-
 bool artFrameBounds(int animIdx, int frameIdx, int& ox, int& oy, int& w, int& h) {
     if (!g_art.ok() || animIdx < 0 || animIdx >= g_art.numAnimations()) return false;
     const ArtAnimation& an = g_art.animation(animIdx);

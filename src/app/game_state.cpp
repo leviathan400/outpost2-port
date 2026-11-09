@@ -817,6 +817,32 @@ void GameState::onIdle(Renderer& renderer, float dt) {
                 drawSprite(op.anim, op.frame, screenXOf(op.x), op.y - m_camY, -1);
     }
 
+    // Fork: building ground layer (vt[30] "DrawGroundLayer", pass 1 of the
+    // original renderer, under every unit body). The pads of the buildings whose
+    // art carries none: Agridome sub_401970 (0x87E/0x87F/0x880 by state), both
+    // Storage Tanks sub_409590 / sub_409840 (0x881/0x882/0x883), and the mines
+    // -- Common/Rare Ore Mine and Magma Well share sub_44B280 (0x747, frame 0).
+    // Drawn at the unit's position like the body, except while dying (0x2F) or
+    // being built (0x21).
+    setArtShadows(m_stationaryShadows);
+    for (size_t i = 1; i < g_units.size(); ++i) {
+        const UnitRecord& r = g_units[i];
+        if (r.id == -1 || (r.flags & UNIT_DEAD) || !(r.flags & UNIT_BUILDING)) continue;
+        if (r.action == 0x2F || r.action == 0x21) continue;
+        const int st = static_cast<int>((r.state34 >> 16) & 0xFFFF);
+        auto byState = [st](int base) {
+            return (st == 0 || st >= 5) ? base : st == 1 ? base + 1 : st == 2 ? base + 2 : 0;
+        };
+        int raw = 0;
+        if (r.type == 0x27) raw = byState(0x87E);                                   // Agridome
+        else if (r.type == 0x19 || r.type == 0x1A) raw = byState(0x881);            // Storage Tanks
+        else if (r.type == 0x15 || r.type == 0x16 || r.type == 0x2A) raw = 0x747;    // mines
+        if (!raw || !g_art.ok() || raw - 0x65 >= g_art.numAnimations()) continue;
+        const int ow = r.owner & 0x0F;
+        const int pc = (ow < kMaxPlayers) ? g_playerData[ow].colorNumber : 0;
+        drawSprite(raw - 0x65, 0, screenXOf(unitOX(r)), unitOY(r) - m_camY, pc);
+    }
+
     // Tres passes: ESTRUTURAS primeiro (ficam por baixo), depois veiculos e por
     // fim as unidades-efeito (explosoes) por cima.
     for (int pass = 0; pass < 3; ++pass)
@@ -924,28 +950,6 @@ void GameState::onIdle(Renderer& renderer, float dt) {
             if (anim >= 0 && g_art.ok() && anim < g_art.numAnimations()) {
                 int pc = (ow >= 0 && ow < kMaxPlayers) ? g_playerData[ow].colorNumber : 0;
                 const int bldFrame = guardPost ? 0 : structureFrame(r);
-                // Fork: Agridome dock pad. The Agridome has a truck dock
-                // (BUILDING.TXT: Docking Truck = Y, column 1) but its art has no
-                // pad, so trucks seemed to park on bare ground; OPU draws one.
-                // It is the same 4-picture pad every other docked building
-                // carries in its art (images 385-388) -- measured on all 10
-                // groups (Structure Factory, both Smelters, Spaceport, GORF; Eden
-                // and Plymouth) at the same place relative to the dock tile:
-                // 385/386 at (0,0), 387 at (21,0), 388 at (0,15). Drawn under the
-                // building, once it is built (not during construction or after
-                // destruction).
-                if (r.type == 0x27) {
-                    const int st = static_cast<int>((r.state34 >> 16) & 0xFFFF);
-                    const bool built = (st == 0 && (r.state34 & 0xFFFF) == 0) || st == 1 || st == 2 || st >= 5;
-                    int dx, dy;
-                    if (built && dockCell(static_cast<int>(i), dx, dy)) {
-                        const int px = screenXOf(dx * 32), py = dy * 32 - m_camY;
-                        static const int kPad[4][3] = {{385, 0, 0}, {386, 0, 0}, {387, 21, 0}, {388, 0, 15}};
-                        for (const auto& p : kPad)
-                            blitArtImage(renderer.getFramebuffer(), m_fbW, m_fbH, p[0], px + p[1], py + p[2],
-                                         pc, 0, 0, viewportW(), viewportH());
-                    }
-                }
                 drew = drawSprite(anim, bldFrame, ucx, ucy, pc);
                 if (drew) recDeco((int)i, ucx, ucy, anim, bldFrame);
                 // EMP / ESG (0x180000) no prédio (sub_408DB0): grade de 16 px no

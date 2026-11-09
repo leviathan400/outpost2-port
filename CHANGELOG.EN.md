@@ -15,11 +15,36 @@ at commit `1697e7f` (2026-11-06). Newest first.
   all the others the view stops at the map's left and right edges, like any
   RTS. That is now the default. Units, terrain and the attract-mode camera
   follow the same rule.
+- **Dock pads of the mines and Storage Tanks.** The Common and Rare Ore
+  Mines, the Magma Well and both Storage Tanks have a truck dock, but the
+  pad is not in their building art, so it was never drawn. The original
+  draws it in a separate "ground layer" pass under every unit (building
+  vtable slot 30), which the port did not have. That pass is now ported:
+  - mines and Magma Well: their own blue-grey pad, animation `0x747`
+    (`sub_44B280`);
+  - Storage Tanks: animation `0x881`, or `0x882`/`0x883` when damaged
+    (`sub_409590` / `sub_409840`);
+  - Agridome: animation `0x87E`, or `0x87F`/`0x880` when damaged
+    (`sub_401970`). This replaces the hand-placed pad of 2026-11-07, which
+    looked the same but never showed damage.
+
+  Hidden while the building is being built or destroyed, as in the original.
+
+### Changed
+- **Right-clicking a dock always sends the truck there.** In the original,
+  right-clicking a building's dock with a vehicle that can't use it -- for
+  example a loaded truck on a mine, which only takes empty ones -- was
+  ignored (`sub_451280` returns without an order), so the truck didn't move.
+  It now drives onto the dock tile with a plain move. A vehicle that can use
+  the dock still gets the dock order and loads/unloads as before.
 
 ### Added
 - **`MapWrap` setting** (`[Game]` section of `OUTPOST2.INI`):
   - `MapWrap=0` (default): as in the original (see above).
   - `MapWrap=1`: every map wraps, the port's old behaviour.
+- `--dockclicktest <DLL> [type]`: optional building type (hex, default
+  `27` = Agridome), e.g. `15` / `16` / `2A` for the mines, `19` / `1A` for
+  the Storage Tanks. Passes for all of them on `t13` and `t14`.
 
 ## 2026-11-07
 

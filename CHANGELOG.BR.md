@@ -15,11 +15,39 @@ no commit `1697e7f` (2026-11-06). As mais recentes primeiro.
   tiles de largura); em todos os outros a vista para nas bordas esquerda e
   direita do mapa, como em qualquer RTS. Agora esse é o padrão. Unidades,
   terreno e a câmera do modo demonstração seguem a mesma regra.
+- **Plataforma da doca das minas e dos tanques.** As minas de minério comum
+  e raro, o Magma Well e os dois tanques de armazenamento têm doca de
+  caminhão, mas a plataforma não está na arte do prédio, então ela nunca
+  aparecia. O original a desenha num passe separado de "camada de chão" por
+  baixo de todas as unidades (slot 30 da vtable do prédio), que o porte não
+  tinha. Esse passe agora está portado:
+  - minas e Magma Well: a plataforma própria, azul-acinzentada, animação
+    `0x747` (`sub_44B280`);
+  - tanques: animação `0x881`, ou `0x882`/`0x883` quando danificados
+    (`sub_409590` / `sub_409840`);
+  - Agridome: animação `0x87E`, ou `0x87F`/`0x880` quando danificado
+    (`sub_401970`). Substitui a plataforma posta à mão em 2026-11-07, que
+    era igual mas não mostrava dano.
+
+  Some enquanto o prédio está sendo construído ou destruído, como no
+  original.
+
+### Alterado
+- **Clicar com o botão direito numa doca sempre manda o caminhão até lá.** No
+  original, o clique direito na doca de um prédio com um veículo que não pode
+  usá-la -- por exemplo um caminhão carregado numa mina, que só aceita
+  vazios -- era ignorado (`sub_451280` volta sem ordem), então o caminhão não
+  saía do lugar. Agora ele vai até o tile da doca com um mover simples. Um
+  veículo que pode usar a doca continua recebendo a ordem de atracar e
+  carrega/descarrega como antes.
 
 ### Adicionado
 - **Chave `MapWrap`** (seção `[Game]` do `OUTPOST2.INI`):
   - `MapWrap=0` (padrão): como no original (ver acima).
   - `MapWrap=1`: todo mapa dá a volta, o comportamento antigo do porte.
+- `--dockclicktest <DLL> [tipo]`: tipo de prédio opcional (hex, padrão
+  `27` = Agridome), por exemplo `15` / `16` / `2A` para as minas, `19` /
+  `1A` para os tanques. Passa em todos no `t13` e no `t14`.
 
 ## 2026-11-07
 
