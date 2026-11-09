@@ -6,6 +6,8 @@
 #include "building_sheet.h"
 #include "colony.h"
 #include "player.h"
+#include "scenario.h"
+#include "../net/net_game.h"
 
 namespace op2 {
 
@@ -145,8 +147,16 @@ uint32_t cheatHash(const char* text) {
     }
 }
 
+// Em rede, um jogador enchendo o estoque com uma frase no chat estraga a
+// partida dos outros -- e a frase vale em TODAS as maquinas, porque o
+// reconhecedor roda no pacote. Por isso o porteiro fica aqui, no reconhecedor:
+// nenhuma das duas perguntas depende de quem esta perguntando, entao as
+// maquinas respondem igual e o lockstep continua de pe.
+bool cheatsAllowed() { return !netActive() && !multiplayerMission(); }
+
 bool cheatCheckChat(int from, std::string& linha) {
     if (from < 0 || from >= kMaxPlayers) return false;
+    if (!cheatsAllowed()) return false;
     const uint32_t h = cheatHash(linha.c_str());
     for (const Entrada& e : kTabela) {
         if (e.hash != h) continue;

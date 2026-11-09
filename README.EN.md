@@ -186,8 +186,10 @@ in `PORT_STATUS.EN.md`.
 
 The original's cheats are not keys: they are sentences typed into the **chat
 line** (Enter). On a match the text turns into `Woof Woof!` and the effect
-applies to whoever typed it — on every machine, without breaking network
-lockstep. **The punctuation is part of the password:**
+applies to whoever typed it. **They only work in single player**: in a network
+game or a multiplayer scenario the sentence does nothing and goes through as an
+ordinary message — the original let them work in any game, which ruins it for
+everyone else. **The punctuation is part of the password:**
 
 | Sentence | Effect |
 |---|---|
@@ -250,6 +252,9 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
   the missile on its way to the enemy.
 - **Walls no longer fail to build** next to a wall under construction, Blight
   or lava. A neighbouring building still blocks, as it should.
+- **Cheats are now single-player only.** In the original the sentence works in
+  any game, network ones included — where one player filling their own stores
+  ruins it for everyone else.
 - **The simulation clock was raised too early.** The game raises its tick
   counter only at the end of the cycle, after the unit loop; the port raised it
   first, so everything gated on `(id ^ tick)` ran a tick out of phase.

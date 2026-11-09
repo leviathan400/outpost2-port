@@ -3357,10 +3357,17 @@ static int runChatTest(const std::string& dll, const char* shot) {
         tecla(SDLK_RETURN);
         escreve("Dan's dog could make more ore.");
         tecla(SDLK_RETURN);
-        const bool cheatOk = op2::g_playerData[eu].ore == op2::g_colony[eu].oreCapacity;
-        std::printf("[ChatTest] cheat pela linha: %s (minerio %d de %d)\n",
-                    cheatOk ? "ok" : "FALHOU", op2::g_playerData[eu].ore,
-                    op2::g_colony[eu].oreCapacity);
+        // Em jogo solo o estoque enche; em cenario multijogador (ou em rede) a
+        // frase nao faz nada e segue como mensagem comum -- a regra nova, igual
+        // a do OPUPatch. O --cheattest cobre o reconhecedor; aqui se prova o
+        // CAMINHO inteiro, da tecla ao efeito.
+        const bool liberado = op2::cheatsAllowed();
+        const int cheio = op2::g_colony[eu].oreCapacity;
+        const bool cheatOk = liberado ? (op2::g_playerData[eu].ore == cheio)
+                                      : (op2::g_playerData[eu].ore == 0);
+        std::printf("[ChatTest] cheat pela linha (%s): %s (minerio %d de %d)\n",
+                    liberado ? "solo, tem de encher" : "multijogador, nao pode valer",
+                    cheatOk ? "ok" : "FALHOU", op2::g_playerData[eu].ore, cheio);
         tudoOk = tudoOk && cheatOk;
     }
 
@@ -4091,6 +4098,48 @@ static int runCheatTest(const std::string& dll) {
         const bool bateu = op2::cheatCheckChat(0, linha);
         return std::make_pair(bateu, linha);
     };
+
+    // --- 1b. o porteiro: cheat so vale em JOGO SOLO --------------------------
+    // Como no OPUPatch, em rede ou em cenario multijogador as frases nao fazem
+    // nada e seguem como mensagem comum. A resposta e a mesma em todas as
+    // maquinas (so olha o tipo de partida), entao o lockstep nao corre risco.
+    const bool liberado = op2::cheatsAllowed();
+    casos.push_back({"cheats liberados nesta partida", liberado ? 1 : 0,
+                     op2::multiplayerMission() ? 0 : 1});
+
+    if (!liberado) {
+        // Cenario multijogador: as quatro frases tem de passar batido.
+        op2::g_colony[0].oreCapacity = 9000;
+        op2::g_playerData[0].ore = 10;
+        op2::g_playerData[0].workers = 100;
+        static const char* kFrases[4] = {
+            "Dan's dog could make more ore.",
+            "Dan's car could hold more people.",
+            "Dan's bike could backfire more often",
+            "Dan's gun could die more people.",
+        };
+        int bateu = 0, mudouTexto = 0;
+        for (const char* f : kFrases) {
+            auto r = digita(f);
+            if (r.first) ++bateu;
+            if (r.second != f) ++mudouTexto;
+        }
+        casos.push_back({"multijogador: nenhuma frase e reconhecida", bateu, 0});
+        casos.push_back({"multijogador: o texto do chat NAO muda", mudouTexto, 0});
+        casos.push_back({"multijogador: o estoque fica onde estava", op2::g_playerData[0].ore, 10});
+        casos.push_back({"multijogador: os trabalhadores ficam", op2::g_playerData[0].workers, 100});
+
+        bool okMp = true;
+        for (const Caso& c : casos) {
+            const bool bom = c.obtido == c.esperado;
+            if (!bom) okMp = false;
+            std::printf("[Cheat] %-40s %lld (esperado %lld) %s%c", c.nome, c.obtido, c.esperado,
+                        bom ? "ok" : "FALHOU", 10);
+        }
+        std::fflush(stdout);
+        renderer.shutdown(); SDL_Quit();
+        return okMp ? 0 : 1;
+    }
 
     // --- 2. cheat 0: estoques vao para a capacidade --------------------------
     op2::g_colony[0].oreCapacity = 9000;

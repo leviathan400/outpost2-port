@@ -188,7 +188,9 @@ A lista está no `PORT_STATUS.BR.md`.
 
 Os cheats do original não são teclas: são frases escritas na **linha de
 conversa** (Enter). Acertando, o texto vira `Woof Woof!` e o efeito vale para
-quem digitou — em todas as máquinas, sem quebrar o lockstep da rede.
+quem digitou. **Só funcionam em jogo solo**: em rede ou em cenário
+multijogador a frase não faz nada e segue como mensagem comum — o original
+deixava valer em qualquer partida, o que estraga o jogo dos outros.
 **A pontuação faz parte da senha:**
 
 | Frase | Efeito |
@@ -253,6 +255,9 @@ cursores `.ANI`.
   míssil que ia no inimigo.
 - **O muro não falha mais** por ter perto dele um muro em obra, a praga ou
   lava. Prédio vizinho continua impedindo, como deve.
+- **Os cheats passaram a valer só em jogo solo.** No original a frase funciona
+  em qualquer partida, inclusive em rede — e lá um jogador enchendo o próprio
+  estoque estraga a partida dos outros.
 - **O relógio da simulação subia cedo demais.** O jogo levanta o contador de
   tiques só no fim do ciclo, depois do laço de unidades; o porte levantava
   antes, e tudo que depende de `(id ^ tique)` ficava um tique fora de fase.

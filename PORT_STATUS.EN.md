@@ -10,7 +10,7 @@
 > against this port) and **5.11** (the Savant alerts, and a message-filter
 > defect of this port's own) **5.12**, **5.13** and **5.14** (the rest of the OPUPatch list, now closed)
 > and **5.15** (the tick raised too early, and the debug HUD drawing from the
-> RNG every tick). The recent changes are summarised in
+> RNG every tick), **5.16** (cheats are single-player only now). The recent changes are summarised in
 > [README.EN.md](README.EN.md).
 
 # Outpost 2: Divided Destiny — Modern Port (C++17/SDL2)

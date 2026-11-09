@@ -691,9 +691,14 @@ Dois detalhes que importam:
 - O reconhecedor roda **antes** do teste da máscara de destinatários
   (`loc_40FC96`), logo ele roda em **todas as máquinas**. O efeito é idêntico em
   todas e o lockstep da rede continua de pé — não é um buraco de sincronia.
-- Não há porteiro: `TethysGame::CanAllowCheats` existe, mas **nunca é chamada
-  dentro do executável** — é só exportada para as DLLs de missão. Os cheats
-  funcionam em qualquer partida.
+- **Neste porte eles valem só em JOGO SOLO** (2026-11-09). O original não tem
+  porteiro nenhum: a frase funciona em qualquer partida, inclusive em rede, e
+  aí um jogador enchendo o próprio estoque estraga a partida dos outros. Como o
+  OPUPatch, o reconhecedor agora começa por `cheatsAllowed()` — falso em rede
+  (`netActive`) e em cenário multijogador (`multiplayerMission`, o `sub_4027D0`)
+  —, e a frase segue como mensagem comum de chat. As duas perguntas não dependem
+  de quem pergunta, então todas as máquinas respondem igual e o lockstep segue
+  intacto.
 - A quinta entrada da tabela é zero e o `jcxz` depois do `repne scasd` a torna
   inalcançável **de propósito**: é o "nenhum casou" do laço, não um bug.
 
@@ -1288,7 +1293,7 @@ original: carga 6 e o tile terraplanado para 0x15.
 | Corrigidos | míssil de aliado, muro no 3×3, perma-wall, muro sobre unidade, `ForceMorale*`, `DoInfect`, destroço virando entulho, avisos de transferência e de energia/estoque |
 | Não se aplicam ao porte | EMP para Eden, míssil em cima da defesa, `ScGroup::TakeUnit`, transferir para a Gaia, alerta de aliança no início |
 | Achado nosso, não deles | o relógio do filtro de mensagens (5.11) e a ausência de teto de unidades (5.10) |
-| Decisão de jogo, em aberto | carga parcial do caminhão; cheats em multijogador (mantidos); mudanças de equilíbrio |
+| Decisão de jogo | carga parcial do caminhão (feita, 5.14) e cheats desligados em rede/multijogador (feito, 5.16); mudanças de equilíbrio ficam de fora |
 
 ---
 
@@ -1410,6 +1415,44 @@ o tique em que o estado da rota é liberado (731 aqui, 732 lá).
   para as minas, `19`/`1A` para os tanques, `27` para o Agridome — o padrão).
   Vale lembrar que ele sai com **3** quando a missão escolhida não tem aquele
   prédio: é premissa, não falha.
+
+---
+
+## 5.16. Cheats só em jogo solo (2026-11-09)
+
+O original não tem porteiro: a frase digitada no chat funciona em **qualquer**
+partida, e como o reconhecedor roda no pacote 0x30 em todas as máquinas, numa
+partida em rede um jogador enche o próprio estoque e estraga a dos outros. (A
+`CanAllowCheats` existe no executável, mas é só exportada para as DLLs de
+missão — o reconhecedor não a consulta.)
+
+Como o OPUPatch, e por decisão do usuário, **neste porte eles valem só em jogo
+solo**. O `cheatCheckChat` começa por:
+
+```c
+bool cheatsAllowed() { return !netActive() && !multiplayerMission(); }
+```
+
+— rede **ou** cenário multijogador desliga. Nenhuma das duas perguntas depende
+de quem está perguntando, então todas as máquinas respondem igual e **o
+lockstep não corre risco**; a frase simplesmente segue como mensagem comum de
+chat, sem virar "Woof Woof!".
+
+O porteiro mora no **reconhecedor**, e não na linha de conversa: assim vale
+para qualquer caminho que chegue ao pacote de chat, não só para o que foi
+digitado.
+
+### Os testes
+
+- `--cheattest <DLL>`: em jogo solo, os efeitos de sempre; num cenário
+  multijogador, as quatro frases **não** são reconhecidas, o texto **não** vira
+  "Woof Woof!" e nem o estoque nem os trabalhadores se mexem.
+- `--chattest <DLL>`: o caminho inteiro, da tecla ao efeito — enche o estoque
+  em jogo solo e não faz nada em multijogador.
+
+Tirando o porteiro, o multijogador reprova (**4** falhas no `--cheattest` e
+**1** no `--chattest`) e o jogo solo **continua passando**, que é a assinatura
+certa: a mudança só alcança a rede.
 
 ---
 
