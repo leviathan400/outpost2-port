@@ -170,6 +170,9 @@ void runLine(GameState& gs, const Line& l, int tick) {
         int id = 0;
         if (type != kMapIdNone) id = scenarioCreateUnit(type, tileX(l, num(2)), num(3), num(1), weapon, dir / 32);
         if (id && dir % 32) g_units[id].rotation = static_cast<uint8_t>(dir);
+        // The harness spawns through TethysAPI's Game::CreateUnit, which turns a vehicle's headlights on after the
+        // game's CreateUnit (its lightsOn argument defaults to true).
+        if (id && (g_units[id].flags & UNIT_VEHICLE)) unitSetLights(id, 1);
         logf("spawn %u: %s -> unit %d", static_cast<unsigned>(g_spawned.size()), arg(0).c_str(), id);
         g_spawned.push_back(id);
         g_spawnType.push_back(id ? g_units[id].type : type);
