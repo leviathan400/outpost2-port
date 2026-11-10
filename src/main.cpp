@@ -4349,6 +4349,159 @@ static int runBannerTest(const std::string& dll, const std::string& shot) {
     return ruins ? 1 : 0;
 }
 
+// --pausetest <DLL>: o Ctrl+P (comando 40001 do acelerador 130). O porte nao
+// tinha pausa nenhuma: a tecla nao fazia nada e o letreiro "Game Paused" do
+// controle TFrame+0x1F4 nunca aparecia.
+static int runPauseTest(const std::string& dll, const std::string& shot) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 pausetest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+
+    struct Caso { std::string nome; long long obtido; long long esperado; };
+    std::vector<Caso> casos;
+    const bool rede = op2::multiplayerMission();
+
+    // Antes do primeiro tique (dword_56DEDC == 0) a tecla nao faz nada.
+    casos.push_back({"antes do 1o tique o relogio esta em zero", op2::TethysGame::tick(), 0});
+    gs.debugCtrlP(renderer);
+    casos.push_back({"... e o Ctrl+P nao pausa", op2::gTApp.paused() ? 1 : 0, 0});
+
+    gs.onActivate();
+    // O tamanho do quadro so vale depois do PRIMEIRO onIdle: e o fitToWindow
+    // que o acerta, e antes dele o quadro ainda e o de 640x480.
+    gs.onIdle(renderer, 0.0f);
+    const int W = renderer.getWidth(), H = renderer.getHeight();
+    std::vector<uint32_t> antes(static_cast<size_t>(W) * H);
+
+    // O relogio anda: sem isto os casos abaixo nao mediriam nada.
+    const int t0 = op2::TethysGame::tick();
+    for (int k = 0; k < 20; ++k) gs.onIdle(renderer, 0.2f);
+    const int t1 = op2::TethysGame::tick();
+    casos.push_back({"o relogio anda com o jogo solto", t1 > t0 ? 1 : 0, 1});
+
+    // Um arrasto no ar: o ReleaseCapture do OnPauseGame tem de acabar com ele.
+    gs.debugAreaDrag(op2::UC_WALL);
+    casos.push_back({"ha um arrasto no ar (premissa)", gs.debugAnyDrag() ? 1 : 0, 1});
+
+    gs.onIdle(renderer, 0.0f);
+    std::memcpy(antes.data(), renderer.getFramebuffer(), antes.size() * sizeof(uint32_t));
+
+    gs.debugCtrlP(renderer);
+    casos.push_back({rede ? "em rede o Ctrl+P nao pausa" : "o Ctrl+P pausa",
+                     op2::gTApp.paused() ? 1 : 0, rede ? 0 : 1});
+    casos.push_back({"... e empilha uma pausa so", gs.debugPauseCount(), rede ? 0 : 1});
+    if (rede) {
+        // O aviso vai para a barra de estado, em maiusculas (sub_49BF10).
+        casos.push_back({"em rede sai o aviso na barra",
+                         op2::statusBarText() == "CANNOT PAUSE IN MULTIPLAYER GAMES" ? 1 : 0, 1});
+    } else {
+        casos.push_back({"... o arrasto foi solto (ReleaseCapture)", gs.debugAnyDrag() ? 1 : 0, 0});
+        casos.push_back({"... o som foi suspenso (sub_47E6F0)", op2::soundSuspendCount(), 1});
+    }
+
+    // O relogio PARA. E com dt generoso: se a pausa so zerasse o acumulador no
+    // quadro, um dt grande ainda passaria.
+    const int t2 = op2::TethysGame::tick();
+    for (int k = 0; k < 10; ++k) gs.onIdle(renderer, 5.0f);
+    const int t3 = op2::TethysGame::tick();
+    casos.push_back({rede ? "em rede o relogio continua andando" : "o relogio para na pausa",
+                     t3 == t2 ? 1 : 0, rede ? 0 : 1});
+
+    // O letreiro, medido por diferenca de quadros como no --bannertest.
+    {
+        gs.onIdle(renderer, 0.0f);
+        const uint32_t* fb = renderer.getFramebuffer();
+        int vermelho = 0, preto = 0, l = 1 << 20, r = -1, t = 1 << 20, b = -1;
+        for (int y = 0; y < H; ++y)
+            for (int x = 0; x < W; ++x) {
+                const size_t i = static_cast<size_t>(y) * W + x;
+                if (fb[i] == antes[i]) continue;
+                if (fb[i] == 0xFFFF0000u) { ++vermelho;
+                    if (x < l) l = x; if (x > r) r = x; if (y < t) t = y; if (y > b) b = y; }
+                else if (fb[i] == 0xFF000000u) ++preto;
+            }
+        if (!shot.empty() && writeBmp32(shot, fb, W, H))
+            std::printf("[Pause] quadro salvo em %s\n", shot.c_str());
+        std::printf("[Pause] letreiro: vermelho %d px, caixa %dx%d; preto %d px\n",
+                    vermelho, r >= l ? r - l + 1 : 0, b >= t ? b - t + 1 : 0, preto);
+        casos.push_back({rede ? "em rede nao ha letreiro" : "o letreiro \"Game Paused\" aparece",
+                         vermelho > 0 ? 1 : 0, rede ? 0 : 1});
+        if (!rede) {
+            casos.push_back({"... grande, como o de fim de missao", (b - t + 1) >= 30 ? 1 : 0, 1});
+            casos.push_back({"... com o contorno preto", preto > 0 ? 1 : 0, 1});
+            // O texto da pausa e MAIOR que "MISSION FAILED": se o letreiro
+            // estivesse pegando o texto errado, a largura entregaria.
+            casos.push_back({"... e e o texto da pausa, nao o do fim",
+                             (r - l + 1) > 600 ? 1 : 0, 1});
+        }
+    }
+
+    if (!rede) {
+        // O CONTADOR ([+0x1E0]): o jogo tambem se pausa por outros motivos,
+        // entao a pausa empilha e so a subida de 0 para 1 e a descida de volta
+        // a 0 e que agem -- o som nao pode ser suspenso duas vezes, e uma
+        // despausa so nao basta para soltar o jogo.
+        gs.debugPauseGame(true);
+        casos.push_back({"uma segunda pausa empilha", gs.debugPauseCount(), 2});
+        casos.push_back({"... sem suspender o som de novo", op2::soundSuspendCount(), 1});
+        gs.debugPauseGame(false);
+        casos.push_back({"uma despausa so nao solta o jogo", op2::gTApp.paused() ? 1 : 0, 1});
+        casos.push_back({"... e a pilha desce para uma", gs.debugPauseCount(), 1});
+
+        // De volta: o Ctrl+P despausa e o relogio anda de novo -- sem disparar.
+        const int t4 = op2::TethysGame::tick();
+        gs.debugCtrlP(renderer);
+        casos.push_back({"o Ctrl+P de novo solta o jogo", op2::gTApp.paused() ? 1 : 0, 0});
+        casos.push_back({"... e a pilha volta a zero", gs.debugPauseCount(), 0});
+        casos.push_back({"... o som volta", op2::soundSuspendCount(), 0});
+        gs.onIdle(renderer, 0.0f);
+        casos.push_back({"... sem disparar os tiques acumulados",
+                         op2::TethysGame::tick() - t4, 0});
+        const int t5 = op2::TethysGame::tick();
+        for (int k = 0; k < 20; ++k) gs.onIdle(renderer, 0.2f);
+        casos.push_back({"... e o relogio anda outra vez",
+                         op2::TethysGame::tick() > t5 ? 1 : 0, 1});
+
+        // O fim de missao tem preferencia sobre a pausa no mesmo controle.
+        gs.debugCtrlP(renderer);
+        op2::debugSetGameEnd(4);                      // "MISSION FAILED"
+        gs.onIdle(renderer, 0.0f);
+        // So DENTRO da vista: o painel da direita tem vermelho proprio, que
+        // alargaria a caixa.
+        int vx = 0, vy = 0, vw = 0, vh = 0;
+        gs.debugViewRect(vx, vy, vw, vh);
+        const uint32_t* fb = renderer.getFramebuffer();
+        int l = 1 << 20, r = -1, n = 0;
+        for (int y = vy; y < vy + vh && y < H; ++y)
+            for (int x = vx; x < vx + vw && x < W; ++x) {
+                const size_t i = static_cast<size_t>(y) * W + x;
+                if (fb[i] == 0xFFFF0000u) { ++n; if (x < l) l = x; if (x > r) r = x; }
+            }
+        std::printf("[Pause] com fim de missao: vermelho %d px, largura %d\n",
+                    n, r >= l ? r - l + 1 : 0);
+        // Tem de HAVER letreiro, e ser o CURTO: sem a primeira metade, uma tela
+        // sem letreiro nenhum passaria.
+        casos.push_back({"pausado e com fim de missao, o letreiro e o do fim",
+                         (n > 1000 && (r - l + 1) < 600) ? 1 : 0, 1});
+    }
+
+    int ruins = 0;
+    for (const Caso& c : casos) {
+        const bool ok = c.obtido == c.esperado;
+        if (!ok) ++ruins;
+        std::printf("[Pause] %-52s %lld (esperado %lld) %s\n", c.nome.c_str(), c.obtido,
+                    c.esperado, ok ? "ok" : "FALHOU");
+    }
+    std::printf("[Pause] %d casos, %d falhas\n", (int)casos.size(), ruins);
+    renderer.shutdown();
+    SDL_Quit();
+    return ruins ? 1 : 0;
+}
+
 // --optmenutest <DLL>: a aba Options de ponta a ponta. Dois bugs moravam aqui:
 //   o L&ESS e o &MORE do PREFERENCES tinham o id de OUTRO comando (kCmdLabsCurrent
 //   e kCmdResStructures), cujo tratador vem antes e sai com `return`; e a tela de
@@ -6039,6 +6192,8 @@ int main(int argc, char* argv[]) {
             return runMusicTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--optmenutest") == 0 && i + 1 < argc)
             return runOptMenuTest(argv[i + 1]);
+        if (std::strcmp(argv[i], "--pausetest") == 0 && i + 1 < argc)
+            return runPauseTest(argv[i + 1], i + 2 < argc ? argv[i + 2] : "");
         if (std::strcmp(argv[i], "--bannertest") == 0 && i + 1 < argc)
             return runBannerTest(argv[i + 1], i + 2 < argc ? argv[i + 2] : "");
         if (std::strcmp(argv[i], "--item21test") == 0 && i + 1 < argc)

@@ -121,7 +121,11 @@ void postMessage(int x, int y, const char* text, int soundId) {
     std::snprintf(buf, sizeof(buf), "<N>%d: %s", TethysGame::tick() / 100, text);
     m.text = buf;
     ++s_serial;
-    // Barra de status: até 80 caracteres em maiúsculas.
+    statusBarSet(text);
+}
+
+// sub_49BF10: ate 80 caracteres, em MAIUSCULAS.
+void statusBarSet(const char* text) {
     s_status.assign(text ? text : "", 0, 0x50);
     for (char& c : s_status) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
 }

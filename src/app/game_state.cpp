@@ -871,7 +871,9 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     // Avança o relógio de simulação na cadência do GameSpeed (m_tickPeriod).
     const float kTickPeriod = m_tickPeriod;
     m_tickAccum += dt;
-    if (m_endPhase || m_saveDlg.active()) m_tickAccum = 0.0f;   // encerrada / diálogo modal: sem turnos
+    // Encerrada, dialogo modal ou PAUSADA: sem turnos. O acumulador zera a
+    // cada quadro para o jogo nao disparar em camera rapida ao voltar.
+    if (m_endPhase || m_saveDlg.active() || gTApp.paused()) m_tickAccum = 0.0f;
     while (m_tickAccum >= kTickPeriod) {
         // Lockstep: em rede o tique so avanca quando o turno de todos chegou
         // (o anel de 16 turnos do original, pacote 0x33).
@@ -1470,17 +1472,10 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     //   * CINCO passadas: `SetTextColor(0)` e o texto nos quatro cantos
     //     diagonais de ±2 px — que é o contorno —, e por fim
     //     `SetTextColor(0xFF)`, ou seja **VERMELHO**, no lugar certo.
-    if (gameEndCode()) {
-        const std::string msg = gameEndText(gameEndCode());
-        uint32_t* fb = renderer.getFramebuffer();
-        const int cx = viewportW() / 2;
-        const int y = (viewportH() - UiFont::lineHeight(UiFont::kBanner)) / 2;
-        for (int dx = -2; dx <= 2; dx += 4)
-            for (int dy = -2; dy <= 2; dy += 4)
-                UiFont::drawCentered(fb, m_fbW, m_fbH, msg, cx + dx, y + dy,
-                                     0xFF000000, UiFont::kBanner);
-        UiFont::drawCentered(fb, m_fbW, m_fbH, msg, cx, y, 0xFFFF0000, UiFont::kBanner);
-    }
+    // O mesmo controle serve aos dois: o fim de missao tem preferencia (e quem
+    // o preenche por ultimo, no sub_49CAC0), e a pausa vem depois.
+    if (gameEndCode()) drawBanner(renderer, gameEndText(gameEndCode()));
+    else if (gTApp.paused()) drawBanner(renderer, "Game Paused. Press CTRL+P to Resume");
     // vt[6] do terremoto (sub_413560): tremor p/ o próximo quadro, pelo centro da vista.
     disasterShake(m_camX + (viewportW() / 32) * 16,
                   m_camY + (viewportH() / 32) * 16,
@@ -1795,6 +1790,63 @@ int GameState::unitAtView(int vx, int vy) const {
     return unitAtBox(vx, vy, /*meusApenas*/ false);
 }
 
+// As cinco passadas do sub_4085C0 sobre a vista, com a fonte do sub_4084D0:
+// o texto em PRETO nos quatro cantos diagonais de +-2 px -- o contorno -- e
+// depois em VERMELHO (o COLORREF 0xFF) no lugar certo. O retangulo do original
+// e a superficie inteira do controle, com DT_CENTER e a centragem vertical
+// pela altura que o DT_CALCRECT mediu, que aqui e a altura da linha.
+void GameState::drawBanner(Renderer& renderer, const std::string& msg) {
+    uint32_t* fb = renderer.getFramebuffer();
+    const int cx = viewportW() / 2;
+    const int y = (viewportH() - UiFont::lineHeight(UiFont::kBanner)) / 2;
+    for (int dx = -2; dx <= 2; dx += 4)
+        for (int dy = -2; dy <= 2; dy += 4)
+            UiFont::drawCentered(fb, m_fbW, m_fbH, msg, cx + dx, y + dy,
+                                 0xFF000000, UiFont::kBanner);
+    UiFont::drawCentered(fb, m_fbW, m_fbH, msg, cx, y, 0xFFFF0000, UiFont::kBanner);
+}
+
+// sub_49BFE0: a pausa e um CONTADOR ([+0x1E0]) -- o jogo tambem se pausa
+// sozinho noutras situacoes --, entao so a subida de 0 para 1 e a descida de
+// volta a 0 e que fazem alguma coisa. Ao subir: para a musica (sub_450A90,
+// que mata o temporizador do sequenciador), suspende o som (sub_47E6F0, que
+// solta os canais que estao tocando) e avisa o TApp (OnPauseGame, que larga a
+// captura do mouse). Ao descer, o caminho inverso -- e o original ainda
+// devolve os campos de tempo do quadro, que aqui e o acumulador do tique: sem
+// isso o jogo dispararia em camera rapida ao voltar.
+void GameState::pauseGame(bool on) {
+    if (on) {
+        if (m_pauseCount++ != 0) return;
+        musicPause();                      // sub_450A90
+        soundSuspend(true);                // sub_47E6F0
+        gTApp.setPaused(true);             // TApp::OnPauseGame(1)
+        // ReleaseCapture: o que estiver sendo arrastado acaba aqui.
+        m_dragging = false;
+        m_areaDrag = false;
+        m_miniDrag = false;
+        return;
+    }
+    if (m_pauseCount <= 0 || --m_pauseCount != 0) return;
+    m_tickAccum = 0.0f;                    // [+0xC0] = [+0xBC], [+0xC4] e [+0xCC] zerados
+    soundSuspend(false);                   // sub_47E750
+    musicResume();                         // sub_450B00
+    gTApp.setPaused(false);                // TApp::OnPauseGame(0)
+}
+
+// Comando 40001 (Ctrl+P e a tecla PAUSE, no acelerador 130 do OUT2RES):
+// sub_49891C. Em partida multijogador nao pausa -- so o aviso na barra. Antes
+// do primeiro tique (dword_56DEDC == 0) a tecla nao faz nada.
+void GameState::togglePause() {
+    // O original olha o objeto da rede (dword_56DC78). Aqui tambem vale a
+    // missao multijogador rodando sozinha, que no original nao existe.
+    if (netActive() || multiplayerMission()) {
+        statusBarSet("Cannot Pause in multiplayer games");
+        return;
+    }
+    if (TethysGame::tick() == 0) return;
+    pauseGame(!gTApp.paused());
+}
+
 // O ESC largava a partida na HORA, sem perguntar e sem passar pelo caminho de
 // saida do jogo (o pacote 0x31). Agora ele desiste do que estiver no ar e, se
 // nao houver nada, pergunta -- com a frase do proprio executavel e pelo mesmo
@@ -1898,13 +1950,22 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
     // teclas (e o que o filtro do original faz, por estar no topo da cadeia).
     if (chatKey(e)) return;
     if (e.type == SDL_KEYDOWN) {
-        // Aceleradores 130 do OUT2RES: Ctrl+S = 40017 (OnSaveSlot), Ctrl+L = 40018.
-        if ((SDL_GetModState() & KMOD_CTRL) && e.key.keysym.sym == SDLK_s && m_mission) {
+        // Aceleradores 130 do OUT2RES: Ctrl+S = 40017 (OnSaveSlot), Ctrl+L =
+        // 40018, Ctrl+P = 40001 (a pausa, tambem na tecla PAUSE). Os
+        // modificadores vem do PROPRIO evento: o acelerador vale pelas teclas
+        // que estavam apertadas no momento da batida, e nao pelas de agora --
+        // que e o que o SDL_GetModState() responde.
+        const bool ctrl = (e.key.keysym.mod & KMOD_CTRL) != 0;
+        if (ctrl && e.key.keysym.sym == SDLK_s && m_mission) {
             m_saveDlg.open(SaveSlotsDialog::kSave, m_mission->levelDesc);
             return;
         }
-        if ((SDL_GetModState() & KMOD_CTRL) && e.key.keysym.sym == SDLK_l) {
+        if (ctrl && e.key.keysym.sym == SDLK_l) {
             m_saveDlg.open(SaveSlotsDialog::kLoad, "");
+            return;
+        }
+        if ((ctrl && e.key.keysym.sym == SDLK_p) || e.key.keysym.sym == SDLK_PAUSE) {
+            togglePause();
             return;
         }
         if (e.key.keysym.sym == SDLK_ESCAPE) { escapePressed(); return; }
@@ -1915,7 +1976,6 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
         //   K = Unit::DoDeath (Kill(1))  B = reinicia a construcao (sub_43DE50)
         //   O = poe o predio OPERANDO (sub_483810 — o que a economia faria)
         const SDL_Keycode k = e.key.keysym.sym;
-        const bool ctrl = (SDL_GetModState() & KMOD_CTRL) != 0;
         if (ctrl && (k == SDLK_d || k == SDLK_h || k == SDLK_k || k == SDLK_b || k == SDLK_o)) {
             for (int id : std::vector<int>(m_selected)) {
                 if (id <= 0 || id >= (int)g_units.size()) continue;

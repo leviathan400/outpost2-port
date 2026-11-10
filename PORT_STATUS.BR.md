@@ -48,7 +48,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 104 modos de teste/captura
+  main.cpp        entrada + os 105 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -1778,6 +1778,89 @@ ainda não tem a pausa do `Ctrl+P`. Quando tiver, o letreiro já está pronto.
 
 ---
 
+## 5.22. A pausa do Ctrl+P (2026-11-09)
+
+O porte não tinha pausa: a tecla não fazia nada e o letreiro *"Game Paused.
+Press CTRL+P to Resume"* — que é o **mesmo controle** da seção anterior — nunca
+aparecia.
+
+### A tecla
+
+Despejando a tabela de aceleradores **130** do `OUT2RES.DLL` (RIFF de recursos,
+`RT_ACCELERATOR`), o comando da pausa é o **40001**, e ele tem **duas** teclas:
+
+| tecla | comando |
+|---|---|
+| `CTRL+P` | 40001 |
+| `PAUSE` (VK 0x13) | 40001 |
+
+Os dois estão ligados. (Na mesma tabela: `CTRL+S` = 40017 e `CTRL+L` = 40018,
+que o porte já tratava.)
+
+### O que o comando faz (`sub_49891C`)
+
+1. **Partida em rede** (`dword_56DC78`, o objeto da camada de rede): não pausa.
+   Só o aviso na barra de estado — *"Cannot Pause in multiplayer games"*, pelo
+   `sub_49BF10`, que é a barra direta, sem entrar no log nem tocar som. No
+   porte a mesma regra vale também para uma missão multijogador rodando
+   sozinha, que no original não existe.
+2. **Antes do primeiro tique** (`dword_56DEDC == 0`): a tecla não faz nada.
+3. Senão, alterna: `sub_49BFE0(paused ? 0 : 1)`.
+4. E, conforme o contador ficou em 1 ou em 0, põe ou tira o texto do letreiro.
+
+### A pausa em si (`sub_49BFE0`)
+
+É um **contador** — `TFrame+0x1E0` —, porque o jogo também se pausa sozinho
+noutras situações; só a subida de 0 para 1 e a descida de volta a 0 é que
+agem. Na subida:
+
+| | |
+|---|---|
+| `sub_450A90` | para a **música**: mata o `timeKillEvent` do sequenciador |
+| `sub_47E6F0` | **suspende o som**: solta os canais que estão tocando (é outro contador, `[+0x91C]`) |
+| `TApp::OnPauseGame(1)` | liga `TApp+0x178` (`dword_56DDA0`, o flag global) e **larga a captura do mouse** |
+
+Na descida, o caminho inverso — e o original ainda devolve os campos de tempo
+do quadro (`[+0xC0] = [+0xBC]`, `[+0xC4]` e `[+0xCC]` zerados) para o jogo não
+disparar em câmera rápida ao voltar. Aqui isso já está feito: o grampo do
+`onIdle` zera o acumulador do tique **a cada quadro** enquanto a pausa está de
+pé, e o último quadro antes de soltar é um deles.
+
+> Essa linha chegou a existir no `pauseGame`, repetindo o original. Uma
+> mutação mostrou que ela era **código morto** — tirá-la não reprovava nada,
+> porque o grampo do quadro já faz o serviço. Saiu, com o comentário dizendo
+> onde o reset mora.
+
+### Uma correção de caminho
+
+Os aceleradores liam os modificadores com `SDL_GetModState()`, que responde
+pelas teclas de **agora**, não pelas da batida. Agora saem do próprio evento
+(`e.key.keysym.mod`), que é o que um acelerador quer dizer — e é também o que
+torna a tecla testável sem um teclado de verdade: com o `GetModState`, um
+`SDL_KEYDOWN` montado à mão nunca tinha Ctrl.
+
+### O teste
+
+`--pausetest <DLL> [saida.bmp]`: 23 casos em jogo solo e 9 em multijogador. A
+tecla entra pelo `handleEvent`, como a de verdade. Mede: antes do primeiro
+tique não pausa; o relógio anda antes e **para** na pausa (com `dt` generoso,
+senão o caso não mediria nada); o arrasto que estava no ar é solto; o som é
+suspenso uma vez; o letreiro aparece, grande, com contorno, e é **o texto da
+pausa** e não o do fim (a largura entrega); uma segunda pausa **empilha** sem
+suspender o som de novo, e uma despausa só não solta o jogo; o Ctrl+P de volta
+solta, sem disparar os tiques; e, pausado **e** com fim de missão, quem aparece
+é o letreiro do fim. Em rede: não pausa, não há letreiro, o relógio continua, e
+o aviso sai na barra.
+
+Neutralizando, uma peça de cada vez (solo / rede): a tecla sem efeito
+**12 / 1**; os turnos continuando **1 / 0**; sem letreiro **4 / 0**; pausando
+também em rede **0 / 5**; sem suspender o som **2 / 0**; o contador sem
+proteger a subida **2 / 0** e sem segurar a descida **6 / 0**; a captura não
+solta **1 / 0**; o letreiro da pausa ganhando do fim de missão **1 / 0**; e a
+tecla valendo antes do primeiro tique **18 / 0**.
+
+---
+
 ## 6. Build e execução
 
 **Toolchain:** CMake >= 3.15 + MSVC, C++17, SDL2 2.30.9 (em `third_party/`).
@@ -1799,7 +1882,7 @@ missão e os recursos originais do diretório de trabalho).
 
 ### Testes por linha de comando
 
-São 104 modos. Os que cobrem regressão de verdade:
+São 105 modos. Os que cobrem regressão de verdade:
 
 | Modo | O que prova |
 |---|---|
@@ -1818,6 +1901,7 @@ São 104 modos. Os que cobrem regressão de verdade:
 | `--item21test <DLL>` | as vozes da plataforma, a arma no ícone do STORAGE e o anel anti-duplicata |
 | `--optmenutest <DLL>` | a aba Options: os botões do PREFERENCES, o rádio do modo de tela e a tela de fim de missão inteira |
 | `--bannertest <DLL> [bmp]` | o letreiro de fim de missão: cor, tamanho, contorno e centragem, medidos no quadro desenhado |
+| `--pausetest <DLL> [bmp]` | a pausa do `Ctrl+P`: o relógio para, o som suspende, o letreiro aparece, e em rede nada disso |
 | `--missiontest <DLL> <saida> <ticks>` | carrega e roda qualquer missão |
 | `--aitest <DLL campanha> <DLL multi>` | o `AILevel` chega ao jogador 0 e o multijogador fica intacto |
 | `--helptest [tópico]` | o leitor do `.HLP` e a navegação da tela do manual |

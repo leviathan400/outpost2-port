@@ -169,6 +169,7 @@ private:
     std::vector<uint8_t> uiStateSave();
     bool uiStateLoad(const std::vector<uint8_t>& blob);
     int m_endPhase = 0;
+    int m_pauseCount = 0;          // TFrame+0x1E0: as pausas empilhadas
     uint32_t m_endWaitStart = 0;
     void beginGameEnd();
     void finishGameEnd();
@@ -346,6 +347,19 @@ public:
     }
     int debugTabNow() const { return m_tab; }
     int debugArmed() const { return m_targetCmd; }
+    // --pausetest: a pausa pela mesma porta da tecla, e o que ela deixou.
+    void debugCtrlP(Renderer& r) {
+        SDL_Event ev{};
+        ev.type = SDL_KEYDOWN;
+        ev.key.keysym.sym = SDLK_p;
+        ev.key.keysym.mod = KMOD_LCTRL;
+        handleEvent(r, ev);
+    }
+    int debugPauseCount() const { return m_pauseCount; }
+    bool debugAnyDrag() const { return m_dragging || m_areaDrag || m_miniDrag; }
+    // --pausetest: a pausa por dentro. O Ctrl+P so ALTERNA, entao e por aqui
+    // que se empilham as pausas, como o jogo faz noutras situacoes.
+    void debugPauseGame(bool on) { pauseGame(on); }
     // --bannertest: a vista em coordenadas de TELA, para o teste saber onde o
     // letreiro deveria estar centrado.
     void debugViewRect(int& x, int& y, int& w, int& h) const {
@@ -500,6 +514,14 @@ private:
     // proprio jogo ("Are you sure you want to abort the mission?") e pelo mesmo
     // caminho do "&BACK TO MAIN MENU" da tela END MISSION.
     void escapePressed();
+    // A pausa do Ctrl+P. `pauseGame` e o sub_49BFE0: um CONTADOR ([+0x1E0]),
+    // porque o jogo se pausa sozinho em outras situacoes alem da tecla; so a
+    // subida de 0 para 1 e a descida para 0 e que agem. `togglePause` e o
+    // comando 40001 (Ctrl+P e a tecla PAUSE no acelerador 130 do OUT2RES).
+    void pauseGame(bool on);
+    void togglePause();
+    // As cinco passadas do sub_4085C0: contorno preto de +-2 px e vermelho.
+    void drawBanner(Renderer& renderer, const std::string& msg);
     // A area em que o clique (e o realce) acertam a unidade, em coordenadas da
     // VISTA. O predio responde na pegada INTEIRA -- a mesma que ele ocupa no
     // mapa --, e nao num circulo no meio dele; o veiculo responde numa caixa do

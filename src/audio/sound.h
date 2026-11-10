@@ -44,6 +44,13 @@ void soundStopAll();
 // o soundStopAll de fato calou).
 int soundActiveChannels();
 
+// sub_47E6F0 / sub_47E750: a PAUSA do jogo suspende o som. E um contador
+// ([+0x91C]): na subida de 0 para 1 solta todos os canais que estao tocando;
+// a descida so decrementa. A fila de vozes do Savant NAO e descartada -- isso
+// e o soundStopAll, que e outro caminho (voltar ao menu).
+void soundSuspend(bool on);
+int  soundSuspendCount();
+
 // Tambem so para os testes: o ultimo id que soundVoice RECEBEU, mesmo com o
 // audio desligado (os modos de teste sobem sem SDL_INIT_AUDIO, e a fila de
 // vozes nem chega a existir). -1 = nenhum desde a ultima limpeza. Nao existe

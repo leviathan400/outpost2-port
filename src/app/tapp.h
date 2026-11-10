@@ -43,6 +43,11 @@ public:
     // TethysGame::LoadGame (DLL): carga adiada no próximo turno do jogo.
     void requestDelayedLoad(const std::string& path);
     bool hasShell() const { return m_shell != nullptr; }   // falso nos testes por linha de comando
+    // TApp::OnPauseGame (TApp+0x178 = dword_56DDA0): o jogo esta pausado. Quem
+    // liga e desliga e o GameState::pauseGame (sub_49BFE0); aqui so mora o
+    // flag, que no original varios pontos consultam.
+    void setPaused(bool on) { m_paused = on; }
+    bool paused() const { return m_paused; }
     Renderer& renderer() { return *m_renderer; }
 
 private:
@@ -51,6 +56,7 @@ private:
     ShellState* m_shell = nullptr;
     GameState*  m_game = nullptr; // singleton do jogo (dword_574A80)
     bool m_quit = false;
+    bool m_paused = false;        // TApp+0x178 (dword_56DDA0)
     bool m_sdlReady = false;
 };
 

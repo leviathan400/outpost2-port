@@ -216,6 +216,20 @@ void soundStopAll() {                                     // sub_47E0C0
     s_nextVoice = SDL_GetTicks();
 }
 
+// sub_47E6F0 (subir) e sub_47E750 (descer), o contador [+0x91C].
+static int s_suspend = 0;
+
+void soundSuspend(bool on) {
+    if (!on) { if (s_suspend > 0) --s_suspend; return; }
+    if (s_suspend++ != 0) return;                 // so a subida de 0 para 1 age
+    if (!s_dev) return;
+    SDL_LockAudioDevice(s_dev);
+    for (Channel& c : s_ch) { c.s = nullptr; c.positional = false; }
+    SDL_UnlockAudioDevice(s_dev);
+}
+
+int soundSuspendCount() { return s_suspend; }
+
 int soundActiveChannels() {
     int n = 0;
     for (const Channel& c : s_ch) if (c.s) ++n;

@@ -15,6 +15,10 @@ namespace op2 {
 // x/y em pixels de mapa (-1 = sem posição).
 void postMessage(int x, int y, const char* text, int soundId);
 
+// sub_49BF10 chamado DIRETO, sem passar pelo log nem tocar som: e assim que
+// saem os avisos da barra, como o "Cannot Pause in multiplayer games".
+void statusBarSet(const char* text);
+
 struct GameMessage { int x = -1, y = -1, soundId = 0; std::string text; };
 int messageCount();
 // Nº de mensagens registradas desde o início (o original compara o horário da
