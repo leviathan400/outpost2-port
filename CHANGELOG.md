@@ -15,6 +15,11 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
 
 **Novo**
 
+- **Shift na seleção**, como no original: **Shift + clique** num veículo põe
+  ele na seleção, ou tira se já estava; o **botão do meio** do mouse faz o
+  mesmo. **Shift + caixa** soma os veículos à seleção — a caixa sem Shift
+  continua substituindo, como sempre foi neste porte. Um veículo atordoado por
+  EMP não entra na seleção, como no original.
 - **O bipe ao fechar o jogo**, como no original: ao sair, a janela some, toca
   um bipe e o jogo espera ele acabar. Com o som desligado, fecha na hora — o
   original esperava 3,5 s à toa.
@@ -46,14 +51,19 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   amarelas na garagem de Plymouth, e o chão escuro com luzes na de Eden — antes
   o terreno aparecia por dentro do prédio.
 
-**Para quem acompanha o código:** seções 5.28 a 5.31 do PORT_STATUS; os modos
+**Para quem acompanha o código:** seções 5.28 a 5.32 do PORT_STATUS; os modos
 de teste `--stacktest` (que veio do PR #2) e `--exitbeeptest`; casos novos no `--scrolltest`, no
-`--drawordertest`, no `--uitest` e no `--optmenutest`.
+`--drawordertest`, no `--uitest`, no `--optmenutest` e no `--selecttest`.
 
 ### English
 
 **New**
 
+- **Shift in selection**, as in the original: **Shift+click** on a vehicle
+  adds it to the selection, or removes it if it was already there; the
+  **middle mouse button** does the same. **Shift+box** adds the vehicles to the
+  selection — a box without Shift still replaces it, as it always has in this
+  port. A vehicle stunned by EMP is not selected, as in the original.
 - **The beep when closing the game**, as in the original: on exit the window
   disappears, a beep plays and the game waits for it to finish. With sound
   off it closes at once — the original waited 3.5 s for nothing.
@@ -84,9 +94,9 @@ de teste `--stacktest` (que veio do PR #2) e `--exitbeeptest`; casos novos no `-
   arrows in the Plymouth garage, and the dark lit floor in the Eden one — the
   terrain used to show through the building.
 
-**For those following the code:** sections 5.28 to 5.31 of PORT_STATUS; the
+**For those following the code:** sections 5.28 to 5.32 of PORT_STATUS; the
 `--stacktest` (from PR #2) and `--exitbeeptest` test modes; new cases in `--scrolltest`,
-`--drawordertest`, `--uitest` and `--optmenutest`.
+`--drawordertest`, `--uitest`, `--optmenutest` and `--selecttest`.
 
 ---
 

@@ -277,6 +277,9 @@ public:
     void debugOptScroll(int linha) { m_gameOptions.debugScroll(linha); }
     // --selecttest: o clique na vista e o que ficou marcado.
     void debugSelectAt(int vx, int vy) { selectAt(vx, vy, false); }
+    // --selecttest: um evento de mouse de verdade no ponto (wx, wy) do MUNDO,
+    // com ou sem Shift (SDL_SetModState). A camera fica onde esta.
+    void debugMouse(Renderer& r, int wx, int wy, int button, bool down, bool shift);
     void debugClearSelection() { m_selected.clear(); }
     int debugSelectedCount() const { return static_cast<int>(m_selected.size()); }
     int debugSelectedId(int i) const {
@@ -401,6 +404,10 @@ public:
     }
 private:
     bool m_dragging = false;       // arrastando caixa de seleção?
+    // O arrasto/clique veio com MK_SHIFT (Shift, ou o botão do MEIO, que o
+    // sub_41AAA0 trata como esquerdo com Shift: casos 519/520 fazem |= 4).
+    bool m_dragShift = false;
+    int  m_dragButton = 0;         // SDL_BUTTON_LEFT ou SDL_BUTTON_MIDDLE
     int  m_dragSX = 0, m_dragSY = 0;   // início da caixa (coords nativas)
     int  m_mouseNX = 0, m_mouseNY = 0; // mouse atual (coords nativas)
     int  m_targetCmd = -1;         // comando em modo de mira (UiCommand) ou -1
@@ -548,7 +555,8 @@ private:
     // tamanho do sprite em volta do seu centro. Empate: o centro mais perto.
     void unitHitBox(int id, int& x, int& y, int& w, int& h) const;
     int unitAtBox(int vx, int vy, bool meusApenas) const;
-    void selectBox(int x0, int y0, int x1, int y1);
+    void selectBox(int x0, int y0, int x1, int y1, bool additive = false);
+    void selectToggleAt(int nx, int ny);   // Shift + clique (sub_41AAA0, MK_SHIFT)
     void renderPanel(Renderer& renderer);
 };
 

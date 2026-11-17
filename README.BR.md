@@ -238,6 +238,10 @@ cursores `.ANI`.
 
 ### 2026-11-17
 
+- **Shift na seleção**, como no original: **Shift + clique** num veículo põe
+  ele na seleção, ou tira se já estava; o **botão do meio** faz o mesmo.
+  **Shift + caixa** soma os veículos à seleção (a caixa sem Shift continua
+  substituindo).
 - **O bipe ao fechar o jogo**, como no original: ao sair, a janela some, toca
   um bipe e o jogo espera ele acabar. Com o som desligado, fecha na hora (o
   original esperava 3,5 s à toa).

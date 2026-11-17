@@ -2546,6 +2546,60 @@ seguida desenha os **pontos da ordem** só com `arg_0 & 0x10` e o
 chamadores passam `arg_0` igual a 1 (o *hover*) ou 2 (a seleção): nenhum dos
 dois ramos roda no executável. Não há o que portar.
 
+## 5.32. Shift e o botão do meio na seleção (2026-11-17)
+
+A pendência dizia que a regra do Shift/Ctrl estava num "objeto enumerador"
+ainda não extraído. Ela está no procedimento de mensagens do filtro de seleção,
+o **`sub_41AAA0`**, que é quem escreve a lista (`dword_5471D0`, a contagem, e
+`dword_5471D4`, os ids). O `wParam` do mouse traz `MK_SHIFT` (4) e
+`MK_CONTROL` (8).
+
+### O que o original faz
+
+| ação | efeito |
+|---|---|
+| clique numa unidade, sem Shift | limpa e marca **só ela** — menos a que está no sub-estado `0x0A` (EMP), que deixa a seleção vazia; o som de seleção (`desc+0x1F0`) só toca se ela **não** era a única já marcada |
+| **Shift + clique** | **alterna** o veículo: se está na seleção, sai; senão entra (até 32), sem som. Nada acontece se a seleção atual é um **prédio**, se o clicado não é veículo, ou se ele está nos sub-estados `0x0A`/`0x0D` |
+| **botão do meio** | é o esquerdo com Shift (casos 519/520 do `switch`: `or arg_8, 4`) — também na caixa |
+| Shift + clique com um comando armado | vai para a **seleção** (o `test al, 4` pula o enumerador do comando); a mira continua armada |
+| a caixa (`WM_LBUTTONUP`) | **soma** os veículos do jogador à seleção atual (até 32), só a limpando antes se ela for um único prédio; os do sub-estado `0x0A` ficam de fora; **não checa repetidos** |
+| **Ctrl + clique** | **não é seleção**: com um comando armado, acrescenta um **ponto de passagem** à rota (`[esi+3C]`/`[esi+40h]`, com o som `0x59`), desenhado em vermelho pelo `sub_41B620` |
+| ESC (`WM_CHAR 0x1B`) / clique direito (`WM_RBUTTONDOWN`) | sem comando armado, **limpam** a seleção |
+
+### O que entrou no porte
+
+- Shift + clique alternando, com as quatro exceções acima, e o botão do meio
+  como Shift + clique — inclusive com um comando armado;
+- no clique simples, os dois filtros que faltavam: quem está em `0x0A` não é
+  marcado, e o som só toca quando a unidade marcada muda;
+- na caixa, quem está em `0x0A` fica de fora.
+
+**Duas decisões deste porte**, porque o modelo do original não fecha com o do
+porte:
+
+- **A caixa sem Shift continua substituindo** a seleção, e **com Shift (ou com
+  o botão do meio) ela soma**, como a do original. No original toda caixa
+  soma, e quem limpa é o ESC ou o clique direito — mas aqui o clique direito
+  é "mover" e o clique no chão limpa, então uma caixa que sempre somasse não
+  teria como recomeçar a seleção pelo mouse;
+- **corrigido**: ao somar, um veículo já marcado não entra de novo na lista
+  (o original não checava, e ele aparecia duas vezes).
+
+### O que ficou de fora
+
+Os **pontos de passagem com Ctrl + clique** — é outro recurso (a rota de vários
+pontos de um comando armado, com o desenho dela), não seleção.
+
+### O teste — `--selecttest <mapa>`
+
+Dezessete casos novos, pelo mouse de verdade (`GameState::debugMouse` manda o
+evento ao `handleEvent`, com o Shift pelo `SDL_SetModState`): o Shift soma e
+tira, o botão do meio faz o mesmo, prédio não entra e não aceita soma, o
+clique simples troca, a caixa simples substitui e a com Shift (ou com o meio)
+soma sem repetir, o Shift com a mira armada mexe na seleção e a mira fica, e o
+`0x0A` fica de fora do clique, do Shift e da caixa. Neutralizando a checagem de
+repetidos, 2 falhas; tirando o botão do meio, 1.
+
 ---
 
 ## 6. Build e execução
@@ -2595,6 +2649,7 @@ São 109 modos. Os que cobrem regressão de verdade:
 | `--drawordertest <mapa>` | a ordem de desenho: veículo atrás de prédio, efeitos por cima, desastres por último, a doca |
 | `--detourtest <mapa>` | quem vem de frente dá passagem: o encontro no corredor, a tabela de decisão do `sub_44BBA0` e o desvio inalcançável |
 | `--exitbeeptest` | o bipe da saída: toca o `beep5.wav` e espera 3,5 s uma vez por sessão; sem som, não espera |
+| `--selecttest <mapa>` | a área de clique das unidades, e a seleção com Shift e com o botão do meio (soma, tira, caixa que soma, as exceções) |
 | `--stacktest <DLL> [bmp]` | estresse do empurrão: todos os veículos do jogador indo e voltando em grupo; nunca dois no mesmo tile, e ninguém sobra andando ao fim de cada perna |
 | `--missiontest <DLL> <saida> <ticks>` | carrega e roda qualquer missão |
 | `--aitest <DLL campanha> <DLL multi>` | o `AILevel` chega ao jogador 0 e o multijogador fica intacto |

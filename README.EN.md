@@ -236,6 +236,10 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
 
 ### 2026-11-17
 
+- **Shift in selection**, as in the original: **Shift+click** on a vehicle
+  adds it to the selection, or removes it if it was already there; the
+  **middle button** does the same. **Shift+box** adds the vehicles to the
+  selection (a box without Shift still replaces it).
 - **The beep when closing the game**, as in the original: on exit the window
   disappears, a beep plays and the game waits for it to finish. With sound
   off it closes at once (the original waited 3.5 s for nothing).

@@ -48,7 +48,11 @@
 > **5.31** (the exit beep: `IWnd::_WndProc` plays `beep5.wav` on the frame's
 > `WM_NCDESTROY` and sleeps 3.5 s — here only when sound is on; and the
 > `loc_43EE7C` branch of the selection marker, noted as pending, turns out to
-> be dead code). The recent changes are summarised in
+> be dead code) and **5.32** (Shift+click toggles a vehicle in the selection
+> and the middle button is Shift+click, as `sub_41AAA0` does with `MK_SHIFT`;
+> Shift+box adds while a plain box still replaces — in the original every box
+> adds; Ctrl+click turns out to be waypoints, not selection, and is not ported
+> yet). The recent changes are summarised in
 > [README.EN.md](README.EN.md).
 
 # Outpost 2: Divided Destiny — Modern Port (C++17/SDL2)

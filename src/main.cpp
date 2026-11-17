@@ -6799,6 +6799,83 @@ static int runSelectTest(const std::string& mapName) {
     casos.push_back({"o realce ve o predio no canto",
                      gs.debugUnitAtView((tlx << 5) + 2, (tly << 5) + 2) == cc.id() ? 1 : 0, 1});
 
+    // ---- Shift e o botao do meio (sub_41AAA0, MK_SHIFT) ------------------
+    // Pelo mouse de verdade (handleEvent), com o Shift no SDL_SetModState.
+    // Tres Lynx na mesma linha, a direita do primeiro.
+    {
+        gs.setCamera(0, 0);
+        gs.onIdle(renderer, 0.0f);
+        op2::Unit l2, l3;
+        op2::TethysGame::CreateUnit(l2, op2::mapLynx, op2::LOCATION{bx + 8, by}, 0, 0x3D);
+        op2::TethysGame::CreateUnit(l3, op2::mapLynx, op2::LOCATION{bx + 10, by}, 0, 0x3D);
+        const int L1 = lynx.id(), L2 = l2.id(), L3 = l3.id();
+        const auto cx = [&](int dxTiles) { return ((bx + dxTiles) << 5) + 16; };
+        const int cy = (by << 5) + 16;
+        const auto clica = [&](int wx, int wy, int botao, bool shift) {
+            gs.debugMouse(renderer, wx, wy, botao, true, shift);
+            gs.debugMouse(renderer, wx, wy, botao, false, shift);
+        };
+        const auto arrasta = [&](int x0, int y0, int x1, int y1, int botao, bool shift) {
+            gs.debugMouse(renderer, x0, y0, botao, true, shift);
+            gs.debugMouse(renderer, x1, y1, botao, false, shift);
+        };
+        const auto tem = [&](int id) {
+            for (int i = 0; i < gs.debugSelectedCount(); ++i) if (gs.debugSelectedId(i) == id) return true;
+            return false;
+        };
+        const auto sel = [&](std::initializer_list<int> ids) {
+            if (gs.debugSelectedCount() != static_cast<int>(ids.size())) return 0;
+            for (int id : ids) if (!tem(id)) return 0;
+            return 1;
+        };
+        gs.debugClearSelection();
+        clica(cx(6), cy, SDL_BUTTON_LEFT, false);
+        casos.push_back({"mouse: clique simples marca o Lynx 1", sel({L1}), 1});
+        clica(cx(8), cy, SDL_BUTTON_LEFT, true);
+        casos.push_back({"Shift+clique SOMA o Lynx 2", sel({L1, L2}), 1});
+        clica(cx(6), cy, SDL_BUTTON_LEFT, true);
+        casos.push_back({"Shift+clique num marcado o TIRA", sel({L2}), 1});
+        clica(cx(10), cy, SDL_BUTTON_MIDDLE, false);
+        casos.push_back({"o botao do meio e Shift+clique", sel({L2, L3}), 1});
+        clica(cx(10), cy, SDL_BUTTON_MIDDLE, false);
+        casos.push_back({"... e tambem tira", sel({L2}), 1});
+        clica((tlx << 5) + 16, (tly << 5) + 16, SDL_BUTTON_LEFT, true);
+        casos.push_back({"Shift+clique num predio nao faz nada", sel({L2}), 1});
+        clica((tlx << 5) + 16, (tly << 5) + 16, SDL_BUTTON_LEFT, false);
+        clica(cx(6), cy, SDL_BUTTON_LEFT, true);
+        casos.push_back({"com um predio marcado, Shift+clique nao soma", sel({cc.id()}), 1});
+        clica(cx(8), cy, SDL_BUTTON_LEFT, false);
+        casos.push_back({"clique simples troca a selecao", sel({L2}), 1});
+
+        // A caixa: sem Shift substitui; com Shift soma, sem repetir.
+        arrasta(cx(6) - 24, cy - 24, cx(8) + 24, cy + 24, SDL_BUTTON_LEFT, false);
+        casos.push_back({"caixa simples marca L1 e L2", sel({L1, L2}), 1});
+        arrasta(cx(10) - 24, cy - 24, cx(10) + 24, cy + 24, SDL_BUTTON_LEFT, false);
+        casos.push_back({"... outra caixa simples SUBSTITUI", sel({L3}), 1});
+        arrasta(cx(6) - 24, cy - 24, cx(8) + 24, cy + 24, SDL_BUTTON_LEFT, true);
+        casos.push_back({"Shift+caixa SOMA", sel({L1, L2, L3}), 1});
+        arrasta(cx(6) - 24, cy - 24, cx(10) + 24, cy + 24, SDL_BUTTON_MIDDLE, false);
+        casos.push_back({"caixa com o meio soma sem repetir", gs.debugSelectedCount(), 3});
+
+        // Com um comando armado, o Shift+clique vai para a selecao e a mira fica.
+        gs.debugArmCommand(op2::UC_MOVE);
+        clica(cx(8), cy, SDL_BUTTON_LEFT, true);
+        casos.push_back({"com mira armada, Shift+clique mexe na selecao", sel({L1, L3}), 1});
+        casos.push_back({"... e a mira continua armada", gs.debugArmed() == op2::UC_MOVE ? 1 : 0, 1});
+        gs.debugArmCommand(-1);
+
+        // Sub-estado 0x0A (EMP): nao entra nem pelo clique nem pela caixa.
+        op2::g_units[L2].field22 = 0x0A;
+        clica(cx(8), cy, SDL_BUTTON_LEFT, false);
+        casos.push_back({"EMP (0x0A): clique simples limpa e nao marca", gs.debugSelectedCount(), 0});
+        clica(cx(6), cy, SDL_BUTTON_LEFT, false);
+        clica(cx(8), cy, SDL_BUTTON_LEFT, true);
+        casos.push_back({"EMP: Shift+clique nao soma", sel({L1}), 1});
+        arrasta(cx(6) - 24, cy - 24, cx(10) + 24, cy + 24, SDL_BUTTON_LEFT, false);
+        casos.push_back({"EMP: a caixa o deixa de fora", sel({L1, L3}), 1});
+        op2::g_units[L2].field22 = 0;
+    }
+
     int ruins = 0;
     for (const Caso& c : casos) {
         const bool ok = c.obtido == c.esperado;

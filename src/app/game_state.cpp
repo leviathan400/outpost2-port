@@ -1832,6 +1832,23 @@ int GameState::unitAtView(int vx, int vy) const {
 }
 
 // --autoroutetest: o clique DIREITO num tile, pela porta do handleEvent.
+void GameState::debugMouse(Renderer& r, int wx, int wy, int button, bool down, bool shift) {
+    SDL_SetModState(shift ? KMOD_LSHIFT : KMOD_NONE);
+    int sx = 0, sy = 0;
+    r.nativeToScreen(wx - m_camX + kViewX, wy - m_camY + kViewY, sx, sy);
+    SDL_Event mv{};
+    mv.type = SDL_MOUSEMOTION;
+    mv.motion.x = sx; mv.motion.y = sy;
+    handleEvent(r, mv);
+    SDL_Event ev{};
+    ev.type = down ? SDL_MOUSEBUTTONDOWN : SDL_MOUSEBUTTONUP;
+    ev.button.button = static_cast<Uint8>(button);
+    ev.button.clicks = 1;
+    ev.button.x = sx; ev.button.y = sy;
+    handleEvent(r, ev);
+    SDL_SetModState(KMOD_NONE);
+}
+
 void GameState::debugRightClickTile(Renderer& r, int tileX, int tileY) {
     setCamera(tileX * 32 - viewportW() / 2, tileY * 32 - viewportH() / 2);
     onIdle(r, 0.0f);                           // a camera e presa aos limites aqui
@@ -1950,25 +1967,54 @@ void GameState::selectAt(int nx, int ny, bool additive) {
     // Seleciona a unidade do jogador sob o clique (coords da vista, entao o
     // wrap horizontal ja esta resolvido): predio pela pegada inteira, veiculo
     // pelo sprite -- ver unitHitBox.
+    // sub_41AAA0 (WM_LBUTTONDOWN sem MK_SHIFT): limpa e marca a unidade --
+    // menos a que esta no sub-estado 0x0A (EMP). O som de selecao (desc+0x1F0)
+    // so toca se ela NAO era a unica ja marcada (cmp edi, ebx).
+    const int antes = m_selected.size() == 1 ? m_selected[0] : 0;
     if (!additive) m_selected.clear();
     const int best = unitAtBox(nx, ny, /*meusApenas*/ true);
-    if (best && m_selected.size() < 0x20) {               // sub_41A9E0: teto de 32
+    if (best && g_units[best].field22 != 0x0A && m_selected.size() < 0x20) {   // sub_41A9E0: teto de 32
         m_selected.push_back(best);
-        soundPlay(unitSelectSound(g_units[best].type));   // sub_41AAA0: desc+0x1F0
+        if (best != antes) soundPlay(unitSelectSound(g_units[best].type));
     }
 }
 
-void GameState::selectBox(int x0, int y0, int x1, int y1) {
+// Shift + clique (e o botao do meio): sub_41AAA0, WM_LBUTTONDOWN com MK_SHIFT.
+// ALTERNA o veiculo na selecao -- se ja esta, sai; senao entra (ate 32), sem
+// som. Nada acontece se a selecao atual e um PREDIO, se o clicado nao e
+// veiculo, ou se ele esta nos sub-estados 0x0A (EMP) ou 0x0D.
+void GameState::selectToggleAt(int nx, int ny) {
+    const int hit = unitAtBox(nx, ny, /*meusApenas*/ true);
+    if (!hit) return;
+    if (!m_selected.empty() && !(g_units[m_selected[0]].flags & UNIT_VEHICLE)) return;
+    const UnitRecord& r = g_units[hit];
+    if (!(r.flags & UNIT_VEHICLE)) return;
+    if (r.field22 == 0x0A || r.field22 == 0x0D) return;
+    const auto it = std::find(m_selected.begin(), m_selected.end(), hit);
+    if (it != m_selected.end()) m_selected.erase(it);
+    else if (m_selected.size() < 0x20) m_selected.push_back(hit);
+}
+
+void GameState::selectBox(int x0, int y0, int x1, int y1, bool additive) {
     // Seleciona os veículos do jogador cujo CENTRO na tela cai na caixa.
     // (coords de tela → o wrap horizontal já está resolvido por screenXOf.)
+    // sub_41AAA0 (WM_LBUTTONUP): a caixa do original SOMA à seleção -- só a
+    // limpa antes se ela for um único prédio --, e fica de fora quem está no
+    // sub-estado 0x0A. Neste porte, a caixa SEM Shift substitui (como sempre
+    // foi aqui) e a caixa COM Shift (ou com o botão do meio) soma, como a do
+    // original. Corrigido: o original não checa repetidos ao somar, e um
+    // veículo já marcado entrava de novo na lista; aqui não entra.
     int bx0 = std::min(x0, x1), by0 = std::min(y0, y1);
     int bx1 = std::max(x0, x1), by1 = std::max(y0, y1);
     int me = TethysGame::localPlayer();
-    m_selected.clear();
+    if (!additive || (m_selected.size() == 1 && !(g_units[m_selected[0]].flags & UNIT_VEHICLE)))
+        m_selected.clear();
     for (int i = 1; i < static_cast<int>(g_units.size()); ++i) {
         const UnitRecord& r = g_units[i];
         if (r.id == -1 || (r.flags & UNIT_DEAD)) continue;
         if ((r.owner & 0x0F) != me || !(r.flags & UNIT_VEHICLE)) continue;
+        if (r.field22 == 0x0A) continue;
+        if (std::find(m_selected.begin(), m_selected.end(), i) != m_selected.end()) continue;
         int ucx = screenXOf(r.pixelX) + 16, ucy = r.pixelY + 16 - m_camY;
         if (ucx >= bx0 && ucx <= bx1 && ucy >= by0 && ucy <= by1) {
             if (m_selected.size() >= 0x20) break;   // sub_41A9E0: a seleção para em 32
@@ -2256,6 +2302,13 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
             soundPlay(0x56);
         } else if (e.button.button == SDL_BUTTON_RIGHT && m_launchFrom) {
             m_launchFrom = 0;
+        } else if (inView && (e.button.button == SDL_BUTTON_MIDDLE ||
+                              (e.button.button == SDL_BUTTON_LEFT && (SDL_GetModState() & KMOD_SHIFT)))) {
+            // sub_41AAA0: com MK_SHIFT o clique vai para a SELECAO mesmo com um
+            // comando armado (o "test al, 4" pula o enumerador do comando), e o
+            // botao do meio e o esquerdo com Shift (casos 519/520: |= 4).
+            m_dragging = true; m_dragSX = vx; m_dragSY = vy;
+            m_dragShift = true; m_dragButton = e.button.button;
         } else if (e.button.button == SDL_BUTTON_LEFT && inView && m_targetCmd >= 0) {
             // Modo de mira: o clique escolhe o alvo (vt[3] do comando).
             int tileX = (m_camX + vx) / 32, tileY = (m_camY + vy) / 32;
@@ -2267,6 +2320,7 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
             m_targetCmd = -1;                                // cancela a mira
         } else if (e.button.button == SDL_BUTTON_LEFT && inView) {
             m_dragging = true; m_dragSX = vx; m_dragSY = vy;
+            m_dragShift = false; m_dragButton = SDL_BUTTON_LEFT;
         } else if (e.button.button == SDL_BUTTON_RIGHT && inView && !m_selected.empty()) {
             // Mover os SELECIONADOS para o tile clicado (pipeline real + espiral).
             // Fork: (1) o tile vem das coordenadas DA VISTA (vx/vy), não das do
@@ -2295,12 +2349,16 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
         if (m_targetCmd >= 0 && uiCommandArea(m_targetCmd, m_selected, x1, y1, x2, y2) != UiClick::TARGET)
             m_targetCmd = -1;
     }
-    if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT && m_dragging) {
+    if (e.type == SDL_MOUSEBUTTONUP && e.button.button == m_dragButton && m_dragging) {
         int nx, ny; renderer.screenToNative(e.button.x, e.button.y, nx, ny);
         const int vx = nx - kViewX, vy = ny - kViewY;     // coordenadas na vista
         int dx = std::abs(vx - m_dragSX), dy = std::abs(vy - m_dragSY);
-        if (dx < 4 && dy < 4) selectAt(vx, vy, false);   // clique = seleção simples
-        else selectBox(m_dragSX, m_dragSY, vx, vy);        // caixa = multi-seleção
+        if (dx < 4 && dy < 4) {                            // clique
+            if (m_dragShift) selectToggleAt(vx, vy);       // Shift: alterna o veículo
+            else selectAt(vx, vy, false);                  // simples: só ele
+        } else {
+            selectBox(m_dragSX, m_dragSY, vx, vy, m_dragShift);   // caixa (Shift: soma)
+        }
         m_dragging = false;
     }
 }
