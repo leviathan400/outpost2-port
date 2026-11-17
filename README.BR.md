@@ -173,10 +173,11 @@ outpost2_modern.exe                      # menu principal
 outpost2_modern.exe --game eden01.map    # abre um mapa direto
 ```
 
-O arquivo `OUTPOST2.INI` do jogo é respeitado. O porte acrescenta sete chaves
+O arquivo `OUTPOST2.INI` do jogo é respeitado. O porte acrescenta nove chaves
 que o original não tem — nível da IA, escuridão da noite, volume, câmera do
-demo, tela cheia, a pele dos menus (`MenuSkin`) e a volta horizontal do mapa
-(`MapWrap`); estão documentadas no `PORT_STATUS.BR.md`.
+demo, tela cheia, a pele dos menus (`MenuSkin`), a volta horizontal do mapa
+(`MapWrap`), a última linha do mapa (`ShowBottomRow`) e a rota de minério num
+clique (`AutoOreRoute`); estão documentadas no `PORT_STATUS.BR.md`.
 
 Há **110 modos de linha de comando** para testes e capturas, entre eles uma
 bateria de regressão (`--savetest` prova o determinismo de salvar/recarregar).
@@ -235,26 +236,12 @@ cursores `.ANI`.
 
 ## Mudanças recentes
 
-### 2026-11-08
+### 2026-11-10
 
-- **A vista do mapa para nas bordas**, como no original: só os mapas "around
-  the world" (512 tiles de largura) dão a volta. Unidades, terreno e a câmera
-  do modo demonstração seguem a mesma regra. `MapWrap=1` devolve a volta em
-  todo mapa, que era o comportamento antigo.
-- **Par de rádio `Screen Mode`** — tela cheia ou janela — nas **duas** telas de
-  preferências: a `PREFERENCES` do menu principal e a lista do `PREFERENCES` da
-  aba Options, dentro do jogo. Só vale no `ACCEPT`/`&APPLY`, e grava
-  `[Game] Fullscreen` no INI.
-- **A lista do `PREFERENCES` de dentro do jogo escondia as próprias setas de
-  rolagem** atrás dos botões: nada depois da primeira página era alcançável, e
-  o painel ainda roubava o clique do `L&ESS`.
-- **As dicas dos botões `L&ESS`/`&MORE`** passaram a ser as do original, uma
-  por item ("Turn music volume down (L&ess)"), e não uma frase genérica.
-- **A Meteor Defense não derruba mais o míssil de um aliado.** Só poupava o
-  míssil do próprio dono, então numa partida aliada a defesa do amigo abatia o
-  míssil que ia no inimigo.
-- **O muro não falha mais** por ter perto dele um muro em obra, a praga ou
-  lava. Prédio vizinho continua impedindo, como deve.
+- **A última linha do mapa fica escondida**, como no original: a vista para
+  no fundo do clip rect do mapa (`altura - 2` nos mapas do jogo), então a
+  última linha de tiles nunca aparece. `ShowBottomRow=1` no `OUTPOST2.INI`
+  deixa a vista descer até ela.
 - **Quem vem de frente dá passagem.** Dois veículos que se encontram de frente
   num caminho estreito não ficam mais esperando um pelo outro: o que está entre
   dois passos recebe um desvio para uma casa ao lado, espera ali um instante e
@@ -284,6 +271,27 @@ cursores `.ANI`.
   carregando. Vale para minério comum, minério raro e Magma Well, nas duas
   raças. O comando de três cliques continua igual; `AutoOreRoute=0` no
   `OUTPOST2.INI` desliga o atalho.
+
+### 2026-11-08
+
+- **A vista do mapa para nas bordas**, como no original: só os mapas "around
+  the world" (512 tiles de largura) dão a volta. Unidades, terreno e a câmera
+  do modo demonstração seguem a mesma regra. `MapWrap=1` devolve a volta em
+  todo mapa, que era o comportamento antigo.
+- **Par de rádio `Screen Mode`** — tela cheia ou janela — nas **duas** telas de
+  preferências: a `PREFERENCES` do menu principal e a lista do `PREFERENCES` da
+  aba Options, dentro do jogo. Só vale no `ACCEPT`/`&APPLY`, e grava
+  `[Game] Fullscreen` no INI.
+- **A lista do `PREFERENCES` de dentro do jogo escondia as próprias setas de
+  rolagem** atrás dos botões: nada depois da primeira página era alcançável, e
+  o painel ainda roubava o clique do `L&ESS`.
+- **As dicas dos botões `L&ESS`/`&MORE`** passaram a ser as do original, uma
+  por item ("Turn music volume down (L&ess)"), e não uma frase genérica.
+- **A Meteor Defense não derruba mais o míssil de um aliado.** Só poupava o
+  míssil do próprio dono, então numa partida aliada a defesa do amigo abatia o
+  míssil que ia no inimigo.
+- **O muro não falha mais** por ter perto dele um muro em obra, a praga ou
+  lava. Prédio vizinho continua impedindo, como deve.
 - **O `Ctrl+P` pausa o jogo** (e a tecla `PAUSE` também, como no acelerador do
   original): o relógio para, a música e o som calam, e aparece o letreiro
   *"Game Paused. Press CTRL+P to Resume"*. Em partida multijogador não pausa —

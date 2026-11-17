@@ -371,6 +371,8 @@ public:
     void debugViewRect(int& x, int& y, int& w, int& h) const {
         x = kViewX; y = kViewY; w = viewportW(); h = viewportH();
     }
+    // --scrolltest: liga/desliga o ShowBottomRow e refaz o limite da camera.
+    void debugShowBottomRow(bool on) { m_showBottomRow = on; m_maxY = viewMaxY(); clampCamera(); }
     // O quadro seguinte: é aqui que a confirmação se fechava sozinha.
     void debugPaneFrame() { m_confirm.update(m_selected); }
     void debugSetHover(int id) { m_hoverUnit = id; m_hoverStartTick = -1000; }  // só p/ --selshot
@@ -495,6 +497,8 @@ private:
     void clampCamera();
     bool viewWraps() const;        // horizontal wrap of the view (MapWrap / world maps)
     bool m_mapWrapAll = false;     // "[Game] MapWrap" (fork): wrap every map
+    int viewMaxY() const;          // lowest camera Y (clip rect bottom, or map bottom)
+    bool m_showBottomRow = false;  // "[Game] ShowBottomRow" (fork): show the map's last row
     // A linha de conversa do jogo (o filtro de teclado sub_4115F0, instalado no
     // TFrame por sub_49AE60). Fechada, o Enter a abre; aberta, ela come as
     // teclas: Enter manda, Esc desiste, Backspace apaga e o resto entra ate

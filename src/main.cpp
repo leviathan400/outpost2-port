@@ -6358,6 +6358,28 @@ static int runScrollTest(const std::string& mapName) {
     gs.debugScrollFrame(false, false, false, true);
     casos.push_back({"baixo desce", gs.camY() > 300 ? 1 : 0, 1});
 
+    // O fundo da vista (sub_402E70: o clip rect do mapa vira o limite da
+    // vista, y2 inclusivo). Com ShowBottomRow=0, a camera saturada embaixo
+    // mostra ate a linha y2 e nao a ultima do mapa; com 1, vai ate o fim.
+    {
+        int vx, vy, vw, vh;
+        gs.debugViewRect(vx, vy, vw, vh);
+        const int fundoClip = (op2::g_gameMap.clipRect().y2 + 1) * 32;
+        const int fundoMapa = op2::g_gameMap.height() * 32;
+        gs.debugShowBottomRow(false);
+        gs.setCamera(300, 1 << 20);
+        const int baseOriginal = gs.camY() + vh;
+        gs.debugShowBottomRow(true);
+        gs.setCamera(300, 1 << 20);
+        const int baseInteira = gs.camY() + vh;
+        gs.debugShowBottomRow(false);
+        std::printf("[scroll] fundo da vista: %d (clip %d), com ShowBottomRow %d (mapa %d)\n",
+                    baseOriginal, fundoClip, baseInteira, fundoMapa);
+        casos.push_back({"o fundo da vista e o do clip rect (a ultima linha some)",
+                         (baseOriginal == fundoClip && fundoClip < fundoMapa) ? 1 : 0, 1});
+        casos.push_back({"... e com ShowBottomRow=1, o do mapa", baseInteira == fundoMapa ? 1 : 0, 1});
+    }
+
     // O MINIMAPA acompanha: desenha um quadro, rola bastante, desenha outro
     // e compara os pixels da caixa do minimapa.
     auto minimapa = [&]() {

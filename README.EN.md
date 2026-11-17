@@ -172,9 +172,11 @@ outpost2_modern.exe                      # main menu
 outpost2_modern.exe --game eden01.map    # opens a map directly
 ```
 
-The game's `OUTPOST2.INI` file is respected. The port adds seven keys the
-original doesn't have — AI level, night darkness, volume, demo camera and
-fullscreen; they are documented in `PORT_STATUS.EN.md`.
+The game's `OUTPOST2.INI` file is respected. The port adds nine keys the
+original doesn't have — AI level, night darkness, volume, demo camera,
+fullscreen, the menu skin (`MenuSkin`), horizontal map wrap (`MapWrap`), the
+map's bottom row (`ShowBottomRow`) and the one-click ore route
+(`AutoOreRoute`); they are documented in `PORT_STATUS.EN.md`.
 
 There are **110 command-line modes** for tests and captures, among them a
 regression battery (`--savetest` proves save/reload determinism). The list is
@@ -232,26 +234,12 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
 
 ## Recent changes
 
-### 2026-11-08
+### 2026-11-10
 
-- **The map view stops at the edges**, as in the original: only "around the
-  world" maps (512 tiles wide) wrap. Units, terrain and the demo camera follow
-  the same rule. `MapWrap=1` brings back wrapping on every map, the old
-  behaviour.
-- **A `Screen Mode` radio pair** — full screen or window — on **both**
-  preferences screens: `PREFERENCES` in the main menu, and the `PREFERENCES`
-  list in the in-game Options tab. It only takes effect on `ACCEPT`/`&APPLY`,
-  and writes `[Game] Fullscreen` to the INI.
-- **The in-game `PREFERENCES` list was hiding its own scroll arrows** behind
-  the buttons: nothing past the first page could be reached, and the pane was
-  even stealing the `L&ESS` button's click.
-- **The `L&ESS`/`&MORE` tooltips** are now the original's, one per item
-  ("Turn music volume down (L&ess)"), instead of one generic sentence.
-- **Meteor Defenses no longer shoot down an ally's missile.** They only spared
-  the owner's own missile, so in an allied game a friend's defense shot down
-  the missile on its way to the enemy.
-- **Walls no longer fail to build** next to a wall under construction, Blight
-  or lava. A neighbouring building still blocks, as it should.
+- **The map's bottom row is hidden**, as in the original: the view stops at
+  the bottom of the map's clip rect (`height - 2` on the stock maps), so the
+  last tile row is never on screen. `ShowBottomRow=1` in `OUTPOST2.INI` lets
+  the view scroll down to it.
 - **Whoever comes head-on gives way.** Two vehicles meeting head-on in a
   narrow passage no longer just wait for each other: the one between two steps
   gets a detour to a side tile, waits there a moment and carries on, as in the
@@ -280,6 +268,27 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
   has room** and off it goes. Works for common ore, rare ore and the Magma
   Well, for both factions. The three-click command is untouched;
   `AutoOreRoute=0` in `OUTPOST2.INI` turns the shortcut off.
+
+### 2026-11-08
+
+- **The map view stops at the edges**, as in the original: only "around the
+  world" maps (512 tiles wide) wrap. Units, terrain and the demo camera follow
+  the same rule. `MapWrap=1` brings back wrapping on every map, the old
+  behaviour.
+- **A `Screen Mode` radio pair** — full screen or window — on **both**
+  preferences screens: `PREFERENCES` in the main menu, and the `PREFERENCES`
+  list in the in-game Options tab. It only takes effect on `ACCEPT`/`&APPLY`,
+  and writes `[Game] Fullscreen` to the INI.
+- **The in-game `PREFERENCES` list was hiding its own scroll arrows** behind
+  the buttons: nothing past the first page could be reached, and the pane was
+  even stealing the `L&ESS` button's click.
+- **The `L&ESS`/`&MORE` tooltips** are now the original's, one per item
+  ("Turn music volume down (L&ess)"), instead of one generic sentence.
+- **Meteor Defenses no longer shoot down an ally's missile.** They only spared
+  the owner's own missile, so in an allied game a friend's defense shot down
+  the missile on its way to the enemy.
+- **Walls no longer fail to build** next to a wall under construction, Blight
+  or lava. A neighbouring building still blocks, as it should.
 - **`Ctrl+P` pauses the game** (and so does the `PAUSE` key, as in the
   original's accelerator table): the clock stops, music and sound go quiet, and
   the *"Game Paused. Press CTRL+P to Resume"* banner comes up. Multiplayer

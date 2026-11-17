@@ -27,6 +27,10 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
 
 **Corrigido**
 
+- **A última linha do mapa fica escondida**, como no original: a vista para no
+  fundo da área jogável do mapa, então a última linha de tiles nunca aparece.
+  `ShowBottomRow=1` na seção `[Game]` do `OUTPOST2.INI` deixa a vista descer
+  até ela.
 - **Quem vem de frente dá passagem.** Dois veículos que se encontram de frente
   num caminho estreito não ficam mais esperando um pelo outro: o que está entre
   dois passos recebe um desvio para uma casa ao lado, espera ali um instante e
@@ -75,6 +79,10 @@ modos de teste novos — `--autoroutetest`, `--pushtest`, `--artcliptest`,
 
 **Fixed**
 
+- **The map's bottom row is hidden**, as in the original: the view stops at
+  the bottom of the map's playable area, so the last tile row is never on
+  screen. `ShowBottomRow=1` in the `[Game]` section of `OUTPOST2.INI` lets the
+  view scroll down to it.
 - **Whoever comes head-on gives way.** Two vehicles meeting head-on in a
   narrow passage no longer just wait for each other: the one between two steps
   gets a detour to a side tile, waits there a moment and carries on, as in the

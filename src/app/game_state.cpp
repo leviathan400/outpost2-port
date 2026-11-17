@@ -89,6 +89,8 @@ void GameState::loadSettings() {
     m_demoCam = gs.demoCamera != 0;                    // "DemoCamera" (idem)
     m_mapWrapAll = gs.mapWrap != 0;                    // "MapWrap" (fork)
     m_autoOreRoute = gs.autoOreRoute != 0;             // "AutoOreRoute" (so deste porte)
+    m_showBottomRow = gs.showBottomRow != 0;           // "ShowBottomRow" (fork)
+    if (g_gameMap.ok() && m_terrain.mapPixelHeight() > 0) { m_maxY = viewMaxY(); clampCamera(); }
     // "Fullscreen" NAO entra aqui: a janela nao pode pular de modo a cada
     // loadSettings (o Alt+Enter troca a tela sem gravar o INI, e o valor do
     // arquivo estaria velho). Quem aplica e o APPLY, por applyScreenMode.
@@ -279,8 +281,7 @@ bool GameState::loadMap(const std::string& mapName) {
     }
     const int VW = m_fbW, VH = m_fbH;
     m_maxX = m_terrain.mapPixelWidth() - viewportW();
-    m_maxY = m_terrain.mapPixelHeight() - viewportH();
-    if (m_maxY < 0) m_maxY = 0;
+    m_maxY = viewMaxY();
     // começa na área jogável (clipRect), como o jogo
     m_camX = g_gameMap.clipRect().x1 * 32;
     m_camY = g_gameMap.clipRect().y1 * 32;
@@ -728,6 +729,19 @@ void GameState::drawChatLine(uint32_t* fb, int vw, int vh) const {
     }
 }
 
+// Lowest camera Y. The original stops the view at the bottom of the map's clip
+// rect (stock maps: y2 = height - 2), so the map's last tile row is never
+// shown. ShowBottomRow=1 lets the view reach the real bottom of the map.
+int GameState::viewMaxY() const {
+    int bottom = m_terrain.mapPixelHeight();
+    if (!m_showBottomRow && g_gameMap.ok()) {
+        const int clipBottom = (g_gameMap.clipRect().y2 + 1) * 32;
+        if (clipBottom > 0 && clipBottom < bottom) bottom = clipBottom;
+    }
+    const int maxY = bottom - viewportH();
+    return maxY < 0 ? 0 : maxY;
+}
+
 void GameState::clampCamera() {
     if (m_camY < 0) m_camY = 0;
     if (m_camY > m_maxY) m_camY = m_maxY;
@@ -799,8 +813,7 @@ void GameState::relayout(int fbW, int fbH) {
     // A vista mudou de tamanho: o limite da câmera também.
     if (m_terrain.mapPixelWidth() > 0) {
         m_maxX = m_terrain.mapPixelWidth() - viewportW();
-        m_maxY = m_terrain.mapPixelHeight() - viewportH();
-        if (m_maxY < 0) m_maxY = 0;
+        m_maxY = viewMaxY();
         clampCamera();
     }
 }
