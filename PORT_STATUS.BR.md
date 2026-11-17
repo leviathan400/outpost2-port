@@ -48,7 +48,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 110 modos de teste/captura
+  main.cpp        entrada + os 111 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -2060,8 +2060,9 @@ bloqueada continua bloqueada.
 
 **Trava:** no original, `vt[0x7C]` chama o planejador (`sub_4401F0`) e o
 empurrado anda no **próprio** tique — ninguém empurra de dentro de um
-empurrão. O porte usa `unitStepToward`, que dá o passo na hora; uma trava
-reproduz o original: quem está sendo empurrado não empurra.
+empurrão. O porte usava `unitStepToward`, que dá o passo na hora, e uma trava
+para quem está sendo empurrado não empurrar. **Substituído na 5.30**: o
+empurrado recebe a rota, como no original, e a trava saiu.
 
 ### O bloqueador em movimento
 
@@ -2286,9 +2287,10 @@ Não é estouro: é uma vaga de propósito, e o teste do −1 impede de passar d
 `[ordem + idx*4 + 0x14]`, então alcançam a vaga também. No porte, a vaga é
 `OrderBlock::detourSlot`, e `wpAt` lê o ponto `i` com ela.
 
-O caso sem pontos não ocorre no porte: uma unidade sem ordem só anda pelo passo
-único do `unitStepToward`, e no meio dele tem velocidade — não está "entre
-passos".
+O caso sem pontos é o de quem foi **empurrado** e anda a rota curta sem ordem
+(5.30). Ele fica de fora: o laço sem ordem do porte não tem lista de pontos.
+Esse empurrado não recebe desvio; segue a rota e, se travar, desiste em 20
+esperas, como qualquer passo.
 
 ### A chegada ao desvio (`loc_44C1D2`, em `sub_44C0B0`)
 
@@ -2427,6 +2429,83 @@ Testes, ambos pelo caminho do jogador e devolvendo o INI byte a byte:
   quatro chaves e o jogo passa a usá-las (`nightDarkness()`,
   `soundMasterVolume()`, a volta e a última linha).
 
+## 5.30. O empurrado anda pela rota, e quem não acha rota espera (2026-11-17)
+
+O teste de estresse que veio no PR #2 (`--stacktest`, agora do projeto) manda
+**todos** os veículos do jogador, em grupo, 8 tiles a leste, de volta e de
+novo. Nunca havia dois no mesmo tile, mas sobravam 1 a 3 veículos **andando
+para sempre**: com 3000 tiques por perna, nenhuma perna terminava nos mapas
+E05 (25 veículos), P05 (26) e P08. O diagnóstico mostrou dois estados presos,
+e os dois eram simplificações do porte.
+
+### 1. O empurrado ganha uma rota, não um passo (`vt[0x7C]` = `sub_44C350`)
+
+No original, o empurrão do parado (`sub_44BBA0`) chama `vt[0x7C]` com a casa
+escolhida e põe `[+0x22] = 1`. O `sub_44C350` **não dá passo nenhum**: encaixa
+a posição no centro do tile, põe o alvo em `[st+0x50]/[st+0x54]` e o objetivo
+em `[st+0xCC]/[st+0xD0]`, zera o passo, as velocidades e a rota, e chama o
+planejador (`sub_4401F0`). Quem anda é o laço da unidade (`sub_44C0B0`), **nos
+tiques dela** — com a lista de pontos vazia, na casa do alvo é a chegada de
+`loc_44C1C0`. E, como anda pelo laço comum, o empurrado pode por sua vez
+empurrar o seguinte, ou esperar.
+
+O porte dava **um passo único na hora** (`unitStepToward`) e, por isso,
+precisava de uma trava contra empurrão dentro de empurrão. Numa multidão a
+vizinha escolhida costuma estar ocupada: o passo era recusado, o empurrado
+ficava com `[+0x22] = 1` sem sair do lugar, e quem empurrava tentava de novo a
+cada tique. Agora:
+
+- `unitPathTo` é o `sub_44C350`: guarda o alvo (`UnitRecord::pathGoalX/Y`),
+  zera passo e rota e planeja, sem passo;
+- o `stepUnit` tem o laço **sem ordem**: sub-estado 1, sem ordem e com alvo →
+  segue a rota (replaneja quando ela acaba), empurrando e esperando como
+  qualquer passo; na casa do alvo ou sem rota, sai do sub-estado
+  (`loc_44C1C0` / `loc_44C20A` sem o bit 0); passo recusado, desiste;
+- a trava `s_empurrando` saiu;
+- o "sair de cima" do salvage (`sub_44BE40`) usa o mesmo `vt[0x7C]`, e o
+  `[+0x22] = 1` é incondicional, como lá.
+
+### 2. Sem rota para o último ponto: espera crescente (`loc_44C20A`)
+
+Sem rota até o **último** ponto, o original não desiste se a ordem está ativa
+(bit 0 de `[ordem+0x34]`): fica `[st+0x70]` tiques parado (um passo sem
+deslocamento) e aumenta a espera da vez seguinte — `espera + GetRand(espera) +
+2`, com teto de `0x53` (`loc_44C227`). A espera volta a 0 quando um ponto é
+alcançado (`loc_44C114`). Sem o bit 0, só sai do sub-estado de movimento. O
+porte replanejava **a cada tique**, sem recuo, zerava o sub-estado e não
+consumia o sorteio do gerador. Agora é o do original (`OrderBlock::retryWait`,
+no bloco que a ordem nova zera).
+
+### O teste — `--stacktest <DLL>`
+
+Além da invariante de ocupação a cada tique, passa a falhar se, ao fim de
+alguma perna, **sobrar veículo andando**, e imprime o estado de quem sobrou.
+Agora todas as pernas terminam: E05 em 201/452/703 tiques, P05 em
+201/502/653, e também E10 e P08 — sem nenhum tique com dois veículos no mesmo
+tile.
+
+O `--pushtest` mudou junto, porque duas premissas dele vinham do passo único:
+
+- **a doca**: o empurrado anda no próprio tique e libera a célula no início do
+  passo; quem chega, se vier depois na volta das unidades, entra no **mesmo**
+  tique (157/157, antes 157/158). O caso agora exige "não antes", e a
+  invariante continua garantindo que nunca há dois no mesmo tile;
+- **o encurralado** virou dois: com o cerco de **caminhões**, o preso agora sai
+  empurrando um vizinho — a cadeia do original — e quem chega atraca (t=53);
+  com o cerco de **paredes**, ninguém sai, e quem chega vai a 20, desiste e
+  recomeça (o caso que testa o limite). 21 casos.
+
+E o `--detourtest` ganhou o **alvo murado**: um caminhão mandado a um tile
+cercado de paredes não larga a ordem, e a espera cresce em 7 tentativas até o
+teto de 83. Sem o recuo, o caso falha (espera 0, tentativa a cada tique).
+
+### O que ficou de fora
+
+O **desvio** (`sub_44BFD0`) num empurrado que está andando a rota **sem
+ordem**: o original faz do alvo `[+0x50]/[+0x54]` o 1º ponto e então recua; o
+laço sem ordem do porte não tem lista de pontos. Esse empurrado segue a rota
+curta dele e, se travar, desiste em 20 esperas.
+
 ---
 
 ## 6. Build e execução
@@ -2475,6 +2554,7 @@ São 109 modos. Os que cobrem regressão de verdade:
 | `--artcliptest` | o recorte por pedaço dos sprites: a carga da doca cortada na borda do poço, contra a composição crua |
 | `--drawordertest <mapa>` | a ordem de desenho: veículo atrás de prédio, efeitos por cima, desastres por último, a doca |
 | `--detourtest <mapa>` | quem vem de frente dá passagem: o encontro no corredor, a tabela de decisão do `sub_44BBA0` e o desvio inalcançável |
+| `--stacktest <DLL> [bmp]` | estresse do empurrão: todos os veículos do jogador indo e voltando em grupo; nunca dois no mesmo tile, e ninguém sobra andando ao fim de cada perna |
 | `--missiontest <DLL> <saida> <ticks>` | carrega e roda qualquer missão |
 | `--aitest <DLL campanha> <DLL multi>` | o `AILevel` chega ao jogador 0 e o multijogador fica intacto |
 | `--helptest [tópico]` | o leitor do `.HLP` e a navegação da tela do manual |

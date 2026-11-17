@@ -179,7 +179,7 @@ demo, tela cheia, a pele dos menus (`MenuSkin`), a volta horizontal do mapa
 (`MapWrap`), a última linha do mapa (`ShowBottomRow`) e a rota de minério num
 clique (`AutoOreRoute`); estão documentadas no `PORT_STATUS.BR.md`.
 
-Há **110 modos de linha de comando** para testes e capturas, entre eles uma
+Há **111 modos de linha de comando** para testes e capturas, entre eles uma
 bateria de regressão (`--savetest` prova o determinismo de salvar/recarregar).
 A lista está no `PORT_STATUS.BR.md`.
 
@@ -213,7 +213,7 @@ e descartado das listas de cheat que circulam por aí.
 
 ```
 src/
-  main.cpp        entrada + os 110 modos de teste/captura
+  main.cpp        entrada + os 111 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -238,6 +238,12 @@ cursores `.ANI`.
 
 ### 2026-11-17
 
+- **Veículos em grupo não ficam mais andando sem parar.** Mandando muitos
+  veículos juntos para o mesmo lugar, alguns ficavam para sempre tentando
+  chegar. O veículo empurrado agora anda até a casa ao lado como no original
+  (e, se ela estiver ocupada, empurra ou espera a sua vez), e quem não acha
+  caminho espera um pouco mais a cada tentativa, em vez de tentar a cada
+  instante.
 - **As opções do porte se trocam pelo jogo**, sem editar o INI. O `GAME
   PREFERENCES` do menu principal ficou mais largo e ganhou uma coluna
   *"Port extras"*: **Auto Ore Route**, **Wrap All Maps**, **Show Bottom Row**,

@@ -1,3 +1,4 @@
+#include <map>
 #include <SDL.h>
 #include <cstdio>
 #include <cstdlib>
@@ -4353,6 +4354,107 @@ static int runBannerTest(const std::string& dll, const std::string& shot) {
     return ruins ? 1 : 0;
 }
 
+// --stacktest <DLL> [out.bmp]: o teste de estresse do empurrao, vindo do PR #2
+// do repositorio. Seleciona TODOS os veiculos do jogador local e os manda, pelo
+// clique direito de verdade, 8 tiles a leste, de volta e de novo: os grupos se
+// cruzam e se amontoam nos destinos. A cada tique, nenhum tile com dois
+// veiculos (o de cada um e o tile para onde esta andando). E, ao fim de cada
+// perna, ninguem pode sobrar andando -- era o que pegava o empurrao de passo
+// unico (5.30): o empurrado nunca saia do lugar numa multidao. Com out.bmp,
+// salva o ultimo quadro. Diagnostico de quem sobra, em cada perna.
+static int runStackTest(const std::string& dll, const std::string& outBmp) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 stacktest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { std::printf("[Stack] missao falhou\n"); renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    gs.onIdle(renderer, 0.0f);
+    const int me = op2::TethysGame::localPlayer();
+    std::vector<int> veh;
+    for (size_t i = 1; i < op2::g_units.size(); ++i) {
+        const op2::UnitRecord& r = op2::g_units[i];
+        if (r.id == -1 || (r.owner & 0x0F) != me || !(r.flags & op2::UNIT_VEHICLE) || (r.flags & op2::UNIT_DEAD)) continue;
+        veh.push_back(static_cast<int>(i));
+    }
+    if (veh.size() < 2) { std::printf("[Stack] menos de 2 veiculos\n"); renderer.shutdown(); SDL_Quit(); return 3; }
+    auto tileOf = [](int id, int& x, int& y) {
+        const op2::UnitRecord& r = op2::g_units[id];
+        if (r.velX || r.velY) { x = r.stepDestX >> 5; y = r.stepDestY >> 5; }   // claimed tile
+        else { x = r.pixelX >> 5; y = r.pixelY >> 5; }
+    };
+    auto rightClick = [&](int px, int py) {
+        gs.setCamera(std::max(0, px - 300), std::max(0, py - 300));
+        gs.onIdle(renderer, 0.0f);
+        SDL_Event ev{};
+        ev.type = SDL_MOUSEBUTTONDOWN;
+        ev.button.button = SDL_BUTTON_RIGHT;
+        ev.button.x = op2::GameState::kViewX + (px - gs.camX());
+        ev.button.y = op2::GameState::kViewY + (py - gs.camY());
+        gs.handleEvent(renderer, ev);
+    };
+    int clashTicks = 0, worst = 0;
+    auto check = [&](int tick) {
+        std::map<std::pair<int, int>, std::vector<int>> at;
+        for (int id : veh) {
+            const op2::UnitRecord& r = op2::g_units[id];
+            if (r.id == -1 || (r.flags & op2::UNIT_DEAD)) continue;
+            int x, y; tileOf(id, x, y);
+            at[{x, y}].push_back(id);
+        }
+        int n = 0;
+        for (auto& kv : at) if (kv.second.size() > 1) {
+            ++n;
+            if (clashTicks < 5)
+                std::printf("[Stack] tick %d: tile (%d,%d) tem %d veiculos (ex. %d e %d)\n", tick, kv.first.first,
+                            kv.first.second, static_cast<int>(kv.second.size()), kv.second[0], kv.second[1]);
+        }
+        if (n) { ++clashTicks; worst = std::max(worst, n); }
+    };
+    auto idle = [&]() {
+        int moving = 0;
+        for (int id : veh) { const op2::UnitRecord& r = op2::g_units[id]; if (r.id != -1 && (r.field22 == 1 || r.hasOrder)) ++moving; }
+        return moving;
+    };
+    int t = 0;
+    auto run = [&](int ticks) {
+        for (int k = 0; k < ticks; ++k) { gs.onIdle(renderer, 0.2501f / 4.0f); check(t++); if (k > 50 && k % 50 == 0 && !idle()) break; }
+    };
+    int sx, sy; tileOf(veh[0], sx, sy);
+    const int legs[3][2] = {{sx + 8, sy}, {sx, sy}, {sx + 8, sy}};
+    std::printf("[Stack] %d veiculos do jogador %d; ida e volta entre (%d,%d) e (%d,%d)\n",
+                static_cast<int>(veh.size()), me, sx, sy, sx + 8, sy);
+    int pernasPresas = 0;
+    for (const auto& L : legs) {
+        gs.setSelection(veh);
+        rightClick(L[0] * 32 + 16, L[1] * 32 + 16);
+        run(3000);
+        std::printf("[Stack] perna para (%d,%d): ate tick %d, ainda andando=%d\n", L[0], L[1], t, idle());
+        if (idle()) ++pernasPresas;
+        for (int id : veh) {
+            const op2::UnitRecord& r = op2::g_units[id];
+            if (r.id == -1 || !(r.field22 == 1 || r.hasOrder)) continue;
+            int x, y; tileOf(id, x, y);
+            std::printf("[Stack]   %d tipo 0x%02X em (%d,%d) acao 0x%02X f20 %d f22 %d ordem %d pts %d/%d rota %d/%d passo %d vel %d/%d espera %d\n",
+                        id, r.type, x, y, r.action, r.field20, r.field22, r.hasOrder ? 1 : 0, r.order.curWaypoint, r.order.countMinus1,
+                        r.routeIdx, (int)r.routeDirs.size(), r.stepTicks, r.velX, r.velY, (int)r.pushWait);
+        }
+    }
+    if (!outBmp.empty()) {
+        gs.setCamera(std::max(0, (sx + 4) * 32 - 600), std::max(0, sy * 32 - 400));
+        gs.onIdle(renderer, 0.0f);
+        writeBmp32(outBmp, renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
+    }
+    const bool ok = clashTicks == 0 && pernasPresas == 0;
+    std::printf("[Stack] ticks com 2+ veiculos no mesmo tile: %d (pior: %d tiles); pernas com veiculo preso: %d -> %s\n",
+                clashTicks, worst, pernasPresas, ok ? "PASSOU" : "FALHOU");
+    renderer.shutdown();
+    SDL_Quit();
+    return ok ? 0 : 4;
+}
+
 // --detourtest <mapa>: o DESVIO de quem vem de frente (sub_44BBA0, ramo do
 // bloqueador em movimento -> sub_44BFD0; a parada de 32 tiques em loc_44C1D2).
 // Tres partes. (1) Dois veiculos, com ordem de mover dada pelo clique direito
@@ -4570,6 +4672,41 @@ static int runDetourTest(const std::string& mapName) {
                         tq, pausou ? ", COM a parada de 32" : "");
             casos.push_back({"desvio inalcancavel: pulado, e o bit 2 sai junto", (inserido && limpo) ? 1 : 0, 1});
         }
+    }
+
+    // O recuo de loc_44C20A: um caminhao mandado a um tile MURADO (anel de
+    // paredes em volta), inalcancavel. Com a ordem ativa o original nao
+    // desiste: fica [st+0x70] tiques parado e a espera cresce (espera +
+    // GetRand(espera) + 2) ate 0x53. O porte replanejava a cada tique.
+    {
+        const int alvoX = x0 + L + 4, alvoY = by - 5;
+        for (int ddy = -1; ddy <= 1; ++ddy)
+            for (int ddx = -1; ddx <= 1; ++ddx)
+                if (ddx || ddy) op2::createWallOrTube(alvoX + ddx, alvoY + ddy, 0x12);
+        op2::Unit rc;
+        op2::TethysGame::CreateUnit(rc, op2::mapCargoTruck, op2::LOCATION{x0 - 3, by - 6}, 0);
+        gs.setSelection({rc.id()});
+        gs.debugRightClickTile(renderer, alvoX, alvoY);
+        gs.setSelection({});
+        int maxEspera = 0, decresceu = 0, antes = 0, tentativas = 0;
+        for (int t = 0; t < 1500; ++t) {
+            gs.onIdle(renderer, 0.2501f / 4.0f);
+            const op2::UnitRecord& r = op2::g_units[rc.id()];
+            if (!r.hasOrder) break;
+            const int w = r.order.retryWait;
+            if (w < antes) ++decresceu;
+            if (w > antes) ++tentativas;
+            antes = w;
+            maxEspera = std::max(maxEspera, w);
+        }
+        const op2::UnitRecord& r = op2::g_units[rc.id()];
+        std::printf("[Desvio] alvo murado: ordem %s, espera maxima %d, %d tentativas com espera maior\n",
+                    r.hasOrder ? "viva" : "ACABOU", maxEspera, tentativas);
+        casos.push_back({"alvo murado: a ordem nao e largada", r.hasOrder ? 1 : 0, 1});
+        casos.push_back({"... a espera cresce ate o teto de 0x53", maxEspera, 0x53});
+        casos.push_back({"... sem nunca diminuir (nenhum ponto alcancado)", decresceu, 0});
+        casos.push_back({"... e as tentativas sao espacadas (poucas, nao uma por tique)",
+                         (tentativas >= 3 && tentativas < 60) ? 1 : 0, 1});
     }
 
     int ruins = 0;
@@ -5094,10 +5231,12 @@ static int runPushTest(const std::string& mapName) {
                 dx, dy, docaLivre, docaDele, saiu, chegou, esperaMax);
     casos.push_back({"o caminhao parado SAI da doca", saiu >= 0 ? 1 : 0, 1});
     casos.push_back({"... e o que chegou ENTRA nela", chegou >= 0 ? 1 : 0, 1});
-    // Pela ocupacao, e estritamente DEPOIS: o que chega so entra no tique em
-    // que tenta de novo, com a doca ja livre.
-    casos.push_back({"... depois que a doca ficou livre",
-                     (docaLivre >= 0 && docaDele > docaLivre) ? 1 : 0, 1});
+    // Pela ocupacao, NUNCA ANTES: o empurrado anda no proprio tique (a rota do
+    // vt[0x7C], 5.30) e libera a celula no inicio do passo; quem chega, se vier
+    // depois dele na volta das unidades, entra no MESMO tique. A invariante de
+    // baixo garante que nunca ha dois no mesmo tile.
+    casos.push_back({"... nao antes de a doca ficar livre",
+                     (docaLivre >= 0 && docaDele >= docaLivre) ? 1 : 0, 1});
     casos.push_back({"... tendo esperado (empurrou e esperou)", esperaMax > 0 ? 1 : 0, 1});
     casos.push_back({"... sem passar de 20 tentativas", esperaMax <= 21 ? 1 : 0, 1});
     // loc_44C0F1: um passo COM deslocamento zera o contador. Ele esperou, entrou
@@ -5157,13 +5296,18 @@ static int runPushTest(const std::string& mapName) {
         casos.push_back({"... e quem chega nao fica esperando (desiste)", esperou, 0});
     }
 
-    // ===== 4) empurravel mas ENCURRALADO: o limite de 20 tentativas =====
-    // A doca e a linha de baixo da fundicao: em volta dela so as tres casas de
-    // baixo sao livres. Com as duas diagonais ocupadas por caminhoes parados,
-    // o da doca pode ser empurrado mas nao tem para onde ir -- quem esta sendo
-    // empurrado nao empurra (a trava). Quem chega por baixo espera, chega a 20,
-    // desiste, replaneja e tenta de novo: o contador nunca passa do limite.
-    {
+    // ===== 4) ENCURRALADO na doca =====
+    // A doca e a linha de baixo da fundicao. Todas as vizinhas transitaveis
+    // dela, menos a de baixo (por onde chega o outro caminhao), sao fechadas
+    // -- primeiro por caminhoes parados, depois por PAREDES.
+    //  4a) Caminhoes: o da doca e empurrado, recebe a rota para uma vizinha
+    //      ocupada e, no tique dele, empurra o caminhao que esta la -- a
+    //      cadeia do original (vt[0x7C] so planeja; quem anda e o laco de cada
+    //      um). O preso sai e quem chega atraca.
+    //  4b) Paredes: nenhuma vizinha serve, ninguem e empurrado. Quem chega por
+    //      baixo espera, chega a 20, desiste, replaneja e tenta de novo: o
+    //      contador nunca passa do limite.
+    for (int cerco = 0; cerco < 2; ++cerco) {
         for (int i = 1; i < (int)op2::g_units.size(); ++i) {   // limpa a doca e arredores
             op2::UnitRecord& r = op2::g_units[i];
             if (r.id == -1 || (r.flags & op2::UNIT_DEAD) || !(r.flags & op2::UNIT_VEHICLE)) continue;
@@ -5186,31 +5330,38 @@ static int runPushTest(const std::string& mapName) {
             if (x == dx && y == dy + 1) continue;                  // a de baixo: por onde chega
             if (!op2::g_gameMap.isPassable(op2::LOCATION{x, y})) continue;
             if (op2::g_gameMap.cellOccupant(x, y)) continue;
-            em(x, y);
+            if (cerco == 0) em(x, y); else op2::createWallOrTube(x, y, 0x12);
             ++cercas;
         }
-        std::printf("[Push] encurralado: %d vizinhas da doca ocupadas\n", cercas);
+        const char* nome = cerco == 0 ? "cadeia" : "paredes";
+        std::printf("[Push] encurralado (%s): %d vizinhas da doca fechadas\n", nome, cercas);
         op2::Unit c4;
         op2::TethysGame::CreateUnit(c4, op2::mapCargoTruck, op2::LOCATION{dx, dy + 4}, 0);
         gs.setSelection({c4.id()});
         gs.debugRightClickTile(renderer, dx, dy);
-        int esperaMax4 = 0, presoSaiu = 0, desistencias = 0, antes = 0;
+        int esperaMax4 = 0, presoSaiu = -1, desistencias = 0, antes = 0, atracou = -1;
         for (int t = 0; t < 600; ++t) {
             gs.onIdle(renderer, 0.2501f / 4.0f);
-            vigia(2000 + t);
+            vigia(2000 + 1000 * cerco + t);
             const op2::UnitRecord& c = op2::g_units[c4.id()];
-            const op2::UnitRecord& p = op2::g_units[preso];
             esperaMax4 = std::max(esperaMax4, (int)c.pushWait);
             if (antes > c.pushWait) ++desistencias;          // o contador voltou: replanejou
             antes = c.pushWait;
-            if ((p.pixelX >> 5) != dx || (p.pixelY >> 5) != dy) ++presoSaiu;
+            if (presoSaiu < 0 && op2::g_gameMap.cellOccupant(dx, dy) != preso) presoSaiu = t;   // pela ocupacao
+            if (atracou < 0 && op2::g_gameMap.cellOccupant(dx, dy) == c4.id()) atracou = t;
         }
-        std::printf("[Push] encurralado: espera maxima %d, %d recomecos, o da doca saiu %d tiques\n",
-                    esperaMax4, desistencias, presoSaiu);
-        casos.push_back({"encurralado: o da doca nao tem para onde ir", presoSaiu, 0});
-        casos.push_back({"... quem chega chega ao limite de 20", esperaMax4 >= 20 ? 1 : 0, 1});
-        casos.push_back({"... e nunca passa dele", esperaMax4 <= 21 ? 1 : 0, 1});
-        casos.push_back({"... desiste e recomeca", desistencias > 0 ? 1 : 0, 1});
+        std::printf("[Push] encurralado (%s): espera maxima %d, %d recomecos, o da doca saiu em t=%d, o outro atracou em t=%d\n",
+                    nome, esperaMax4, desistencias, presoSaiu, atracou);
+        if (cerco == 0) {
+            casos.push_back({"cadeia: o da doca sai empurrando um vizinho", presoSaiu >= 0 ? 1 : 0, 1});
+            casos.push_back({"... e quem chega atraca", atracou >= 0 ? 1 : 0, 1});
+            casos.push_back({"... sem passar de 20 esperas", esperaMax4 <= 21 ? 1 : 0, 1});
+        } else {
+            casos.push_back({"paredes: o da doca nao tem para onde ir", presoSaiu >= 0 ? 1 : 0, 0});
+            casos.push_back({"... quem chega chega ao limite de 20", esperaMax4 >= 20 ? 1 : 0, 1});
+            casos.push_back({"... e nunca passa dele", esperaMax4 <= 21 ? 1 : 0, 1});
+            casos.push_back({"... desiste e recomeca", desistencias > 0 ? 1 : 0, 1});
+        }
     }
 
     casos.push_back({"invariante: nenhum par no mesmo tile, ocupacao correta", violacoes, 0});
@@ -7541,6 +7692,8 @@ int main(int argc, char* argv[]) {
             return runMusicTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--optmenutest") == 0 && i + 1 < argc)
             return runOptMenuTest(argv[i + 1]);
+        if (std::strcmp(argv[i], "--stacktest") == 0 && i + 1 < argc)
+            return runStackTest(argv[i + 1], i + 2 < argc && argv[i + 2][0] != '-' ? argv[i + 2] : "");
         if (std::strcmp(argv[i], "--detourtest") == 0 && i + 1 < argc)
             return runDetourTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--drawordertest") == 0 && i + 1 < argc)

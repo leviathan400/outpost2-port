@@ -118,6 +118,11 @@ struct OrderBlock {
     // DESVIO cai quando a unidade está no 1º ponto (sub_44BFD0 decrementa o
     // índice e grava ali); o índice nunca passa de −1. Ver wpAt (movement.cpp).
     uint32_t detourSlot = 0;
+    // [st+0x70]: a espera antes de tentar de novo quando nao ha rota para o
+    // ultimo ponto (loc_44C227). Cresce a cada falha -- espera + GetRand(espera)
+    // + 2, com teto de 0x53 -- e volta a 0 quando um ponto e alcancado
+    // (loc_44C114). Esta no bloco que a ordem nova zera, como no original.
+    int retryWait = 0;
 };
 
 // Registro de unidade — no original é um array global (dword_54EC08) de registros
@@ -179,6 +184,10 @@ struct UnitRecord {
     // um passo COM deslocamento termina (loc_44C0F1) e quando a rota e
     // replanejada (loc_44C1A0).
     uint8_t  pushWait = 0;
+    // [st+0x50]/[st+0x54]: o alvo de uma rota SEM ordem -- a de quem foi
+    // empurrado ou mandado sair de cima (vt[0x7C] = sub_44C350). −1 = nenhum.
+    // Com ordem, o alvo e o ponto atual dela (waypointGoal).
+    int16_t  pathGoalX = -1, pathGoalY = -1;
     int      velX = 0, velY = 0;   // [st+0x58]/[st+0x5C] velocidade 16.16 (px/tick)
     uint16_t fracX = 0, fracY = 0; // [st+0x44]/[st+0x46] fração 16 bits da posição
     int      turnTicks = 0;        // [st+0x68] ticks de giro restantes

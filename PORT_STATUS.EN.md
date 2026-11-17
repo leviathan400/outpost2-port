@@ -39,7 +39,13 @@
 > wide, with `AutoOreRoute`, `MapWrap`, `ShowBottomRow`, `DemoCamera`,
 > `MenuSkin` — which now switches on `ACCEPT` — and a `NightDarkness` slider;
 > and new lines in the in-game list for the master volume, night darkness, map
-> wrap, bottom row and ore route). The recent changes are summarised in
+> wrap, bottom row and ore route) and **5.30** (a pushed vehicle now gets a ROUTE, as `vt[0x7C]`
+> = `sub_44C350` does, and walks it in its own ticks — the port gave it a
+> single immediate step that a crowd kept refusing; and with no route to the
+> last waypoint an ordered unit waits with the original's growing back-off,
+> `loc_44C20A`, instead of replanning every tick. `--stacktest`, from PR #2,
+> now also fails if any vehicle is still moving at the end of a leg). The
+> recent changes are summarised in
 > [README.EN.md](README.EN.md).
 
 # Outpost 2: Divided Destiny — Modern Port (C++17/SDL2)
@@ -90,7 +96,7 @@ coverage by comparing the DLLs' import tables against the registry in
 
 ```
 src/
-  main.cpp        entry point + the 110 test/capture modes
+  main.cpp        entry point + the 111 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -677,7 +683,7 @@ mission DLLs and the original resources from the working directory).
 
 ### Command-line tests
 
-There are 110 modes. The ones that cover real regressions:
+There are 111 modes. The ones that cover real regressions:
 
 | Mode | What it proves |
 |---|---|

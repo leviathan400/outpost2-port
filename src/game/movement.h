@@ -10,8 +10,10 @@ namespace op2 {
 // ainda a mapear) — mas NÃO substitui o pathfinder: a rota é a do original.
 void tickMovement();
 void moveDockArrive(int id);          // ações 3/4 no destino (giro + doca)
-// vt[0x7C] (sub_44B650) p/ um tile vizinho: monta o passo; false se não dá.
-bool unitStepToward(int id, int tx, int ty);
+// vt[0x7C] = sub_44C350: uma ROTA sem ordem ate (tx, ty) -- guarda o alvo,
+// zera o passo e a rota e chama o planejador; NAO da passo nenhum (quem anda e
+// o laco da unidade, nos proprios tiques). true se achou rota.
+bool unitPathTo(int id, int tx, int ty);
 // Só para o --detourtest: o empurrão (sub_44BBA0) chamado direto, com o estado
 // das duas unidades montado pelo teste.
 void debugPushAside(int pusherId, int dir, int blockerId);

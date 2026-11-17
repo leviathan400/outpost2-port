@@ -148,7 +148,7 @@ static void stepOff(int id) {
     pfSetContext(id);
     bool ok = pfCanEnter(x, y) != 0;
     if (!ok) { y += 2; ok = pfCanEnter(x, y) != 0; }
-    if (ok && unitStepToward(id, x, y)) g_units[id].field22 = 1;   // vt[0x7C] + [+0x22] = 1
+    if (ok) { unitPathTo(id, x, y); g_units[id].field22 = 1; }   // vt[0x7C] + [+0x22] = 1
     pfPop();
 }
 

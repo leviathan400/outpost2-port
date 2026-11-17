@@ -71,12 +71,6 @@ void wallBlockTarget(UnitRecord& u, int nx, int ny) {
     u.field4E = static_cast<int16_t>(ny);
 }
 
-// Trava do empurrao: no original quem e empurrado recebe uma ROTA (vt[0x7C] =
-// sub_44C350, que chama o planejador sub_4401F0) e anda no proprio tique --
-// nunca empurra ninguem de dentro de um empurrao. O porte da o passo na hora
-// (unitStepToward), entao esta trava reproduz isso: quem esta sendo empurrado
-// nao empurra.
-static int s_empurrando = 0;
 
 // sub_44BFD0: insere um DESVIO na ordem de quem está andando -- a casa
 // (tx, ty) passa a ser o ponto atual, e o ponto em que ele ia vira o seguinte.
@@ -85,9 +79,10 @@ static int s_empurrando = 0;
 // O bit 2 de [ordem+0x34] marca o desvio pendente: enquanto ligado, não entra
 // outro; quem o apaga é a chegada ao desvio (loc_44C1D2, em stepUnit).
 // O original, sem pontos (count == 0), faria do alvo [+0x50]/[+0x54] o 1º
-// ponto antes de recuar. No porte isso não ocorre: uma unidade sem ordem só
-// anda pelo passo único do unitStepToward, e no meio dele está com velocidade
-// -- e o pushAside não a trata como "andando entre passos".
+// ponto antes de recuar -- é o caso de quem foi EMPURRADO e está andando a
+// rota sem ordem (unitPathTo). Isso fica de fora: o laço sem ordem do porte
+// não tem lista de pontos. Esse empurrado não recebe desvio; segue a rota
+// curta dele e, se travar, desiste em 20 esperas, como qualquer passo.
 static bool insertDetour(int id, int tx, int ty, int mode) {
     UnitRecord& u = g_units[id];
     OrderBlock& ob = u.order;
@@ -161,9 +156,7 @@ static void pushAside(int pusherId, int dir, int blockerId) {
         insertDetour(blockerId, mx, my, 0);
         return;
     }
-    ++s_empurrando;
-    unitStepToward(blockerId, mx, my);           // vt[0x7C] (sub_44C350)
-    --s_empurrando;
+    unitPathTo(blockerId, mx, my);               // vt[0x7C] (sub_44C350): so a ROTA
     b.field22 = 1;                               // incondicional, como no original
 }
 
@@ -218,7 +211,7 @@ static bool setupStep(int id, int dir) {
         const int occId = static_cast<int>((dcell & GameMap::CELL_OCCUPANCY) >> GameMap::CELL_OCC_SHIFT);
         if (occId != 0 && occId != id) {
             if (dcell & GameMap::CELL_WALLBITS) return false;     // loc_44B8F0 -> loc_44B998
-            if (s_empurrando || !pfOccupantPassable(occId, id)) return false;   // loc_44B998
+            if (!pfOccupantPassable(occId, id)) return false;     // loc_44B998
             pushAside(id, dir, occId);                            // sub_44BBA0
             if (u.pushWait++ >= 20) return false;                 // loc_44B998
             u.velX = u.velY = 0;                                  // [st+0x58] = [st+0x5C] = 0
@@ -274,13 +267,30 @@ static bool setupStep(int id, int dir) {
     return true;
 }
 
-bool unitStepToward(int id, int tx, int ty) {
-    const UnitRecord& u = g_units[id];
-    const int mask = g_gameMap.width() - 1;
-    const int cx = u.pixelX >> 5, cy = u.pixelY >> 5;
-    for (int d = 0; d < 8; ++d)
-        if (((cx + kDir8[d].dx) & mask) == (tx & mask) && cy + kDir8[d].dy == ty) return setupStep(id, d);
-    return false;
+// vt[0x7C] = sub_44C350. O original encaixa a posicao no centro do tile, poe
+// o alvo em [st+0x50]/[st+0x54] e o objetivo (modo/distancia) em
+// [st+0xCC]/[st+0xD0], zera o passo ([st+0x64]), as velocidades e a rota
+// ([st+0x74]/[st+0x78]/[st+0xBC]) e chama o planejador (sub_4401F0). Nao da
+// passo: quem anda e o laco da unidade (sub_44C0B0), nos tiques dela -- e por
+// isso quem e empurrado pode, na sua vez, empurrar o seguinte. O porte dava um
+// passo unico na hora (e precisava de uma trava contra empurrao dentro de
+// empurrao); numa multidao a vizinha escolhida costuma estar ocupada, o passo
+// era recusado e o empurrado nunca saia do lugar.
+bool unitPathTo(int id, int tx, int ty) {
+    UnitRecord& u = g_units[id];
+    const int mask = g_gameMap.internalWidth() - 1;
+    u.pathGoalX = static_cast<int16_t>(tx & mask);
+    u.pathGoalY = static_cast<int16_t>(ty);
+    u.stepTicks = 0;
+    u.velX = u.velY = 0;
+    u.turnStep = 0; u.turnTicks = 0;
+    u.clearRoute();
+    pfPush();                                    // quem chamou pode estar no meio da busca dele
+    pfSetContext(id);
+    pfSetGoal(0, u.pathGoalX, u.pathGoalY, 0);
+    pfPlanRoute(id, u.pixelX >> 5, u.pixelY >> 5, u.pathGoalX, u.pathGoalY, 0, 0);
+    pfPop();
+    return !u.routeDirs.empty();                 // [st+0x74] != 0
 }
 
 // O ponto `i` da ordem: o vetor começa em [ordem+0x14], e o índice −1 cai em
@@ -350,12 +360,38 @@ static void stepUnit(int id) {
                         u.action == 6 || u.action == 7 || u.action == 1 || u.action == 8 ||
                         u.action == 0x1F;   // 6: ConVec indo à obra; 0x1F: SALVAGE de região
                         // 0x27: rota de minério; 7: Earthworker; 1: Robo-Dozer
+    // Rota SEM ordem (vt[0x7C]: quem foi empurrado, ou saiu de cima de um
+    // destroço): o mesmo laço de sub_44C0B0 com a lista de pontos vazia. Na casa
+    // do alvo -- [ordem+8] == [ordem+4], os dois 0 -- é a chegada de
+    // loc_44C1C0; sem rota até ela, loc_44C20A sem o bit 0 da ordem: sai do
+    // sub-estado de movimento. Passo recusado (ocupada por quem não pode ser
+    // empurrado, ou 20 esperas): desiste, como o passo com ordem.
+    if (!u.hasOrder && u.field22 == 1 && u.pathGoalX >= 0) {
+        const int cx = u.pixelX >> 5, cy = u.pixelY >> 5;
+        auto para = [&]() {
+            u.field23 = u.field22; u.field22 = 0;
+            u.clearRoute();
+            u.pathGoalX = u.pathGoalY = -1;
+        };
+        if (cx == u.pathGoalX && cy == u.pathGoalY) { para(); return; }      // loc_44C1C0
+        pfSetContext(id);
+        pfSetGoal(0, u.pathGoalX, u.pathGoalY, 0);
+        if (u.routeIdx >= static_cast<int>(u.routeDirs.size())) {
+            pfPlanRoute(id, cx, cy, u.pathGoalX, u.pathGoalY, 0, 0);
+            if (u.routeDirs.empty()) { para(); return; }                     // loc_44C20A
+            u.pushWait = 0;                                                  // loc_44C1A0
+        }
+        if (!setupStep(id, u.routeDirs[u.routeIdx] & 7)) { para(); return; }
+        applyStepTick(u);
+        return;
+    }
     if (u.field20 != 1 || !moving || !u.hasOrder || u.order.waypoints.empty()) {
         // Parado: sai do sub-estado de movimento (1). Os demais sub-estados
         // (espera 6, troca na doca 0x0D...) são do laço da unidade (sub_43DE50).
         if (u.field22 == 1) u.field22 = 0;
         return;
     }
+    u.pathGoalX = u.pathGoalY = -1;              // com ordem, o alvo é o ponto dela
 
     const int curX = u.pixelX >> 5, curY = u.pixelY >> 5;
     OrderBlock& ob = u.order;
@@ -386,6 +422,7 @@ static void stepUnit(int id) {
                 g_units[id].hasOrder = false; g_units[id].order = OrderBlock{};
                 return;
             }
+            ob.retryWait = 0;                            // loc_44C114: [st+0x70] = 0
             const bool avancou = waypointAdvance(u);     // sub_44BEC0
             u.clearRoute();                              // sub_44C2F0
             // loc_44C1D2: se o ponto alcançado era um DESVIO (bit 2 de
@@ -442,7 +479,27 @@ static void stepUnit(int id) {
                     g_units[id].hasOrder = false; g_units[id].order = OrderBlock{};
                     return;
                 }
-                u.field22 = 0; return;                    // sem rota: parado, não anima
+                // loc_44C20A: sem rota para o ÚLTIMO ponto. Sem ordem ativa
+                // (bit 0 de [ordem+0x34]), sai do sub-estado de movimento. Com
+                // ela, o original NÃO desiste: fica [st+0x70] tiques parado (um
+                // passo sem deslocamento) e aumenta a espera da próxima vez --
+                // espera + GetRand(espera) + 2, até 0x53 (loc_44C227). O porte
+                // replanejava a CADA tique, sem recuo, e ia cutucando os
+                // vizinhos; o sorteio também faltava na sequência do gerador.
+                if (!(ob.flags & 1u)) {
+                    u.field23 = u.field22;
+                    u.field22 = 0;
+                    return;
+                }
+                u.stepTicks = ob.retryWait;              // [st+0x64] = [st+0x70]
+                u.velX = u.velY = 0;                     // [st+0x58] = [st+0x5C] = 0
+                {
+                    const int w = ob.retryWait;
+                    int prox = TethysGame::getRand(w) + w + 2;   // sub_46EF50 (unk_56B1E0)
+                    if (prox >= 0x53) prox = 0x53;
+                    ob.retryWait = prox;
+                }
+                return;
             }
         }
         break;

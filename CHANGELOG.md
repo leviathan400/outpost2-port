@@ -29,6 +29,12 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
 
 **Corrigido**
 
+- **Veículos em grupo não ficam mais andando sem parar.** Mandando muitos
+  veículos juntos para o mesmo lugar, alguns ficavam para sempre tentando
+  chegar. O veículo empurrado agora anda até a casa ao lado como no original
+  (e, se ela estiver ocupada, empurra ou espera a sua vez), e quem não acha
+  caminho espera um pouco mais a cada tentativa, em vez de tentar a cada
+  instante.
 - **A última linha do mapa fica escondida**, como no original: a vista para no
   fundo da área jogável do mapa, então a última linha de tiles nunca aparece.
   `ShowBottomRow=1` na seção `[Game]` do `OUTPOST2.INI` deixa a vista descer
@@ -37,9 +43,9 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   amarelas na garagem de Plymouth, e o chão escuro com luzes na de Eden — antes
   o terreno aparecia por dentro do prédio.
 
-**Para quem acompanha o código:** seções 5.28 e 5.29 do PORT_STATUS; casos
-novos no `--scrolltest`, no `--drawordertest`, no `--uitest` e no
-`--optmenutest`.
+**Para quem acompanha o código:** seções 5.28 a 5.30 do PORT_STATUS; o modo
+de teste `--stacktest` (que veio do PR #2); casos novos no `--scrolltest`, no
+`--drawordertest`, no `--uitest` e no `--optmenutest`.
 
 ### English
 
@@ -59,6 +65,11 @@ novos no `--scrolltest`, no `--drawordertest`, no `--uitest` e no
 
 **Fixed**
 
+- **Vehicles in a group no longer keep moving forever.** Sending many vehicles
+  to the same place left some of them trying to arrive forever. A pushed
+  vehicle now walks to the side tile as in the original (and, if that tile is
+  taken, pushes or waits its turn), and a unit that finds no path waits a
+  little longer after each try instead of retrying every instant.
 - **The map's bottom row is hidden**, as in the original: the view stops at
   the bottom of the map's playable area, so the last tile row is never on
   screen. `ShowBottomRow=1` in the `[Game]` section of `OUTPOST2.INI` lets the
@@ -67,8 +78,9 @@ novos no `--scrolltest`, no `--drawordertest`, no `--uitest` e no
   arrows in the Plymouth garage, and the dark lit floor in the Eden one — the
   terrain used to show through the building.
 
-**For those following the code:** sections 5.28 and 5.29 of PORT_STATUS; new
-cases in `--scrolltest`, `--drawordertest`, `--uitest` and `--optmenutest`.
+**For those following the code:** sections 5.28 to 5.30 of PORT_STATUS; the
+`--stacktest` test mode (from PR #2); new cases in `--scrolltest`,
+`--drawordertest`, `--uitest` and `--optmenutest`.
 
 ---
 
