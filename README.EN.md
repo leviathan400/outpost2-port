@@ -236,12 +236,14 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
 
 ### 2026-11-17
 
-- **The one-click ore route can be switched on and off in game.** The main
-  menu's `GAME PREFERENCES` is wider and has a new *"Port extras"* column with
-  the **Auto Ore Route** check box (checked = on; unchecked = as in the
-  original). In game, the Options tab's *Game Preferences* list has an **Auto
-  Ore Route On/Off** line, which takes effect on `&APPLY` without restarting
-  the mission.
+- **The port's options can be changed in game**, without editing the INI.
+  The main menu's `GAME PREFERENCES` is wider and has a new *"Port extras"*
+  column: **Auto Ore Route**, **Wrap All Maps**, **Show Bottom Row**, **Demo
+  Camera**, **Original Menu Skin** (the skin switches right away) and the
+  **Night Darkness** slider. Unchecked, each box behaves as the original. In
+  a mission, the Options tab's *Game Preferences* list gained **Audio Volume**,
+  **Night Darkness**, **Wrap All Maps**, **Show Bottom Row** and **Auto Ore
+  Route**, which take effect on `&APPLY` without restarting the mission.
 - **The map's bottom row is hidden**, as in the original: the view stops at
   the bottom of the map's clip rect (`height - 2` on the stock maps), so the
   last tile row is never on screen. `ShowBottomRow=1` in `OUTPOST2.INI` lets

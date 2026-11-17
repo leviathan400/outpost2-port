@@ -453,6 +453,66 @@ bool ShellMenu::prefsTest(std::string& report) {
     if (aorUm != 1) { report += "o ACCEPT nao gravou AutoOreRoute=1 (deu " + std::to_string(aorUm) + ")"; return false; }
     step("a caixa Auto Ore Route marca/desmarca e so grava no ACCEPT");
 
+    // --- as outras caixas da coluna dos extras ----------------------------
+    // Cada uma pelo mouse: o INI no valor OPOSTO, a caixa nasce com ele, o
+    // clique inverte, sair sem ACCEPT nao grava, e o ACCEPT grava o novo.
+    {
+        struct Cx { int id; const char* chave; };
+        const Cx caixas[] = { {1205, "MapWrap"}, {1206, "ShowBottomRow"}, {1207, "DemoCamera"}, {1208, "MenuSkin"} };
+        auto poeK = [](const char* k, int v) { Config c("OUTPOST2.INI"); c.load(); c.setInt("Game", k, v); c.save(); };
+        auto leK = [](const char* k) { Config c("OUTPOST2.INI"); return c.load() ? c.getInt("Game", k, -1) : -1; };
+        auto ponto = [&](int id, int& x, int& y) {
+            x = y = -1;
+            for (const Control& c : m_controls)
+                if (c.id == id) { x = c.x + 6; y = c.y + c.h / 2; }
+            return x >= 0;
+        };
+        const bool peleAntes = DialogSkin::enabled();
+        for (const Cx& k : caixas) {
+            for (int alvo = 1; alvo >= 0; --alvo) {           // 0 -> 1, depois 1 -> 0
+                poeK(k.chave, 1 - alvo);
+                showPreferences();
+                int x, y;
+                if (!ponto(k.id, x, y)) { devolve(); report += std::string("nao achei a caixa de ") + k.chave; return false; }
+                if (x < fimEsquerda) { devolve(); report += std::string(k.chave) + ": fora da coluna da direita"; return false; }
+                clica(x, y);
+                showMainMenu();                                  // sem ACCEPT
+                if (leK(k.chave) != 1 - alvo) { devolve(); report += std::string(k.chave) + ": sair sem ACCEPT gravou"; return false; }
+                showPreferences();
+                ponto(k.id, x, y);
+                clica(x, y);
+                dispatchButton(1);                               // ACCEPT
+                if (leK(k.chave) != alvo) {
+                    devolve();
+                    report += std::string(k.chave) + ": o ACCEPT nao gravou " + std::to_string(alvo);
+                    return false;
+                }
+                // A pele troca ja no ACCEPT (o menu se remonta com ela).
+                if (k.id == 1208 && DialogSkin::enabled() != (alvo != 0)) {
+                    devolve(); report += "a pele nao trocou no ACCEPT"; return false;
+                }
+            }
+        }
+        step("as caixas MapWrap/ShowBottomRow/DemoCamera/MenuSkin gravam no ACCEPT, e a pele troca na hora");
+
+        // A barra da noite: o INI em 100, o clique no meio leva a ~50, o ACCEPT grava.
+        poeK("NightDarkness", 100);
+        showPreferences();
+        int nx = -1, ny = -1, nw = 0;
+        for (const Control& c : m_controls)
+            if (c.id == 1209) { nx = c.x; ny = c.y + c.h / 2; nw = c.w; }
+        if (nx < 0) { devolve(); report += "nao achei a barra da noite"; return false; }
+        if (m_prefNightDarkness != 100) { devolve(); report += "a barra da noite nao nasceu com o INI"; return false; }
+        handleMouseDown(nx + nw / 2, ny, SDL_BUTTON_LEFT);
+        handleMouseUp(nx + nw / 2, ny, SDL_BUTTON_LEFT);
+        dispatchButton(1);
+        const int noite = leK("NightDarkness");
+        devolve();
+        applyMenuSkin(peleAntes);
+        if (noite < 45 || noite > 55) { report += "o meio da barra da noite gravou " + std::to_string(noite); return false; }
+        step("a barra da noite grava no ACCEPT (" + std::to_string(noite) + "%)");
+    }
+
     showMainMenu();
     return true;
 }

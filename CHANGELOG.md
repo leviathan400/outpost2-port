@@ -15,13 +15,17 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
 
 **Novo**
 
-- **A rota de minério num clique liga e desliga pelo jogo**, sem editar o INI.
-  No `GAME PREFERENCES` do menu principal — agora mais largo, com uma coluna
-  *"Port extras"* para as opções que são acréscimo deste porte — há a caixa
-  **Auto Ore Route**: marcada, o clique direito na doca da mina monta a rota;
-  desmarcada, é como no original. Dentro da partida, a lista *Game
-  Preferences* da aba Options tem a linha **Auto Ore Route On/Off**, que vale
-  no `&APPLY` sem reiniciar a partida.
+- **As opções do porte se trocam pelo jogo**, sem editar o INI. O `GAME
+  PREFERENCES` do menu principal ficou mais largo e ganhou uma coluna *"Port
+  extras"* para tudo o que é acréscimo deste porte: **Auto Ore Route** (a rota
+  de minério num clique), **Wrap All Maps** (todo mapa dá a volta), **Show
+  Bottom Row** (mostra a última linha do mapa), **Demo Camera** (a câmera
+  passeia no demo), **Original Menu Skin** (a pele de diálogo do original —
+  agora troca na hora, sem reabrir o jogo) e a barra **Night Darkness** (quanto
+  as noites escurecem). Desmarcada, cada caixa é o comportamento do original.
+  Dentro da partida, a lista *Game Preferences* da aba Options ganhou **Audio
+  Volume**, **Night Darkness**, **Wrap All Maps**, **Show Bottom Row** e
+  **Auto Ore Route**, que valem no `&APPLY` sem reiniciar a partida.
 
 **Corrigido**
 
@@ -41,13 +45,17 @@ novos no `--scrolltest`, no `--drawordertest`, no `--uitest` e no
 
 **New**
 
-- **The one-click ore route can be switched on and off in game**, without
-  editing the INI. The main menu's `GAME PREFERENCES` — now wider, with a
-  *"Port extras"* column for the options this port adds — has an **Auto Ore
-  Route** check box: checked, right-clicking a mine's dock builds the route;
-  unchecked, it behaves as the original. During a mission, the Options tab's
-  *Game Preferences* list has an **Auto Ore Route On/Off** line, which takes
-  effect on `&APPLY` without restarting the mission.
+- **The port's options can be changed in game**, without editing the INI.
+  The main menu's `GAME PREFERENCES` is wider and has a new *"Port extras"*
+  column for everything this port adds: **Auto Ore Route** (the one-click ore
+  route), **Wrap All Maps** (every map wraps around), **Show Bottom Row** (the
+  map's last row is shown), **Demo Camera** (the camera tours the demo),
+  **Original Menu Skin** (the original dialog skin — it now switches right
+  away, without restarting the game) and the **Night Darkness** slider (how
+  dark the nights get). Unchecked, each box behaves as the original. During a
+  mission, the Options tab's *Game Preferences* list gained **Audio Volume**,
+  **Night Darkness**, **Wrap All Maps**, **Show Bottom Row** and **Auto Ore
+  Route**, which take effect on `&APPLY` without restarting the mission.
 
 **Fixed**
 

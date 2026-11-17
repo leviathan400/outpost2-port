@@ -5917,6 +5917,60 @@ static int runOptMenuTest(const std::string& dll) {
     }
     renderer.setFullscreen(false);
 
+    // ---- os outros extras do porte na lista -----------------------------
+    // Valores (L&ESS/&MORE de 5 em 5) e alternancias. O &APPLY grava e o jogo
+    // passa a usar na hora: volume mestre, escuridao, volta e ultima linha.
+    {
+        std::string iniX;
+        {
+            std::ifstream f("OUTPOST2.INI", std::ios::binary);
+            if (f) iniX.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+        }
+        auto poeK = [](const char* k, int v) { op2::Config c("OUTPOST2.INI"); c.load(); c.setInt("Game", k, v); c.save(); };
+        auto leK = [](const char* k) { op2::Config c("OUTPOST2.INI"); return c.load() ? c.getInt("Game", k, -1) : -1; };
+        using GOP = op2::GameOptionsPane;
+        poeK("AudioVolume", 50); poeK("NightDarkness", 50); poeK("MapWrap", 0); poeK("ShowBottomRow", 0);
+        gs.debugOptionsScreen(1);
+        texto("a linha do volume mestre", gs.debugOptItem(GOP::OPT_AUDIO_VOL), "Audio Volume\n\tMaster Volume:<R>50%");
+        texto("a linha da noite", gs.debugOptItem(GOP::OPT_NIGHT), "Night Darkness\n\tNight Darkness:<R>50%");
+        texto("a linha da volta", gs.debugOptItem(GOP::OPT_MAP_WRAP), "Wrap All Maps<R>Off");
+        texto("a linha da ultima linha", gs.debugOptItem(GOP::OPT_BOTTOM_ROW), "Show Bottom Row<R>Off");
+        gs.debugOptRow(GOP::OPT_NIGHT);                  // seleciona (item com valor)
+        gs.debugOptClick("&MORE");
+        gs.debugOptClick("&MORE");
+        texto("o &MORE anda de 5 em 5", gs.debugOptItem(GOP::OPT_NIGHT), "Night Darkness\n\tNight Darkness:<R>60%");
+        gs.debugOptRow(GOP::OPT_AUDIO_VOL);
+        gs.debugOptClick("&MORE");
+        for (int k = 0; k < 30; ++k) gs.debugOptClick("&MORE");
+        texto("o volume para em 100", gs.debugOptItem(GOP::OPT_AUDIO_VOL), "Audio Volume\n\tMaster Volume:<R>100%");
+        for (int k = 0; k < 30; ++k) gs.debugOptClick("L&ESS");
+        texto("... e em 0", gs.debugOptItem(GOP::OPT_AUDIO_VOL), "Audio Volume\n\tMaster Volume:<R>0%");
+        gs.debugOptClick("&MORE");
+        gs.debugOptRow(GOP::OPT_MAP_WRAP);
+        gs.debugOptRow(GOP::OPT_BOTTOM_ROW);
+        casos.push_back({"nada disso vale antes do &APPLY",
+                         (op2::nightDarkness() == 50 && !gs.debugMapWrapAll() && !gs.debugShowBottomRowOn()) ? 1 : 0, 1});
+        gs.debugOptClick("&APPLY");
+        casos.push_back({"o &APPLY grava NightDarkness=60", leK("NightDarkness"), 60});
+        casos.push_back({"... AudioVolume=5", leK("AudioVolume"), 5});
+        casos.push_back({"... MapWrap=1", leK("MapWrap"), 1});
+        casos.push_back({"... ShowBottomRow=1", leK("ShowBottomRow"), 1});
+        casos.push_back({"e o jogo usa na hora: a noite", op2::nightDarkness(), 60});
+        casos.push_back({"... o volume mestre", op2::soundMasterVolume(), 5});
+        casos.push_back({"... a volta e a ultima linha",
+                         (gs.debugMapWrapAll() && gs.debugShowBottomRowOn()) ? 1 : 0, 1});
+        if (!iniX.empty()) {
+            std::ofstream f("OUTPOST2.INI", std::ios::binary | std::ios::trunc);
+            f.write(iniX.data(), static_cast<std::streamsize>(iniX.size()));
+        }
+        gs.debugOptionsScreen(1);                        // rele o INI devolvido...
+        gs.debugOptClick("&APPLY");                      // ...e o jogo volta a ele
+        if (!iniX.empty()) {
+            std::ofstream f("OUTPOST2.INI", std::ios::binary | std::ios::trunc);
+            f.write(iniX.data(), static_cast<std::streamsize>(iniX.size()));
+        }
+    }
+
     // ---- extra do porte: a linha "Auto Ore Route" -----------------------
     // Alternancia On/Off. O clique so muda a tela; o &APPLY grava o INI e o
     // jogo passa a usar o valor (loadSettings). INI guardado em bytes.

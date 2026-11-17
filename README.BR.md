@@ -238,12 +238,14 @@ cursores `.ANI`.
 
 ### 2026-11-17
 
-- **A rota de minério num clique liga e desliga pelo jogo.** O `GAME
+- **As opções do porte se trocam pelo jogo**, sem editar o INI. O `GAME
   PREFERENCES` do menu principal ficou mais largo e ganhou uma coluna
-  *"Port extras"*, com a caixa **Auto Ore Route** (marcada = ligada;
-  desmarcada = como o original). Dentro do jogo, a lista *Game Preferences* da
-  aba Options tem a linha **Auto Ore Route On/Off**, que vale no `&APPLY` sem
-  reiniciar a partida.
+  *"Port extras"*: **Auto Ore Route**, **Wrap All Maps**, **Show Bottom Row**,
+  **Demo Camera**, **Original Menu Skin** (a pele troca na hora) e a barra
+  **Night Darkness**. Desmarcada, cada caixa é o comportamento do original.
+  Dentro da partida, a lista *Game Preferences* da aba Options ganhou **Audio
+  Volume**, **Night Darkness**, **Wrap All Maps**, **Show Bottom Row** e
+  **Auto Ore Route**, que valem no `&APPLY` sem reiniciar a partida.
 - **A última linha do mapa fica escondida**, como no original: a vista para
   no fundo do clip rect do mapa (`altura - 2` nos mapas do jogo), então a
   última linha de tiles nunca aparece. `ShowBottomRow=1` no `OUTPOST2.INI`

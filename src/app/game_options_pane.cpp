@@ -29,6 +29,8 @@ void clampAll() {
     cl(g_opt.gameSpeed, 1, 10);
     cl(g_opt.scrollRate, 1, 6);
     cl(g_opt.spiffyDraw, 0, 2);
+    cl(g_opt.audioVolume, 0, 100);     // extras do porte, em porcento
+    cl(g_opt.nightDarkness, 0, 100);
 }
 }
 
@@ -158,6 +160,10 @@ std::vector<std::string> GameOptionsPane::items() const {
     out.push_back(std::string("\t") + (cheia ? "( ) " : "(o) ") + "Window");
     // Extra deste porte: a rota de minerio num clique (AutoOreRoute).
     add("Auto Ore Route<R>%s", onOff(g_opt.autoOreRoute));
+    add("Audio Volume\n\tMaster Volume:<R>%i%%", g_opt.audioVolume);
+    add("Night Darkness\n\tNight Darkness:<R>%i%%", g_opt.nightDarkness);
+    add("Wrap All Maps<R>%s", onOff(g_opt.mapWrap));
+    add("Show Bottom Row<R>%s", onOff(g_opt.showBottomRow));
     return out;
 }
 
@@ -173,6 +179,8 @@ const char* GameOptionsPane::tipLess(int i) const {
     case OPT_GAME_SPEED:  return "Turn game speed down (L&ess)";
     case OPT_SCROLL_RATE: return "Turn scroll speed down (L&ess)";
     case OPT_DETAIL:      return "Turn detail level down (L&ess)";
+    case OPT_AUDIO_VOL:   return "Turn master volume down (L&ess)";
+    case OPT_NIGHT:       return "Make the nights lighter (L&ess)";
     default:              return "";
     }
 }
@@ -184,6 +192,8 @@ const char* GameOptionsPane::tipMore(int i) const {
     case OPT_GAME_SPEED:  return "Turn game speed up (&More)";
     case OPT_SCROLL_RATE: return "Turn scroll speed up (&More)";
     case OPT_DETAIL:      return "Turn detail level up (&More)";
+    case OPT_AUDIO_VOL:   return "Turn master volume up (&More)";
+    case OPT_NIGHT:       return "Make the nights darker (&More)";
     default:              return "";
     }
 }
@@ -226,6 +236,10 @@ void GameOptionsPane::bump(int i, int dir) {
     case OPT_SCREEN_FULL:   g_opt.fullscreen = 1; break;
     case OPT_SCREEN_WINDOW: g_opt.fullscreen = 0; break;
     case OPT_AUTO_ORE:      g_opt.autoOreRoute = !g_opt.autoOreRoute; break;
+    case OPT_AUDIO_VOL:     g_opt.audioVolume += dir * 5; break;
+    case OPT_NIGHT:         g_opt.nightDarkness += dir * 5; break;
+    case OPT_MAP_WRAP:      g_opt.mapWrap = !g_opt.mapWrap; break;
+    case OPT_BOTTOM_ROW:    g_opt.showBottomRow = !g_opt.showBottomRow; break;
     default: return;
     }
     clampAll();

@@ -366,6 +366,8 @@ public:
     void debugRightClickTile(Renderer& r, int tileX, int tileY);
     void debugAutoOreRoute(bool on) { m_autoOreRoute = on; }
     bool debugAutoOreRouteOn() const { return m_autoOreRoute; }
+    bool debugMapWrapAll() const { return m_mapWrapAll; }
+    bool debugShowBottomRowOn() const { return m_showBottomRow; }
     // --bannertest: a vista em coordenadas de TELA, para o teste saber onde o
     // letreiro deveria estar centrado.
     void debugCamera(int& x, int& y) const { x = m_camX; y = m_camY; }

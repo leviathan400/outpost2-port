@@ -305,6 +305,13 @@ private:
     // "AutoOreRoute" (0/1): a rota de minerio num clique (5.23), extra do
     // porte -- a caixa 1204, na coluna da direita. So vale no ACCEPT.
     bool m_prefAutoOreRoute = true;
+    // Os outros extras do porte, na mesma coluna: MapWrap, ShowBottomRow,
+    // DemoCamera e MenuSkin (caixas 1205..1208) e NightDarkness (barra 1209,
+    // 0..100%). Tudo so vale no ACCEPT; a pele troca na hora (applyMenuSkin).
+    bool m_prefMapWrap = false, m_prefBottomRow = false;
+    bool m_prefDemoCamera = true, m_prefMenuSkin = false;
+    int  m_prefNightDarkness = 75;
+    void applyMenuSkin(bool on);
     bool m_prefApplyScreen = false;   // aplicar o escolhido (ACCEPT)
     void loadPrefs();   // le o [Game] do OUTPOST2.INI para a tela
     void savePrefs();   // grava de volta (botao ACCEPT)

@@ -123,11 +123,13 @@ namespace {
     constexpr int kNcX = 180, kNcY = 130, kNcW = 280, kNcH = 220;
     // +28 de altura em relacao ao Dialog 142: a linha do modo de tela, que e
     // acrescimo do porte (como ja eram o combo da IA e a barra do volume).
-    // +120 de largura: a coluna da direita, com as caixas que sao extras do
-    // porte (a primeira e a rota de minerio num clique, AutoOreRoute). A
-    // altura nao tinha mais para onde crescer em 480.
-    constexpr int kPrX = 80, kPrY = 59, kPrW = 480, kPrH = 390;
-    constexpr int kPrExtraX = kPrX + 290;   // a coluna dos extras
+    // +160 de largura: a coluna da direita, com as chaves que sao extras do
+    // porte (AutoOreRoute, MapWrap, ShowBottomRow, DemoCamera, MenuSkin e a
+    // barra do NightDarkness). A altura nao tinha mais para onde crescer em
+    // 480. A coluna comeca depois dos botoes LESS/MORE (que vao ate x+306).
+    constexpr int kPrX = 60, kPrY = 59, kPrW = 520, kPrH = 390;
+    constexpr int kPrExtraX = kPrX + 320;   // a coluna dos extras
+    constexpr int kPrExtraW = 176;          // ate a margem direita (24 px)
     constexpr int kAbX = 140, kAbY = 100, kAbW = 360, kAbH = 300;
 }
 
@@ -156,6 +158,14 @@ void applyMenuStyle(bool op2) {
     }
 }
 } // namespace
+
+// Liga ou desliga a pele do original e acerta as medidas que dependem dela.
+// Era so na abertura do jogo; o ACCEPT do GAME PREFERENCES tambem a chama, e
+// o setState que vem em seguida remonta a tela com as medidas novas.
+void ShellMenu::applyMenuSkin(bool on) {
+    DialogSkin::setEnabled(on);
+    applyMenuStyle(DialogSkin::ok());
+}
 
 ShellMenu::ShellMenu() = default;
 ShellMenu::~ShellMenu() = default;
@@ -190,8 +200,7 @@ bool ShellMenu::init(const std::string& resDllPath) {
         GameSettings gs;
         if (cfg.load()) gs.loadFrom(cfg);
         const bool loaded = DialogSkin::load(reader);
-        DialogSkin::setEnabled(gs.menuSkin != 0);
-        applyMenuStyle(DialogSkin::ok());
+        applyMenuSkin(gs.menuSkin != 0);
         std::cout << "[ShellMenu] menus: "
                   << (DialogSkin::ok() ? "OP2 skin" : loaded ? "port style (MenuSkin=0)"
                                                              : "port style (skin not loaded)")
@@ -448,9 +457,16 @@ void ShellMenu::rebuildControls() {
         addCheck("Ambient Animations",    cy, &m_prefAnimations); cy += 24;
         addCheck("Unit Shadows",          cy, &m_prefUnitShadows);cy += 24;
         addCheck("Structure Shadows",     cy, &m_prefStructShadows);
-        // A coluna dos extras do porte (o titulo sai no render). Marcada =
-        // AutoOreRoute=1; desmarcada = 0, o comportamento do original.
-        addCheck("Auto Ore Route", kPrY + 64, &m_prefAutoOreRoute, kPrExtraX, 160, 1204);
+        // A coluna dos extras do porte (o titulo, o rotulo da barra e a nota
+        // saem no render). Em todas, DESMARCADA e o comportamento do original
+        // -- menos AutoOreRoute e DemoCamera, que nascem ligadas.
+        addCheck("Auto Ore Route",     kPrY + 64,  &m_prefAutoOreRoute, kPrExtraX, kPrExtraW, 1204);
+        addCheck("Wrap All Maps",      kPrY + 86,  &m_prefMapWrap,      kPrExtraX, kPrExtraW, 1205);
+        addCheck("Show Bottom Row",    kPrY + 108, &m_prefBottomRow,    kPrExtraX, kPrExtraW, 1206);
+        addCheck("Demo Camera",        kPrY + 130, &m_prefDemoCamera,   kPrExtraX, kPrExtraW, 1207);
+        addCheck("Original Menu Skin", kPrY + 152, &m_prefMenuSkin,     kPrExtraX, kPrExtraW, 1208);
+        // NightDarkness: quanto da noite do original se aplica (0..100%).
+        addSlider(1209, &m_prefNightDarkness, 0, 100, kPrExtraX, kPrY + 198, kPrExtraW, 16);
         // Velocidades: os botoes LESS/MORE do Dialog 142, com os ids do
         // original (1095/1099 jogo, 1097/1101 rolagem). O rotulo e o valor
         // saem no render.
@@ -1819,6 +1835,11 @@ void ShellMenu::loadPrefs() {
     m_prefAudioVolumeIni = m_prefAudioVolume;
     m_prefFullscreen = gs.fullscreen ? 1 : 0;
     m_prefAutoOreRoute = gs.autoOreRoute != 0;
+    m_prefMapWrap      = gs.mapWrap != 0;
+    m_prefBottomRow    = gs.showBottomRow != 0;
+    m_prefDemoCamera   = gs.demoCamera != 0;
+    m_prefMenuSkin     = gs.menuSkin != 0;
+    m_prefNightDarkness = gs.nightDarkness < 0 ? 0 : (gs.nightDarkness > 100 ? 100 : gs.nightDarkness);
 }
 
 void ShellMenu::savePrefs() {
@@ -1836,6 +1857,12 @@ void ShellMenu::savePrefs() {
     gs.audioVolume       = m_prefAudioVolume;
     gs.fullscreen        = m_prefFullscreen;
     gs.autoOreRoute      = m_prefAutoOreRoute ? 1 : 0;
+    gs.mapWrap           = m_prefMapWrap ? 1 : 0;
+    gs.showBottomRow     = m_prefBottomRow ? 1 : 0;
+    gs.demoCamera        = m_prefDemoCamera ? 1 : 0;
+    gs.menuSkin          = m_prefMenuSkin ? 1 : 0;
+    gs.nightDarkness     = m_prefNightDarkness;
+    applyMenuSkin(gs.menuSkin != 0);             // a pele troca ja no ACCEPT
     m_prefApplyScreen    = true;                 // o render troca a janela
     m_prefAudioVolumeIni = m_prefAudioVolume;    // o ACCEPT é que torna isso o som gravado
     gs.saveTo(cfg);
@@ -1879,9 +1906,15 @@ void ShellMenu::renderPreferencesDialog(Renderer& renderer) {
                    kPrY + 270, 0xFFFFD24A, true);
     // Modo de tela (idem): o rótulo do par de rádio 1202/1203.
     SkinText::draw(fb, 640, 480, "Screen Mode:", kPrX + 24, kPrY + 320, 0xFFD8E4F8, true);
-    // A coluna dos extras: o título e a linha que diz o que a caixa faz.
+    // A coluna dos extras: o título, o rótulo e o valor da barra da noite, e a
+    // nota de que nada disto existe no original.
     SkinText::draw(fb, 640, 480, "Port extras:", kPrExtraX, kPrY + 40, 0xFFD8E4F8, true);
-    SkinText::draw(fb, 640, 480, "(not in the original)", kPrExtraX, kPrY + 84, 0xFF8090A8, true);
+    SkinText::draw(fb, 640, 480, "Night Darkness:", kPrExtraX, kPrY + 180, 0xFFD8E4F8, true);
+    char noite[16];
+    std::snprintf(noite, sizeof(noite), "%d%%", m_prefNightDarkness);
+    SkinText::draw(fb, 640, 480, noite, kPrExtraX + kPrExtraW - SkinText::width(noite),
+                   kPrY + 180, 0xFFFFD24A, true);
+    SkinText::draw(fb, 640, 480, "(not in the original)", kPrExtraX, kPrY + 224, 0xFF8090A8, true);
 }
 
 // O botão HELP (1012) e a tecla F1 — no original, WM_HELP -> TApp::GetHelp,

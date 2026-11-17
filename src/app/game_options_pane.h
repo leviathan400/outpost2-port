@@ -58,6 +58,11 @@ public:
         // Extra deste porte: a rota de minerio num clique ([Game]
         // AutoOreRoute, ver 5.23), uma alternancia On/Off como as do original.
         OPT_AUTO_ORE,
+        // Os outros extras do porte que valem DURANTE a partida: o volume
+        // mestre e a escuridao da noite (com L&ESS/&MORE, de 5 em 5 por
+        // cento) e as duas chaves da vista. (AILevel, DemoCamera e MenuSkin
+        // so valem fora dela: estao no GAME PREFERENCES do menu.)
+        OPT_AUDIO_VOL, OPT_NIGHT, OPT_MAP_WRAP, OPT_BOTTOM_ROW,
         OPT_COUNT
     };
 
@@ -97,7 +102,9 @@ public:
     // (o chamador reaplica as configurações) e `back` que o BACK foi apertado.
     bool click(const PaneRect& pane, int x, int y, bool& changed, bool& back);
 
-    bool valueItem(int i) const { return i >= OPT_MUSIC_VOL && i <= OPT_DETAIL; }
+    bool valueItem(int i) const {
+        return (i >= OPT_MUSIC_VOL && i <= OPT_DETAIL) || i == OPT_AUDIO_VOL || i == OPT_NIGHT;
+    }
     // As dicas dos botoes L&ESS e &MORE sao POR ITEM no original -- cada item
     // tem as suas na tabela de 7 dwords que comeca em 0x4E3118 (campos "dica
     // do botao esq./dir."). Fora dos itens com valor nao ha botao, e nao ha
