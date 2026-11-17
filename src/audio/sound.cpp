@@ -176,6 +176,16 @@ int startSound(int id, int x, int y, bool positional) {     // sub_47EE00
 
 } // namespace
 
+bool soundExitBeep() {
+    static bool feito = false;                            // dword_4E0BB8
+    if (feito) return false;
+    feito = true;
+    if (soundMasterVolume() <= 0) return false;
+    if (startSound(0x5C, 0, 0, false) < 0) return false;  // sub_47F020(0x5C)
+    SDL_Delay(3500);                                      // Sleep(0DACh)
+    return true;
+}
+
 bool soundInit() {                                        // sub_47E020
     Config cfg("OUTPOST2.INI");
     if (cfg.load()) {

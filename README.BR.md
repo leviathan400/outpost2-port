@@ -179,7 +179,7 @@ demo, tela cheia, a pele dos menus (`MenuSkin`), a volta horizontal do mapa
 (`MapWrap`), a última linha do mapa (`ShowBottomRow`) e a rota de minério num
 clique (`AutoOreRoute`); estão documentadas no `PORT_STATUS.BR.md`.
 
-Há **111 modos de linha de comando** para testes e capturas, entre eles uma
+Há **112 modos de linha de comando** para testes e capturas, entre eles uma
 bateria de regressão (`--savetest` prova o determinismo de salvar/recarregar).
 A lista está no `PORT_STATUS.BR.md`.
 
@@ -213,7 +213,7 @@ e descartado das listas de cheat que circulam por aí.
 
 ```
 src/
-  main.cpp        entrada + os 111 modos de teste/captura
+  main.cpp        entrada + os 112 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -238,6 +238,9 @@ cursores `.ANI`.
 
 ### 2026-11-17
 
+- **O bipe ao fechar o jogo**, como no original: ao sair, a janela some, toca
+  um bipe e o jogo espera ele acabar. Com o som desligado, fecha na hora (o
+  original esperava 3,5 s à toa).
 - **Veículos em grupo não ficam mais andando sem parar.** Mandando muitos
   veículos juntos para o mesmo lugar, alguns ficavam para sempre tentando
   chegar. O veículo empurrado agora anda até a casa ao lado como no original

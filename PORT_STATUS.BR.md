@@ -48,7 +48,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 111 modos de teste/captura
+  main.cpp        entrada + os 112 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -2506,6 +2506,46 @@ ordem**: o original faz do alvo `[+0x50]/[+0x54]` o 1º ponto e então recua; o
 laço sem ordem do porte não tem lista de pontos. Esse empurrado segue a rota
 curta dele e, se travar, desiste em 20 esperas.
 
+## 5.31. O bipe da saída, e um ramo do marcador que nunca roda (2026-11-17)
+
+Duas pendências pequenas que estavam anotadas — e as duas anotações estavam
+erradas.
+
+### O bipe da saída (`IWnd::_WndProc`)
+
+A anotação dizia `sub_431000`, que é uma cópia de texto. O lugar certo é o
+procedimento de janela estático `IWnd::_WndProc`: no `WM_NCDESTROY` (`0x82`)
+da **primeira** janela `IWnd` destruída na sessão (`dword_4E0BB8`, escrito só
+ali), ele toca o som **0x5C** — o `beep5.wav`, pelo `sub_47F020`, global — e
+faz `Sleep(3500)`, para o som terminar antes de o áudio ser desligado. Os
+diálogos (`IDlgWnd`) passam pelo procedimento de diálogo, não por este; a
+janela que chega aqui de forma garantida é a **moldura**, destruída pelo
+`TFrame::ShutDown` ao sair do programa.
+
+No porte: `soundExitBeep()`, chamado pelo `TApp::shutdown` depois de esconder
+a janela (no original ela já sumiu nessa hora) e antes de desligar o vídeo e o
+som. Uma vez por sessão.
+
+**Corrigido em relação ao original:** ele espera os 3,5 s **mesmo sem som**
+(`Sound=0`, ou sem dispositivo de áudio) — uma espera à toa ao fechar o jogo.
+Aqui só espera se o bipe de fato começou.
+
+Teste `--exitbeeptest`: com som, toca e espera 3,5 s (medido: 3501 ms); a
+segunda chamada não faz nada; com `Sound=0`, não toca e não espera.
+
+### O ramo `loc_43EE7C` do marcador de seleção — código morto
+
+Anotado como "barra verde ainda não portada". Lido de perto, o `sub_43E950`
+(colchete e barra de vida sobre a unidade) vai para `loc_43EE7C` quando
+`arg_0 & 0xB == 0`, e ali a primeira coisa é `test al, 1 / jz loc_43F223` —
+que sai, porque o bit 0 já é zero para ter chegado ali. O que viria depois era
+o **nome** da unidade escrito sobre ela (`vt[0x3C]`, com o nome da arma em
+`"%s %s"` quando `[+0x44] & 0x90`), e não uma barra. E o `loc_43F223` em
+seguida desenha os **pontos da ordem** só com `arg_0 & 0x10` e o
+`dword_56DE70` ligado pelo comando **40122** do menu de depuração. Os três
+chamadores passam `arg_0` igual a 1 (o *hover*) ou 2 (a seleção): nenhum dos
+dois ramos roda no executável. Não há o que portar.
+
 ---
 
 ## 6. Build e execução
@@ -2554,6 +2594,7 @@ São 109 modos. Os que cobrem regressão de verdade:
 | `--artcliptest` | o recorte por pedaço dos sprites: a carga da doca cortada na borda do poço, contra a composição crua |
 | `--drawordertest <mapa>` | a ordem de desenho: veículo atrás de prédio, efeitos por cima, desastres por último, a doca |
 | `--detourtest <mapa>` | quem vem de frente dá passagem: o encontro no corredor, a tabela de decisão do `sub_44BBA0` e o desvio inalcançável |
+| `--exitbeeptest` | o bipe da saída: toca o `beep5.wav` e espera 3,5 s uma vez por sessão; sem som, não espera |
 | `--stacktest <DLL> [bmp]` | estresse do empurrão: todos os veículos do jogador indo e voltando em grupo; nunca dois no mesmo tile, e ninguém sobra andando ao fim de cada perna |
 | `--missiontest <DLL> <saida> <ticks>` | carrega e roda qualquer missão |
 | `--aitest <DLL campanha> <DLL multi>` | o `AILevel` chega ao jogador 0 e o multijogador fica intacto |

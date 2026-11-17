@@ -161,6 +161,11 @@ void TApp::shutdown() {
     delete m_game;  m_game = nullptr;
     delete m_shell; m_shell = nullptr;
     m_cur = nullptr;
+    // TFrame::ShutDown destroi a moldura; o WM_NCDESTROY dela, no
+    // IWnd::_WndProc, toca o bipe da saida e espera ele acabar. A janela ja
+    // sumiu nessa hora: aqui ela e escondida antes.
+    if (m_renderer && m_renderer->getWindow()) SDL_HideWindow(m_renderer->getWindow());
+    soundExitBeep();
     if (m_renderer) { m_renderer->shutdown(); delete m_renderer; m_renderer = nullptr; }
     soundShutdown();
     if (m_sdlReady) { SDL_Quit(); m_sdlReady = false; }

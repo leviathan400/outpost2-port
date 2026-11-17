@@ -15,6 +15,9 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
 
 **Novo**
 
+- **O bipe ao fechar o jogo**, como no original: ao sair, a janela some, toca
+  um bipe e o jogo espera ele acabar. Com o som desligado, fecha na hora — o
+  original esperava 3,5 s à toa.
 - **As opções do porte se trocam pelo jogo**, sem editar o INI. O `GAME
   PREFERENCES` do menu principal ficou mais largo e ganhou uma coluna *"Port
   extras"* para tudo o que é acréscimo deste porte: **Auto Ore Route** (a rota
@@ -43,14 +46,17 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   amarelas na garagem de Plymouth, e o chão escuro com luzes na de Eden — antes
   o terreno aparecia por dentro do prédio.
 
-**Para quem acompanha o código:** seções 5.28 a 5.30 do PORT_STATUS; o modo
-de teste `--stacktest` (que veio do PR #2); casos novos no `--scrolltest`, no
+**Para quem acompanha o código:** seções 5.28 a 5.31 do PORT_STATUS; os modos
+de teste `--stacktest` (que veio do PR #2) e `--exitbeeptest`; casos novos no `--scrolltest`, no
 `--drawordertest`, no `--uitest` e no `--optmenutest`.
 
 ### English
 
 **New**
 
+- **The beep when closing the game**, as in the original: on exit the window
+  disappears, a beep plays and the game waits for it to finish. With sound
+  off it closes at once — the original waited 3.5 s for nothing.
 - **The port's options can be changed in game**, without editing the INI.
   The main menu's `GAME PREFERENCES` is wider and has a new *"Port extras"*
   column for everything this port adds: **Auto Ore Route** (the one-click ore
@@ -78,8 +84,8 @@ de teste `--stacktest` (que veio do PR #2); casos novos no `--scrolltest`, no
   arrows in the Plymouth garage, and the dark lit floor in the Eden one — the
   terrain used to show through the building.
 
-**For those following the code:** sections 5.28 to 5.30 of PORT_STATUS; the
-`--stacktest` test mode (from PR #2); new cases in `--scrolltest`,
+**For those following the code:** sections 5.28 to 5.31 of PORT_STATUS; the
+`--stacktest` (from PR #2) and `--exitbeeptest` test modes; new cases in `--scrolltest`,
 `--drawordertest`, `--uitest` and `--optmenutest`.
 
 ---

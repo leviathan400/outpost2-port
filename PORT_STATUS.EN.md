@@ -44,8 +44,11 @@
 > single immediate step that a crowd kept refusing; and with no route to the
 > last waypoint an ordered unit waits with the original's growing back-off,
 > `loc_44C20A`, instead of replanning every tick. `--stacktest`, from PR #2,
-> now also fails if any vehicle is still moving at the end of a leg). The
-> recent changes are summarised in
+> now also fails if any vehicle is still moving at the end of a leg) and
+> **5.31** (the exit beep: `IWnd::_WndProc` plays `beep5.wav` on the frame's
+> `WM_NCDESTROY` and sleeps 3.5 s — here only when sound is on; and the
+> `loc_43EE7C` branch of the selection marker, noted as pending, turns out to
+> be dead code). The recent changes are summarised in
 > [README.EN.md](README.EN.md).
 
 # Outpost 2: Divided Destiny — Modern Port (C++17/SDL2)
@@ -96,7 +99,7 @@ coverage by comparing the DLLs' import tables against the registry in
 
 ```
 src/
-  main.cpp        entry point + the 111 test/capture modes
+  main.cpp        entry point + the 112 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -683,7 +686,7 @@ mission DLLs and the original resources from the working directory).
 
 ### Command-line tests
 
-There are 111 modes. The ones that cover real regressions:
+There are 112 modes. The ones that cover real regressions:
 
 | Mode | What it proves |
 |---|---|

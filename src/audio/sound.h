@@ -22,6 +22,14 @@ void soundPlayAt(int pixelX, int pixelY, int id);   // sub_47EE00
 void soundVoice(int id, int pixelX, int pixelY);    // sub_47F060
 void soundUpdate();                        // fila de vozes (sub_47F250)
 
+// O bipe da saida. No IWnd::_WndProc, o WM_NCDESTROY (0x82) da primeira janela
+// destruida na sessao (dword_4E0BB8) -- a moldura, no TFrame::ShutDown -- toca o
+// som 0x5C ("beep5.wav", sub_47F020 global) e espera 3500 ms (Sleep), para o
+// som terminar antes de o audio ser desligado. Uma vez por sessao.
+// Corrigido em relacao ao original: ele espera os 3,5 s MESMO sem som (Sound=0,
+// sem dispositivo); aqui so espera se o bipe de fato comecou. Devolve se tocou.
+bool soundExitBeep();
+
 // Volume mestre, de 0 a 100 por cento ("[Game] AudioVolume"; 50 por padrao).
 // Nao existe no original: la cada canal tem a sua atenuacao fixa (MusicVol
 // 0..5 pela tabela dword_4D4AD0, SoundVol a -250/100 dB por degrau) e nada

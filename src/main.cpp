@@ -4455,6 +4455,40 @@ static int runStackTest(const std::string& dll, const std::string& outBmp) {
     return ok ? 0 : 4;
 }
 
+// --exitbeeptest: o bipe da saida (IWnd::_WndProc, WM_NCDESTROY). Com som:
+// toca o 0x5C e espera 3,5 s; a segunda chamada nao faz nada (uma vez por
+// sessao). Sem som (Sound=0 ou sem dispositivo): nao espera nada.
+static int runExitBeepTest() {
+    if (SDL_Init(SDL_INIT_AUDIO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    const bool comSom = op2::soundInit();
+    uint32_t t0 = SDL_GetTicks();
+    const bool tocou = op2::soundExitBeep();
+    const uint32_t dt1 = SDL_GetTicks() - t0;
+    t0 = SDL_GetTicks();
+    const bool deNovo = op2::soundExitBeep();
+    const uint32_t dt2 = SDL_GetTicks() - t0;
+    std::printf("[Beep] som %s; 1a chamada: tocou=%d em %u ms; 2a: tocou=%d em %u ms\n",
+                comSom ? "ligado" : "DESLIGADO", tocou ? 1 : 0, dt1, deNovo ? 1 : 0, dt2);
+    int ruins = 0;
+    auto caso = [&](const char* nome, bool ok) {
+        std::printf("[Beep] %-46s %s\n", nome, ok ? "ok" : "FALHOU");
+        if (!ok) ++ruins;
+    };
+    if (comSom) {
+        caso("com som, o bipe toca", tocou);
+        caso("... e espera os 3,5 s", dt1 >= 3490 && dt1 < 4500);
+    } else {
+        caso("sem som, nao toca", !tocou);
+        caso("... e nao espera (corrigido)", dt1 < 100);
+    }
+    caso("uma vez por sessao: a 2a chamada nao toca", !deNovo && dt2 < 100);
+    std::printf("[Beep] %d falhas\n", ruins);
+    op2::soundShutdown();
+    SDL_Quit();
+    return ruins ? 1 : 0;
+}
+
 // --detourtest <mapa>: o DESVIO de quem vem de frente (sub_44BBA0, ramo do
 // bloqueador em movimento -> sub_44BFD0; a parada de 32 tiques em loc_44C1D2).
 // Tres partes. (1) Dois veiculos, com ordem de mover dada pelo clique direito
@@ -7692,6 +7726,8 @@ int main(int argc, char* argv[]) {
             return runMusicTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--optmenutest") == 0 && i + 1 < argc)
             return runOptMenuTest(argv[i + 1]);
+        if (std::strcmp(argv[i], "--exitbeeptest") == 0)
+            return runExitBeepTest();
         if (std::strcmp(argv[i], "--stacktest") == 0 && i + 1 < argc)
             return runStackTest(argv[i + 1], i + 2 < argc && argv[i + 2][0] != '-' ? argv[i + 2] : "");
         if (std::strcmp(argv[i], "--detourtest") == 0 && i + 1 < argc)
