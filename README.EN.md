@@ -234,12 +234,22 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
 
 ## Recent changes
 
-### 2026-11-10
+### 2026-11-17
 
 - **The map's bottom row is hidden**, as in the original: the view stops at
   the bottom of the map's clip rect (`height - 2` on the stock maps), so the
   last tile row is never on screen. `ShowBottomRow=1` in `OUTPOST2.INI` lets
   the view scroll down to it.
+- **The Garage floor is drawn**, as in the original's
+  `Garage::DrawGroundLayer`: the Plymouth garage's grey pad with the yellow
+  arrows, and the dark floor with lights inside the Eden garage (until now
+  the ground showed through). One animation per state (0x214/0x216/0x218 or
+  0x85A/0x85C/0x85F, from the same table as the garage body), drawn in the
+  ground layer under the units like the other building pads.
+- `--missiontest` lists each building's state and animation.
+
+### 2026-11-10
+
 - **Whoever comes head-on gives way.** Two vehicles meeting head-on in a
   narrow passage no longer just wait for each other: the one between two steps
   gets a detour to a side tile, waits there a moment and carries on, as in the

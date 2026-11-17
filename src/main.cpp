@@ -3050,8 +3050,11 @@ static int runMissionTest(const std::string& dll, const std::string& outPath, in
     for (size_t i = 1; i < op2::g_units.size(); ++i) {
         const op2::UnitRecord& r = op2::g_units[i];
         if (r.id == -1) continue;
-        std::printf("[MissionTest] %2d tipo 0x%02X dono %d tile (%d,%d)\n", r.id, r.type, r.owner & 0x0F,
+        std::printf("[MissionTest] %2d tipo 0x%02X dono %d tile (%d,%d)", r.id, r.type, r.owner & 0x0F,
                     op2::unitOX(r) >> 5, op2::unitOY(r) >> 5);
+        if (r.flags & op2::UNIT_BUILDING)
+            std::printf(" estado %d anim %d", static_cast<int>((r.state34 >> 16) & 0xFFFF), op2::structureCurAnim(r));
+        std::printf("\n");
     }
     std::string lastMsg;
     for (int k = 0; k < ticks; ++k) {
@@ -4769,6 +4772,42 @@ static int runDrawOrderTest(const std::string& mapName, const std::string& shot)
         casos.push_back({"sul: o VEICULO fica na frente", f.b > 0 ? 1 : 0, 1});
         casos.push_back({"... e o predio nao o cobre", f.a, 0});
         tira(v.id());
+        tira(fund);
+    }
+
+    // 5) o PISO da Garage, das duas faccoes (a camada de chao do original:
+    //    loc_41CF24..41CF5A, 0x214/0x216/0x218 ou 0x85A/0x85C/0x85F pelo bit
+    //    0x1000). Sem ele o terreno aparecia por dentro do predio: aqui conta
+    //    quantos pixels do footprint ficam IGUAIS ao terreno sem a garagem.
+    {
+        const int gar = op2::placeBuilding(0x29, bx, by, 0);
+        int gw = 0, gh = 0;
+        op2::buildingFootprint(static_cast<op2::map_id>(0x29), gw, gh);
+        int camX = 0, camY = 0;
+        gs.debugCamera(camX, camY);
+        const int x0 = (bx - gw / 2) * 32 - camX, y0 = (by - gh / 2) * 32 - camY;
+        const int edenAntes = op2::g_playerData[0].isEden;
+        for (int eden = 0; eden <= 1; ++eden) {
+            op2::g_playerData[0].isEden = eden;
+            op2::unitListSort();
+            const std::vector<uint32_t> com = quadro({}), sem = quadro({gar});
+            int total = 0, terreno = 0;
+            for (int y = std::max(y0, 0); y < std::min(y0 + gh * 32, vh); ++y)
+                for (int x = std::max(x0, 0); x < std::min(x0 + gw * 32, vw); ++x) {
+                    ++total;
+                    if (com[(size_t)y * vw + x] == sem[(size_t)y * vw + x]) ++terreno;
+                }
+            std::printf("[Ordem] garagem %s: %d de %d pixels do footprint iguais ao terreno\n",
+                        eden ? "Eden" : "Plymouth", terreno, total);
+            casos.push_back({std::string("garagem ") + (eden ? "Eden" : "Plymouth") + ": footprint inteiro (premissa)",
+                             total == gw * gh * 1024 ? 1 : 0, 1});
+            // Com o piso sobram 4-5% (as bordas recortadas do sprite); sem ele,
+            // 38-40% do footprint mostra o terreno.
+            casos.push_back({std::string("garagem ") + (eden ? "Eden" : "Plymouth") + ": o piso cobre o terreno (< 15%)",
+                             terreno * 100 < total * 15 ? 1 : 0, 1});
+        }
+        op2::g_playerData[0].isEden = edenAntes;
+        tira(gar);
     }
     int ruins = 0;
     for (const Caso& c : casos) {

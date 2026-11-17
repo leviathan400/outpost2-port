@@ -30,7 +30,11 @@
 > (a vehicle coming head-on gets a detour inserted in its own order —
 > `sub_44BFD0`, written to the order block's index −1 slot at `[+0x10]` — and
 > waits 32 ticks there; fixed against the original: a detour skipped as
-> unreachable now clears its pending bit). The recent changes are summarised in
+> unreachable now clears its pending bit) and **5.28** (two contributed pull
+> requests, checked against the binary: the view stops at the bottom of the
+> map's clip rect, `sub_402E70`, so the last tile row is hidden — key
+> `ShowBottomRow` — and the Garage floor is drawn in the ground layer for both
+> factions). The recent changes are summarised in
 > [README.EN.md](README.EN.md).
 
 # Outpost 2: Divided Destiny — Modern Port (C++17/SDL2)

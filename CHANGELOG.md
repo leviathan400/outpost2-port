@@ -9,6 +9,40 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
 
 ---
 
+## 2026-11-17
+
+### Português
+
+**Corrigido**
+
+- **A última linha do mapa fica escondida**, como no original: a vista para no
+  fundo da área jogável do mapa, então a última linha de tiles nunca aparece.
+  `ShowBottomRow=1` na seção `[Game]` do `OUTPOST2.INI` deixa a vista descer
+  até ela.
+- **O piso da Garagem aparece**, nas duas facções: o piso cinza com as setas
+  amarelas na garagem de Plymouth, e o chão escuro com luzes na de Eden — antes
+  o terreno aparecia por dentro do prédio.
+
+**Para quem acompanha o código:** seção 5.28 do PORT_STATUS; casos novos
+no `--scrolltest` e no `--drawordertest`.
+
+### English
+
+**Fixed**
+
+- **The map's bottom row is hidden**, as in the original: the view stops at
+  the bottom of the map's playable area, so the last tile row is never on
+  screen. `ShowBottomRow=1` in the `[Game]` section of `OUTPOST2.INI` lets the
+  view scroll down to it.
+- **The Garage floor is drawn**, for both factions: the grey pad with yellow
+  arrows in the Plymouth garage, and the dark lit floor in the Eden one — the
+  terrain used to show through the building.
+
+**For those following the code:** section 5.28 of PORT_STATUS; new cases
+in `--scrolltest` and `--drawordertest`.
+
+---
+
 ## 2026-11-10
 
 ### Português
@@ -27,10 +61,6 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
 
 **Corrigido**
 
-- **A última linha do mapa fica escondida**, como no original: a vista para no
-  fundo da área jogável do mapa, então a última linha de tiles nunca aparece.
-  `ShowBottomRow=1` na seção `[Game]` do `OUTPOST2.INI` deixa a vista descer
-  até ela.
 - **Quem vem de frente dá passagem.** Dois veículos que se encontram de frente
   num caminho estreito não ficam mais esperando um pelo outro: o que está entre
   dois passos recebe um desvio para uma casa ao lado, espera ali um instante e
@@ -79,10 +109,6 @@ modos de teste novos — `--autoroutetest`, `--pushtest`, `--artcliptest`,
 
 **Fixed**
 
-- **The map's bottom row is hidden**, as in the original: the view stops at
-  the bottom of the map's playable area, so the last tile row is never on
-  screen. `ShowBottomRow=1` in the `[Game]` section of `OUTPOST2.INI` lets the
-  view scroll down to it.
 - **Whoever comes head-on gives way.** Two vehicles meeting head-on in a
   narrow passage no longer just wait for each other: the one between two steps
   gets a detour to a side tile, waits there a moment and carries on, as in the

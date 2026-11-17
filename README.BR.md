@@ -236,12 +236,22 @@ cursores `.ANI`.
 
 ## Mudanças recentes
 
-### 2026-11-10
+### 2026-11-17
 
 - **A última linha do mapa fica escondida**, como no original: a vista para
   no fundo do clip rect do mapa (`altura - 2` nos mapas do jogo), então a
   última linha de tiles nunca aparece. `ShowBottomRow=1` no `OUTPOST2.INI`
   deixa a vista descer até ela.
+- **O piso da Garagem aparece**, como no `Garage::DrawGroundLayer` do
+  original: o piso cinza com as setas amarelas da garagem de Plymouth, e o
+  chão escuro com luzes dentro da garagem de Eden (até agora o terreno
+  aparecia por baixo). Uma animação por estado (0x214/0x216/0x218 ou
+  0x85A/0x85C/0x85F, da mesma tabela do corpo da garagem), desenhada na
+  camada de chão sob as unidades, como os outros pisos de prédio.
+- O `--missiontest` lista o estado e a animação de cada prédio.
+
+### 2026-11-10
+
 - **Quem vem de frente dá passagem.** Dois veículos que se encontram de frente
   num caminho estreito não ficam mais esperando um pelo outro: o que está entre
   dois passos recebe um desvio para uma casa ao lado, espera ali um instante e

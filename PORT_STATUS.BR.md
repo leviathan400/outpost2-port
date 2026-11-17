@@ -2334,6 +2334,49 @@ Neutralizando, uma peça de cada vez: sem chamar o desvio **5** falhas; sem a pa
 > feliz (lá o bloqueador está sempre entre passos e de frente): as mutações que
 > tiravam esses dois testes sobreviviam a ele, e por isso existe a tabela.
 
+## 5.28. A última linha do mapa e o piso da Garage (2026-11-17)
+
+Duas contribuições de fora, recebidas como *pull request* e conferidas no
+binário antes de entrar.
+
+### A vista para no fundo do clip rect
+
+`sub_402E70` copia o clip rect do mapa (`dword_54EBD4..E0`: x1, y1, x2, y2) para
+o retângulo-limite da vista em `[vista+0x344]`, com x1/y1 ≥ 0 e y2 limitado a
+`altura − 1` — o y2 é um índice de tile **inclusivo**. Nos mapas do jogo
+`y2 = altura − 2`, então a última linha de tiles nunca aparece. O porte deixava
+a câmera descer até o fim do mapa. Agora o fundo da vista é `(y2 + 1) * 32`
+(`GameState::viewMaxY`); a chave nova `[Game] ShowBottomRow=1` devolve o
+comportamento antigo.
+
+Teste: dois casos no `--scrolltest` — a câmera saturada embaixo mostra até
+2016 px no eden02 (o fundo do clip rect; o mapa tem 2048) e, com
+`ShowBottomRow=1`, até 2048.
+
+### O piso da Garage
+
+A camada de chão da Garage (`loc_41CF24..41CF5A`) desenha um piso sob o prédio
+inteiro, uma animação por estado: estado 0/1/2 → `0x85A`/`0x85C`/`0x85F` com o
+bit `0x1000` da unidade (a mesma tabela do corpo do prédio, `isEdenTable`), e
+senão `0x214`/`0x216`/`0x218`; nos outros estados, nada. O porte não o
+desenhava: faltava o piso cinza com as setas amarelas da garagem de Plymouth, e
+o terreno aparecia por dentro da de Eden. Entra no passe da camada de chão, com
+os pisos do Agridome, dos tanques e das minas.
+
+Teste: um caso no `--drawordertest` para cada facção, que conta quantos pixels
+do footprint ficam iguais ao terreno sem a garagem — 4–5% com o piso (as
+bordas recortadas do sprite), 38–40% sem ele. O `--missiontest` passou a
+listar o estado e a animação de cada prédio.
+
+### O terceiro, que não entrou
+
+O terceiro *pull request* portava o empurrão e o desvio de quem está no
+caminho (`sub_44BBA0`/`sub_44BFD0`) — o mesmo que as seções 5.24 e 5.27, feito
+em paralelo a partir de um commit anterior a elas. A versão deste repositório é
+a que fica: tem a regra da arma corrigida, a vaga −1 do original, a parada de
+32 tiques e a conta de 1,5× sem estouro. A única correção dele que faltava aqui
+(o bit do desvio pulado) já tinha entrado na 5.27.
+
 ---
 
 ## 6. Build e execução
