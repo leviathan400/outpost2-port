@@ -179,7 +179,7 @@ demo, tela cheia, a pele dos menus (`MenuSkin`), a volta horizontal do mapa
 (`MapWrap`), a última linha do mapa (`ShowBottomRow`) e a rota de minério num
 clique (`AutoOreRoute`); estão documentadas no `PORT_STATUS.BR.md`.
 
-Há **112 modos de linha de comando** para testes e capturas, entre eles uma
+Há **113 modos de linha de comando** para testes e capturas, entre eles uma
 bateria de regressão (`--savetest` prova o determinismo de salvar/recarregar).
 A lista está no `PORT_STATUS.BR.md`.
 
@@ -213,7 +213,7 @@ e descartado das listas de cheat que circulam por aí.
 
 ```
 src/
-  main.cpp        entrada + os 112 modos de teste/captura
+  main.cpp        entrada + os 113 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -238,6 +238,11 @@ cursores `.ANI`.
 
 ### 2026-11-17
 
+- **Pontos de passagem com Ctrl + clique**, como no original: depois de
+  apertar um comando (mover, atacar, guardar, construir, reparar, patrulhar,
+  rota de minério…), cada **Ctrl + clique** no mapa marca um ponto — um
+  quadrado vermelho numerado — e a unidade passa por eles, na ordem, antes de
+  ir ao alvo. Até 7 pontos na maioria dos comandos.
 - **Shift na seleção**, como no original: **Shift + clique** num veículo põe
   ele na seleção, ou tira se já estava; o **botão do meio** faz o mesmo.
   **Shift + caixa** soma os veículos à seleção (a caixa sem Shift continua

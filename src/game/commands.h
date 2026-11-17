@@ -75,6 +75,21 @@ bool uiCommandCellOk(int cmd, const std::vector<int>& sel, int x, int y);
 // initial patrol point"; vazio se o comando não tem.
 const std::string& uiCommandHint();
 
+// Os PONTOS DE PASSAGEM da mira -- o objeto dword_547170 (um SubFilter): em
+// [+0x34] o limite, em [+0x3C] a contagem e, a partir de [+0x40], os pontos
+// (x, y em pixels do mundo). Com um comando armado que os aceite, Ctrl +
+// clique acrescenta um (sub_41AAA0, MK_CONTROL); cheio, o ultimo e trocado.
+// Armar um comando (sub_41B550) zera a contagem e poe o limite dele -- 7 para
+// mover, ficar parado, atacar, guardar, reparar/tomar/desmontar e as obras;
+// 6 na patrulha e 5 na rota de minerio (que rearmam com o que sobra); 0 nos
+// demais. No pacote, cada ponto vira um ponto intermediario da ordem, com
+// folga de 2 tiles (sub_451420, dl = 2), antes do alvo.
+struct WaypointPx { int x, y; };
+void uiWaypointsArm(int cap);                       // sub_41B550: [+0x34] = cap, [+0x3C] = 0
+int  uiWaypointCap();                               // [+0x34]
+const std::vector<WaypointPx>& uiWaypoints();       // [+0x40..], [+0x3C] pontos
+bool uiWaypointAdd(int px, int py);                 // Ctrl + clique (som 0x59)
+
 // sub_43A910: solta os alvos/referências de combate da unidade (armada).
 void unitResetCombat(int id);
 // Ação 5 (parada) no laço de ações (sub_43ACA0 case 5).

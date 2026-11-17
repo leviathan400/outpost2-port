@@ -48,7 +48,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 112 modos de teste/captura
+  main.cpp        entrada + os 113 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -2585,10 +2585,11 @@ porte:
 - **corrigido**: ao somar, um veículo já marcado não entra de novo na lista
   (o original não checava, e ele aparecia duas vezes).
 
-### O que ficou de fora
+### O Ctrl
 
-Os **pontos de passagem com Ctrl + clique** — é outro recurso (a rota de vários
-pontos de um comando armado, com o desenho dela), não seleção.
+Os **pontos de passagem com Ctrl + clique** são outro recurso (a rota de vários
+pontos de um comando armado, com o desenho dela), não seleção — portados na
+**5.33**.
 
 ### O teste — `--selecttest <mapa>`
 
@@ -2599,6 +2600,75 @@ clique simples troca, a caixa simples substitui e a com Shift (ou com o meio)
 soma sem repetir, o Shift com a mira armada mexe na seleção e a mira fica, e o
 `0x0A` fica de fora do clique, do Shift e da caixa. Neutralizando a checagem de
 repetidos, 2 falhas; tirando o botão do meio, 1.
+
+## 5.33. Pontos de passagem com Ctrl + clique (2026-11-17)
+
+O Ctrl, no original, **não é de seleção**: com um comando armado, Ctrl +
+clique marca **pontos de passagem** que a unidade percorre antes do alvo.
+
+### O mecanismo (do disassembly)
+
+- **A lista mora na mira**, o objeto `dword_547170` (um `SubFilter`): em
+  `[+0x34]` o **limite**, em `[+0x3C]` a contagem e, a partir de `[+0x40]`, os
+  pontos (x e y em pixels do mundo, em *words*).
+- **Armar um comando** — `sub_41B550(estado, comando, limite, …)`, chamado no
+  `vt[1]` de cada um — põe o estado da mira (`[+0x24]`: 1/4 área, 2
+  posicionamento, 3 ponto), o limite, e **zera a contagem**. O porte chamava
+  esse limite de "modo"; os comentários da tabela de comandos foram
+  corrigidos.
+- **Ctrl + clique** (`sub_41AAA0`, `WM_LBUTTONDOWN` com `MK_CONTROL`, testado
+  antes de tudo): com `[+0x34] != 0`, grava o ponto e toca o som `0x59`; com a
+  lista cheia, **troca o último**. Com o limite 0 — ou sem comando armado —,
+  nada: nem ponto, nem seleção, nem alvo.
+- **Os limites** (o 3º argumento do `sub_41B550`): **7** para mover, ficar
+  parado, guardar, reparar/tomar/desmontar e as obras (kit e mina); atacar
+  também, mas **0** quando o único selecionado é um prédio armado (bit `0x80`,
+  que não anda); **6** na patrulha e **5** na rota de minério, que **rearmam**
+  a cada clique com o que sobra (`7 − usados`, `6 − usados`); **0** em muros,
+  tubos e terraplenagem.
+- **No pacote** (`sub_451420`): cada ponto vira um LOCATION de pixel com a
+  folga de chegada **2** nos bits 29..31 (`dl = 2`: chegar a até 2 tiles),
+  **antes** do alvo. Mover/doca e ficar parado acrescentam o alvo por último
+  (folga 0); a obra acrescenta o local (o `inc word ptr [ebx]` do
+  `sub_451B30`); ataque, guarda e reparo levam só os intermediários — o alvo
+  deles vai em outro campo.
+- **Patrulha e rota de minério** (`sub_454540` / `sub_453FA0`) copiam os
+  pontos do Ctrl para a lista delas **antes** de cada ponto clicado; o índice
+  de recomeço da patrulha e os índices da mina e da fundição apontam para o
+  ponto **clicado**.
+- **O desenho** (`sub_41B620`, `loc_41B74D`): em cada ponto, um quadrado
+  **cheio** de 17×17 px vermelho (`0x7C00`, `sub_41F3E0`) e, dentro, o número
+  dele em branco (`'0' + [+0x38] + i` — 1, 2, 3…), na fonte comum. E com Ctrl
+  apertado numa mira de posicionamento (estado 2), o retângulo da obra **não**
+  é desenhado — ali o clique é ponto, não obra.
+
+### No porte
+
+`uiWaypointsArm` / `uiWaypointAdd` / `uiWaypoints` (em `commands`), o limite
+de cada comando no `uiCommandClick`, os pontos em cada pacote, o Ctrl no
+clique do `GameState` e o desenho. A ordem de obra (`setBuildOrder`) passou a
+receber a lista inteira, com o local por último. O pacote leva os pontos na
+rede sem mudança (a serialização já levava a lista de qualquer tipo).
+
+**Ficou de fora:** remover muro. O original aceita 7 pontos ali, mas no porte o
+Earthworker vai até o muro sem lista de pontos (`applyRemoveWall`); lá o
+limite fica 0.
+
+### O teste — `--waypointtest <mapa> [bmp]`
+
+31 casos, pelo botão do comando e pelo mouse de verdade (Ctrl no
+`SDL_SetModState`): sem mira, Ctrl + clique não faz nada; mover arma com limite
+7, acrescenta pontos sem disparar, desenha o quadrado vermelho com o número
+branco, para em 7 trocando o último, zera ao rearmar; o alvo dispara a ordem
+com os 2 pontos (folga 2) e o alvo (folga 0), e o caminhão passa a até 2 tiles
+de cada ponto, na ordem, antes de chegar; o muro tem limite 0 e o Ctrl + clique
+não o dispara; a patrulha arma com 6, reabre com 4 depois do ponto inicial, e
+manda 5 pontos recomeçando no índice 2; o kit arma com 7 e a ordem da obra
+leva o ponto antes do local. Com o `bmp`, salva o quadro com os pontos.
+
+> Uma armadilha do próprio porte, pega olhando a imagem e que o teste agora
+> cobre: o `UiFont::draw` recebe a largura como **passo da linha**; passando a
+> largura da vista, o número saía espalhado fora do quadrado.
 
 ---
 
@@ -2649,6 +2719,7 @@ São 109 modos. Os que cobrem regressão de verdade:
 | `--drawordertest <mapa>` | a ordem de desenho: veículo atrás de prédio, efeitos por cima, desastres por último, a doca |
 | `--detourtest <mapa>` | quem vem de frente dá passagem: o encontro no corredor, a tabela de decisão do `sub_44BBA0` e o desvio inalcançável |
 | `--exitbeeptest` | o bipe da saída: toca o `beep5.wav` e espera 3,5 s uma vez por sessão; sem som, não espera |
+| `--waypointtest <mapa> [bmp]` | pontos de passagem com Ctrl + clique: limites por comando, o pacote com os pontos antes do alvo, a unidade passando por eles, patrulha e obra, e o desenho |
 | `--selecttest <mapa>` | a área de clique das unidades, e a seleção com Shift e com o botão do meio (soma, tira, caixa que soma, as exceções) |
 | `--stacktest <DLL> [bmp]` | estresse do empurrão: todos os veículos do jogador indo e voltando em grupo; nunca dois no mesmo tile, e ninguém sobra andando ao fim de cada perna |
 | `--missiontest <DLL> <saida> <ticks>` | carrega e roda qualquer missão |

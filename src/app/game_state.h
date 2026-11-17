@@ -279,7 +279,7 @@ public:
     void debugSelectAt(int vx, int vy) { selectAt(vx, vy, false); }
     // --selecttest: um evento de mouse de verdade no ponto (wx, wy) do MUNDO,
     // com ou sem Shift (SDL_SetModState). A camera fica onde esta.
-    void debugMouse(Renderer& r, int wx, int wy, int button, bool down, bool shift);
+    void debugMouse(Renderer& r, int wx, int wy, int button, bool down, bool shift, bool ctrl = false);
     void debugClearSelection() { m_selected.clear(); }
     int debugSelectedCount() const { return static_cast<int>(m_selected.size()); }
     int debugSelectedId(int i) const {

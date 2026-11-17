@@ -104,7 +104,8 @@ void weaponAttackStart(int id);
 void weaponAttackTick(int id);
 void weaponGuardTick(int id);                     // case 37 (ação 0x25)
 // sub_4534F0: pacote 0x25 c/ a unidade aliada sob o clique (ou nenhuma).
-void sendGuardTarget(int me, const std::vector<int>& sel, int tileX, int tileY);
+void sendGuardTarget(int me, const std::vector<int>& sel, int tileX, int tileY,
+                     const std::vector<uint32_t>& wps = {});   // wps: os pontos do Ctrl (sub_451420)
 
 // Utilitários compartilhados com os desastres:
 int8_t  dirCos(uint8_t dir);                 // byte_4E9AF8 (cos * 64)

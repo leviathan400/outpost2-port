@@ -15,6 +15,12 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
 
 **Novo**
 
+- **Pontos de passagem com Ctrl + clique**, como no original: depois de
+  apertar um comando — mover, ficar parado, atacar, guardar, construir,
+  reparar, patrulhar, rota de minério —, cada **Ctrl + clique** no mapa marca
+  um ponto, desenhado como um quadrado vermelho numerado, e a unidade passa por
+  eles, na ordem, antes de ir ao alvo. Até 7 pontos na maioria dos comandos (6
+  na patrulha, 5 na rota de minério). Cheio, o último ponto é trocado.
 - **Shift na seleção**, como no original: **Shift + clique** num veículo põe
   ele na seleção, ou tira se já estava; o **botão do meio** do mouse faz o
   mesmo. **Shift + caixa** soma os veículos à seleção — a caixa sem Shift
@@ -51,14 +57,20 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   amarelas na garagem de Plymouth, e o chão escuro com luzes na de Eden — antes
   o terreno aparecia por dentro do prédio.
 
-**Para quem acompanha o código:** seções 5.28 a 5.32 do PORT_STATUS; os modos
-de teste `--stacktest` (que veio do PR #2) e `--exitbeeptest`; casos novos no `--scrolltest`, no
+**Para quem acompanha o código:** seções 5.28 a 5.33 do PORT_STATUS; os modos
+de teste `--stacktest` (que veio do PR #2), `--exitbeeptest` e `--waypointtest`; casos novos no `--scrolltest`, no
 `--drawordertest`, no `--uitest`, no `--optmenutest` e no `--selecttest`.
 
 ### English
 
 **New**
 
+- **Ctrl+click waypoints**, as in the original: after pressing a command —
+  move, stand ground, attack, guard, build, repair, patrol, ore route —, each
+  **Ctrl+click** on the map marks a point, drawn as a numbered red square, and
+  the unit goes through them, in order, before heading to the target. Up to 7
+  points for most commands (6 for patrol, 5 for the ore route). When full, the
+  last point is replaced.
 - **Shift in selection**, as in the original: **Shift+click** on a vehicle
   adds it to the selection, or removes it if it was already there; the
   **middle mouse button** does the same. **Shift+box** adds the vehicles to the
@@ -94,8 +106,8 @@ de teste `--stacktest` (que veio do PR #2) e `--exitbeeptest`; casos novos no `-
   arrows in the Plymouth garage, and the dark lit floor in the Eden one — the
   terrain used to show through the building.
 
-**For those following the code:** sections 5.28 to 5.32 of PORT_STATUS; the
-`--stacktest` (from PR #2) and `--exitbeeptest` test modes; new cases in `--scrolltest`,
+**For those following the code:** sections 5.28 to 5.33 of PORT_STATUS; the
+`--stacktest` (from PR #2), `--exitbeeptest` and `--waypointtest` test modes; new cases in `--scrolltest`,
 `--drawordertest`, `--uitest`, `--optmenutest` and `--selecttest`.
 
 ---

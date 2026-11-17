@@ -92,9 +92,13 @@ void dispatchCommandPacket(int owner, const CommandPacket& p) {
             return;
         case CMD_STOP:          applyStop(owner, p.unitIds); return;
         case CMD_BUILD:
-            for (int id : p.unitIds)
-                processBuildPacket(owner, id, p.waypoints.empty() ? 0u : p.waypoints[0],
-                                   p.rectL, p.rectT, p.rectR, p.rectB, p.arg0);
+            for (int id : p.unitIds) {
+                // O local da obra e o ULTIMO ponto; antes dele, os do Ctrl.
+                const std::vector<uint32_t> mid(p.waypoints.begin(),
+                                                p.waypoints.empty() ? p.waypoints.end() : p.waypoints.end() - 1);
+                processBuildPacket(owner, id, p.waypoints.empty() ? 0u : p.waypoints.back(),
+                                   p.rectL, p.rectT, p.rectR, p.rectB, p.arg0, &mid);
+            }
             return;
         case CMD_BUILD_WALL:
             for (int id : p.unitIds)

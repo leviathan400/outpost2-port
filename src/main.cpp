@@ -4489,6 +4489,175 @@ static int runExitBeepTest() {
     return ruins ? 1 : 0;
 }
 
+// --waypointtest <mapa>: os pontos de passagem do Ctrl + clique (sub_41AAA0
+// com MK_CONTROL; sub_41B550 arma o limite; sub_451420 os poe no pacote; o
+// desenho do sub_41B620). Tudo pelo caminho do jogador: o botao do comando
+// (pressCommand) e o mouse de verdade (debugMouse, Ctrl/Shift no SDL_SetModState).
+static int runWaypointTest(const std::string& mapName, const std::string& shot) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 waypointtest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    op2::resetUnits();
+    const int MW = op2::g_gameMap.width(), MH = op2::g_gameMap.height();
+    int bx = -1, by = -1;
+    for (int y = 8; y < MH - 12 && bx < 0; ++y)
+        for (int x = 8; x < MW - 24 && bx < 0; ++x) {
+            bool ok = true;
+            for (int dy = -6; dy <= 8 && ok; ++dy)
+                for (int dx = -2; dx <= 20 && ok; ++dx)
+                    if (!op2::g_gameMap.isPassable(op2::LOCATION{x + dx, y + dy})) ok = false;
+            if (ok) { bx = x; by = y; }
+        }
+    if (bx < 0) { std::printf("[Wp] sem area livre\n"); return 3; }
+    struct Caso { std::string nome; long long obtido, esperado; };
+    std::vector<Caso> casos;
+    const auto px = [](int t) { return (t << 5) + 16; };
+    op2::Unit tr;
+    op2::TethysGame::CreateUnit(tr, op2::mapCargoTruck, op2::LOCATION{bx, by}, 0);
+    gs.onIdle(renderer, 0.0f);
+    gs.setCamera(bx * 32 - 64, by * 32 - 192);
+    gs.onIdle(renderer, 0.0f);
+    const auto clica = [&](int wx, int wy, bool ctrl, int botao = SDL_BUTTON_LEFT) {
+        gs.debugMouse(renderer, wx, wy, botao, true, false, ctrl);
+        gs.debugMouse(renderer, wx, wy, botao, false, false, ctrl);
+    };
+
+    // 1) Ctrl + clique SEM comando armado: nada -- nem ponto, nem selecao.
+    gs.setSelection({tr.id()});
+    clica(px(bx + 3), px(by + 3), true);
+    casos.push_back({"sem mira: Ctrl+clique nao poe ponto", (long long)op2::uiWaypoints().size(), 0});
+    casos.push_back({"... nem mexe na selecao", gs.debugSelectedCount() == 1 && gs.debugSelectedId(0) == tr.id() ? 1 : 0, 1});
+
+    // 2) Mover: limite 7; tres pontos; o oitavo troca o setimo.
+    gs.pressCommand(op2::UC_MOVE);
+    casos.push_back({"mover arma a mira", gs.debugArmed() == op2::UC_MOVE ? 1 : 0, 1});
+    casos.push_back({"... com limite de 7 pontos", op2::uiWaypointCap(), 7});
+    clica(px(bx + 4), px(by - 3), true);
+    clica(px(bx + 8), px(by + 4), true);
+    casos.push_back({"Ctrl+clique acrescenta pontos", (long long)op2::uiWaypoints().size(), 2});
+    casos.push_back({"... e a mira continua armada", gs.debugArmed() == op2::UC_MOVE ? 1 : 0, 1});
+    // o desenho: o centro do 1o ponto fica vermelho
+    {
+        gs.onIdle(renderer, 0.0f);
+        int cx = 0, cy = 0;
+        gs.debugCamera(cx, cy);
+        int vx0, vy0, vw0, vh0;
+        gs.debugViewRect(vx0, vy0, vw0, vh0);
+        const uint32_t* fb = renderer.getFramebuffer();
+        const int W = renderer.getWidth();
+        const int sx = vx0 + px(bx + 4) - cx - 6, sy = vy0 + px(by - 3) - cy - 6;   // canto do quadrado (fora do numero)
+        const uint32_t c = fb[sy * W + sx];
+        casos.push_back({"o ponto e desenhado em vermelho", ((c & 0xFFFFFF) == 0xF80000) ? 1 : 0, 1});
+        int brancos = 0;                                   // o numero, em branco, dentro do quadrado
+        for (int yy = sy - 2; yy <= sy + 14; ++yy)
+            for (int xx = sx - 2; xx <= sx + 14; ++xx)
+                if ((fb[yy * W + xx] & 0xFFFFFF) == 0xFFFFFF) ++brancos;
+        casos.push_back({"... com o numero em branco dentro", brancos > 3 ? 1 : 0, 1});
+        if (!shot.empty() && writeBmp32(shot, fb, W, renderer.getHeight()))
+            std::printf("[Wp] quadro salvo em %s%c", shot.c_str(), 10);
+    }
+    for (int k = 0; k < 6; ++k) clica(px(bx + 2 + k), px(by + 6), true);
+    casos.push_back({"no limite, a lista para em 7", (long long)op2::uiWaypoints().size(), 7});
+    casos.push_back({"... trocando o ultimo", (op2::uiWaypoints().back().x >> 5) == bx + 7 ? 1 : 0, 1});
+
+    // 3) Armar de novo zera; o alvo manda o pacote com os pontos antes dele.
+    gs.pressCommand(op2::UC_MOVE);
+    casos.push_back({"armar de novo zera os pontos", (long long)op2::uiWaypoints().size(), 0});
+    clica(px(bx + 6), px(by - 4), true);
+    clica(px(bx + 12), px(by + 5), true);
+    clica(px(bx + 16), px(by), false);                     // o alvo
+    gs.onIdle(renderer, 0.2501f / 4.0f);
+    const op2::UnitRecord& r = op2::g_units[tr.id()];
+    casos.push_back({"o alvo dispara o comando (mira desarmada)", gs.debugArmed() < 0 ? 1 : 0, 1});
+    casos.push_back({"a ordem tem 3 pontos (2 do Ctrl + o alvo)", r.hasOrder ? r.order.count : -1, 3});
+    if (r.hasOrder && r.order.waypoints.size() == 3) {
+        casos.push_back({"os do Ctrl com folga 2 (bits 29..31)",
+                         ((r.order.waypoints[0] >> 29) == 2 && (r.order.waypoints[1] >> 29) == 2) ? 1 : 0, 1});
+        casos.push_back({"... nos tiles clicados",
+                         (op2::unpackLocX(r.order.waypoints[0]) == bx + 6 && op2::unpackLocY(r.order.waypoints[0]) == by - 4 &&
+                          op2::unpackLocX(r.order.waypoints[1]) == bx + 12 && op2::unpackLocY(r.order.waypoints[1]) == by + 5) ? 1 : 0, 1});
+        casos.push_back({"o alvo por ultimo, folga 0", ((r.order.waypoints[2] >> 29) == 0 &&
+                          op2::unpackLocX(r.order.waypoints[2]) == bx + 16) ? 1 : 0, 1});
+    }
+    // e o caminhao passa perto de cada ponto, na ordem, antes de chegar
+    int perto1 = -1, perto2 = -1, chegou = -1;
+    for (int t = 0; t < 1500 && chegou < 0; ++t) {
+        gs.onIdle(renderer, 0.2501f / 4.0f);
+        const op2::UnitRecord& u = op2::g_units[tr.id()];
+        const int ux = u.pixelX >> 5, uy = u.pixelY >> 5;
+        if (perto1 < 0 && std::abs(ux - (bx + 6)) <= 2 && std::abs(uy - (by - 4)) <= 2) perto1 = t;
+        if (perto2 < 0 && perto1 >= 0 && std::abs(ux - (bx + 12)) <= 2 && std::abs(uy - (by + 5)) <= 2) perto2 = t;
+        if (!u.hasOrder && ux == bx + 16 && uy == by) chegou = t;
+    }
+    std::printf("[Wp] ponto 1 em t=%d, ponto 2 em t=%d, chegou em t=%d\n", perto1, perto2, chegou);
+    casos.push_back({"passa a ate 2 tiles do 1o ponto", perto1 >= 0 ? 1 : 0, 1});
+    casos.push_back({"... depois do 2o", perto2 > perto1 ? 1 : 0, 1});
+    casos.push_back({"... e chega ao alvo depois", chegou > perto2 ? 1 : 0, 1});
+    gs.onIdle(renderer, 0.0f);
+
+    // 4) Muro: limite 0 -- o Ctrl+clique nao faz nada.
+    op2::Unit ew;
+    op2::TethysGame::CreateUnit(ew, op2::mapEarthworker, op2::LOCATION{bx + 2, by + 2}, 0);
+    gs.setSelection({ew.id()});
+    gs.pressCommand(op2::UC_WALL);
+    casos.push_back({"muro: limite 0", op2::uiWaypointCap(), 0});
+    clica(px(bx + 5), px(by + 2), true);
+    casos.push_back({"... Ctrl+clique nao poe ponto", (long long)op2::uiWaypoints().size(), 0});
+    casos.push_back({"... nem dispara o muro", gs.debugArmed() == op2::UC_WALL ? 1 : 0, 1});
+    gs.debugArmCommand(-1);
+
+    // 5) Patrulha: limite 6; dois pontos e o inicial -> reabre com 7 - 3 = 4;
+    //    um ponto e o final -> 5 pontos, a patrulha recomeca no indice 2.
+    op2::Unit ly;
+    op2::TethysGame::CreateUnit(ly, op2::mapLynx, op2::LOCATION{bx + 1, by - 2}, 0, 0x3D);
+    gs.setSelection({ly.id()});
+    gs.pressCommand(op2::UC_PATROL);
+    casos.push_back({"patrulha: limite 6", op2::uiWaypointCap(), 6});
+    clica(px(bx + 4), px(by - 5), true);
+    clica(px(bx + 7), px(by - 5), true);
+    clica(px(bx + 10), px(by - 4), false);                 // ponto inicial
+    casos.push_back({"... reabre com 7 - 3 = 4", op2::uiWaypointCap(), 4});
+    casos.push_back({"... e a lista zerada", (long long)op2::uiWaypoints().size(), 0});
+    clica(px(bx + 13), px(by - 2), true);
+    clica(px(bx + 16), px(by - 1), false);                 // ponto final
+    gs.onIdle(renderer, 0.2501f / 4.0f);
+    const op2::UnitRecord& l = op2::g_units[ly.id()];
+    casos.push_back({"... a ordem tem 5 pontos", l.hasOrder ? l.order.count : -1, 5});
+    casos.push_back({"... e recomeca no ponto inicial (indice 2)", l.patrolStart, 2});
+
+    // 6) Obra: o kit vai com os pontos antes do local, e o local por ultimo.
+    op2::Unit cv;
+    op2::TethysGame::CreateUnit(cv, op2::mapConVec, op2::LOCATION{bx + 1, by + 6}, 0, op2::mapCommandCenter);
+    gs.setSelection({cv.id()});
+    gs.pressCommand(op2::UC_BUILD_KIT);
+    casos.push_back({"kit: limite 7", op2::uiWaypointCap(), 7});
+    clica(px(bx + 5), px(by + 7), true);
+    clica(px(bx + 14), px(by + 4), false);                 // o local
+    gs.onIdle(renderer, 0.2501f / 4.0f);
+    const op2::UnitRecord& c = op2::g_units[cv.id()];
+    casos.push_back({"... a ordem da obra tem 2 pontos", c.hasOrder ? c.order.count : -1, 2});
+    if (c.hasOrder && c.order.waypoints.size() == 2)
+        casos.push_back({"... o do Ctrl primeiro, com folga 2",
+                         ((c.order.waypoints[0] >> 29) == 2 && op2::unpackLocX(c.order.waypoints[0]) == bx + 5) ? 1 : 0, 1});
+    casos.push_back({"... e a acao e a da obra (6)", c.action, 6});
+
+    int ruins = 0;
+    for (const Caso& k : casos) {
+        const bool ok = k.obtido == k.esperado;
+        if (!ok) ++ruins;
+        std::printf("[Wp] %-46s %lld (esperado %lld) %s\n", k.nome.c_str(), k.obtido, k.esperado, ok ? "ok" : "FALHOU");
+    }
+    std::printf("[Wp] %d casos, %d falhas\n", (int)casos.size(), ruins);
+    renderer.shutdown();
+    SDL_Quit();
+    return ruins ? 1 : 0;
+}
+
 // --detourtest <mapa>: o DESVIO de quem vem de frente (sub_44BBA0, ramo do
 // bloqueador em movimento -> sub_44BFD0; a parada de 32 tiques em loc_44C1D2).
 // Tres partes. (1) Dois veiculos, com ordem de mover dada pelo clique direito
@@ -7803,6 +7972,8 @@ int main(int argc, char* argv[]) {
             return runMusicTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--optmenutest") == 0 && i + 1 < argc)
             return runOptMenuTest(argv[i + 1]);
+        if (std::strcmp(argv[i], "--waypointtest") == 0 && i + 1 < argc)
+            return runWaypointTest(argv[i + 1], i + 2 < argc && argv[i + 2][0] != '-' ? argv[i + 2] : "");
         if (std::strcmp(argv[i], "--exitbeeptest") == 0)
             return runExitBeepTest();
         if (std::strcmp(argv[i], "--stacktest") == 0 && i + 1 < argc)

@@ -367,10 +367,12 @@ void unitPatrolTick(int id) {                                // sub_43ACA0 case 
 // o pacote volta pelo turno, em todas as maquinas. Era assim no original (todo
 // comando passa pelo CommandPacket) e e o que mantem a partida em rede no
 // mesmo passo.
-static void submit(int type, const std::vector<int>& ids, uint32_t target = 0) {
+static void submit(int type, const std::vector<int>& ids, uint32_t target = 0,
+                   const std::vector<uint32_t>* wps = nullptr) {
     CommandPacket pkt;
     pkt.type = type;
     pkt.target = target;
+    if (wps) pkt.waypoints = *wps;
     const int me = TethysGame::localPlayer();
     for (int id : ids)
         if (id > 0 && id < static_cast<int>(g_units.size()) && (g_units[id].owner & 0x0F) == me)
@@ -491,39 +493,99 @@ static struct {
 
 const std::string& uiCommandHint() { return s_hint; }
 
+namespace {
+int s_wpCap = 0;                                    // [dword_547170+0x34]
+std::vector<WaypointPx> s_wp;                       // [+0x3C] / [+0x40..]
+}
+void uiWaypointsArm(int cap) { s_wpCap = cap < 0 ? 0 : cap; s_wp.clear(); }
+int uiWaypointCap() { return s_wpCap; }
+const std::vector<WaypointPx>& uiWaypoints() { return s_wp; }
+bool uiWaypointAdd(int px, int py) {                // sub_41AAA0, WM_LBUTTONDOWN com MK_CONTROL
+    if (s_wpCap <= 0) return false;                 // [+0x34] == 0: nada
+    if (static_cast<int>(s_wp.size()) >= s_wpCap) s_wp.pop_back();   // cheio: dec [+0x3C]
+    s_wp.push_back({px, py});
+    soundPlay(0x59);
+    return true;
+}
+
+// sub_451420: cada ponto da mira vira um LOCATION de pixel -- x nos bits 0..14,
+// y nos 15..28 -- com a folga de chegada nos bits 29..31 (dl = 2: chegar a ate
+// 2 tiles). Vem ANTES do alvo do comando.
+static void appendWaypoints(std::vector<uint32_t>& out) {
+    for (const WaypointPx& w : s_wp) {
+        uint32_t v = static_cast<uint32_t>(w.x) & 0x7FFFu;
+        v |= (static_cast<uint32_t>(w.y) << 15) & 0x1FFF8000u;
+        v |= 2u << 29;
+        out.push_back(v);
+    }
+}
+
+// O limite de pontos de cada comando, o 3o argumento do sub_41B550 em cada
+// vt[1]: 7 em quase todos; atacar (sub_4530D0) e o sub_4552C0 caem para 0 quando
+// o unico selecionado e um predio armado (bit 0x80), que nao anda; patrulha 6
+// (sub_4544F0), rota de minerio 5 (sub_453F50); muros, terraplenagem e salvage
+// de regiao, 0. Remover muro (sub_452B40) aceita 7 no original, mas aqui o
+// Earthworker vai ate o muro sem lista de pontos (applyRemoveWall): fica 0.
+static int waypointCapFor(int cmd, const std::vector<int>& sel) {
+    switch (cmd) {
+        case UC_MOVE: case UC_STAND_GROUND: case UC_GUARD:
+        case UC_BUILD_KIT: case UC_BUILD_MINE:
+        case UC_REPAIR: case UC_TAKE_OVER: case UC_DISMANTLE:
+            return 7;
+        case UC_ATTACK:
+            if (sel.size() == 1 && (g_units[sel[0]].flags & 0x80u)) return 0;
+            return 7;
+        case UC_PATROL: return 6;
+        case UC_ORE_ROUTE: return 5;
+        default: return 0;
+    }
+}
+
 // Ponto da patrulha: pixel do clique empacotado (x & 0x7FFF) | (y << 15), com
 // os bits 29-31 = 3 (chegar a até 3 tiles de cada ponto intermediário).
 static uint32_t patrolPoint(int tileX, int tileY) {
     return packLocation(tileX, tileY) | 0x60000000u;
 }
 
+static UiClick uiCommandClickImpl(int cmd, const std::vector<int>& sel);
+
 UiClick uiCommandClick(int cmd, const std::vector<int>& sel) {
+    // sub_41B550(estado, comando, limite, ...): armar a mira poe o ESTADO
+    // ([+0x24]: 1/4 area, 2 posicionamento, 3 ponto), o limite de pontos de
+    // passagem ([+0x34]) e zera a contagem ([+0x3C]). Os comentarios da tabela
+    // abaixo dizem os dois de cada comando.
+    const UiClick r = uiCommandClickImpl(cmd, sel);
+    uiWaypointsArm(r == UiClick::TARGET ? waypointCapFor(cmd, sel) : 0);
+    return r;
+}
+
+static UiClick uiCommandClickImpl(int cmd, const std::vector<int>& sel) {
     s_hint.clear();
     switch (cmd) {
         case UC_STOP: sendStop(sel); return UiClick::DONE;              // sub_455540 (pacote 5)
         case UC_SELF_DESTRUCT: sendSelfDestruct(sel); return UiClick::DONE;   // sub_4555F0 (0x14)
-        case UC_MOVE: return UiClick::TARGET;                           // sub_451260 (modo 7)
-        case UC_STAND_GROUND: return UiClick::TARGET;                   // sub_4518E0 (modo 7)
+        case UC_MOVE: return UiClick::TARGET;                           // sub_451260 (estado 3, ate 7 pontos)
+        case UC_STAND_GROUND: return UiClick::TARGET;                   // sub_4518E0 (estado 3, ate 7 pontos)
         case UC_ATTACK: return UiClick::TARGET;                         // sub_4530D0
-        case UC_GUARD: return UiClick::TARGET;                          // sub_4534D0 (modo 7)
-        case UC_BUILD_KIT: return UiClick::TARGET;                      // sub_451AC0 (modo 2, área do kit)
-        case UC_BUILD_MINE: return UiClick::TARGET;                     // sub_451FC0 (modo 2, área da mina)
-        case UC_WALL: case UC_LAVA_WALL: case UC_MICROBE_WALL: case UC_TUBE:   // sub_452640 (modo 4)
-        case UC_BULLDOZE:                                               // sub_453760 (modo 1)
-        case UC_REMOVE_WALL:                                            // sub_452B40 (modo 3)
+        case UC_GUARD: return UiClick::TARGET;                          // sub_4534D0 (estado 3, ate 7 pontos)
+        case UC_BUILD_KIT: return UiClick::TARGET;                      // sub_451AC0 (estado 2, área do kit; ate 7 pontos)
+        case UC_BUILD_MINE: return UiClick::TARGET;                     // sub_451FC0 (estado 2, área da mina; ate 7 pontos)
+        case UC_WALL: case UC_LAVA_WALL: case UC_MICROBE_WALL: case UC_TUBE:   // sub_452640 (estado 4, sem pontos)
+        case UC_BULLDOZE:                                               // sub_453760 (estado 1, sem pontos)
+        case UC_REMOVE_WALL:                                            // sub_452B40 (estado 3, ate 7 pontos no original)
             return UiClick::TARGET;
-        case UC_ORE_ROUTE:                                              // sub_453F50 (modo 3)
+        case UC_ORE_ROUTE:                                              // sub_453F50 (estado 3, ate 5 pontos)
             s_ore = {};
             s_hint = "Set path to mine";
             return UiClick::TARGET;
-        case UC_PATROL:                                                 // sub_4544F0 (modo 6)
+        case UC_PATROL:                                                 // sub_4544F0 (estado 3, ate 6 pontos)
             s_patrol = {};
             s_hint = "Set path to initial patrol point";
             return UiClick::TARGET;
         case UC_SCATTER: sendScatter(sel); return UiClick::DONE;        // sub_4556B0 (0x15)
-        case UC_SALVAGE: return UiClick::TARGET;                        // sub_453B20 (modo região)
+        case UC_SALVAGE: return UiClick::TARGET;                        // sub_453B20 (estado 3, 1 ponto; aqui, região)
         case UC_DETONATE: sendDetonate(sel); return UiClick::DONE;      // sub_457E40 (0x24 no próprio tile)
-        case UC_REPAIR: case UC_TAKE_OVER: case UC_DISMANTLE:          // sub_4548B0 etc. (modo 7)
+        case UC_REPAIR: case UC_TAKE_OVER: case UC_DISMANTLE:          // sub_4548B0 etc. (estado 3, ate 7 pontos)
             return UiClick::TARGET;
         // IDLE (pacote 0x12) / ACTIVATE (0x13). Quando desligar o prédio faria
         // o metal passar do teto de armazenagem, quem pergunta antes é o
@@ -604,13 +666,19 @@ static void sendRepairLike(int cmd, const std::vector<int>& sel) {
         }
     }
     const int type = cmd == UC_REPAIR ? 0x1C : cmd == UC_TAKE_OVER ? 0x1D : 0x1E;
-    submit(type, sel, static_cast<uint32_t>(tgt) | 0xFFFF0000u);
+    std::vector<uint32_t> wps;
+    appendWaypoints(wps);                                    // sub_451420 (sem o alvo)
+    submit(type, sel, static_cast<uint32_t>(tgt) | 0xFFFF0000u, &wps);
     soundPlay(0x56);
 }
 
 UiClick uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int tileY) {
     if (cmd == UC_REPAIR || cmd == UC_TAKE_OVER || cmd == UC_DISMANTLE) { sendRepairLike(cmd, sel); return UiClick::DONE; }
-    if (cmd == UC_BUILD_MINE) { sendBuildMine(sel, tileX, tileY); return UiClick::DONE; }   // sub_452010
+    if (cmd == UC_BUILD_MINE) {                              // sub_452010
+        std::vector<uint32_t> wps; appendWaypoints(wps);
+        sendBuildMine(sel, tileX, tileY, wps);
+        return UiClick::DONE;
+    }
     if (cmd == UC_REMOVE_WALL) {                             // sub_452B60 + sub_452D10
         if (!sendRemoveWall(sel, tileX, tileY)) { soundPlay(0x58); return UiClick::TARGET; }
         return UiClick::DONE;
@@ -621,17 +689,22 @@ UiClick uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int til
         const int stage = !s_ore.mine ? 0 : !s_ore.smelter ? 1 : 2;
         const int b = oreRouteTarget(stage, s_ore.mine, u->owner & 0x0F, tileX, tileY);
         if (!b) { soundPlay(0x58); return UiClick::TARGET; } // sub_41AAA0: alvo recusado
+        // sub_453FA0: os pontos do Ctrl entram antes do clicado, e os indices da
+        // mina e da fundicao apontam para o CLICADO ([+0x12] = contagem antes dele).
+        for (const WaypointPx& w : s_wp) s_ore.pts.push_back(packLocation(w.x >> 5, w.y >> 5));
         s_ore.pts.push_back(packLocation(tileX, tileY));
         soundPlay(0x59);
         if (stage == 0) {
-            s_ore.mine = b; s_ore.mineIdx = 0;
+            s_ore.mine = b; s_ore.mineIdx = static_cast<int>(s_ore.pts.size()) - 1;
             s_hint = "Set path from mine to smelter";
+            uiWaypointsArm(6 - static_cast<int>(s_ore.pts.size()));
             return UiClick::TARGET;
         }
         if (stage == 1) {
             s_ore.smelter = b;
             s_ore.smelterIdx = static_cast<int>(s_ore.pts.size()) - 1;
             s_hint = "Set path from smelter back to mine";
+            uiWaypointsArm(7 - static_cast<int>(s_ore.pts.size()));
             return UiClick::TARGET;
         }
         s_hint.clear();
@@ -641,13 +714,17 @@ UiClick uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int til
         return UiClick::DONE;
     }
     if (cmd == UC_PATROL) {                                  // sub_454540
+        // sub_454540: cada clique copia antes os pontos do Ctrl ([+0x3C] de
+        // dword_547170) e so entao o ponto clicado.
+        for (const WaypointPx& w : s_wp) s_patrol.pts.push_back(patrolPoint(w.x >> 5, w.y >> 5));
         if (s_patrol.stage == 0) {                           // 1º clique: ponto inicial
             s_patrol.stage = 1;
             s_patrol.start = static_cast<int>(s_patrol.pts.size());   // [+0xC] = [+0xE] = fila
             s_patrol.pts.push_back(patrolPoint(tileX, tileY));
             s_hint = "Set path to final patrol point";
             soundPlay(0x59);
-            return UiClick::TARGET;                          // mira de novo (7 - n pontos)
+            uiWaypointsArm(7 - static_cast<int>(s_patrol.pts.size()));   // mira de novo (7 - n pontos)
+            return UiClick::TARGET;
         }
         s_patrol.pts.push_back(patrolPoint(tileX, tileY));   // 2º clique: ponto final
         soundPlay(0x59);
@@ -670,7 +747,8 @@ UiClick uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int til
         const int me = TethysGame::localPlayer();
         CommandPacket pkt;
         pkt.type = 0x26;
-        pkt.waypoints.push_back(packLocation(tileX, tileY));
+        appendWaypoints(pkt.waypoints);                      // sub_451420: pontos do Ctrl...
+        pkt.waypoints.push_back(packLocation(tileX, tileY)); // ...e o alvo
         for (int id : sel)
             if ((g_units[id].owner & 0x0F) == me && (g_units[id].flags & UNIT_ARMED)) pkt.unitIds.push_back(id);
         if (!pkt.unitIds.empty()) commandSubmit(me, pkt);
@@ -689,13 +767,26 @@ UiClick uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int til
         if (occ > 0 && occ < static_cast<int>(g_units.size()) && g_units[occ].id != -1 &&
             !(g_units[occ].flags & UNIT_DEAD))
             tgt = static_cast<uint32_t>(occ) | 0xFFFF0000u;
-        if (!ids.empty()) submit(CMD_ATTACK, ids, tgt);
+        if (!ids.empty()) {
+            CommandPacket pkt;                               // pacote 0x24
+            pkt.type = CMD_ATTACK;
+            pkt.unitIds = ids;
+            pkt.target = tgt;
+            appendWaypoints(pkt.waypoints);                  // sub_451420 (sem o alvo)
+            commandSubmit(me, pkt);
+        }
         soundPlay(0x56);
         return UiClick::DONE;
     }
-    if (cmd == UC_BUILD_KIT) { sendBuildKit(sel, tileX, tileY); return UiClick::DONE; }   // sub_451B30
+    if (cmd == UC_BUILD_KIT) {                               // sub_451B30
+        std::vector<uint32_t> wps; appendWaypoints(wps);
+        sendBuildKit(sel, tileX, tileY, wps);
+        return UiClick::DONE;
+    }
     if (cmd == UC_GUARD) {                                   // sub_4534F0: pacote 0x25
-        sendGuardTarget(TethysGame::localPlayer(), sel, tileX, tileY);
+        std::vector<uint32_t> wps;
+        appendWaypoints(wps);                                // sub_451420 (sem o alvo)
+        sendGuardTarget(TethysGame::localPlayer(), sel, tileX, tileY, wps);
         soundPlay(0x56);
         return UiClick::DONE;
     }
@@ -723,7 +814,8 @@ UiClick uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int til
             }
         }
     }
-    pkt.waypoints.push_back(packLocation(tileX, tileY));
+    appendWaypoints(pkt.waypoints);                          // sub_451420: os pontos do Ctrl...
+    pkt.waypoints.push_back(packLocation(tileX, tileY));     // ...e o alvo (folga 0)
     for (int id : sel)
         if ((g_units[id].owner & 0x0F) == me && (g_units[id].flags & UNIT_VEHICLE)) pkt.unitIds.push_back(id);
     if (!pkt.unitIds.empty()) commandSubmit(me, pkt);

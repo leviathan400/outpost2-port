@@ -49,15 +49,19 @@ void kitPlacementRect(int w, int h, int tileX, int tileY, int& l, int& t, int& r
 }
 
 // sub_40E210 case 6 → vt[0x84] da ConVec (sub_423310).
-static void setBuildOrder(UnitRecord& u, uint32_t loc, int l, int t, int r, int b) {
+// Os pontos do pacote: os intermediarios do Ctrl (sub_451420) e, por ultimo, o
+// local da obra (o inc word ptr [ebx] do sub_451B30 o acrescenta).
+static void setBuildOrder(UnitRecord& u, uint32_t loc, int l, int t, int r, int b,
+                          const std::vector<uint32_t>* mid = nullptr) {
     u.action = 6;
     u.field20 = 1;
     u.field3C = 0;
     u.hasOrder = true;
     u.order = OrderBlock{};
-    u.order.count = 1;
-    u.order.countMinus1 = 0;
-    u.order.waypoints.assign(1, loc);
+    if (mid) u.order.waypoints = *mid;
+    u.order.waypoints.push_back(loc);
+    u.order.count = static_cast<int>(u.order.waypoints.size());
+    u.order.countMinus1 = u.order.count - 1;
     u.order.flags |= 1;
     u.clearRoute();
     u.buildL = static_cast<int16_t>(l); u.buildT = static_cast<int16_t>(t);   // [+0x62]/[+0x64]
@@ -71,14 +75,16 @@ void mineFootprint(int& w, int& h) {
 
 // sub_40E210 case 6: unidade comandável; ConVec só com kit; [+0x23] != 2 →
 // vt[0x84] (sub_423310 / sub_4233A0 / sub_423430: idênticos).
-static void sendBuildPacket(const std::vector<int>& sel, int w, int h, int tileX, int tileY) {
+static void sendBuildPacket(const std::vector<int>& sel, int w, int h, int tileX, int tileY,
+                            const std::vector<uint32_t>& wps) {
     const int me = TethysGame::localPlayer();
     int l, t, r, b;
     kitPlacementRect(w, h, tileX, tileY, l, t, r, b);
     soundPlay(0x56);
     CommandPacket pkt;
     pkt.type = CMD_BUILD;
-    pkt.waypoints.push_back(packLocation(r, b));         // canto inferior direito do anel
+    pkt.waypoints = wps;                                 // os pontos do Ctrl (sub_451420)...
+    pkt.waypoints.push_back(packLocation(r, b));         // ...e o canto inferior direito do anel
     pkt.rectL = l; pkt.rectT = t; pkt.rectR = r; pkt.rectB = b;
     pkt.arg0 = -1;                                       // [+0x6A]: sem grupo de IA
     for (int id : sel)
@@ -86,25 +92,28 @@ static void sendBuildPacket(const std::vector<int>& sel, int w, int h, int tileX
     if (!pkt.unitIds.empty()) commandSubmit(me, pkt);
 }
 
-bool processBuildPacket(int owner, int id, unsigned int loc, int l, int t, int r, int b, int group) {
+bool processBuildPacket(int owner, int id, unsigned int loc, int l, int t, int r, int b, int group,
+                        const std::vector<uint32_t>* mid) {
     if (!valid(id)) return false;
     UnitRecord& u = g_units[id];
     if (ownerOf(u) != (owner & 0x0F) || !commandable(u)) return false;
     if (u.type == mapConVec && u.cargo == 0) return false;
     if (u.field23 == 2) return false;
     if (u.type != mapConVec && u.type != mapRoboMiner && u.type != mapGeoCon) return false;   // vt[0x84] nulo
-    setBuildOrder(u, loc, l, t, r, b);
+    setBuildOrder(u, loc, l, t, r, b, mid);
     u.buildGroup = static_cast<int16_t>(group);          // [+0x6A]
     return true;
 }
 
-void sendBuildMine(const std::vector<int>& sel, int tileX, int tileY) {   // sub_452010
+void sendBuildMine(const std::vector<int>& sel, int tileX, int tileY,
+                   const std::vector<uint32_t>& wps) {   // sub_452010
     int w, h;
     mineFootprint(w, h);
-    sendBuildPacket(sel, w, h, tileX, tileY);
+    sendBuildPacket(sel, w, h, tileX, tileY, wps);
 }
 
-void sendBuildKit(const std::vector<int>& sel, int tileX, int tileY) {   // sub_451B30
+void sendBuildKit(const std::vector<int>& sel, int tileX, int tileY,
+                  const std::vector<uint32_t>& wps) {   // sub_451B30
     const int me = TethysGame::localPlayer();
     int w = 0, h = 0;
     for (int id : sel) if (kitFootprint(id, w, h)) break;
@@ -114,7 +123,8 @@ void sendBuildKit(const std::vector<int>& sel, int tileX, int tileY) {   // sub_
     soundPlay(0x56);
     CommandPacket pkt;                                   // case 6
     pkt.type = CMD_BUILD;
-    pkt.waypoints.push_back(packLocation(r, b));         // canto inferior direito do anel
+    pkt.waypoints = wps;                                 // os pontos do Ctrl (sub_451420)...
+    pkt.waypoints.push_back(packLocation(r, b));         // ...e o canto inferior direito do anel
     pkt.rectL = l; pkt.rectT = t; pkt.rectR = r; pkt.rectB = b;
     pkt.arg0 = -1;
     for (int id : sel)                                   // (o kit sai só do ConVec)

@@ -1137,7 +1137,8 @@ void weaponGuardTick(int id) {                               // sub_43ACA0 jpt_4
     u.field3C = 0x28;
 }
 
-void sendGuardTarget(int me, const std::vector<int>& sel, int tileX, int tileY) {   // sub_4534F0
+void sendGuardTarget(int me, const std::vector<int>& sel, int tileX, int tileY,
+                     const std::vector<uint32_t>& wps) {   // sub_4534F0
     std::vector<int> ids;
     for (int id : sel)
         if ((g_units[id].owner & 0x0F) == me && (g_units[id].flags & UNIT_ARMED)) ids.push_back(id);
@@ -1153,6 +1154,7 @@ void sendGuardTarget(int me, const std::vector<int>& sel, int tileX, int tileY) 
     pkt.type = CMD_GUARD;
     pkt.unitIds = ids;
     pkt.target = tgt;
+    pkt.waypoints = wps;                                      // intermediarios (sub_451420)
     commandSubmit(me, pkt);
 }
 

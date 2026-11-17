@@ -24,15 +24,19 @@ bool kitFootprint(int convecId, int& w, int& h);
 // Retângulo de posicionamento p/ o cursor no tile (x,y) — sub_41B960 (modo 2).
 void kitPlacementRect(int w, int h, int tileX, int tileY, int& l, int& t, int& r, int& b);
 // sub_451B30 + case 6 (jogador local).
-void sendBuildKit(const std::vector<int>& sel, int tileX, int tileY);
+void sendBuildKit(const std::vector<int>& sel, int tileX, int tileY,
+                  const std::vector<uint32_t>& wps = {});   // wps: os pontos do Ctrl
 // sub_452010: Robo-Miner / GeoCon — mesmo pacote 6 com a área da mina (off_4E1394).
-void sendBuildMine(const std::vector<int>& sel, int tileX, int tileY);
+void sendBuildMine(const std::vector<int>& sel, int tileX, int tileY,
+                   const std::vector<uint32_t>& wps = {});
 // Área da mina (desc 0x15 +0x248/+0x24A) — o retângulo de posicionamento do
 // Robo-Miner e da GeoCon (sub_451FC0).
 void mineFootprint(int& w, int& h);
 // sub_40E210 case 6 p/ uma unidade de `owner` (vt[0x84]); [+0x6A] = grupo do
 // prédio (−1 = nenhum). loc = ponto (canto inferior direito do anel).
-bool processBuildPacket(int owner, int id, unsigned int loc, int l, int t, int r, int b, int group);
+// mid: os pontos intermediarios do pacote (os do Ctrl), antes do local da obra.
+bool processBuildPacket(int owner, int id, unsigned int loc, int l, int t, int r, int b, int group,
+                        const std::vector<uint32_t>* mid = nullptr);
 // sub_44C410: gira [+0x1C] rumo ao alvo (no máximo Turn Rate por tick); true = virado.
 struct UnitRecord;
 bool unitTurnTo(UnitRecord& u, unsigned char target);

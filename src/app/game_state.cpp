@@ -1461,7 +1461,10 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     // tamanho da área no cursor). sub_41BC50 pergunta a cor de cada tile ao
     // comando (vt+0x14) e TINGE o tile inteiro com ela, misturando 50% com o
     // terreno (sub_41F1C0: dst = (dst>>1 & 0x3DEF) + (cor>>1 & 0x3DEF)).
-    if ((m_targetCmd == UC_BUILD_KIT || m_targetCmd == UC_BUILD_MINE) && !m_selected.empty()) {
+    // sub_41B620: com Ctrl apertado e uma mira que aceite pontos, o retangulo
+    // de posicionamento NAO e desenhado -- o clique ali e um ponto, nao a obra.
+    const bool ctrlPontos = uiWaypointCap() > 0 && (SDL_GetModState() & KMOD_CTRL);
+    if ((m_targetCmd == UC_BUILD_KIT || m_targetCmd == UC_BUILD_MINE) && !m_selected.empty() && !ctrlPontos) {
         int w = 0, h = 0;
         const int mvx = m_mouseNX - kViewX, mvy = m_mouseNY - kViewY;
         const bool mineCmd = m_targetCmd == UC_BUILD_MINE;
@@ -1494,6 +1497,22 @@ void GameState::onIdle(Renderer& renderer, float dt) {
                          uiCommandCellOk(m_targetCmd, m_selected, x & wm, y) ? 0x7FD0 : 0x7C00);
         const int sx = screenXOf(x1 * 32), sy = y1 * 32 - m_camY;
         renderer.drawRect(sx, sy, (x2 - x1) * 32, (y2 - y1) * 32, 0xFF0008F8);   // 0x3F
+    }
+    // Os pontos de passagem da mira (sub_41B620, loc_41B74D): em cada um, um
+    // quadrado CHEIO de 17x17 px vermelho (0x7C00, sub_41F3E0) centrado no
+    // ponto e, dentro, o numero dele em branco ('0' + [+0x38] + i: 1, 2, 3...),
+    // centrado (unk_5772A8, a fonte comum). So com a mira armada.
+    if (m_targetCmd >= 0) {
+        const std::vector<WaypointPx>& wps = uiWaypoints();
+        for (size_t i = 0; i < wps.size(); ++i) {
+            const int sx = screenXOf(wps[i].x), sy = wps[i].y - m_camY;
+            for (int yy = sy - 8; yy <= sy + 8; ++yy)
+                for (int xx = sx - 8; xx <= sx + 8; ++xx)
+                    if (xx >= 0 && xx < vw && yy >= 0 && yy < vh) fb[yy * m_fbW + xx] = 0xFFF80000u;
+            const std::string n(1, static_cast<char>('1' + i));
+            UiFont::draw(fb, m_fbW, m_fbH, n, sx - 8 + (16 - UiFont::width(n)) / 2,   // fbW = passo da linha
+                         sy - 8 + (16 - UiFont::lineHeight()) / 2, 0xFFFFFFFFu);
+        }
     }
     // Caixa de arrasto (multi-seleção).
     if (m_dragging) {
@@ -1832,8 +1851,8 @@ int GameState::unitAtView(int vx, int vy) const {
 }
 
 // --autoroutetest: o clique DIREITO num tile, pela porta do handleEvent.
-void GameState::debugMouse(Renderer& r, int wx, int wy, int button, bool down, bool shift) {
-    SDL_SetModState(shift ? KMOD_LSHIFT : KMOD_NONE);
+void GameState::debugMouse(Renderer& r, int wx, int wy, int button, bool down, bool shift, bool ctrl) {
+    SDL_SetModState(static_cast<SDL_Keymod>((shift ? KMOD_LSHIFT : 0) | (ctrl ? KMOD_LCTRL : 0)));
     int sx = 0, sy = 0;
     r.nativeToScreen(wx - m_camX + kViewX, wy - m_camY + kViewY, sx, sy);
     SDL_Event mv{};
@@ -2289,7 +2308,16 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
             for (const CmdButton& b : commandButtons())
                 if (nx >= b.l && nx < b.r && ny >= b.t && ny < b.b) { soundPlay(0x57); clickCommand(b.cmd); break; }
         }
-        if (e.button.button == SDL_BUTTON_LEFT && inView && m_targetCmd >= 0 && uiCommandIsArea(m_targetCmd)) {
+        if (e.button.button == SDL_BUTTON_LEFT && inView && (SDL_GetModState() & KMOD_CTRL)) {
+            // sub_41AAA0: o MK_CONTROL e testado ANTES de tudo. Com um comando
+            // armado que aceite pontos ([dword_547170+0x34] != 0), o clique
+            // acrescenta um ponto de passagem no pixel do cursor (cheio, troca o
+            // ultimo; som 0x59). Sem isso, nada -- nem selecao, nem alvo.
+            if (m_targetCmd >= 0) {
+                const int px = g_gameMap.ok() ? (m_camX + vx) & (g_gameMap.width() * 32 - 1) : m_camX + vx;
+                uiWaypointAdd(px, m_camY + vy);
+            }
+        } else if (e.button.button == SDL_BUTTON_LEFT && inView && m_targetCmd >= 0 && uiCommandIsArea(m_targetCmd)) {
             // Área (sub_41B550 modos 1/4): o arrasto começa aqui e termina ao soltar.
             m_areaDrag = true;
             m_areaSX = m_camX + vx; m_areaSY = m_camY + vy;
