@@ -13,6 +13,16 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
 
 ### Português
 
+**Novo**
+
+- **A rota de minério num clique liga e desliga pelo jogo**, sem editar o INI.
+  No `GAME PREFERENCES` do menu principal — agora mais largo, com uma coluna
+  *"Port extras"* para as opções que são acréscimo deste porte — há a caixa
+  **Auto Ore Route**: marcada, o clique direito na doca da mina monta a rota;
+  desmarcada, é como no original. Dentro da partida, a lista *Game
+  Preferences* da aba Options tem a linha **Auto Ore Route On/Off**, que vale
+  no `&APPLY` sem reiniciar a partida.
+
 **Corrigido**
 
 - **A última linha do mapa fica escondida**, como no original: a vista para no
@@ -23,10 +33,21 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   amarelas na garagem de Plymouth, e o chão escuro com luzes na de Eden — antes
   o terreno aparecia por dentro do prédio.
 
-**Para quem acompanha o código:** seção 5.28 do PORT_STATUS; casos novos
-no `--scrolltest` e no `--drawordertest`.
+**Para quem acompanha o código:** seções 5.28 e 5.29 do PORT_STATUS; casos
+novos no `--scrolltest`, no `--drawordertest`, no `--uitest` e no
+`--optmenutest`.
 
 ### English
+
+**New**
+
+- **The one-click ore route can be switched on and off in game**, without
+  editing the INI. The main menu's `GAME PREFERENCES` — now wider, with a
+  *"Port extras"* column for the options this port adds — has an **Auto Ore
+  Route** check box: checked, right-clicking a mine's dock builds the route;
+  unchecked, it behaves as the original. During a mission, the Options tab's
+  *Game Preferences* list has an **Auto Ore Route On/Off** line, which takes
+  effect on `&APPLY` without restarting the mission.
 
 **Fixed**
 
@@ -38,8 +59,8 @@ no `--scrolltest` e no `--drawordertest`.
   arrows in the Plymouth garage, and the dark lit floor in the Eden one — the
   terrain used to show through the building.
 
-**For those following the code:** section 5.28 of PORT_STATUS; new cases
-in `--scrolltest` and `--drawordertest`.
+**For those following the code:** sections 5.28 and 5.29 of PORT_STATUS; new
+cases in `--scrolltest`, `--drawordertest`, `--uitest` and `--optmenutest`.
 
 ---
 

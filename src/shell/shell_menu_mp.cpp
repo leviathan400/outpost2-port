@@ -404,6 +404,55 @@ bool ShellMenu::prefsTest(std::string& report) {
     }
     step("o modo de tela so vai para o INI no ACCEPT");
 
+    // --- a caixa AutoOreRoute (acrescimo do porte) ------------------------
+    // Pelo mouse. O INI comeca em 1 (o padrao); a caixa nasce marcada, o
+    // clique desmarca, sair sem ACCEPT nao grava, reabrir relê, e o ACCEPT
+    // grava 0. Depois o caminho de volta, de 0 para 1.
+    auto poeAor = [](int v) { Config c("OUTPOST2.INI"); c.load(); c.setInt("Game", "AutoOreRoute", v); c.save(); };
+    auto leAor = []() { Config c("OUTPOST2.INI"); return c.load() ? c.getInt("Game", "AutoOreRoute", -1) : -1; };
+    auto caixa = [&](int& x, int& y) {
+        x = y = -1;
+        for (const Control& c : m_controls)
+            if (c.id == 1204 && c.kind == CtrlKind::Check) { x = c.x + 6; y = c.y + c.h / 2; }
+        return x >= 0;
+    };
+    int xa = -1, ya = -1;
+    poeAor(1);
+    showPreferences();
+    if (!caixa(xa, ya)) { devolve(); report += "nao achei a caixa Auto Ore Route"; return false; }
+    int fimEsquerda = -1;               // a borda direita da coluna das caixas do original
+    for (const Control& c : m_controls)
+        if (c.kind == CtrlKind::Check && c.checkTarget == &m_prefSound) fimEsquerda = c.x + c.w;
+    if (fimEsquerda < 0 || xa < fimEsquerda) {
+        devolve(); report += "a caixa Auto Ore Route nao esta na coluna da direita do dialogo"; return false;
+    }
+    const bool nasceu = m_prefAutoOreRoute;
+    clica(xa, ya);
+    const bool clicada = m_prefAutoOreRoute;
+    showMainMenu();                     // sem ACCEPT
+    const int aorSem = leAor();
+    showPreferences();
+    const bool relida = m_prefAutoOreRoute;
+    caixa(xa, ya);
+    clica(xa, ya);
+    dispatchButton(1);                  // ACCEPT
+    const int aorZero = leAor();
+    showPreferences();
+    const bool nasceuDesmarcada = !m_prefAutoOreRoute;
+    caixa(xa, ya);
+    clica(xa, ya);
+    dispatchButton(1);
+    const int aorUm = leAor();
+    devolve();
+    if (!nasceu) { report += "com AutoOreRoute=1 a caixa nasceu desmarcada"; return false; }
+    if (clicada) { report += "o clique nao desmarcou a caixa"; return false; }
+    if (aorSem != 1) { report += "sair sem ACCEPT gravou o AutoOreRoute"; return false; }
+    if (!relida) { report += "reabrir nao releu o AutoOreRoute do INI"; return false; }
+    if (aorZero != 0) { report += "o ACCEPT nao gravou AutoOreRoute=0 (deu " + std::to_string(aorZero) + ")"; return false; }
+    if (!nasceuDesmarcada) { report += "com AutoOreRoute=0 a caixa nasceu marcada"; return false; }
+    if (aorUm != 1) { report += "o ACCEPT nao gravou AutoOreRoute=1 (deu " + std::to_string(aorUm) + ")"; return false; }
+    step("a caixa Auto Ore Route marca/desmarca e so grava no ACCEPT");
+
     showMainMenu();
     return true;
 }

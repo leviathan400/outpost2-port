@@ -34,7 +34,10 @@
 > requests, checked against the binary: the view stops at the bottom of the
 > map's clip rect, `sub_402E70`, so the last tile row is hidden — key
 > `ShowBottomRow` — and the Garage floor is drawn in the ground layer for both
-> factions). The recent changes are summarised in
+> factions) and **5.29** (the `AutoOreRoute` key on both preferences screens:
+> a check box in a new "Port extras" column of the main menu's `GAME
+> PREFERENCES`, now 480 px wide, and an On/Off line in the in-game list). The
+> recent changes are summarised in
 > [README.EN.md](README.EN.md).
 
 # Outpost 2: Divided Destiny — Modern Port (C++17/SDL2)
@@ -172,7 +175,7 @@ preferences screen; the original ignores keys it doesn't know.
 | `MenuSkin` | 0/1 | 0 | Menu style. 0 = the port's own look (dark-blue panels, main menu on the right); 1 = the original OP2 dialog skin (blueprint background, red frames, green text, art from `OP2SHRES.DLL`). |
 | `MapWrap` | 0/1 | 0 | Horizontal map wrap. 0 = as in the original: the view stops at the left/right edges of the map, and only "around the world" maps (512 tiles wide) wrap; 1 = every map wraps (the port's old behaviour). |
 | `ShowBottomRow` | 0/1 | 0 | Map's last tile row. 0 = as in the original: the view stops at the bottom of the map's clip rect, so the last row is hidden; 1 = the view can scroll down to show it. |
-| `AutoOreRoute` | 0/1 | 1 | One-click ore route (an addition of this port): with empty trucks selected, right-clicking a mine's dock builds the cycle to the nearest available compatible smelter (see 5.23 in the BR status). 0 = only the three-click command, as in the original. |
+| `AutoOreRoute` | 0/1 | 1 | One-click ore route (an addition of this port): with empty trucks selected, right-clicking a mine's dock builds the cycle to the nearest available compatible smelter (see 5.23 in the BR status). 0 = only the three-click command, as in the original. It can also be changed in game: the **Auto Ore Route** check box in the main menu's `GAME PREFERENCES`, and the line of the same name in the Options tab's `Game Preferences` (see 5.29). |
 
 ---
 

@@ -123,7 +123,11 @@ namespace {
     constexpr int kNcX = 180, kNcY = 130, kNcW = 280, kNcH = 220;
     // +28 de altura em relacao ao Dialog 142: a linha do modo de tela, que e
     // acrescimo do porte (como ja eram o combo da IA e a barra do volume).
-    constexpr int kPrX = 140, kPrY = 59, kPrW = 360, kPrH = 390;
+    // +120 de largura: a coluna da direita, com as caixas que sao extras do
+    // porte (a primeira e a rota de minerio num clique, AutoOreRoute). A
+    // altura nao tinha mais para onde crescer em 480.
+    constexpr int kPrX = 80, kPrY = 59, kPrW = 480, kPrH = 390;
+    constexpr int kPrExtraX = kPrX + 290;   // a coluna dos extras
     constexpr int kAbX = 140, kAbY = 100, kAbW = 360, kAbH = 300;
 }
 
@@ -432,9 +436,9 @@ void ShellMenu::rebuildControls() {
     }
     case MenuState::Preferences: {
         loadPrefs();
-        auto addCheck = [&](const char* t, int y, bool* tgt) {
-            Control c; c.kind = CtrlKind::Check; c.text = t;
-            c.x = kPrX + 24; c.y = y; c.w = 240; c.h = 14;
+        auto addCheck = [&](const char* t, int y, bool* tgt, int x = kPrX + 24, int w = 240, int id = 0) {
+            Control c; c.kind = CtrlKind::Check; c.text = t; c.id = id;
+            c.x = x; c.y = y; c.w = w; c.h = 14;
             c.checkTarget = tgt;
             m_controls.push_back(c);
         };
@@ -444,6 +448,9 @@ void ShellMenu::rebuildControls() {
         addCheck("Ambient Animations",    cy, &m_prefAnimations); cy += 24;
         addCheck("Unit Shadows",          cy, &m_prefUnitShadows);cy += 24;
         addCheck("Structure Shadows",     cy, &m_prefStructShadows);
+        // A coluna dos extras do porte (o titulo sai no render). Marcada =
+        // AutoOreRoute=1; desmarcada = 0, o comportamento do original.
+        addCheck("Auto Ore Route", kPrY + 64, &m_prefAutoOreRoute, kPrExtraX, 160, 1204);
         // Velocidades: os botoes LESS/MORE do Dialog 142, com os ids do
         // original (1095/1099 jogo, 1097/1101 rolagem). O rotulo e o valor
         // saem no render.
@@ -1811,6 +1818,7 @@ void ShellMenu::loadPrefs() {
     m_prefAudioVolume = gs.audioVolume < 0 ? 0 : (gs.audioVolume > 100 ? 100 : gs.audioVolume);
     m_prefAudioVolumeIni = m_prefAudioVolume;
     m_prefFullscreen = gs.fullscreen ? 1 : 0;
+    m_prefAutoOreRoute = gs.autoOreRoute != 0;
 }
 
 void ShellMenu::savePrefs() {
@@ -1827,6 +1835,7 @@ void ShellMenu::savePrefs() {
     gs.aiLevel           = m_prefAiLevel;
     gs.audioVolume       = m_prefAudioVolume;
     gs.fullscreen        = m_prefFullscreen;
+    gs.autoOreRoute      = m_prefAutoOreRoute ? 1 : 0;
     m_prefApplyScreen    = true;                 // o render troca a janela
     m_prefAudioVolumeIni = m_prefAudioVolume;    // o ACCEPT é que torna isso o som gravado
     gs.saveTo(cfg);
@@ -1870,6 +1879,9 @@ void ShellMenu::renderPreferencesDialog(Renderer& renderer) {
                    kPrY + 270, 0xFFFFD24A, true);
     // Modo de tela (idem): o rótulo do par de rádio 1202/1203.
     SkinText::draw(fb, 640, 480, "Screen Mode:", kPrX + 24, kPrY + 320, 0xFFD8E4F8, true);
+    // A coluna dos extras: o título e a linha que diz o que a caixa faz.
+    SkinText::draw(fb, 640, 480, "Port extras:", kPrExtraX, kPrY + 40, 0xFFD8E4F8, true);
+    SkinText::draw(fb, 640, 480, "(not in the original)", kPrExtraX, kPrY + 84, 0xFF8090A8, true);
 }
 
 // O botão HELP (1012) e a tecla F1 — no original, WM_HELP -> TApp::GetHelp,

@@ -55,6 +55,9 @@ public:
         // dialogos do shell: o clique escolhe a linha em que se clicou, em vez
         // de inverter o que estava.
         OPT_SCREEN_FULL, OPT_SCREEN_WINDOW,
+        // Extra deste porte: a rota de minerio num clique ([Game]
+        // AutoOreRoute, ver 5.23), uma alternancia On/Off como as do original.
+        OPT_AUTO_ORE,
         OPT_COUNT
     };
 

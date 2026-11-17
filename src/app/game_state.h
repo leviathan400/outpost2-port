@@ -365,6 +365,7 @@ public:
     // A camera vai antes para o tile, senao o clique cai fora da vista.
     void debugRightClickTile(Renderer& r, int tileX, int tileY);
     void debugAutoOreRoute(bool on) { m_autoOreRoute = on; }
+    bool debugAutoOreRouteOn() const { return m_autoOreRoute; }
     // --bannertest: a vista em coordenadas de TELA, para o teste saber onde o
     // letreiro deveria estar centrado.
     void debugCamera(int& x, int& y) const { x = m_camX; y = m_camY; }

@@ -156,6 +156,8 @@ std::vector<std::string> GameOptionsPane::items() const {
     const bool cheia = g_opt.fullscreen != 0;
     out.push_back(std::string("Screen Mode\n\t") + (cheia ? "(o) " : "( ) ") + "Full Screen");
     out.push_back(std::string("\t") + (cheia ? "( ) " : "(o) ") + "Window");
+    // Extra deste porte: a rota de minerio num clique (AutoOreRoute).
+    add("Auto Ore Route<R>%s", onOff(g_opt.autoOreRoute));
     return out;
 }
 
@@ -223,6 +225,7 @@ void GameOptionsPane::bump(int i, int dir) {
     // janela e o GameState no quadro seguinte -- o painel nao tem o Renderer.
     case OPT_SCREEN_FULL:   g_opt.fullscreen = 1; break;
     case OPT_SCREEN_WINDOW: g_opt.fullscreen = 0; break;
+    case OPT_AUTO_ORE:      g_opt.autoOreRoute = !g_opt.autoOreRoute; break;
     default: return;
     }
     clampAll();

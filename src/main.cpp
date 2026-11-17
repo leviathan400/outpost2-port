@@ -5916,6 +5916,39 @@ static int runOptMenuTest(const std::string& dll) {
         f.write(iniAntes.data(), static_cast<std::streamsize>(iniAntes.size()));
     }
     renderer.setFullscreen(false);
+
+    // ---- extra do porte: a linha "Auto Ore Route" -----------------------
+    // Alternancia On/Off. O clique so muda a tela; o &APPLY grava o INI e o
+    // jogo passa a usar o valor (loadSettings). INI guardado em bytes.
+    {
+        std::string iniAor;
+        {
+            std::ifstream f("OUTPOST2.INI", std::ios::binary);
+            if (f) iniAor.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+        }
+        auto poeAor = [](int v) { op2::Config c("OUTPOST2.INI"); c.load(); c.setInt("Game", "AutoOreRoute", v); c.save(); };
+        auto leAor = []() { op2::Config c("OUTPOST2.INI"); return c.load() ? c.getInt("Game", "AutoOreRoute", -1) : -1; };
+        const int kAor = op2::GameOptionsPane::OPT_AUTO_ORE;
+        poeAor(1);
+        gs.debugOptionsScreen(1);                    // entrar no PREFERENCES rele o INI
+        gs.debugAutoOreRoute(true);
+        texto("a linha Auto Ore Route nasce On", gs.debugOptItem(kAor), "Auto Ore Route<R>On");
+        gs.debugOptRow(kAor);
+        texto("o clique a deixa Off", gs.debugOptItem(kAor), "Auto Ore Route<R>Off");
+        casos.push_back({"... sem mexer no jogo nem no INI antes do &APPLY",
+                         (gs.debugAutoOreRouteOn() && leAor() == 1) ? 1 : 0, 1});
+        gs.debugOptClick("&APPLY");
+        casos.push_back({"o &APPLY grava AutoOreRoute=0", leAor(), 0});
+        casos.push_back({"... e o jogo desliga o atalho", gs.debugAutoOreRouteOn() ? 1 : 0, 0});
+        gs.debugOptRow(kAor);
+        gs.debugOptClick("&APPLY");
+        casos.push_back({"e o caminho de volta grava 1", leAor(), 1});
+        casos.push_back({"... e religa o atalho", gs.debugAutoOreRouteOn() ? 1 : 0, 1});
+        if (!iniAor.empty()) {
+            std::ofstream f("OUTPOST2.INI", std::ios::binary | std::ios::trunc);
+            f.write(iniAor.data(), static_cast<std::streamsize>(iniAor.size()));
+        }
+    }
     gs.debugOptionsScreen(1);                        // volta ao PREFERENCES limpo
 
     // ---- o ESC dentro da partida ----------------------------------------

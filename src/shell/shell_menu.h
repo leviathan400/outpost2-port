@@ -302,6 +302,9 @@ private:
     // o setState tem um na mao: o render(), que tem, resolve no quadro seguinte.
     int  m_prefFullscreen = 1;
     bool m_prefSyncScreen = false;    // ler a janela de verdade ao abrir a tela
+    // "AutoOreRoute" (0/1): a rota de minerio num clique (5.23), extra do
+    // porte -- a caixa 1204, na coluna da direita. So vale no ACCEPT.
+    bool m_prefAutoOreRoute = true;
     bool m_prefApplyScreen = false;   // aplicar o escolhido (ACCEPT)
     void loadPrefs();   // le o [Game] do OUTPOST2.INI para a tela
     void savePrefs();   // grava de volta (botao ACCEPT)

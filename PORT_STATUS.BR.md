@@ -136,7 +136,7 @@ preferências; o original ignora chaves que não conhece.
 | `MenuSkin` | 0/1 | 0 | Estilo dos menus. 0 = o visual do próprio porte (painéis azul-escuros, menu principal à direita); 1 = a pele de diálogo do OP2 original (fundo "blueprint", molduras vermelhas, texto verde, arte do `OP2SHRES.DLL`). |
 | `MapWrap` | 0/1 | 0 | Volta horizontal do mapa. 0 = como no original: a vista para nas bordas esquerda/direita do mapa, e só os mapas "around the world" (512 tiles de largura) dão a volta; 1 = todo mapa dá a volta (o comportamento antigo do porte). |
 | `ShowBottomRow` | 0/1 | 0 | Última linha de tiles do mapa. 0 = como no original: a vista para no fundo do clip rect do mapa, e a última linha fica escondida; 1 = a vista pode descer até mostrá-la. |
-| `AutoOreRoute` | 0/1 | 1 | Rota de minério num clique (acréscimo deste porte): com caminhões vazios selecionados, o clique direito na doca de uma mina monta o ciclo até a fundição compatível disponível mais próxima (ver 5.23). 0 = só o comando de três cliques, como no original. |
+| `AutoOreRoute` | 0/1 | 1 | Rota de minério num clique (acréscimo deste porte): com caminhões vazios selecionados, o clique direito na doca de uma mina monta o ciclo até a fundição compatível disponível mais próxima (ver 5.23). 0 = só o comando de três cliques, como no original. Também se troca pelo jogo: a caixa **Auto Ore Route** no `GAME PREFERENCES` do menu e a linha de mesmo nome no `Game Preferences` da aba Options (ver 5.29). |
 
 ---
 
@@ -2376,6 +2376,31 @@ em paralelo a partir de um commit anterior a elas. A versão deste repositório 
 a que fica: tem a regra da arma corrigida, a vaga −1 do original, a parada de
 32 tiques e a conta de 1,5× sem estouro. A única correção dele que faltava aqui
 (o bit do desvio pulado) já tinha entrado na 5.27.
+
+## 5.29. A rota de minério nas telas de preferências (2026-11-17) — **acréscimo deste porte**
+
+Pedido: poder ligar e desligar a `AutoOreRoute` (5.23) pelo jogo, sem editar o
+INI — uma caixa de marcar: marcada = `AutoOreRoute=1`, desmarcada = `0`, o
+comportamento do original.
+
+- **`GAME PREFERENCES` do menu principal:** o diálogo ficou **120 px mais
+  largo** (360 → 480; `kPrX` 140 → 80) e ganhou uma **coluna à direita** para
+  os extras do porte, com o título *"Port extras:"*. A primeira caixa é *"Auto
+  Ore Route"* (id 1204), com a nota *"(not in the original)"*. A altura não
+  tinha para onde crescer em 480 px, e a coluna deixa lugar para os próximos
+  extras. Só vale no `ACCEPT`, como o resto da tela.
+- **`Game Preferences` dentro do jogo** (aba Options): uma linha *"Auto Ore
+  Route"* com `On`/`Off`, que é como essa lista mostra toda opção de ligar e
+  desligar (`OPT_AUTO_ORE`). Só vale no `&APPLY`, que regrava o INI e faz o
+  jogo reler a chave (`loadSettings`) — o atalho liga ou desliga na hora, sem
+  reiniciar a partida.
+
+Testes: no `--uitest` (o `prefsTest` do shell), pelo mouse — a caixa está à
+direita da coluna das caixas do original, nasce com o valor do INI, o clique a
+inverte, sair sem `ACCEPT` não grava, reabrir relê, e o `ACCEPT` grava `0` e
+depois `1`. No `--optmenutest`, a linha nasce `On`, o clique a deixa `Off` sem
+mexer no jogo nem no INI, e o `&APPLY` grava `0` e desliga o atalho; o caminho
+de volta grava `1` e o religa. Os dois guardam o INI em bytes e o devolvem.
 
 ---
 
