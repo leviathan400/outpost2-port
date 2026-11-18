@@ -366,7 +366,12 @@ static void stepUnit(int id) {
     // loc_44C1C0; sem rota até ela, loc_44C20A sem o bit 0 da ordem: sai do
     // sub-estado de movimento. Passo recusado (ocupada por quem não pode ser
     // empurrado, ou 20 esperas): desiste, como o passo com ordem.
-    if (!u.hasOrder && u.field22 == 1 && u.pathGoalX >= 0) {
+    // "Sem ordem" inclui a ordem VELHA de quem ja nao tem acao de movimento:
+    // o caminhao que descartou a carga atracado na mina (acao 14) termina com
+    // a acao 0 mas guarda a ordem da rota de minerio; empurrado, ele ficava
+    // com o sub-estado 1 sem nunca andar -- o laco comum o via "parado" e o
+    // zerava --, e a doca da mina ficava bloqueada para sempre.
+    if (u.field22 == 1 && u.pathGoalX >= 0 && (!u.hasOrder || !moving)) {
         const int cx = u.pixelX >> 5, cy = u.pixelY >> 5;
         auto para = [&]() {
             u.field23 = u.field22; u.field22 = 0;

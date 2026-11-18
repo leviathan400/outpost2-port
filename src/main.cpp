@@ -4922,6 +4922,167 @@ static int runE02Test(const std::string& dll, const std::string& shot) {
     return ruins ? 1 : 0;
 }
 
+// --dumptest <mapa>: o botao DUMP do caminhao de carga (D&ump vehicle's cargo).
+// Pelo caminho do jogador: seleciona o caminhao carregado, aperta o botao,
+// confirma no &YES e deixa a acao 0x0E rodar. A carga tem de sumir.
+static int runDumpTest(const std::string& mapName) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 dumptest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    op2::resetUnits();
+    const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
+    int bx = -1, by = -1;
+    for (int y = 3; y < H - 16 && bx < 0; ++y)
+        for (int x = 3; x < W - 44 && bx < 0; ++x) {
+            bool ok = true;
+            for (int dy = -1; dy <= 14 && ok; ++dy)
+                for (int dx = -2; dx <= 40 && ok; ++dx)
+                    if (!op2::g_gameMap.isPassable(op2::LOCATION{x + dx, y + dy})) ok = false;
+            if (ok) { bx = x; by = y; }
+        }
+    if (bx < 0) { std::printf("[Dump] sem area livre\n"); return 3; }
+    struct Caso { std::string nome; long long obtido, esperado; };
+    std::vector<Caso> casos;
+
+    // Descarta pelo MOUSE (o botao da botoeira e o &YES) e espera ate 400 tiques.
+    auto descarta = [&](int id, const std::string& nome) {
+        gs.setSelection({id});
+        gs.onIdle(renderer, 0.0f);
+        const int antes = op2::g_units[id].cargo;
+        int bxn = 0, byn = 0;
+        const bool temBotao = gs.debugCommandButtonCenter(op2::UC_DUMP_CARGO, bxn, byn);
+        if (temBotao) gs.debugClickNative(renderer, bxn, byn);
+        const bool pergunta = gs.debugConfirmOpen();
+        gs.onIdle(renderer, 0.0f);
+        int yx = 0, yy = 0;
+        if (gs.debugButtonCenter("&YES", yx, yy)) gs.debugClickNative(renderer, yx, yy);
+        int t = 0;
+        for (; t < 400; ++t) {
+            gs.onIdle(renderer, 0.2501f / 4.0f);
+            if (op2::g_units[id].cargo == 0 && op2::g_units[id].action != 0x0E) break;
+        }
+        const op2::UnitRecord& r = op2::g_units[id];
+        std::printf("[Dump] %s: antes 0x%X, botao %d, pergunta %d, depois 0x%X em t=%d (acao 0x%X f20 %d f22 0x%X)\n",
+                    nome.c_str(), antes, (int)temBotao, (int)pergunta, r.cargo, t, r.action, r.field20, r.field22);
+        casos.push_back({nome + ": a carga some", r.cargo == 0 ? 1 : 0, 1});
+    };
+
+    // 1) Parado, os tipos de carga (Truck_Cargo 1..9).
+    for (int k = 1; k <= 9; ++k) {
+        op2::Unit tr;
+        op2::TethysGame::CreateUnit(tr, op2::mapCargoTruck, op2::LOCATION{bx + (k % 5) * 2, by + 12 + (k / 5) * 2}, 0);
+        op2::unitSetTruckCargo(tr.id(), k, 1000);
+        descarta(tr.id(), "parado, carga tipo " + std::to_string(k));
+    }
+    // 2) ConVec com kit.
+    {
+        op2::Unit cv;
+        op2::TethysGame::CreateUnit(cv, op2::mapConVec, op2::LOCATION{bx + 14, by + 12}, 0, op2::mapTokamak);
+        descarta(cv.id(), "ConVec com kit");
+    }
+    // 3) Andando, com carga.
+    {
+        op2::Unit tr;
+        op2::TethysGame::CreateUnit(tr, op2::mapCargoTruck, op2::LOCATION{bx + 2, by + 4}, 0);
+        op2::unitSetTruckCargo(tr.id(), 2, 1000);
+        gs.setSelection({tr.id()});
+        gs.debugRightClickTile(renderer, bx + 20, by + 4);
+        for (int k = 0; k < 20; ++k) gs.onIdle(renderer, 0.2501f / 4.0f);
+        descarta(tr.id(), "andando");
+    }
+    // 4) A rota de minerio: mina, CC, Tokamak e fundicao, como no --autoroutetest.
+    const int mineX = bx + 30, mineY = by + 7;
+    op2::createBeacon(0x51, mineX, mineY, 0, 0, 0);
+    const int mine = op2::placeBuilding(0x15, mineX, mineY, 0);
+    op2::Unit cc, tok;
+    op2::TethysGame::CreateUnit(cc, op2::mapCommandCenter, op2::LOCATION{mineX - 10, mineY}, 0);
+    op2::TethysGame::CreateUnit(tok, op2::mapTokamak, op2::LOCATION{mineX - 7, mineY}, 0);
+    op2::g_playerData[0].workers = 60;
+    op2::g_playerData[0].scientists = 20;
+    op2::g_playerData[0].foodStored = 100000;
+    op2::colonyMarkDirty(0);
+    const int fund = op2::placeBuilding(0x36, mineX - 10, mineY + 2, 0);
+    for (int t = 0; t < 120; ++t) gs.onIdle(renderer, 0.2501f / 4.0f);
+    int mdx = 0, mdy = 0;
+    op2::dockCell(mine, mdx, mdy);
+    auto novoCaminhao = [&]() {
+        op2::Unit tr;
+        op2::TethysGame::CreateUnit(tr, op2::mapCargoTruck, op2::LOCATION{mineX - 3, mineY + 4}, 0);
+        gs.setSelection({tr.id()});
+        gs.debugRightClickTile(renderer, mdx, mdy);          // rota de minerio num clique
+        return tr.id();
+    };
+    // 4b) na rota, carregado, a caminho da fundicao
+    {
+        const int id = novoCaminhao();
+        int t = 0, saiu = 0;
+        for (; t < 4000; ++t) {
+            gs.onIdle(renderer, 0.2501f / 4.0f);
+            const op2::UnitRecord& r = op2::g_units[id];
+            if (r.cargo != 0 && r.field22 == 1 && r.action == 0x27) { if (++saiu > 20) break; }
+        }
+        std::printf("[Dump]   na rota em t=%d (acao 0x%X f22 0x%X carga 0x%X)\n", t, op2::g_units[id].action,
+                    op2::g_units[id].field22, op2::g_units[id].cargo);
+        descarta(id, "na rota de minerio, carregado");
+    }
+    // 4c) atracado na fundicao, descarregando
+    {
+        const int id = novoCaminhao();
+        int fdx = 0, fdy = 0;
+        op2::dockCell(fund, fdx, fdy);
+        int t = 0;
+        for (; t < 6000; ++t) {
+            gs.onIdle(renderer, 0.2501f / 4.0f);
+            const op2::UnitRecord& r = op2::g_units[id];
+            if (r.field22 == 0x0D && r.cargo != 0 && (r.pixelX >> 5) == fdx && (r.pixelY >> 5) == fdy) break;
+        }
+        std::printf("[Dump]   atracou na fundicao em t=%d (f22 0x%X carga 0x%X)\n", t, op2::g_units[id].field22, op2::g_units[id].cargo);
+        descarta(id, "atracado na fundicao");
+    }
+    // 4a) atracado na mina, carregando
+    {
+        const int id = novoCaminhao();
+        int t = 0;
+        for (; t < 3000 && !(op2::g_units[id].field22 == 0x0D && op2::g_units[id].cargo != 0); ++t)
+            gs.onIdle(renderer, 0.2501f / 4.0f);
+        std::printf("[Dump]   atracou na mina em t=%d (f22 0x%X, carga 0x%X)\n", t, op2::g_units[id].field22, op2::g_units[id].cargo);
+        descarta(id, "atracado na mina");
+    }
+    // 4d) depois do descarte NA DOCA da mina, outro caminhao ainda carrega ali
+    {
+        const int id = novoCaminhao();
+        int t = 0;
+        for (; t < 3000 && op2::g_units[id].cargo == 0; ++t) {
+            gs.onIdle(renderer, 0.2501f / 4.0f);
+            if (std::getenv("DUMP_TRACE") && t % 250 == 0) {
+                const op2::UnitRecord& r = op2::g_units[id];
+                const int occ = op2::g_gameMap.cellOccupant(mdx, mdy);
+                std::printf("[Dump]     t=%d novo (%d,%d) acao 0x%X f22 0x%X espera %d ordem %d | doca (%d,%d) ocupada por %d (acao 0x%X f22 0x%X) | mina op %d%c",
+                            t, r.pixelX >> 5, r.pixelY >> 5, r.action, r.field22, (int)r.pushWait, (int)r.hasOrder,
+                            mdx, mdy, occ, occ > 0 ? op2::g_units[occ].action : -1, occ > 0 ? op2::g_units[occ].field22 : -1,
+                            (int)op2::structureOperational(op2::g_units[mine]), 10);
+            }
+        }
+        std::printf("[Dump]   outro caminhao carregou na mina em t=%d (carga 0x%X)%c", t, op2::g_units[id].cargo, 10);
+        casos.push_back({"depois do descarte na doca, a mina ainda carrega outro", op2::g_units[id].cargo != 0 ? 1 : 0, 1});
+    }
+    int falhas = 0;
+    for (const Caso& c : casos) {
+        const bool ok = c.obtido == c.esperado;
+        if (!ok) ++falhas;
+        std::printf("[Dump] %-46s %lld (esperado %lld) %s\n", c.nome.c_str(), c.obtido, c.esperado, ok ? "ok" : "FALHOU");
+    }
+    std::printf("[Dump] %d casos, %d falhas\n", (int)casos.size(), falhas);
+    renderer.shutdown();
+    SDL_Quit();
+    return falhas ? 1 : 0;
+}
+
 // --detourtest <mapa>: o DESVIO de quem vem de frente (sub_44BBA0, ramo do
 // bloqueador em movimento -> sub_44BFD0; a parada de 32 tiques em loc_44C1D2).
 // Tres partes. (1) Dois veiculos, com ordem de mover dada pelo clique direito
@@ -8243,6 +8404,8 @@ int main(int argc, char* argv[]) {
         if (std::strcmp(argv[i], "--e02test") == 0)
             return runE02Test(i + 1 < argc && argv[i + 1][0] != '-' ? argv[i + 1] : "E02.DLL",
                               i + 2 < argc && argv[i + 2][0] != '-' ? argv[i + 2] : "");
+        if (std::strcmp(argv[i], "--dumptest") == 0 && i + 1 < argc)
+            return runDumpTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--exitbeeptest") == 0)
             return runExitBeepTest();
         if (std::strcmp(argv[i], "--stacktest") == 0 && i + 1 < argc)

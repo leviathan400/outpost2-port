@@ -48,7 +48,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 115 modos de teste/captura
+  main.cpp        entrada + os 116 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -2798,6 +2798,40 @@ laboratório (`researchMarkComplete`) e confere: a praga é plantada e passa de
 nenhum; e os cinco objetivos de pesquisa ficam cumpridos. Com o `bmp`, salva o
 quadro com a praga.
 
+## 5.36. O botão DUMP, e a doca da mina que travava depois dele (2026-11-18)
+
+Pedido: *o botão de descartar a carga dos transportes não funciona — o que está
+carregado não é descartado.*
+
+### O botão, conferido
+
+O botão **DUMP** ("D&ump vehicle's cargo") existe no original e funciona como
+o porte já fazia: só fica ativo com **um** veículo selecionado que tenha carga —
+caminhão ou ConVec, que descarta o **kit** (`loc_455710`); pergunta antes
+(*"Are you sure you want to dump this cargo?"*, `sub_4557B0(0)`); o **&YES**
+manda o pacote `0x0E`, que põe a ação 14 (`sub_40E210`, caso 14, depois do
+`vt[0x74]`); a ação toca o som `0x45`, espera a animação `0x7BC` e zera a carga
+(`jpt_43AD56` / `jpt_43B312`, caso 14). O teste novo descarta pelo **mouse de
+verdade** — o botão da botoeira e o &YES — em todos os estados: parado, com os
+nove tipos de carga; o ConVec com kit; andando; na rota de minério, carregado;
+atracado na fundição; atracado na mina. A carga some em todos.
+
+### O defeito: depois do descarte na doca, a mina travava
+
+O caminhão que descarta **atracado na mina** termina a ação 14 com a ação 0,
+mas guarda a ordem da rota de minério. O próximo caminhão chega, o empurra
+(5.24), e o empurrado recebe a rota curta para sair (`vt[0x7C]`, 5.30) — só
+que o laço "sem ordem" do porte só rodava para quem **não tem** ordem. Com a
+ordem velha, o laço comum o via "parado", zerava o sub-estado, vinha outro
+empurrão, e assim para sempre: ele nunca saía da doca e a mina não carregava
+mais ninguém. Agora quem tem ordem mas nenhuma ação de movimento segue a rota
+curta como os outros empurrados.
+
+### O teste — `--dumptest <mapa>`
+
+15 casos: os estados acima, e depois do descarte na doca da mina, outro
+caminhão ainda carrega ali (antes: 3000 tiques sem carregar; agora, 113).
+
 ---
 
 ## 6. Build e execução
@@ -2847,6 +2881,7 @@ São 109 modos. Os que cobrem regressão de verdade:
 | `--drawordertest <mapa>` | a ordem de desenho: veículo atrás de prédio, efeitos por cima, desastres por último, a doca |
 | `--detourtest <mapa>` | quem vem de frente dá passagem: o encontro no corredor, a tabela de decisão do `sub_44BBA0` e o desvio inalcançável |
 | `--exitbeeptest` | o bipe da saída: toca o `beep5.wav` e espera 3,5 s uma vez por sessão; sem som, não espera |
+| `--dumptest <mapa>` | o botão DUMP pelo mouse em todos os estados do caminhão, e a mina que segue carregando depois do descarte na doca |
 | `--e02test [DLL] [bmp]` | missão 2 do Eden: a praga se espalha e é desenhada com o Overlay, e os objetivos de pesquisa são cumpridos |
 | `--tubetest <mapa> [prefixo]` | o Earthworker ligando prédios com tubo: retas inteiras, a doca que não liga, a animação de trabalho |
 | `--waypointtest <mapa> [bmp]` | pontos de passagem com Ctrl + clique: limites por comando, o pacote com os pontos antes do alvo, a unidade passando por eles, patrulha e obra, e o desenho |

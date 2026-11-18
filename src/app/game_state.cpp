@@ -1872,6 +1872,15 @@ void GameState::debugMouse(Renderer& r, int wx, int wy, int button, bool down, b
     SDL_SetModState(KMOD_NONE);
 }
 
+void GameState::debugClickNative(Renderer& r, int nx, int ny) {
+    int sx = 0, sy = 0;
+    r.nativeToScreen(nx, ny, sx, sy);
+    SDL_Event mv{}; mv.type = SDL_MOUSEMOTION; mv.motion.x = sx; mv.motion.y = sy; handleEvent(r, mv);
+    SDL_Event d{}; d.type = SDL_MOUSEBUTTONDOWN; d.button.button = SDL_BUTTON_LEFT; d.button.clicks = 1;
+    d.button.x = sx; d.button.y = sy; handleEvent(r, d);
+    SDL_Event u = d; u.type = SDL_MOUSEBUTTONUP; handleEvent(r, u);
+}
+
 void GameState::debugRightClickTile(Renderer& r, int tileX, int tileY) {
     setCamera(tileX * 32 - viewportW() / 2, tileY * 32 - viewportH() / 2);
     onIdle(r, 0.0f);                           // a camera e presa aos limites aqui

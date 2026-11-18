@@ -344,6 +344,21 @@ public:
     void debugOptRow(int i) { m_gameOptions.debugRowClick(i); }
     bool debugWantFullscreen() const { return m_gameOptions.wantFullscreen(); }
     bool debugConfirmOpen() const { return m_confirm.isOpen(); }
+    void debugConfirmYes() { clickCommand(kCmdYes); }     // --dumptest: o &YES da pergunta
+    // --dumptest: o centro (coords nativas) do botao de texto do painel ou da
+    // botoeira de rotulo/comando dado; false se nao ha.
+    bool debugButtonCenter(const std::string& rotulo, int& nx, int& ny) {
+        for (const TextButton& b : structureButtons())
+            if (b.label == rotulo) { nx = (b.l + b.r) / 2; ny = (b.t + b.b) / 2; return true; }
+        return false;
+    }
+    bool debugCommandButtonCenter(int cmd, int& nx, int& ny) {
+        for (const CmdButton& b : commandButtons())
+            if (b.cmd == cmd) { nx = (b.l + b.r) / 2; ny = (b.t + b.b) / 2; return true; }
+        return false;
+    }
+    // Um clique esquerdo de mouse de verdade no ponto NATIVO (nx, ny).
+    void debugClickNative(Renderer& r, int nx, int ny);
     // --optmenutest: o ESC pela mesma porta da tecla, o texto da pergunta que
     // ele levanta, a aba em que o jogo ficou e a mira em curso.
     std::string debugConfirmText() const { return m_confirm.message(); }

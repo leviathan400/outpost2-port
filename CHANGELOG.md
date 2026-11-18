@@ -15,6 +15,9 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
 
 **Corrigido**
 
+- **A mina não trava mais depois de um descarte na doca.** Um caminhão que
+  descartava a carga (botão DUMP) atracado na mina ficava preso na doca, e a
+  mina não carregava mais nenhum outro caminhão.
 - **A missão 2 do Eden agora termina.** As pesquisas pedidas nos objetivos
   ("Reconstruct … database") não saíam da lista, mesmo concluídas no
   laboratório, e a missão nunca acabava. O gatilho de pesquisa disparava no
@@ -35,14 +38,17 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   Agora é sempre como no original: **a doca não liga**; o tubo tem de encostar
   numa parte do prédio que não seja a doca.
 
-**Para quem acompanha o código:** seções 5.34 e 5.35 do PORT_STATUS; os modos de
-teste `--tubetest` e `--e02test`; o gerador `tools/extract_anim_tables.py` extrai os quatro
+**Para quem acompanha o código:** seções 5.34 a 5.36 do PORT_STATUS; os modos de
+teste `--tubetest`, `--e02test` e `--dumptest`; o gerador `tools/extract_anim_tables.py` extrai os quatro
 conjuntos de animação dos veículos.
 
 ### English
 
 **Fixed**
 
+- **A mine no longer jams after a dump at its dock.** A truck that dumped its
+  cargo (DUMP button) while docked at a mine got stuck on the dock, and the mine
+  loaded no other truck.
 - **Eden mission 2 can now be won.** The research asked for in the objectives
   ("Reconstruct … database") never left the list, even when finished in the
   lab, and the mission never ended. The research trigger fired at the very
@@ -64,8 +70,8 @@ conjuntos de animação dos veículos.
   not connect**; the tube has to touch a part of the building that is not the
   dock.
 
-**For those following the code:** sections 5.34 and 5.35 of PORT_STATUS; the
-`--tubetest` and `--e02test` test modes; the `tools/extract_anim_tables.py` generator extracts
+**For those following the code:** sections 5.34 to 5.36 of PORT_STATUS; the
+`--tubetest`, `--e02test` and `--dumptest` test modes; the `tools/extract_anim_tables.py` generator extracts
 the four animation sets of the vehicles.
 
 ---

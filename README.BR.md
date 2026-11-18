@@ -179,7 +179,7 @@ demo, tela cheia, a pele dos menus (`MenuSkin`), a volta horizontal do mapa
 (`MapWrap`), a última linha do mapa (`ShowBottomRow`) e a rota de minério num
 clique (`AutoOreRoute`); estão documentadas no `PORT_STATUS.BR.md`.
 
-Há **115 modos de linha de comando** para testes e capturas, entre eles uma
+Há **116 modos de linha de comando** para testes e capturas, entre eles uma
 bateria de regressão (`--savetest` prova o determinismo de salvar/recarregar).
 A lista está no `PORT_STATUS.BR.md`.
 
@@ -213,7 +213,7 @@ e descartado das listas de cheat que circulam por aí.
 
 ```
 src/
-  main.cpp        entrada + os 115 modos de teste/captura
+  main.cpp        entrada + os 116 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -238,6 +238,9 @@ cursores `.ANI`.
 
 ### 2026-11-18
 
+- **A mina não trava mais depois de um descarte na doca.** Um caminhão que
+  descartava a carga atracado na mina ficava preso ali, e a mina não carregava
+  mais nenhum outro.
 - **Missão 2 do Eden termina**: as pesquisas pedidas nos objetivos ("Reconstruct
   … database") passam a contar quando o laboratório as conclui. O gatilho de
   pesquisa disparava no primeiro instante da missão e era desligado antes de a
