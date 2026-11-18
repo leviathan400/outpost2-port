@@ -104,6 +104,8 @@ static bool messageAllowed(int id, int x, int y) {
     }
 }
 
+static void logMessage(int x, int y, const char* text, int soundId);
+
 void postMessage(int x, int y, const char* text, int soundId) {
     // Sem som → beep 0x5B; vozes do Savant (0x5E..0xE3) passam pelo filtro e
     // vão p/ a fila (sub_47F060); o resto toca direto (sub_47F020).
@@ -113,10 +115,18 @@ void postMessage(int x, int y, const char* text, int soundId) {
     } else {
         soundPlay(soundId ? soundId : 0x5B);
     }
+    logMessage(x, y, text, soundId ? soundId : 0x5B);
+}
+
+// Extra deste porte: entra no log e na barra sem tocar nada (o diagnostico de
+// comando recusado, command_debug.cpp).
+void postMessageQuiet(int x, int y, const char* text) { logMessage(x, y, text, 0x5B); }
+
+static void logMessage(int x, int y, const char* text, int soundId) {
     const int slot = (s_start + s_count) & 0x3F;
     if (s_count == 0x40) s_start = (s_start + 1) & 0x3F; else ++s_count;
     GameMessage& m = s_ring[slot];
-    m.x = x; m.y = y; m.soundId = soundId ? soundId : 0x5B;
+    m.x = x; m.y = y; m.soundId = soundId;
     char buf[0x40];
     std::snprintf(buf, sizeof(buf), "<N>%d: %s", TethysGame::tick() / 100, text);
     m.text = buf;

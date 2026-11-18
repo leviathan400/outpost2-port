@@ -172,13 +172,13 @@ outpost2_modern.exe                      # main menu
 outpost2_modern.exe --game eden01.map    # opens a map directly
 ```
 
-The game's `OUTPOST2.INI` file is respected. The port adds nine keys the
+The game's `OUTPOST2.INI` file is respected. The port adds ten keys the
 original doesn't have — AI level, night darkness, volume, demo camera,
 fullscreen, the menu skin (`MenuSkin`), horizontal map wrap (`MapWrap`), the
-map's bottom row (`ShowBottomRow`) and the one-click ore route
-(`AutoOreRoute`); they are documented in `PORT_STATUS.EN.md`.
+map's bottom row (`ShowBottomRow`), the one-click ore route
+(`AutoOreRoute`) and refused-command diagnostics (`CommandDebug`); they are documented in `PORT_STATUS.EN.md`.
 
-There are **120 command-line modes** for tests and captures, among them a
+There are **121 command-line modes** for tests and captures, among them a
 regression battery (`--savetest` proves save/reload determinism). The list is
 in `PORT_STATUS.EN.md`.
 
@@ -212,7 +212,7 @@ and what was checked and discarded from the cheat lists that circulate.
 
 ```
 src/
-  main.cpp        entry point + the 120 test/capture modes
+  main.cpp        entry point + the 121 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -236,6 +236,12 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
 
 ### 2026-11-18
 
+- **Research and production no longer fail "at random".** An order at a lab
+  or factory sometimes only took after several tries: the protection against
+  repeated clicks kept stale entries and dropped the new command. Fixed. And
+  the **Command Debug** option (in the preferences, or `CommandDebug=1` in
+  `OUTPOST2.INI`) now tells you, in the message log, why a building command was
+  refused.
 - **The Blight shows on the minimap** and grows there along with the
   infection, as in the original. The minimap also got the original's pure
   player colours, and now marks mining beacons and known wreckage in white.

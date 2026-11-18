@@ -13,8 +13,26 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
 
 ### Português
 
+**Novo**
+
+- **Diagnóstico de comando recusado** (`CommandDebug=1` na seção `[Game]` do
+  `OUTPOST2.INI`). Quando um prédio não aceita a ordem — produzir, pesquisar,
+  treinar —, aparece no registro de mensagens o motivo: falta de
+  trabalhadores, de cientistas, de energia, de minério (e quanto), prédio já
+  ocupado, tópico já pesquisado... O original não diz nada. Vem desligado, e
+  também se liga pela caixa **Command Debug** do `GAME PREFERENCES` do menu ou
+  pela linha de mesmo nome no `Game Preferences` da aba Options, durante a
+  partida.
+
 **Corrigido**
 
+- **A pesquisa e a produção não falham mais "ao acaso".** Mandar pesquisar no
+  laboratório, ou produzir um veículo ou um kit na fábrica, às vezes só pegava
+  na 3ª, 4ª, até 10ª tentativa. A proteção contra clique repetido (que existe
+  no original) guardava os registros para sempre: depois de um tempo, quase
+  todo comando novo para a mesma fábrica ou o mesmo laboratório parecia
+  "repetido" e era descartado em silêncio. Agora cada registro vale só pelos
+  poucos instantes em que deve valer. A proteção contra o clique duplo continua.
 - **A praga aparece no minimapa.** O micróbio se espalhava pelo mapa, mas o
   minimapa não mostrava nada. Agora, como no original, cada pedaço infectado
   fica roxo no minimapa, e dá para acompanhar a mancha surgir e crescer.
@@ -58,14 +76,32 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   Agora é sempre como no original: **a doca não liga**; o tubo tem de encostar
   numa parte do prédio que não seja a doca.
 
-**Para quem acompanha o código:** seções 5.34 a 5.38 do PORT_STATUS; os modos de
-teste `--tubetest`, `--e02test`, `--dumptest`, `--dumpmission`, `--vehpanetest`, `--convecdocktest` e `--minimaptest`; o gerador `tools/extract_anim_tables.py` extrai os quatro
+**Para quem acompanha o código:** seções 5.34 a 5.39 do PORT_STATUS; os modos de
+teste `--tubetest`, `--e02test`, `--dumptest`, `--dumpmission`, `--vehpanetest`, `--convecdocktest`, `--minimaptest` e `--cmddebugtest`; o gerador `tools/extract_anim_tables.py` extrai os quatro
 conjuntos de animação dos veículos.
 
 ### English
 
+**New**
+
+- **Refused-command diagnostics** (`CommandDebug=1` in the `[Game]` section of
+  `OUTPOST2.INI`). When a building does not accept an order — produce,
+  research, train — the message log shows why: not enough workers, scientists
+  or power, not enough ore (and how much), building already busy, topic
+  already researched... The original says nothing. Off by default; it can
+  also be turned on with the **Command Debug** check box in the main menu's
+  `GAME PREFERENCES`, or the line of the same name in the Options tab's `Game
+  Preferences`, during a game.
+
 **Fixed**
 
+- **Research and production no longer fail "at random".** Ordering research
+  at a lab, or a vehicle or kit at a factory, sometimes only took on the 3rd,
+  4th, even 10th try. The protection against repeated clicks (which the
+  original has) kept its entries forever: after a while almost every new
+  command to the same factory or lab looked "repeated" and was silently
+  dropped. Each entry now only lasts the few moments it is meant to. The
+  double-click protection is still there.
 - **The Blight shows on the minimap.** The microbe spread across the map, but
   the minimap showed nothing. Now, as in the original, every infected spot turns
   purple on the minimap, so you can watch the patch appear and grow. Unlike the
@@ -109,8 +145,8 @@ conjuntos de animação dos veículos.
   not connect**; the tube has to touch a part of the building that is not the
   dock.
 
-**For those following the code:** sections 5.34 to 5.38 of PORT_STATUS; the
-`--tubetest`, `--e02test`, `--dumptest`, `--dumpmission`, `--vehpanetest`, `--convecdocktest` and `--minimaptest` test modes; the `tools/extract_anim_tables.py` generator extracts
+**For those following the code:** sections 5.34 to 5.39 of PORT_STATUS; the
+`--tubetest`, `--e02test`, `--dumptest`, `--dumpmission`, `--vehpanetest`, `--convecdocktest`, `--minimaptest` and `--cmddebugtest` test modes; the `tools/extract_anim_tables.py` generator extracts
 the four animation sets of the vehicles.
 
 ---

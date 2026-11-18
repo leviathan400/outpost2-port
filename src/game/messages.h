@@ -14,6 +14,8 @@ namespace op2 {
 //   - texto vai p/ a barra de status (sub_49BF10: 80 chars, MAIÚSCULAS).
 // x/y em pixels de mapa (-1 = sem posição).
 void postMessage(int x, int y, const char* text, int soundId);
+// Extra deste porte: o mesmo registro, sem som (diagnostico, command_debug).
+void postMessageQuiet(int x, int y, const char* text);
 
 // sub_49BF10 chamado DIRETO, sem passar pelo log nem tocar som: e assim que
 // saem os avisos da barra, como o "Cannot Pause in multiplayer games".

@@ -7,6 +7,7 @@
 
 #include "building_sheet.h"
 #include "colony.h"
+#include "command_debug.h"
 #include "messages.h"
 #include "player.h"
 #include "research.h"
@@ -65,9 +66,22 @@ bool processStartResearch(int owner, int labId, int topic, int scientists) {   /
     if (!valid(labId)) return false;
     UnitRecord& r = g_units[labId];
     if (ownerOf(r) != (owner & 0x0F)) return false;
-    // (Humano: anel anti-duplicata [jogador+0xBD8] — rede, não portado.)
-    if (r.action != 0 && r.action != 0x16) return false;
-    if (researchHas(ownerOf(r), topic)) return false;    // sub_472C50
+    // (Humano: o anel anti-duplicata [jogador+0xBD8] ja filtrou o pacote no
+    // despachante, command_dispatch.cpp.)
+    if (r.action != 0 && r.action != 0x16) {
+        const char* why = structureDownReason(r);
+        commandRefused(owner, labId, *why ? why : "busy");
+        return false;
+    }
+    if (researchHas(ownerOf(r), topic)) {                // sub_472C50
+        commandRefused(owner, labId, "topic already researched");
+        return false;
+    }
+    if ((r.flags & UNIT_DEAD) || !structureOperational(r)) {
+        // O original devolve 1 e nao comeca nada: a pesquisa "nao pega".
+        const char* why = structureDownReason(r);
+        commandRefused(owner, labId, *why ? why : "not operating");
+    }
     if (!(r.flags & UNIT_DEAD) && structureOperational(r)) {
         if (r.action != 0x16) { r.action = 0x16; r.field20 = 1; r.field3C = 0; }
         r.labTopic = topic;                              // [+0x60]
@@ -142,7 +156,15 @@ bool processTrainPacket(int owner, int univId, int students) {   // case 23
     if (!valid(univId)) return false;
     UnitRecord& r = g_units[univId];
     if (ownerOf(r) != (owner & 0x0F)) return false;
-    if (r.action != 0) return false;
+    if (r.action != 0) {
+        const char* why = structureDownReason(r);
+        commandRefused(owner, univId, r.action == 0x17 ? "already training" : (*why ? why : "busy"));
+        return false;
+    }
+    if ((r.flags & UNIT_DEAD) || !structureOperational(r)) {
+        const char* why = structureDownReason(r);
+        commandRefused(owner, univId, *why ? why : "not operating");
+    }
     if (!(r.flags & UNIT_DEAD) && structureOperational(r)) {
         r.action = 0x17; r.field20 = 1; r.field3C = 0;
         r.extraWorkers = static_cast<int8_t>(students);  // [+0x60] (byte com sinal)

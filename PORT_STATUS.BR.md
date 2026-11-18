@@ -48,7 +48,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 120 modos de teste/captura
+  main.cpp        entrada + os 121 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -137,6 +137,7 @@ preferências; o original ignora chaves que não conhece.
 | `MapWrap` | 0/1 | 0 | Volta horizontal do mapa. 0 = como no original: a vista para nas bordas esquerda/direita do mapa, e só os mapas "around the world" (512 tiles de largura) dão a volta; 1 = todo mapa dá a volta (o comportamento antigo do porte). |
 | `ShowBottomRow` | 0/1 | 0 | Última linha de tiles do mapa. 0 = como no original: a vista para no fundo do clip rect do mapa, e a última linha fica escondida; 1 = a vista pode descer até mostrá-la. |
 | `AutoOreRoute` | 0/1 | 1 | Rota de minério num clique (acréscimo deste porte): com caminhões vazios selecionados, o clique direito na doca de uma mina monta o ciclo até a fundição compatível disponível mais próxima (ver 5.23). 0 = só o comando de três cliques, como no original. Também se troca pelo jogo: a caixa **Auto Ore Route** no `GAME PREFERENCES` do menu e a linha de mesmo nome no `Game Preferences` da aba Options (ver 5.29). |
+| `CommandDebug` | 0/1 | 0 | Diagnóstico (acréscimo deste porte): cada comando de prédio recusado — produzir, pesquisar, treinar, o repetido que o anel descarta — vira uma linha no registro de mensagens com o motivo (`not enough workers`, `needs 400 common ore`…). 0 = mudo, como no original. Também se troca pelo jogo: a caixa **Command Debug** no `GAME PREFERENCES` do menu e a linha de mesmo nome no `Game Preferences` da aba Options (ver 5.39). |
 
 Todas, menos `AILevel` dentro da partida, também se trocam pelas telas de
 preferências — ver 5.29.
@@ -390,6 +391,11 @@ ambiente — estavam portadas, com o comentário atrasado). Das seis reais,
     Teste: `--item21test <DLL>`, quinze casos. Neutralizando as três peças,
     cinco reprovam — ao menos um por peça — e os dez restantes, controles
     incluídos, continuam passando.
+
+    **Depois (5.39):** o original grava só a chave e nunca limpa o slot, então
+    16 turnos depois o registro velho descartava o comando legítimo — a
+    pesquisa e a produção que "falhavam ao acaso". O slot agora guarda também
+    o turno; mais dois casos no teste (17).
 
 ### Não aplicável nesta instalação
 
@@ -2399,6 +2405,7 @@ estavam em tela nenhuma.
 | `DemoCamera` | **novo:** caixa *Demo Camera* (1207) | — só vale no demo de atração do menu |
 | `MenuSkin` | **novo:** caixa *Original Menu Skin* (1208) | — só vale nos menus |
 | `NightDarkness` | **novo:** barra *Night Darkness* (1209, 0..100%) | **novo:** *Night Darkness*, `L&ESS`/`&MORE` de 5 em 5% |
+| `CommandDebug` | **novo (5.39):** caixa *Command Debug* (1210) | **novo (5.39):** *Command Debug* `On`/`Off` |
 
 **No menu principal**, o diálogo ficou **160 px mais largo** (360 → 520;
 `kPrX` 140 → 60) e ganhou uma **coluna à direita**, *"Port extras:"*, que
@@ -2963,6 +2970,95 @@ O porte não marcava nenhum dos dois.
   mina), o destroço antes e depois de conhecido, e os pixels na tela. Passa
   na E02 (Eden, azul) e na P04 (Plymouth, vermelho).
 
+## 5.39. Pesquisa e produção que falhavam "ao acaso": o anel anti-duplicata, e o diagnóstico `CommandDebug` (2026-11-18)
+
+Relato, jogando a missão 3 do Eden: *mandar pesquisar no laboratório às vezes
+só pega na 3ª ou 4ª tentativa; o mesmo com a produção na fábrica (Lynx, Scout,
+Robo-Miner); o Medical Center levou umas 10 tentativas. É aleatório.*
+
+### A causa: o anel guardava a chave sem o turno
+
+O anel anti-duplicata `[_Player+0xBD8]` (item 21c da seção 4, `sub_40E210`)
+descarta o comando de produzir, pesquisar, treinar, lançar, das cargas e de
+ociosar/religar quando a **mesma unidade** já foi assunto de um desses comandos
+nos turnos `T−4` a `T−2`. O original grava no slot `T % 16` só a chave — o
+`[unidade+0x10]`, que é o **índice** da unidade (`sub_439910` o põe na
+alocação, nos dois ramos) — e **nunca limpa** o slot: não há outra escrita em
+`+0xBD8` no executável, e o anel de pacotes de turno (`+0x4C8`, 16 slots de
+`0x71` bytes) termina exatamente em `+0xBD8`, sem sobrepor.
+
+Dezesseis turnos (64 tiques) depois, o slot volta à janela com a chave velha.
+Quem manda sempre nos mesmos prédios — a fábrica, o laboratório — vai enchendo
+os 16 slots com as chaves deles, e daí em diante quase todo comando novo para
+um desses prédios casa com algum registro antigo e é **descartado em
+silêncio**. Medido no teste abaixo, com a missão 3 rodando e um pedido de
+fábrica e um de laboratório a cada 37 tiques: **297 de 400** pedidos
+descartados. O clique só pega quando a janela calha de cair em slots com chave
+de outra unidade — daí o "na 3ª, 4ª, 10ª tentativa".
+
+**Correção:** o slot guarda a chave **e o turno** em que foi gravado
+(`marcaDoAnel`: 19 bits de turno, 12 de chave), e cada slot da janela só casa
+com o turno que ele representa. A proteção continua de pé — o mesmo comando
+repetido 2 turnos depois ainda é descartado —, mas o registro velho não casa
+mais. O anel continua `int[16]`, então o jogo salvo não muda de formato (um
+salvo antigo traz chaves sem turno, que simplesmente não casam), e as duas
+máquinas da partida em rede fazem a mesma conta.
+
+Com isso, os comentários que diziam que o anel "não foi portado" em
+`processProducePacket` e `processStartResearch` foram corrigidos: ele filtra
+antes, no despachante.
+
+### O diagnóstico: `[Game] CommandDebug` (acréscimo deste porte)
+
+Pedido junto: *quando não conseguir, mostrar uma mensagem dizendo o que
+falta.* O original recusa em silêncio — só a falta de minério ou de comida toca
+o som `0x58`. Com `CommandDebug=1` no `OUTPOST2.INI`, cada recusa de um comando
+do jogador **local** vira uma linha no registro de mensagens (sem som, na
+posição do prédio, então o clique na mensagem leva até ele) e no stdout:
+
+| Onde | Mensagem |
+|---|---|
+| fábrica já produzindo / universidade já treinando | `already producing` / `already training` |
+| prédio ocupado com outra ordem | `busy` |
+| obra / desmonte / ociosado pelo jogador | `still under construction` / `being dismantled` / `idled` |
+| dano acima de 3/4 | `too damaged` |
+| EMP e afins (`0xC0000`) | `disabled (EMP)` |
+| sem energia (ligado ou não ao CC pelos tubos) | `not enough power` / `no tube link to CC` |
+| sem trabalhadores / cientistas | `not enough workers` / `not enough scientists` |
+| minério | `needs N common ore` / `needs N rare ore` |
+| Food Cargo | `needs 10000 food` |
+| plataforma do Spaceport ocupada | `launch pad occupied` |
+| tópico já pesquisado | `topic already researched` |
+| o anel descartou | `repeated command ignored` |
+
+O laboratório e a universidade que recebem a ordem parados (sem energia,
+trabalhadores ou cientistas) não recusam no original: devolvem 1 e não começam
+nada. O diagnóstico avisa esse caso também. O motivo sai de
+`structureDownReason`, que segue as mesmas condições de `structureOperational`.
+Só exibe: não toca na simulação. Padrão `0` (mudo, como no original). Como as
+outras chaves do porte, também se troca pelo jogo: a caixa **Command Debug**
+(1210) na coluna *Port extras* do `GAME PREFERENCES` do menu (a barra da noite
+e a nota desceram 22 px para abrir lugar) e a linha *Command Debug* `On`/`Off`
+no `Game Preferences` da aba Options, que vale já no `&APPLY`.
+
+### Os testes
+
+- `--cmddebugtest <DLL>` — 20 casos na própria missão (E03, Eden; P03,
+  Plymouth): cada motivo forçado um a um na Structure Factory e no laboratório,
+  a pesquisa que não começa sem cientistas, o repetido que o anel descarta, a
+  chave desligada (nada no registro) e ligada (uma linha); e a missão rodando
+  com 400 pedidos espaçados — **todos aceitos**. Com o anel antigo, 297
+  descartados.
+- `--item21test` ganhou 2 casos (17 no total): o registro de 16 turnos atrás
+  não descarta mais, e o repetido 2 turnos depois continua descartado.
+- `--optmenutest` confere a linha nova (nasce `Off`, o clique a liga, nada vale
+  antes do `&APPLY`, que grava `CommandDebug=1` e liga o diagnóstico na hora);
+  o `--uitest` passa a caixa 1210 pelo mesmo ciclo das outras da coluna.
+
+Mutações: o anel sem o turno (pega nos dois testes), o anel mudo, o
+laboratório parado mudo, o motivo dos trabalhadores apagado e a chave ignorada —
+6 de 6 pegas.
+
 ---
 
 ## 6. Build e execução
@@ -3002,7 +3098,7 @@ São 109 modos. Os que cobrem regressão de verdade:
 | `--alerttest <DLL>` | a unidade atacada alerta os vizinhos armados do próprio lado (`sub_44DE10`) |
 | `--deletetest <DLL>` | grupo de IA com prazo vencido: autodestruição e, 400 ticks depois, sair do mapa |
 | `--cheattest <DLL>` | os cheats do chat: os quatro hashes do executável e o efeito de cada um |
-| `--item21test <DLL>` | as vozes da plataforma, a arma no ícone do STORAGE e o anel anti-duplicata |
+| `--item21test <DLL>` | as vozes da plataforma, a arma no ícone do STORAGE e o anel anti-duplicata (e o registro velho, 5.39) |
 | `--optmenutest <DLL>` | a aba Options: os botões do PREFERENCES, o rádio do modo de tela e a tela de fim de missão inteira |
 | `--bannertest <DLL> [bmp]` | o letreiro de fim de missão: cor, tamanho, contorno e centragem, medidos no quadro desenhado |
 | `--pausetest <DLL> [bmp]` | a pausa do `Ctrl+P`: o relógio para, o som suspende, o letreiro aparece, e em rede nada disso |
@@ -3017,6 +3113,7 @@ São 109 modos. Os que cobrem regressão de verdade:
 | `--vehpanetest <mapa> [tela.bmp]` | o texto do quadro de veículo: o kit do ConVec, a carga do caminhão, os colonos |
 | `--convecdocktest <mapa> [prefixo]` | a doca do ConVec na Structure Factory: a animação, a duração das fases e a troca do kit |
 | `--minimaptest <DLL> [tela.bmp]` | o minimapa além do terreno: as cores dos jogadores, os beacons e os destroços |
+| `--cmddebugtest <DLL>` | o anel anti-duplicata sem registro velho e cada motivo do diagnóstico `CommandDebug` (5.39) |
 | `--e02test [DLL] [bmp]` | missão 2 do Eden: a praga se espalha e é desenhada com o Overlay, e os objetivos de pesquisa são cumpridos; e a praga no minimapa |
 | `--tubetest <mapa> [prefixo]` | o Earthworker ligando prédios com tubo: retas inteiras, a doca que não liga, a animação de trabalho |
 | `--waypointtest <mapa> [bmp]` | pontos de passagem com Ctrl + clique: limites por comando, o pacote com os pontos antes do alvo, a unidade passando por eles, patrulha e obra, e o desenho |

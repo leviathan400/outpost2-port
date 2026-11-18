@@ -11,6 +11,7 @@
 
 #include "tapp.h"
 #include "info_pane.h"
+#include "../game/command_debug.h"
 #include "../game/production.h"
 #include "../game/construction.h"
 #include "../game/mining.h"
@@ -94,6 +95,7 @@ void GameState::loadSettings() {
     m_demoCam = gs.demoCamera != 0;                    // "DemoCamera" (idem)
     m_mapWrapAll = gs.mapWrap != 0;                    // "MapWrap" (fork)
     m_autoOreRoute = gs.autoOreRoute != 0;             // "AutoOreRoute" (so deste porte)
+    setCommandDebug(gs.commandDebug != 0);             // "CommandDebug" (idem, 5.39)
     m_showBottomRow = gs.showBottomRow != 0;           // "ShowBottomRow" (fork)
     if (g_gameMap.ok() && m_terrain.mapPixelHeight() > 0) { m_maxY = viewMaxY(); clampCamera(); }
     // "Fullscreen" NAO entra aqui: a janela nao pode pular de modo a cada

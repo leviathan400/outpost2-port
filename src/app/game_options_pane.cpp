@@ -164,6 +164,8 @@ std::vector<std::string> GameOptionsPane::items() const {
     add("Night Darkness\n\tNight Darkness:<R>%i%%", g_opt.nightDarkness);
     add("Wrap All Maps<R>%s", onOff(g_opt.mapWrap));
     add("Show Bottom Row<R>%s", onOff(g_opt.showBottomRow));
+    // Extra deste porte (5.39): o diagnostico de comando recusado.
+    add("Command Debug<R>%s", onOff(g_opt.commandDebug));
     return out;
 }
 
@@ -240,6 +242,7 @@ void GameOptionsPane::bump(int i, int dir) {
     case OPT_NIGHT:         g_opt.nightDarkness += dir * 5; break;
     case OPT_MAP_WRAP:      g_opt.mapWrap = !g_opt.mapWrap; break;
     case OPT_BOTTOM_ROW:    g_opt.showBottomRow = !g_opt.showBottomRow; break;
+    case OPT_CMD_DEBUG:     g_opt.commandDebug = !g_opt.commandDebug; break;
     default: return;
     }
     clampAll();

@@ -117,6 +117,10 @@ struct GameSettings {
     // tres cliques (S&et an ore-hauling route) continua existindo nos dois
     // casos. Ver op2::autoOreRoute.
     int autoOreRoute = 1;
+    // "CommandDebug": acrescimo DESTE porte (5.39). 1 = cada comando de predio
+    // recusado (produzir, pesquisar, treinar, o repetido do anel) vira uma linha
+    // no registro de mensagens com o motivo. 0 = mudo, como no original.
+    int commandDebug = 0;
     // Fork: "MapWrap". 0 = like the original: the map view stops at the map's
     // left/right edges; only "around the world" maps (512 tiles wide) wrap.
     // 1 = every map wraps horizontally (the port's old behaviour).

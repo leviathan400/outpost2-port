@@ -33,6 +33,7 @@
 #include "game/pathfinder.h"
 #include "game/command.h"
 #include "game/command_apply.h"
+#include "game/command_debug.h"
 #include "game/movement.h"
 #include "game/structure.h"
 #include "game/weapon.h"
@@ -7143,11 +7144,13 @@ static int runOptMenuTest(const std::string& dll) {
         auto leK = [](const char* k) { op2::Config c("OUTPOST2.INI"); return c.load() ? c.getInt("Game", k, -1) : -1; };
         using GOP = op2::GameOptionsPane;
         poeK("AudioVolume", 50); poeK("NightDarkness", 50); poeK("MapWrap", 0); poeK("ShowBottomRow", 0);
+        poeK("CommandDebug", 0);
         gs.debugOptionsScreen(1);
         texto("a linha do volume mestre", gs.debugOptItem(GOP::OPT_AUDIO_VOL), "Audio Volume\n\tMaster Volume:<R>50%");
         texto("a linha da noite", gs.debugOptItem(GOP::OPT_NIGHT), "Night Darkness\n\tNight Darkness:<R>50%");
         texto("a linha da volta", gs.debugOptItem(GOP::OPT_MAP_WRAP), "Wrap All Maps<R>Off");
         texto("a linha da ultima linha", gs.debugOptItem(GOP::OPT_BOTTOM_ROW), "Show Bottom Row<R>Off");
+        texto("a linha do diagnostico", gs.debugOptItem(GOP::OPT_CMD_DEBUG), "Command Debug<R>Off");
         gs.debugOptRow(GOP::OPT_NIGHT);                  // seleciona (item com valor)
         gs.debugOptClick("&MORE");
         gs.debugOptClick("&MORE");
@@ -7161,13 +7164,18 @@ static int runOptMenuTest(const std::string& dll) {
         gs.debugOptClick("&MORE");
         gs.debugOptRow(GOP::OPT_MAP_WRAP);
         gs.debugOptRow(GOP::OPT_BOTTOM_ROW);
+        gs.debugOptRow(GOP::OPT_CMD_DEBUG);
+        texto("o clique liga o diagnostico", gs.debugOptItem(GOP::OPT_CMD_DEBUG), "Command Debug<R>On");
         casos.push_back({"nada disso vale antes do &APPLY",
-                         (op2::nightDarkness() == 50 && !gs.debugMapWrapAll() && !gs.debugShowBottomRowOn()) ? 1 : 0, 1});
+                         (op2::nightDarkness() == 50 && !gs.debugMapWrapAll() && !gs.debugShowBottomRowOn() &&
+                          !op2::commandDebug()) ? 1 : 0, 1});
         gs.debugOptClick("&APPLY");
         casos.push_back({"o &APPLY grava NightDarkness=60", leK("NightDarkness"), 60});
         casos.push_back({"... AudioVolume=5", leK("AudioVolume"), 5});
         casos.push_back({"... MapWrap=1", leK("MapWrap"), 1});
         casos.push_back({"... ShowBottomRow=1", leK("ShowBottomRow"), 1});
+        casos.push_back({"... CommandDebug=1", leK("CommandDebug"), 1});
+        casos.push_back({"... e o diagnostico liga na hora", op2::commandDebug() ? 1 : 0, 1});
         casos.push_back({"e o jogo usa na hora: a noite", op2::nightDarkness(), 60});
         casos.push_back({"... o volume mestre", op2::soundMasterVolume(), 5});
         casos.push_back({"... a volta e a ultima linha",
@@ -7485,6 +7493,21 @@ static int runItem21Test(const std::string& dll) {
     andaTurnos(2);
     mandaIdle(ag);
     casos.push_back({"21c: jogador do PC ignora o anel", ocioso(ag), 1});
+    // O registro velho: o anel tem 16 slots e o original nunca os limpa. O
+    // comando aplicado no turno T (o "fora da janela" acima) deixou a chave no
+    // slot T % 16; 16 turnos depois esse slot cai de novo na janela e o
+    // comando legitimo seria DESCARTADO -- a pesquisa/producao que "falha ao
+    // acaso" (5.39). Aqui o turno vai junto da chave e o velho nao casa mais.
+    op2::g_units[ag].action = 0;
+    op2::g_playerData[0].isHuman = 1;
+    andaTurnos(16);
+    mandaIdle(ag);
+    casos.push_back({"21c: registro de 16 turnos atras nao descarta", ocioso(ag), 1});
+    // E a protecao continua valendo: o repetido logo depois e descartado.
+    op2::g_units[ag].action = 0;
+    andaTurnos(2);
+    mandaIdle(ag);
+    casos.push_back({"21c: ... e o repetido 2 turnos depois, sim", ocioso(ag), 0});
 
     bool ok = true;
     for (const Caso& c : casos) {
@@ -7496,6 +7519,172 @@ static int runItem21Test(const std::string& dll) {
     std::fflush(stdout);
     renderer.shutdown(); SDL_Quit();
     return ok ? 0 : 1;
+}
+
+// --cmddebugtest <DLL>: a pesquisa e a producao que "falhavam ao acaso" (5.39).
+//   (a) cada motivo de recusa do diagnostico [Game] CommandDebug, forcado um a
+//       um na Structure Factory e no laboratorio da propria missao;
+//   (b) a missao jogada de verdade: a cada 37 tiques um pedido de Medical
+//       Center na fabrica e um de pesquisa no laboratorio, 200 vezes, contando
+//       quantos o anel descartou. Antes da correcao do anel, ~3 em 16.
+static int runCmdDebugTest(const std::string& dll) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 cmddebugtest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    op2::setCommandDebug(true);
+    const int me = op2::TethysGame::localPlayer();
+    op2::g_playerData[me].isHuman = 1;
+    auto acha = [&](int tipo) {
+        for (int i = 1; i < static_cast<int>(op2::g_units.size()); ++i) {
+            const op2::UnitRecord& u = op2::g_units[i];
+            if (u.id != -1 && u.type == tipo && (u.owner & 0x0F) == me && !(u.flags & op2::UNIT_DEAD)) return i;
+        }
+        return 0;
+    };
+    // Deixa a colonia assentar (energia, trabalhadores) antes de mexer.
+    for (int k = 0; k < 200; ++k) gs.simTick();
+    const int sf = acha(op2::mapStructureFactory);
+    int lab = acha(0x21);                                    // Basic Lab
+    if (!lab) lab = acha(0x31);                              // Standard Lab
+    std::printf("[CmdDbg] %s: jogador %d, Structure Factory %d, laboratorio %d\n", dll.c_str(), me, sf, lab);
+    if (!sf || !lab) { renderer.shutdown(); SDL_Quit(); return 3; }
+    op2::UnitRecord& f = op2::g_units[sf];
+    op2::UnitRecord& l = op2::g_units[lab];
+    const int kMedical = 0x22;
+    // Um topico que o jogador pode pesquisar e um que ele ja tem.
+    int topicoLivre = -1, topicoFeito = -1;
+    for (int i = 1; i < op2::techCount(); ++i) {
+        if (topicoLivre < 0 && op2::researchAvailable(me, i)) topicoLivre = i;
+        if (topicoFeito < 0 && op2::researchHas(me, i)) topicoFeito = i;
+    }
+    std::printf("[CmdDbg] topico livre %d, ja pesquisado %d\n", topicoLivre, topicoFeito);
+
+    struct Caso { std::string nome; std::string obtido, esperado; };
+    std::vector<Caso> casos;
+    // Cada pedido anda 5 turnos antes (o anel nao interfere entre os casos).
+    auto passa = [&]() { for (int k = 0; k < 5 * op2::kTurnPeriod; ++k) op2::TethysGame::advanceTick(); };
+    auto produz = [&]() {
+        passa(); op2::commandClearLastRefusal();
+        op2::CommandPacket p; p.type = op2::CMD_PRODUCE; p.unitIds = {sf}; p.arg0 = kMedical; p.arg2 = -1;
+        op2::dispatchCommandPacket(me, p);
+        return op2::commandLastRefusal();
+    };
+    auto pesquisa = [&](int topico) {
+        passa(); op2::commandClearLastRefusal();
+        op2::CommandPacket p; p.type = op2::CMD_RESEARCH; p.unitIds = {lab}; p.arg0 = topico; p.arg1 = 1;
+        op2::dispatchCommandPacket(me, p);
+        return op2::commandLastRefusal();
+    };
+    const std::string nf = op2::unitDisplayName(op2::mapStructureFactory);
+    const std::string nl = op2::unitDisplayName(l.type);
+
+    // ---------------- (a) os motivos, um a um ----------------
+    const op2::UnitRecord fSalva = f, lSalvo = l;
+    const int oreSalvo = op2::g_playerData[me].ore, rareSalvo = op2::g_playerData[me].rareOre;
+    op2::g_playerData[me].ore = 100000; op2::g_playerData[me].rareOre = 100000;
+    f.flags &= ~op2::UNIT_WORKERS;
+    casos.push_back({"fabrica sem trabalhadores", produz(), nf + ": not enough workers"});
+    f = fSalva; f.flags &= ~op2::UNIT_POWERED;
+    casos.push_back({"fabrica sem energia", produz(), nf + (f.netConnected ? ": not enough power" : ": no tube link to CC")});
+    f = fSalva; f.action = 0x12;
+    casos.push_back({"fabrica ociosa", produz(), nf + ": idled"});
+    f = fSalva; f.action = 9;
+    casos.push_back({"fabrica ja produzindo", produz(), nf + ": already producing"});
+    f = fSalva; f.flags |= 0x40000u;
+    casos.push_back({"fabrica sob EMP", produz(), nf + ": disabled (EMP)"});
+    f = fSalva; op2::g_playerData[me].ore = 0;
+    {
+        const std::string r = produz();
+        casos.push_back({"sem minerio comum", r.substr(0, nf.size() + 8), nf + ": needs "});
+        casos.push_back({"   ... e diz qual", r.find("common ore") != std::string::npos ? "sim" : r, "sim"});
+    }
+    op2::g_playerData[me].ore = 100000;
+    f = fSalva;
+    casos.push_back({"fabrica em ordem produz", produz(), ""});
+    casos.push_back({"   ... e comecou", f.action == 9 ? "9" : std::to_string(f.action), "9"});
+    f = fSalva;
+    l.flags &= ~op2::UNIT_SCIENTISTS;
+    casos.push_back({"lab sem cientistas", pesquisa(topicoLivre), nl + ": not enough scientists"});
+    casos.push_back({"   ... e a pesquisa nao comecou", l.action == 0x16 ? "comecou" : "parado", "parado"});
+    l = lSalvo;
+    if (topicoFeito > 0) casos.push_back({"topico ja pesquisado", pesquisa(topicoFeito), nl + ": topic already researched"});
+    l = lSalvo;
+    casos.push_back({"lab em ordem pesquisa", pesquisa(topicoLivre), ""});
+    casos.push_back({"   ... e comecou", l.action == 0x16 ? "sim" : "nao", "sim"});
+    // O repetido logo em seguida (2 turnos): o anel descarta, e agora avisa.
+    l = lSalvo;
+    for (int k = 0; k < 2 * op2::kTurnPeriod; ++k) op2::TethysGame::advanceTick();
+    op2::commandClearLastRefusal();
+    {
+        op2::CommandPacket p; p.type = op2::CMD_RESEARCH; p.unitIds = {lab}; p.arg0 = topicoLivre; p.arg1 = 1;
+        op2::dispatchCommandPacket(me, p);
+    }
+    casos.push_back({"repetido 2 turnos depois", op2::commandLastRefusal(), nl + ": repeated command ignored"});
+    // Desligado: nada no registro.
+    op2::setCommandDebug(false);
+    f.flags &= ~op2::UNIT_WORKERS;
+    const int msgs = op2::messageSerial();
+    casos.push_back({"desligado nao registra", produz(), ""});
+    casos.push_back({"   ... nem no log", std::to_string(op2::messageSerial() - msgs), "0"});
+    op2::setCommandDebug(true);
+    f = fSalva; l = lSalvo;
+    // Ligado, a mensagem cai no registro.
+    f.flags &= ~op2::UNIT_WORKERS;
+    const int msgs2 = op2::messageSerial();
+    produz();
+    casos.push_back({"ligado entra no log", std::to_string(op2::messageSerial() - msgs2), "1"});
+    f = fSalva;
+    op2::g_playerData[me].ore = oreSalvo; op2::g_playerData[me].rareOre = rareSalvo;
+
+    // ---------------- (b) a missao jogada ----------------
+    // 200 pedidos espacados de 37 tiques (o clique de um jogador nao respeita
+    // turno nenhum). Cada pedido aceito e desfeito logo (a fabrica volta a
+    // parada, o minerio volta), para o proximo encontrar o mesmo estado; o que
+    // conta e so quem o ANEL descartou: com a fabrica e o laboratorio sempre
+    // os mesmos, o registro velho de 16 turnos casava ~3 vezes em 16.
+    int descartes = 0, aceitos = 0, outros = 0;
+    for (int n = 0; n < 200; ++n) {
+        for (int k = 0; k < 37; ++k) gs.simTick();
+        const op2::UnitRecord f0 = f, l0 = l;
+        const int o0 = op2::g_playerData[me].ore, r0 = op2::g_playerData[me].rareOre;
+        op2::g_playerData[me].ore = 100000; op2::g_playerData[me].rareOre = 100000;
+        f.action = 0; f.flags |= op2::UNIT_POWERED | op2::UNIT_WORKERS | op2::UNIT_SCIENTISTS;
+        l.action = 0; l.flags |= op2::UNIT_POWERED | op2::UNIT_WORKERS | op2::UNIT_SCIENTISTS;
+        for (int alvo = 0; alvo < 2; ++alvo) {
+            op2::commandClearLastRefusal();
+            op2::CommandPacket p;
+            if (alvo == 0) { p.type = op2::CMD_PRODUCE; p.unitIds = {sf}; p.arg0 = kMedical; p.arg2 = -1; }
+            else { p.type = op2::CMD_RESEARCH; p.unitIds = {lab}; p.arg0 = topicoLivre; p.arg1 = 1; }
+            op2::dispatchCommandPacket(me, p);
+            const std::string& r = op2::commandLastRefusal();
+            if (r.empty()) ++aceitos;
+            else if (r.find("repeated") != std::string::npos) ++descartes;
+            else { ++outros; std::printf("[CmdDbg] recusa inesperada: %s\n", r.c_str()); }
+        }
+        f = f0; l = l0;
+        op2::g_playerData[me].ore = o0; op2::g_playerData[me].rareOre = r0;
+    }
+    std::printf("[CmdDbg] 400 pedidos ao longo da missao: %d aceitos, %d descartados pelo anel, %d outros\n",
+                aceitos, descartes, outros);
+    casos.push_back({"nenhum pedido espacado e descartado", std::to_string(descartes), "0"});
+    casos.push_back({"todos aceitos", std::to_string(aceitos), "400"});
+
+    int falhas = 0;
+    for (const Caso& c : casos) {
+        const bool bom = c.obtido == c.esperado;
+        if (!bom) ++falhas;
+        std::printf("[CmdDbg] %-38s \"%s\" (esperado \"%s\") %s\n", c.nome.c_str(), c.obtido.c_str(),
+                    c.esperado.c_str(), bom ? "ok" : "FALHOU");
+    }
+    std::printf("[CmdDbg] %d casos, %d falhas\n", static_cast<int>(casos.size()), falhas);
+    std::fflush(stdout);
+    renderer.shutdown(); SDL_Quit();
+    return falhas ? 1 : 0;
 }
 
 // --walltest <map>: parede comum, de lava, de micróbio e um tubo lado a lado;
@@ -8868,6 +9057,8 @@ int main(int argc, char* argv[]) {
             return runBannerTest(argv[i + 1], i + 2 < argc ? argv[i + 2] : "");
         if (std::strcmp(argv[i], "--item21test") == 0 && i + 1 < argc)
             return runItem21Test(argv[i + 1]);
+        if (std::strcmp(argv[i], "--cmddebugtest") == 0 && i + 1 < argc)
+            return runCmdDebugTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--cheattest") == 0 && i + 1 < argc)
             return runCheatTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--deletetest") == 0 && i + 1 < argc)

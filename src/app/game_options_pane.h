@@ -63,6 +63,9 @@ public:
         // cento) e as duas chaves da vista. (AILevel, DemoCamera e MenuSkin
         // so valem fora dela: estao no GAME PREFERENCES do menu.)
         OPT_AUDIO_VOL, OPT_NIGHT, OPT_MAP_WRAP, OPT_BOTTOM_ROW,
+        // O diagnostico de comando recusado ([Game] CommandDebug, 5.39): vale
+        // na hora, entao mora aqui tambem.
+        OPT_CMD_DEBUG,
         OPT_COUNT
     };
 

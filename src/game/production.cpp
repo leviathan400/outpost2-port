@@ -17,6 +17,7 @@
 #include "tethys_game.h"
 #include "unit.h"
 #include "ai_group.h"
+#include "command_debug.h"
 
 namespace op2 {
 
@@ -171,25 +172,49 @@ bool processProducePacket(int owner, int factoryId, int type, int weapon, int gr
     if (!validFactory(factoryId)) return false;
     UnitRecord& f = g_units[factoryId];
     if (ownerLo(f) != (owner & 0x0F)) return false;
-    // (Humano: o original ignora o pacote se a fábrica já está no anel de
-    // comandos recentes [jogador+0xBD8] — proteção da rede, não portada.)
-    if (f.action != 0) return false;                         // [+0x21] == 0
+    // (Humano: o anel anti-duplicata [jogador+0xBD8] ja filtrou o pacote no
+    // despachante, command_dispatch.cpp.)
+    // Cada recusa abaixo e muda no original; com [Game] CommandDebug o porte
+    // diz o motivo (command_debug.cpp, 5.39).
+    if (f.action != 0) {                                     // [+0x21] == 0
+        const char* why = structureDownReason(f);
+        commandRefused(owner, factoryId, f.action == 9 ? "already producing" : (*why ? why : "busy"));
+        return false;
+    }
     // Custo pelo bloco do criador (nibble alto de +0x1D): desc+0x14/+0x18.
     const int hb = ownerHi(f);
     int common = costOf(type, hb, 0x0C), rare = costOf(type, hb, 0x10);
     if (weapon) { common += costOf(weapon, hb, 0x0C); rare += costOf(weapon, hb, 0x10); }
     if (type == 0x71) { common += 2 * costOf(weapon, hb, 0x0C); rare += 2 * costOf(weapon, hb, 0x10); }
-    if (f.flags & 0x20000u) return false;
-    if (!structureOperational(f)) return false;              // vt+0xA0
+    if (f.flags & 0x20000u) { commandRefused(owner, factoryId, "dying"); return false; }
+    if (!structureOperational(f)) {                          // vt+0xA0
+        const char* why = structureDownReason(f);
+        commandRefused(owner, factoryId, *why ? why : "not operating");
+        return false;
+    }
     PlayerData& pd = g_playerData[ownerLo(f)];
     // Sem minério / comida: som 0x58 p/ o jogador local.
     const bool local = ownerLo(f) == TethysGame::localPlayer();
-    if (pd.rareOre < rare || pd.ore < common) { if (local) soundPlay(0x58); return false; }
+    if (pd.rareOre < rare || pd.ore < common) {
+        if (local) soundPlay(0x58);
+        char why[64];
+        if (pd.ore < common) std::snprintf(why, sizeof(why), "needs %d common ore", common);
+        else std::snprintf(why, sizeof(why), "needs %d rare ore", rare);
+        commandRefused(owner, factoryId, why);
+        return false;
+    }
     if (type == 0x66) {                                      // Food Cargo
-        if (pd.foodStored < 10000) { if (local) soundPlay(0x58); return false; }
+        if (pd.foodStored < 10000) {
+            if (local) soundPlay(0x58);
+            commandRefused(owner, factoryId, "needs 10000 food");
+            return false;
+        }
         pd.foodStored -= 10000;
     }
-    if (type >= 0x69 && type <= 0x6B && f.padReserved != 0) return false;   // [+0x74]
+    if (type >= 0x69 && type <= 0x6B && f.padReserved != 0) {               // [+0x74]
+        commandRefused(owner, factoryId, "launch pad occupied");
+        return false;
+    }
     f.action = 9;                                            // [+0x21]
     f.field20 = 1;
     f.field3C = 0;

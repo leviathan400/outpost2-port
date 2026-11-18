@@ -187,6 +187,7 @@ void GameSettings::loadFrom(const Config& cfg) {
     menuSkin          = cfg.getInt("Game", "MenuSkin", menuSkin);
     mapWrap           = cfg.getInt("Game", "MapWrap", mapWrap);
     autoOreRoute      = cfg.getInt("Game", "AutoOreRoute", autoOreRoute);
+    commandDebug      = cfg.getInt("Game", "CommandDebug", commandDebug);
     showBottomRow     = cfg.getInt("Game", "ShowBottomRow", showBottomRow);
     name              = cfg.getString("Game", "Name", name);
 
@@ -218,6 +219,7 @@ void GameSettings::saveTo(Config& cfg) const {
     cfg.setInt("Game", "MenuSkin", menuSkin);
     cfg.setInt("Game", "MapWrap", mapWrap);
     cfg.setInt("Game", "AutoOreRoute", autoOreRoute);
+    cfg.setInt("Game", "CommandDebug", commandDebug);
     cfg.setInt("Game", "ShowBottomRow", showBottomRow);
     cfg.setString("Game", "Name", name);
 

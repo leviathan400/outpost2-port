@@ -76,7 +76,12 @@
 > it spreads, `sub_48D1E0(x, y, 0x301B)`, and repainted by `sub_49E2D0` after
 > loading and after any minimap button; player colours are `sub_490C00` —
 > ramp entry 4 with each channel saturated —; mining beacons and known wreckage
-> are drawn in white).
+> are drawn in white) and **5.39** (research and production that failed "at
+> random": the anti-duplicate ring `[_Player+0xBD8]` stored only the unit key
+> and was never cleared, so 16 turns later a stale entry dropped a legitimate
+> command — 297 of 400 spaced orders in mission 3; each slot now also stores
+> its turn. Plus the port's `[Game] CommandDebug` key, which logs why a
+> building command was refused).
 > The recent
 > changes are summarised in
 > [README.EN.md](README.EN.md).
@@ -129,7 +134,7 @@ coverage by comparing the DLLs' import tables against the registry in
 
 ```
 src/
-  main.cpp        entry point + the 120 test/capture modes
+  main.cpp        entry point + the 121 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -217,6 +222,7 @@ preferences screen; the original ignores keys it doesn't know.
 | `MapWrap` | 0/1 | 0 | Horizontal map wrap. 0 = as in the original: the view stops at the left/right edges of the map, and only "around the world" maps (512 tiles wide) wrap; 1 = every map wraps (the port's old behaviour). |
 | `ShowBottomRow` | 0/1 | 0 | Map's last tile row. 0 = as in the original: the view stops at the bottom of the map's clip rect, so the last row is hidden; 1 = the view can scroll down to show it. |
 | `AutoOreRoute` | 0/1 | 1 | One-click ore route (an addition of this port): with empty trucks selected, right-clicking a mine's dock builds the cycle to the nearest available compatible smelter (see 5.23 in the BR status). 0 = only the three-click command, as in the original. It can also be changed in game: the **Auto Ore Route** check box in the main menu's `GAME PREFERENCES`, and the line of the same name in the Options tab's `Game Preferences` (see 5.29). |
+| `CommandDebug` | 0/1 | 0 | Diagnostics (an addition of this port): every refused building command — produce, research, train, the repeat the anti-duplicate ring drops — becomes a line in the message log with the reason (`not enough workers`, `needs 400 common ore`…). 0 = silent, as in the original. It can also be changed in game: the **Command Debug** check box in the main menu's `GAME PREFERENCES`, and the line of the same name in the Options tab's `Game Preferences` (see 5.39 in the BR status). |
 
 All of them can also be changed on the preferences screens — see 5.29 in the
 BR status.
@@ -716,7 +722,7 @@ mission DLLs and the original resources from the working directory).
 
 ### Command-line tests
 
-There are 120 modes. The ones that cover real regressions:
+There are 121 modes. The ones that cover real regressions:
 
 | Mode | What it proves |
 |---|---|

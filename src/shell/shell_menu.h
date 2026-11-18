@@ -310,6 +310,7 @@ private:
     // 0..100%). Tudo so vale no ACCEPT; a pele troca na hora (applyMenuSkin).
     bool m_prefMapWrap = false, m_prefBottomRow = false;
     bool m_prefDemoCamera = true, m_prefMenuSkin = false;
+    bool m_prefCmdDebug = false;      // "CommandDebug" (5.39), caixa 1210
     int  m_prefNightDarkness = 75;
     void applyMenuSkin(bool on);
     bool m_prefApplyScreen = false;   // aplicar o escolhido (ACCEPT)

@@ -173,13 +173,13 @@ outpost2_modern.exe                      # menu principal
 outpost2_modern.exe --game eden01.map    # abre um mapa direto
 ```
 
-O arquivo `OUTPOST2.INI` do jogo é respeitado. O porte acrescenta nove chaves
+O arquivo `OUTPOST2.INI` do jogo é respeitado. O porte acrescenta dez chaves
 que o original não tem — nível da IA, escuridão da noite, volume, câmera do
 demo, tela cheia, a pele dos menus (`MenuSkin`), a volta horizontal do mapa
-(`MapWrap`), a última linha do mapa (`ShowBottomRow`) e a rota de minério num
-clique (`AutoOreRoute`); estão documentadas no `PORT_STATUS.BR.md`.
+(`MapWrap`), a última linha do mapa (`ShowBottomRow`), a rota de minério num
+clique (`AutoOreRoute`) e o diagnóstico de comando recusado (`CommandDebug`); estão documentadas no `PORT_STATUS.BR.md`.
 
-Há **120 modos de linha de comando** para testes e capturas, entre eles uma
+Há **121 modos de linha de comando** para testes e capturas, entre eles uma
 bateria de regressão (`--savetest` prova o determinismo de salvar/recarregar).
 A lista está no `PORT_STATUS.BR.md`.
 
@@ -213,7 +213,7 @@ e descartado das listas de cheat que circulam por aí.
 
 ```
 src/
-  main.cpp        entrada + os 120 modos de teste/captura
+  main.cpp        entrada + os 121 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -238,6 +238,12 @@ cursores `.ANI`.
 
 ### 2026-11-18
 
+- **A pesquisa e a produção não falham mais "ao acaso".** O pedido no
+  laboratório ou na fábrica às vezes só pegava depois de várias tentativas: a
+  proteção contra clique repetido guardava registros velhos e descartava o
+  comando novo. Corrigido. E a opção **Command Debug** (nas preferências, ou
+  `CommandDebug=1` no `OUTPOST2.INI`) passa a dizer, no registro de mensagens,
+  por que um comando de prédio foi recusado.
 - **A praga aparece no minimapa** e cresce nele junto com a infecção, como no
   original. O minimapa também ganhou as cores puras dos jogadores do original e
   passou a marcar em branco os mining beacons e os destroços conhecidos.

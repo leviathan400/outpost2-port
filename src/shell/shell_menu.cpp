@@ -124,8 +124,8 @@ namespace {
     // +28 de altura em relacao ao Dialog 142: a linha do modo de tela, que e
     // acrescimo do porte (como ja eram o combo da IA e a barra do volume).
     // +160 de largura: a coluna da direita, com as chaves que sao extras do
-    // porte (AutoOreRoute, MapWrap, ShowBottomRow, DemoCamera, MenuSkin e a
-    // barra do NightDarkness). A altura nao tinha mais para onde crescer em
+    // porte (AutoOreRoute, MapWrap, ShowBottomRow, DemoCamera, MenuSkin,
+    // CommandDebug e a barra do NightDarkness). A altura nao tinha mais para onde crescer em
     // 480. A coluna comeca depois dos botoes LESS/MORE (que vao ate x+306).
     constexpr int kPrX = 60, kPrY = 59, kPrW = 520, kPrH = 390;
     constexpr int kPrExtraX = kPrX + 320;   // a coluna dos extras
@@ -465,8 +465,9 @@ void ShellMenu::rebuildControls() {
         addCheck("Show Bottom Row",    kPrY + 108, &m_prefBottomRow,    kPrExtraX, kPrExtraW, 1206);
         addCheck("Demo Camera",        kPrY + 130, &m_prefDemoCamera,   kPrExtraX, kPrExtraW, 1207);
         addCheck("Original Menu Skin", kPrY + 152, &m_prefMenuSkin,     kPrExtraX, kPrExtraW, 1208);
+        addCheck("Command Debug",      kPrY + 174, &m_prefCmdDebug,     kPrExtraX, kPrExtraW, 1210);
         // NightDarkness: quanto da noite do original se aplica (0..100%).
-        addSlider(1209, &m_prefNightDarkness, 0, 100, kPrExtraX, kPrY + 198, kPrExtraW, 16);
+        addSlider(1209, &m_prefNightDarkness, 0, 100, kPrExtraX, kPrY + 220, kPrExtraW, 16);
         // Velocidades: os botoes LESS/MORE do Dialog 142, com os ids do
         // original (1095/1099 jogo, 1097/1101 rolagem). O rotulo e o valor
         // saem no render.
@@ -1839,6 +1840,7 @@ void ShellMenu::loadPrefs() {
     m_prefBottomRow    = gs.showBottomRow != 0;
     m_prefDemoCamera   = gs.demoCamera != 0;
     m_prefMenuSkin     = gs.menuSkin != 0;
+    m_prefCmdDebug     = gs.commandDebug != 0;
     m_prefNightDarkness = gs.nightDarkness < 0 ? 0 : (gs.nightDarkness > 100 ? 100 : gs.nightDarkness);
 }
 
@@ -1861,6 +1863,7 @@ void ShellMenu::savePrefs() {
     gs.showBottomRow     = m_prefBottomRow ? 1 : 0;
     gs.demoCamera        = m_prefDemoCamera ? 1 : 0;
     gs.menuSkin          = m_prefMenuSkin ? 1 : 0;
+    gs.commandDebug      = m_prefCmdDebug ? 1 : 0;
     gs.nightDarkness     = m_prefNightDarkness;
     applyMenuSkin(gs.menuSkin != 0);             // a pele troca ja no ACCEPT
     m_prefApplyScreen    = true;                 // o render troca a janela
@@ -1909,12 +1912,12 @@ void ShellMenu::renderPreferencesDialog(Renderer& renderer) {
     // A coluna dos extras: o título, o rótulo e o valor da barra da noite, e a
     // nota de que nada disto existe no original.
     SkinText::draw(fb, 640, 480, "Port extras:", kPrExtraX, kPrY + 40, 0xFFD8E4F8, true);
-    SkinText::draw(fb, 640, 480, "Night Darkness:", kPrExtraX, kPrY + 180, 0xFFD8E4F8, true);
+    SkinText::draw(fb, 640, 480, "Night Darkness:", kPrExtraX, kPrY + 202, 0xFFD8E4F8, true);
     char noite[16];
     std::snprintf(noite, sizeof(noite), "%d%%", m_prefNightDarkness);
     SkinText::draw(fb, 640, 480, noite, kPrExtraX + kPrExtraW - SkinText::width(noite),
-                   kPrY + 180, 0xFFFFD24A, true);
-    SkinText::draw(fb, 640, 480, "(not in the original)", kPrExtraX, kPrY + 224, 0xFF8090A8, true);
+                   kPrY + 202, 0xFFFFD24A, true);
+    SkinText::draw(fb, 640, 480, "(not in the original)", kPrExtraX, kPrY + 246, 0xFF8090A8, true);
 }
 
 // O botão HELP (1012) e a tecla F1 — no original, WM_HELP -> TApp::GetHelp,

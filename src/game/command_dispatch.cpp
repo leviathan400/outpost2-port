@@ -14,6 +14,7 @@
 #include "weapon.h"
 #include "colony.h"
 #include "cheat.h"
+#include "command_debug.h"
 #include "player.h"
 #include "tethys_game.h"
 #include "../net/net_game.h"
@@ -48,6 +49,22 @@ namespace op2 {
 // nos primeiros turnos ele lê alguns dwords ANTES do anel — campos vizinhos do
 // jogador. Aqui o índice é normalizado para 0..15. Na prática dá no mesmo (os
 // slots começam zerados e nada casa), sem ler fora do vetor.
+//
+// CORREÇÃO (5.39): o original grava só a chave (`[unidade+0x10]`, o índice da
+// unidade — sub_439910) e NUNCA limpa o slot. Dezesseis turnos depois o mesmo
+// slot volta para a janela com a chave velha, e o comando novo para a mesma
+// unidade é descartado sem aviso — a pesquisa ou a produção que "falha ao
+// acaso" e só pega na 3ª, 4ª, 10ª tentativa. Quem manda sempre nos mesmos
+// prédios enche os 16 slots com as chaves deles: na missão 3 do Eden, com a
+// fábrica e o laboratório, 297 de 400 pedidos espaçados caíam (--cmddebugtest
+// com o anel antigo). Aqui o slot guarda também o turno em que foi gravado e só casa com o
+// turno que ele representa. O anel continua sendo int[16] (o jogo salvo não
+// muda de formato); um salvo antigo traz chaves sem turno, que simplesmente não
+// casam.
+static int marcaDoAnel(int turno, int chave) {
+    return static_cast<int>((static_cast<uint32_t>(turno) & 0x7FFFFu) << 12 |
+                            (static_cast<uint32_t>(chave) & 0xFFFu));
+}
 static bool usaAnel(int tipo) {
     switch (tipo) {
         case CMD_PRODUCE: case CMD_XFER_CARGO: case CMD_LOAD_CARGO:
@@ -72,20 +89,25 @@ static bool comandoDuplicado(int owner, const CommandPacket& p) {
     auto m16 = [](int v) { return ((v % 16) + 16) % 16; };
     const int turno = TethysGame::tick() / kTurnPeriod;
     const int fim = m16(turno - 1);
-    int i = m16(fim - kTurnLead - 1);
+    int t = turno - 1 - kTurnLead - 1;               // o turno que o slot i representa
+    int i = m16(t);
     if (i != fim) {                                  // cmp eax, ecx / jz
         do {
-            if (anel[i] == chave) return true;       // jz loc_40E93C
+            if (anel[i] == marcaDoAnel(t, chave)) return true;   // jz loc_40E93C
             i = m16(i + 1);
+            ++t;
         } while (i != fim);
     }
-    anel[m16(turno)] = chave;
+    anel[m16(turno)] = marcaDoAnel(turno, chave);
     return false;
 }
 
 // A ordem dos casos segue o enum CommandType do original.
 void dispatchCommandPacket(int owner, const CommandPacket& p) {
-    if (usaAnel(p.type) && comandoDuplicado(owner, p)) return;
+    if (usaAnel(p.type) && comandoDuplicado(owner, p)) {
+        commandRefused(owner, p.unitIds[0], "repeated command ignored");
+        return;
+    }
     switch (p.type) {
         case CMD_DOZE:
             if (!p.unitIds.empty()) applyDoze(owner, p.unitIds[0], p.rectL, p.rectT, p.rectR, p.rectB);
