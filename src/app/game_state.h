@@ -197,7 +197,11 @@ private:
     bool m_showPassability = false; // overlay de debug (tecla G)
     bool m_showDebugHud = false;    // overlay de depuração (Tick/RNG/economia; tecla F3)
     bool m_stationaryShadows = false; // INI StationaryShadows (dword_575634)
-    bool m_overlay = true;           // "Overlay" (dword_57562C): luz de status dos prédios
+    bool m_overlay = true;           // "Overlay" (dword_57562C): luz de status dos prédios e a praga
+    void drawBlight(uint32_t* fb) const;   // a praga (sub_46FF60/sub_4A88D0), com o Overlay
+public:
+    void debugOverlay(bool on) { m_overlay = on; }   // --e02test
+private:
     bool m_mobileShadows = false;     // INI MobileShadows (dword_575638)
     int  m_frameSkip = 1;             // INI FrameSkip (Value)
     // "AILevel" do INI: 0 = AUTO (vale o que a partida escolheu), 1..3 forcam

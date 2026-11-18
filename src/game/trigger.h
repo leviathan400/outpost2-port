@@ -111,6 +111,11 @@ void missionTriggerTick(MissionScript* mission);
 // Objetivos (textos das VictoryConditions, na ordem da lista).
 std::vector<std::string> missionObjectives();
 
+// Testes: um retrato de cada gatilho vivo (stub, tipo, ligado, campos, mascara).
+struct TriggerInfo { int stub, kind, enabled, f30, f34; uint32_t playerMask; };
+std::vector<TriggerInfo> debugTriggers();
+enum { kTrigResearch = 1, kTrigVictory = 2 };
+
 // Fim de jogo (sub_48A650 / TethysGame +0x9C,+0x98): 0 = em andamento;
 // 3 MISSION ACCOMPLISHED, 4 MISSION FAILED, 7 VICTORY IS SWEET, 8 YOU HAVE BEEN
 // DEFEATED, 0xB demo. endTick = tick em que o jogo é encerrado.

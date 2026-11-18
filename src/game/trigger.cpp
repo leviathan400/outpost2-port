@@ -673,17 +673,22 @@ static bool hasFired(Trigger& t) {
         }
         case TK_RESEARCH: {                                   // sub_492700
             // sub_472C50: o jogador tem a tecnologia (ou a trapaça "produce all",
-            // dword_56DE5C). A árvore de pesquisa completa (dword_56B5F0) ainda
-            // não está portada; vale o conjunto de tecnologias do jogador.
+            // dword_56DE5C).
             auto has = [&](int p) {
                 return TethysGame::cheatFlag(1) != 0 || Player[p].HasTechnology(t.f30) != 0;
             };
-            if (t.f34 == -1) {
+            if (t.f34 == -1) {                                // qualquer jogador
                 for (int p = 0; p < n; ++p) if (has(p)) t.playerMask |= 1u << p;
-            } else if (has(t.f34)) {
-                t.playerMask |= 1u << t.f34;
+                return t.playerMask != 0;
             }
-            return t.playerMask != 0;
+            // Um jogador: dispara SO quando ele tem a tecnologia (loc_49275B:
+            // 1 com o bit dele ligado; senao 0). O porte devolvia "mascara != 0"
+            // aqui tambem -- e a mascara ja nasce (1 << jogador) ^ 0x3F, entao o
+            // gatilho disparava no PRIMEIRO tique: a missao (E02) o desligava na
+            // funcao dela e a pesquisa de verdade nunca chegava ao objetivo.
+            if (!has(t.f34)) return false;
+            t.playerMask |= 1u << t.f34;
+            return true;
         }
         case TK_COUNT: {                                      // sub_493AF0
             t.playerMask = 0;
@@ -990,6 +995,16 @@ void debugSetGameEnd(int code) {
 
 void endGameAborted() { endGame(6, 0); }            // "MISSION ABORTED"
 void endGamePlayerQuit(int delay) { endGame(multiplayerMission() ? 9 : 6, delay); }
+
+std::vector<TriggerInfo> debugTriggers() {
+    std::vector<TriggerInfo> v;
+    for (int i = 0; i < kMaxStubs; ++i) {
+        Trigger* t = trig(i);
+        if (!t) continue;
+        v.push_back({i, static_cast<int>(t->kind), t->enabled, t->f30, t->f34, t->playerMask});
+    }
+    return v;
+}
 
 std::vector<std::string> missionObjectives() {
     std::vector<std::string> v;

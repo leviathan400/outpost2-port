@@ -23,7 +23,7 @@ done, what is missing, and the original mechanism behind each part.
 ## ⚠️ Nothing from the 1997 game is here
 
 This repository contains **only the port's code**. The game files
-(`OUTPOST2.EXE`, the `*.DLL`s, the `*.VOL`s, `OP2_ART.BMP`, the `*.ANI`s,
+(`OUTPOST2.EXE`, the `*.DLL`s, the `*.VOL`s, `OP2_ART.BMP`, `VIRMASK.RAW`, the `*.ANI`s,
 `OUTPOST2.INI`, `OUTPOST2.HLP`…) and the disassembly are protected commercial
 material and are **not** versioned or redistributed.
 
@@ -178,7 +178,7 @@ fullscreen, the menu skin (`MenuSkin`), horizontal map wrap (`MapWrap`), the
 map's bottom row (`ShowBottomRow`) and the one-click ore route
 (`AutoOreRoute`); they are documented in `PORT_STATUS.EN.md`.
 
-There are **114 command-line modes** for tests and captures, among them a
+There are **115 command-line modes** for tests and captures, among them a
 regression battery (`--savetest` proves save/reload determinism). The list is
 in `PORT_STATUS.EN.md`.
 
@@ -212,7 +212,7 @@ and what was checked and discarded from the cheat lists that circulate.
 
 ```
 src/
-  main.cpp        entry point + the 114 test/capture modes
+  main.cpp        entry point + the 115 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -236,6 +236,15 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
 
 ### 2026-11-18
 
+- **Eden mission 2 can be won**: the research asked for in the objectives
+  ("Reconstruct … database") now counts when the lab completes it. The research
+  trigger fired at the very first moment of the mission and was switched off
+  before any research happened — this applies to every mission with a research
+  objective.
+- **The Blight shows up**: the original's purple checkerboard over infected
+  terrain, with the *Display Computer Overlay* option on. It already spread, but
+  was never drawn. The edges use the game's `VIRMASK.RAW` (put it in the game
+  folder if it is not inside the volumes).
 - **Work vehicles show their work animation**, as in the original: the
   Earthworker laying tube or wall, the ConVec building or repairing, the Spider
   and the repair vehicle repairing, the Robo-Dozer bulldozing. They used to

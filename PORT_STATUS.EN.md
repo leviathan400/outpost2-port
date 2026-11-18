@@ -60,7 +60,12 @@
 > the action at `desc+0x44C`, and `desc+0x450` — the Earthworker, ConVec,
 > Spider, repair vehicle and Robo-Dozer now show their work animation; and a
 > building's dock is not part of its tube-network search, as in `sub_42F000`,
-> so a tube touching only the dock never connects). The recent
+> so a tube touching only the dock never connects) and **5.35** (Eden mission 2:
+> a research trigger fired on the first tick — `sub_492700` only fires for a
+> given player once that player has the technology —, so research objectives
+> never completed; and the Blight spread but was never drawn: it is part of
+> the computer overlay, a checkerboard of colour `0x3018` cut by the corner
+> masks from `VIRMASK.RAW`). The recent
 > changes are summarised in
 > [README.EN.md](README.EN.md).
 
@@ -112,7 +117,7 @@ coverage by comparing the DLLs' import tables against the registry in
 
 ```
 src/
-  main.cpp        entry point + the 114 test/capture modes
+  main.cpp        entry point + the 115 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -699,7 +704,7 @@ mission DLLs and the original resources from the working directory).
 
 ### Command-line tests
 
-There are 114 modes. The ones that cover real regressions:
+There are 115 modes. The ones that cover real regressions:
 
 | Mode | What it proves |
 |---|---|

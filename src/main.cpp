@@ -4814,6 +4814,114 @@ static int runTubeTest(const std::string& mapName, const std::string& prefix) {
     return ruins ? 1 : 0;
 }
 
+// --e02test [DLL]: a praga (Blight) e os objetivos de pesquisa da E02. Conta as
+// celulas com virus (bit 0x40000000) e os tiles infectados (0x20000000) ao
+// longo do tempo; lista os gatilhos de pesquisa e de vitoria; conclui cada
+// pesquisa pedida pelo caminho do laboratorio (researchMarkComplete) e confere
+// que o objetivo correspondente fica cumprido e a missao termina.
+namespace op2 { bool blightMaskFromFile(); }   // game_state.cpp
+static int runE02Test(const std::string& dll, const std::string& shot) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 e02test", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { std::printf("[E02] missao nao carregou\n"); renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
+    auto conta = [&](uint32_t bit) {
+        int n = 0;
+        for (int y = 0; y < H; ++y) for (int x = 0; x < W; ++x) if (op2::g_gameMap.rawCell(x, y) & bit) ++n;
+        return n;
+    };
+    std::printf("[E02] mapa %dx%d; inicio: virus %d, infectados %d\n", W, H, conta(0x40000000u), conta(0x20000000u));
+    for (const op2::TriggerInfo& t : op2::debugTriggers())
+        if (t.kind == op2::kTrigResearch || t.kind == op2::kTrigVictory)
+            std::printf("[E02]   gatilho %d tipo %s ligado %d f30 %d f34 %d mascara 0x%X\n", t.stub,
+                        t.kind == op2::kTrigResearch ? "PESQUISA" : "VITORIA", t.enabled, t.f30, t.f34, t.playerMask);
+    for (const std::string& o : op2::missionObjectives()) std::printf("[E02]   objetivo: %s\n", o.c_str());
+    int v0 = conta(0x40000000u);
+    for (int t = 1; t <= (std::getenv("E02_T") ? std::atoi(std::getenv("E02_T")) : 8000); ++t) {
+        gs.onIdle(renderer, 0.2501f / 4.0f);
+        if (t % 1000 == 0)
+            std::printf("[E02] t=%d: virus %d, infectados %d\n", t, conta(0x40000000u), conta(0x20000000u));
+    }
+    const int v1 = conta(0x40000000u);
+
+    // O desenho: a camera sobre uma celula com virus; conta os pixels roxos
+    // (0x3018) na vista com o Overlay ligado e desligado.
+    int roxoCom = 0, roxoSem = 0, alvoX = -1, alvoY = -1;
+    for (int y = 0; y < H && alvoX < 0; ++y)
+        for (int x = 0; x < W && alvoX < 0; ++x)
+            if ((op2::g_gameMap.rawCell(x, y) & 0x60000000u) == 0x60000000u) { alvoX = x; alvoY = y; }
+    if (alvoX >= 0) {
+        int vx, vy, vw, vh;
+        gs.debugViewRect(vx, vy, vw, vh);
+        auto roxos = [&]() {
+            gs.setCamera(alvoX * 32 - vw / 2, alvoY * 32 - vh / 2);
+            gs.onIdle(renderer, 0.0f);
+            const uint32_t* fb = renderer.getFramebuffer();
+            const int FW = renderer.getWidth();
+            int n = 0;
+            for (int y = vy; y < vy + vh; ++y)
+                for (int x = vx; x < vx + vw; ++x)
+                    if ((fb[y * FW + x] & 0xFFFFFF) == 0x6300C6) ++n;
+            return n;
+        };
+        gs.debugOverlay(true);
+        roxoCom = roxos();
+        if (!shot.empty() && writeBmp32(shot, renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight()))
+            std::printf("[E02] quadro salvo em %s\n", shot.c_str());
+        gs.debugOverlay(false);
+        roxoSem = roxos();
+        gs.debugOverlay(true);
+    }
+    std::printf("[E02] desenho: celula (%d,%d); molde %s; pixels roxos com Overlay %d, sem %d\n", alvoX, alvoY,
+                op2::blightMaskFromFile() ? "do VIRMASK.RAW" : "de reserva", roxoCom, roxoSem);
+    // As pesquisas pedidas: conclui uma a uma pelo caminho do laboratorio.
+    for (const op2::TriggerInfo& t : op2::debugTriggers()) {
+        if (t.kind != op2::kTrigResearch) continue;
+        const int idx = op2::techIndex(t.f30);
+        std::printf("[E02] pesquisa %d (indice %d) ja tem=%d\n", t.f30, idx, idx >= 0 ? (int)op2::researchHas(0, idx) : -1);
+        if (idx >= 0) op2::researchMarkComplete(0, idx);
+        for (int k = 0; k < 40; ++k) gs.onIdle(renderer, 0.2501f / 4.0f);
+    }
+    for (const op2::TriggerInfo& t : op2::debugTriggers())
+        if (t.kind == op2::kTrigResearch || t.kind == op2::kTrigVictory)
+            std::printf("[E02]   depois: gatilho %d tipo %s ligado %d f30 %d f34 %d mascara 0x%X\n", t.stub,
+                        t.kind == op2::kTrigResearch ? "PESQUISA" : "VITORIA", t.enabled, t.f30, t.f34, t.playerMask);
+    int cumpridos = 0, total = 0;
+    for (const std::string& o : op2::missionObjectives()) {
+        std::printf("[E02]   objetivo: %s\n", o.c_str());
+        ++total; if (o.rfind("<C0>", 0) == 0) ++cumpridos;
+    }
+    for (int k = 0; k < 200 && op2::gameEndCode() == 0; ++k) gs.onIdle(renderer, 0.2501f / 4.0f);
+    std::printf("[E02] virus %d -> %d; objetivos cumpridos %d de %d; fim de jogo %d\n", v0, v1, cumpridos, total,
+                op2::gameEndCode());
+    // Os casos. A missao planta a praga perto do tique 13200 (SetVirusUL em 7
+    // cantos e SetMicrobeSpreadSpeed(170)); os objetivos de pesquisa sao 5.
+    struct Caso { std::string nome; long long obtido, esperado; };
+    std::vector<Caso> casos;
+    casos.push_back({"a praga e plantada e se espalha (mais de 100 celulas)", v1 > 100 ? 1 : 0, 1});
+    casos.push_back({"com o Overlay, a praga aparece (pixels roxos)", roxoCom > 200 ? 1 : 0, 1});
+    casos.push_back({"sem o Overlay, nao aparece (como o original)", roxoSem, 0});
+    int pesquisas = 0;
+    for (const std::string& o : op2::missionObjectives())
+        if (o.find("Reconstruct") != std::string::npos && o.rfind("<C0>", 0) == 0) ++pesquisas;
+    casos.push_back({"os 5 objetivos de pesquisa ficam cumpridos", pesquisas, 5});
+    int ruins = 0;
+    for (const Caso& k : casos) {
+        const bool ok = k.obtido == k.esperado;
+        if (!ok) ++ruins;
+        std::printf("[E02] %-52s %lld (esperado %lld) %s\n", k.nome.c_str(), k.obtido, k.esperado, ok ? "ok" : "FALHOU");
+    }
+    std::printf("[E02] %d casos, %d falhas\n", (int)casos.size(), ruins);
+    renderer.shutdown();
+    SDL_Quit();
+    return ruins ? 1 : 0;
+}
+
 // --detourtest <mapa>: o DESVIO de quem vem de frente (sub_44BBA0, ramo do
 // bloqueador em movimento -> sub_44BFD0; a parada de 32 tiques em loc_44C1D2).
 // Tres partes. (1) Dois veiculos, com ordem de mover dada pelo clique direito
@@ -8132,6 +8240,9 @@ int main(int argc, char* argv[]) {
             return runWaypointTest(argv[i + 1], i + 2 < argc && argv[i + 2][0] != '-' ? argv[i + 2] : "");
         if (std::strcmp(argv[i], "--tubetest") == 0 && i + 1 < argc)
             return runTubeTest(argv[i + 1], i + 2 < argc && argv[i + 2][0] != '-' ? argv[i + 2] : "");
+        if (std::strcmp(argv[i], "--e02test") == 0)
+            return runE02Test(i + 1 < argc && argv[i + 1][0] != '-' ? argv[i + 1] : "E02.DLL",
+                              i + 2 < argc && argv[i + 2][0] != '-' ? argv[i + 2] : "");
         if (std::strcmp(argv[i], "--exitbeeptest") == 0)
             return runExitBeepTest();
         if (std::strcmp(argv[i], "--stacktest") == 0 && i + 1 < argc)

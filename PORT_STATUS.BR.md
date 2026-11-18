@@ -48,7 +48,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 114 modos de teste/captura
+  main.cpp        entrada + os 115 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -2738,6 +2738,66 @@ o tique em que ficou pronta. Enquanto assenta, a animação é sempre a de
 trabalho (2283 tiques, todos no conjunto 2). Com o prefixo, salva o quadro
 com o veículo trabalhando. 10 casos.
 
+## 5.35. Missão 2 do Eden: a praga que não aparecia e a pesquisa que não contava (2026-11-18)
+
+Pedido: *na missão 2 do Eden a infecção do Blight não aparece nem aumenta, e
+os itens de pesquisa são feitos mas não saem dos objetivos — a missão não
+termina.* Dois defeitos do porte.
+
+### 1. O gatilho de pesquisa disparava no primeiro tique (`sub_492700`)
+
+A E02 cria cinco `CreateResearchTrigger` (tecnologias 2701 a 2705, uma por
+banco de dados a reconstruir) e uma condição de vitória para cada. A máscara
+do gatilho nasce `(1 << jogador) ^ 0x3F` (`sub_4926D0`), e o porte devolvia
+"disparou" quando ela não era zero — **sempre**. O gatilho disparava no
+primeiro tique, a função da missão o desligava, e a pesquisa concluída depois
+nunca ligava o bit do jogador: os cinco objetivos ficavam pendentes e não havia
+vitória.
+
+No original, para um jogador específico, ele dispara **só** quando o jogador
+tem a tecnologia (`loc_49275B`: liga o bit e devolve 1; senão 0). Só no modo
+"qualquer jogador" (`−1`) vale "máscara ≠ 0". Isso afetava todo gatilho de
+pesquisa de todas as missões (a T03 também usa).
+
+### 2. A praga não era desenhada (`sub_46FF60` / `sub_4A88D0`)
+
+A praga **se espalhava**: a E02 a planta perto do tique 13200 (`SetVirusUL` em
+7 cantos na borda de baixo e `SetMicrobeSpreadSpeed(170)`), e ela passa de
+2900 células logo depois. Mas o porte **nunca a desenhava** — por isso parecia
+não existir nem crescer.
+
+No original, ela é parte do **overlay do computador**: com a opção *Display
+Computer Overlay* (`dword_57562C`) ligada, o laço dos tiles do terreno
+(`sub_46FF60`) monta, no tile tocado pela praga (`0x20000000`), a máscara dos
+quatro cantos com vírus (`0x40000000`: `(x,y)` = 1, `(x+1,y)` = 2, `(x,y+1)` =
+4, `(x+1,y+1)` = 8), e o desenho do tile (`sub_4A88D0`) a passa às rotinas de
+pixel (em `sub_5865EB`, que o IDA deixou como bytes crus — desmontados com o
+capstone a partir do `OUTPOST2.EXE`):
+
+- máscara `0xF`, tile inteiro (`0x5866C3`): um **xadrez** na cor `0x3018` — um
+  roxo, em RGB555 — no tile todo;
+- máscara parcial (modo 1, `0x58665B`): o mesmo xadrez só onde o **molde** liga
+  o bit;
+- a paridade (`dword_586390`) é `x ^ y` do destino e vira a cada pixel e a cada
+  linha: o pixel fica roxo quando `(X + Y)` de tela é **par**. A cor vai direto,
+  sem a paleta da escuridão.
+
+O molde (16 padrões × 32 linhas, `unk_57ABAC` = `dword_57AB98 + 0x14`, membro do
+objeto do micróbio) vem do arquivo **`VIRMASK.RAW`**, lido pelo `sub_49E180`:
+cada palavra em big-endian e invertida. No original, sem o arquivo o jogo nem
+abre (`TApp::Init`). O porte o lê dos volumes ou da pasta do jogo; **sem ele**,
+usa um molde de reserva em que cada quarto do tile acompanha o seu canto
+(acréscimo do porte — as bordas ficam mais quadradas; o miolo não usa molde).
+
+### O teste — `--e02test [DLL] [bmp]`
+
+Carrega a E02, mostra os gatilhos de pesquisa e de vitória e os objetivos,
+roda até a praga se espalhar, conclui as cinco pesquisas pelo caminho do
+laboratório (`researchMarkComplete`) e confere: a praga é plantada e passa de
+100 células; com o Overlay, a vista sobre ela tem pixels roxos; sem o Overlay,
+nenhum; e os cinco objetivos de pesquisa ficam cumpridos. Com o `bmp`, salva o
+quadro com a praga.
+
 ---
 
 ## 6. Build e execução
@@ -2787,6 +2847,7 @@ São 109 modos. Os que cobrem regressão de verdade:
 | `--drawordertest <mapa>` | a ordem de desenho: veículo atrás de prédio, efeitos por cima, desastres por último, a doca |
 | `--detourtest <mapa>` | quem vem de frente dá passagem: o encontro no corredor, a tabela de decisão do `sub_44BBA0` e o desvio inalcançável |
 | `--exitbeeptest` | o bipe da saída: toca o `beep5.wav` e espera 3,5 s uma vez por sessão; sem som, não espera |
+| `--e02test [DLL] [bmp]` | missão 2 do Eden: a praga se espalha e é desenhada com o Overlay, e os objetivos de pesquisa são cumpridos |
 | `--tubetest <mapa> [prefixo]` | o Earthworker ligando prédios com tubo: retas inteiras, a doca que não liga, a animação de trabalho |
 | `--waypointtest <mapa> [bmp]` | pontos de passagem com Ctrl + clique: limites por comando, o pacote com os pontos antes do alvo, a unidade passando por eles, patrulha e obra, e o desenho |
 | `--selecttest <mapa>` | a área de clique das unidades, e a seleção com Shift e com o botão do meio (soma, tira, caixa que soma, as exceções) |

@@ -24,7 +24,7 @@ pronto, o que falta, e o mecanismo original por trás de cada parte.
 ## ⚠️ Nada do jogo de 1997 está aqui
 
 Este repositório contém **apenas o código do porte**. Os arquivos do jogo
-(`OUTPOST2.EXE`, as `*.DLL`, os `*.VOL`, `OP2_ART.BMP`, os `*.ANI`,
+(`OUTPOST2.EXE`, as `*.DLL`, os `*.VOL`, `OP2_ART.BMP`, `VIRMASK.RAW`, os `*.ANI`,
 `OUTPOST2.INI`, `OUTPOST2.HLP`…) e o disassembly são material comercial
 protegido e **não** são versionados nem redistribuídos.
 
@@ -179,7 +179,7 @@ demo, tela cheia, a pele dos menus (`MenuSkin`), a volta horizontal do mapa
 (`MapWrap`), a última linha do mapa (`ShowBottomRow`) e a rota de minério num
 clique (`AutoOreRoute`); estão documentadas no `PORT_STATUS.BR.md`.
 
-Há **114 modos de linha de comando** para testes e capturas, entre eles uma
+Há **115 modos de linha de comando** para testes e capturas, entre eles uma
 bateria de regressão (`--savetest` prova o determinismo de salvar/recarregar).
 A lista está no `PORT_STATUS.BR.md`.
 
@@ -213,7 +213,7 @@ e descartado das listas de cheat que circulam por aí.
 
 ```
 src/
-  main.cpp        entrada + os 114 modos de teste/captura
+  main.cpp        entrada + os 115 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -238,6 +238,14 @@ cursores `.ANI`.
 
 ### 2026-11-18
 
+- **Missão 2 do Eden termina**: as pesquisas pedidas nos objetivos ("Reconstruct
+  … database") passam a contar quando o laboratório as conclui. O gatilho de
+  pesquisa disparava no primeiro instante da missão e era desligado antes de a
+  pesquisa acontecer — vale para todas as missões com objetivo de pesquisa.
+- **A praga (Blight) aparece**: o xadrez roxo do original sobre o terreno
+  infectado, com a opção *Display Computer Overlay* ligada. Ela já se
+  espalhava, mas não era desenhada. As bordas usam o `VIRMASK.RAW` do jogo
+  (ponha-o na pasta do jogo, se ele não vier nos volumes).
 - **Os veículos de trabalho mostram a animação de trabalho**, como no original:
   o Earthworker assentando tubo ou muro, o ConVec construindo ou reparando, a
   Spider e o veículo de reparo reparando, o Robo-Dozer terraplanando. Antes eles

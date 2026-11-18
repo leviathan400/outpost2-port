@@ -941,6 +941,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
                      m_fbH, m_camX, m_camY,
                      TethysGame::daylightEverywhere() ? nullptr : &GameState::tileDarkness,
                      viewWraps());
+    if (m_overlay) drawBlight(renderer.getFramebuffer());   // a praga, por cima do terreno
 
     // Overlay de passabilidade (debug, tecla G): tinge de vermelho as células
     // impassáveis visíveis. Base visual para waypoints/pathfinding.
@@ -1883,6 +1884,90 @@ void GameState::debugRightClickTile(Renderer& r, int tileX, int tileY) {
     ev.button.clicks = 1;
     ev.button.x = sx; ev.button.y = sy;
     handleEvent(r, ev);
+}
+
+// ---- A praga (Blight) -------------------------------------------------------
+// O molde dos cantos: 16 padroes x 32 linhas de 32 bits, membro do objeto do
+// micrbio (dword_57AB98 + 0x14 = unk_57ABAC), lido do VIRMASK.RAW por sub_49E180
+// -- cada palavra em big-endian (bswap) e invertida (not). O bit 31 e a coluna 0.
+// No original a falta do arquivo impede o jogo de abrir (TApp::Init); a
+// instalacao daqui nao o tem, entao, sem ele, o porte usa um molde de reserva:
+// cada quarto do tile acompanha o canto dele (acrescimo do porte -- as bordas
+// ficam mais quadradas que as do original; o miolo, mascara 0xF, nao usa molde).
+namespace {
+uint32_t s_virMask[16][32];
+bool s_virTried = false, s_virFromFile = false;
+void loadVirMask() {
+    if (s_virTried) return;
+    s_virTried = true;
+    auto st = g_ResManager.openStream("VIRMASK.RAW");
+    if (st && st->size() >= 0x800) {
+        const uint8_t* d = st->data();
+        for (int i = 0; i < 512; ++i) {
+            const uint32_t be = (uint32_t(d[i * 4]) << 24) | (uint32_t(d[i * 4 + 1]) << 16) |
+                                (uint32_t(d[i * 4 + 2]) << 8) | uint32_t(d[i * 4 + 3]);
+            s_virMask[i / 32][i % 32] = ~be;
+        }
+        s_virFromFile = true;
+        return;
+    }
+    for (int m = 0; m < 16; ++m)
+        for (int r = 0; r < 32; ++r) {
+            uint32_t row = 0;
+            for (int i = 0; i < 32; ++i) {
+                const int canto = r < 16 ? (i < 16 ? 1 : 2) : (i < 16 ? 4 : 8);
+                if (m & canto) row |= 0x80000000u >> i;
+            }
+            s_virMask[m][r] = row;
+        }
+}
+}  // namespace
+
+bool blightMaskFromFile() { loadVirMask(); return s_virFromFile; }
+
+// sub_46FF60 (o laco dos tiles do terreno): com a opcao Overlay (dword_57562C)
+// ligada, o tile com o bit 0x20000000 (tocado pela praga) leva a mascara dos 4
+// cantos com virus (0x40000000): (x,y) = 1, (x+1,y) = 2, (x,y+1) = 4,
+// (x+1,y+1) = 8 -- o y + 1 da a volta (& (altura - 1)), como la. O sub_4A88D0
+// manda a mascara as rotinas de pixel: 0xF (tile inteiro, unk_5866C3) pinta um
+// XADREZ na cor 0x3018 (roxo, RGB555) no tile todo; 1..0xE (modo 1, 0x58665B),
+// o mesmo xadrez so onde o molde liga o bit. A paridade do xadrez vem de
+// dword_586390 = x ^ y do destino e vira a cada linha e a cada pixel: o pixel
+// fica roxo quando (X + Y) de tela e PAR. A cor e escrita direto, sem a paleta
+// da escuridao.
+void GameState::drawBlight(uint32_t* fb) const {
+    if (!g_gameMap.ok()) return;
+    loadVirMask();
+    const int W = g_gameMap.width(), H = g_gameMap.height();
+    const uint32_t kRoxo = 0xFF6300C6u;                       // 0x3018: r 12, g 0, b 24 (5 bits)
+    const bool volta = viewWraps();
+    const int t0x = m_camX >> 5, t0y = m_camY >> 5;
+    const int t1x = (m_camX + m_fbW) >> 5, t1y = (m_camY + m_fbH) >> 5;
+    auto virus = [&](int x, int y) { return (g_gameMap.rawCell(x & (W - 1), y & (H - 1)) & 0x40000000u) != 0; };
+    for (int ty = t0y; ty <= t1y; ++ty) {
+        if (ty < 0 || ty >= H) continue;
+        for (int txv = t0x; txv <= t1x; ++txv) {
+            if (!volta && (txv < 0 || txv >= W)) continue;
+            const int tx = txv & (W - 1);
+            if (!(g_gameMap.rawCell(tx, ty) & 0x20000000u)) continue;
+            const int m = (virus(tx, ty) ? 1 : 0) | (virus(tx + 1, ty) ? 2 : 0) |
+                          (virus(tx, ty + 1) ? 4 : 0) | (virus(tx + 1, ty + 1) ? 8 : 0);
+            if (!m) continue;
+            const int sx = txv * 32 - m_camX, sy = ty * 32 - m_camY;
+            for (int r = 0; r < 32; ++r) {
+                const int py = sy + r;
+                if (py < 0 || py >= m_fbH) continue;
+                const uint32_t linha = m == 0xF ? 0xFFFFFFFFu : s_virMask[m][r];
+                for (int i = 0; i < 32; ++i) {
+                    const int px = sx + i;
+                    if (px < 0 || px >= m_fbW) continue;
+                    if (((px + py) & 1) != 0) continue;              // o xadrez
+                    if (!(linha & (0x80000000u >> i))) continue;     // o molde
+                    fb[py * m_fbW + px] = kRoxo;
+                }
+            }
+        }
+    }
 }
 
 // Ver a declaracao: o atalho da rota de minerio, que nao existe no original.

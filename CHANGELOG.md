@@ -15,6 +15,16 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
 
 **Corrigido**
 
+- **A missão 2 do Eden agora termina.** As pesquisas pedidas nos objetivos
+  ("Reconstruct … database") não saíam da lista, mesmo concluídas no
+  laboratório, e a missão nunca acabava. O gatilho de pesquisa disparava no
+  primeiro instante da missão, antes de qualquer pesquisa, e era desligado em
+  seguida. Agora só dispara quando a tecnologia é de fato pesquisada, como no
+  original — vale para todas as missões com objetivo de pesquisa.
+- **A praga (Blight) aparece.** Ela se espalhava, mas não era desenhada, então
+  parecia não existir nem crescer. Agora aparece como no original: um xadrez
+  roxo sobre o terreno infectado, com a opção *Display Computer Overlay* ligada.
+  As bordas usam o arquivo `VIRMASK.RAW` do jogo; sem ele, saem mais quadradas.
 - **Os veículos de trabalho mostram a animação de trabalho**, como no original:
   o Earthworker assentando tubo ou muro, o ConVec construindo ou reparando, a
   Spider e o veículo de reparo reparando, e o Robo-Dozer terraplanando. Antes
@@ -25,14 +35,24 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   Agora é sempre como no original: **a doca não liga**; o tubo tem de encostar
   numa parte do prédio que não seja a doca.
 
-**Para quem acompanha o código:** seção 5.34 do PORT_STATUS; o modo de teste
-`--tubetest`; o gerador `tools/extract_anim_tables.py` extrai os quatro
+**Para quem acompanha o código:** seções 5.34 e 5.35 do PORT_STATUS; os modos de
+teste `--tubetest` e `--e02test`; o gerador `tools/extract_anim_tables.py` extrai os quatro
 conjuntos de animação dos veículos.
 
 ### English
 
 **Fixed**
 
+- **Eden mission 2 can now be won.** The research asked for in the objectives
+  ("Reconstruct … database") never left the list, even when finished in the
+  lab, and the mission never ended. The research trigger fired at the very
+  first moment of the mission, before any research, and was then switched off.
+  It now fires only once the technology is actually researched, as in the
+  original — this applies to every mission with a research objective.
+- **The Blight shows up.** It spread but was never drawn, so it seemed not to
+  exist or grow. It now looks as in the original: a purple checkerboard over
+  infected terrain, with the *Display Computer Overlay* option on. The edges use
+  the game's `VIRMASK.RAW` file; without it they come out squarer.
 - **Work vehicles show their work animation**, as in the original: the
   Earthworker laying tube or wall, the ConVec building or repairing, the Spider
   and the repair vehicle repairing, and the Robo-Dozer bulldozing. They used to
@@ -44,8 +64,8 @@ conjuntos de animação dos veículos.
   not connect**; the tube has to touch a part of the building that is not the
   dock.
 
-**For those following the code:** section 5.34 of PORT_STATUS; the
-`--tubetest` test mode; the `tools/extract_anim_tables.py` generator extracts
+**For those following the code:** sections 5.34 and 5.35 of PORT_STATUS; the
+`--tubetest` and `--e02test` test modes; the `tools/extract_anim_tables.py` generator extracts
 the four animation sets of the vehicles.
 
 ---
