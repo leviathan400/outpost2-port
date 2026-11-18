@@ -1123,7 +1123,10 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         if ((r.flags & UNIT_VEHICLE) && hasVehicleAnim(r.type)) {
             int ow = r.owner & 0x0F;
             bool eden = (ow >= 0 && ow < kMaxPlayers) ? (g_playerData[ow].isEden != 0) : true;
-            int anim = vehicleAnimIndex(r.type, r.rotation, eden);   // resolver fiel (facção)
+            // sub_44C4F0: o conjunto pelo estado (parado / andando / trabalhando
+            // na acao desc+0x44C / desc+0x450) e a direcao; a faccao escolhe a tabela.
+            const int set = vehicleAnimSet(r.type, r.action, r.field22, r.velX || r.velY || r.turnStep);
+            int anim = vehicleAnimIndexSet(r.type, r.rotation, eden, set);
             if (r.type == mapCargoTruck) {               // vt[0x80] sub_4062B0 (carga/doca)
                 const int raw = truckAnimRaw(r, ((r.rotation + 8) & 0xF0) >> 4);
                 if (raw) anim = raw - 0x65;

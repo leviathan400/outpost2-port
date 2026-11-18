@@ -48,7 +48,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 113 modos de teste/captura
+  main.cpp        entrada + os 114 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -2670,6 +2670,74 @@ leva o ponto antes do local. Com o `bmp`, salva o quadro com os pontos.
 > cobre: o `UiFont::draw` recebe a largura como **passo da linha**; passando a
 > largura da vista, o número saía espalhado fora do quadrado.
 
+## 5.34. O Earthworker: a animação de trabalho e o tubo que não ligava (2026-11-18)
+
+Pedido: *o veículo que constrói os tubos não está funcionando direito, e a
+animação dele está estranha.* Eram dois defeitos do porte, e nenhum dos dois
+era só do Earthworker.
+
+### 1. Os quatro conjuntos de animação dos veículos (`sub_44C4F0`)
+
+O porte só conhecia **uma** tabela de 16 direções por facção. O descritor do
+veículo tem **quatro**, e o `sub_44C4F0` (`vt[0x80]`) escolhe uma pelo estado:
+
+| conjunto | quando | Eden / Plymouth |
+|---|---|---|
+| 0 | parado | `+0x24C` / `+0x34C` |
+| 1 | andando — sub-estado 1 com velocidade ou giro (`[st+0x58]`/`[st+0x5C]`/`[st+0x60]`) | `+0x28C` / `+0x38C` |
+| 2 | **trabalhando** — a ação é a de `desc+0x44C`, fora do sub-estado 1 | `+0x2CC` / `+0x3CC` |
+| 3 | a ação é a de `desc+0x450`, fora do sub-estado 1 | `+0x30C` / `+0x40C` |
+
+Uma entrada vazia cai na do conjunto 0. O construtor-base (`sub_44B400`) põe
+`0x35` — uma ação que não existe — nos dois campos, e só quem tem animação de
+trabalho os define. Saíram do binário:
+
+- **Earthworker**: ação **7** (muro/tubo) → 1804–1811 (Eden) / 1812–1819
+  (Plymouth). O porte mostrava os quadros de **andar** girando com o veículo
+  parado — era a "animação estranha";
+- **ConVec**: ação **6** (construindo) e **0x1C** (reparando);
+- **Spider** e **veículo de reparo**: ação **0x1C** (reparando);
+- **Robo-Dozer**: ação **1** (terraplanando).
+
+Nenhum deles mostrava a animação de trabalho no porte. O
+`tools/extract_anim_tables.py --emit` passou a extrair os quatro conjuntos e
+as duas ações (`vehicleAnimSet` / `vehicleAnimIndexSet`), e o desenho usa o
+conjunto pelo estado. A função antiga (`vehicleAnimIndex`) ficou como o
+conjunto 0, para quem só precisa do corpo parado.
+
+### 2. A doca na rede de tubos (`sub_42F000` / `sub_42EC40`)
+
+Um tubo que terminava na **doca** de um prédio (a casa livre para o caminhão
+atracar, sem ocupante) às vezes ligava e às vezes não. A busca do porte
+começava pelo **retângulo inteiro** do prédio, com a doca: saindo do prédio,
+ela achava o tubo pela doca; vindo pelo tubo, não achava o prédio — e o
+resultado dependia da ordem dos prédios na lista.
+
+No original, a busca de um prédio parte do **centro** dele (`[+14h]/[+18h]`)
+e se espalha pelas células que ele **ocupa** (`sub_42EC40`: prédio sem nó de
+rede entra; prédio com nó registra o encontro; sem ocupante, só passa tubo).
+A doca fica de fora nos dois sentidos: **tubo encostado só na doca não liga o
+prédio** — sempre. O porte passou a fazer igual.
+
+### O que estava certo
+
+O percurso do Earthworker (a ponta mais próxima da reta, ir para o **lado** de
+cada casa, assentar, seguir) já estava fiel: com minério, as retas saem
+inteiras, nos dois sentidos. Quando falta minério, ele larga a ordem **sem
+aviso** — e o original faz o mesmo (`loc_43BCCD`: ação 0, sub-estado 0). E
+**usina não precisa de tubo**: o Tokamak opera solto, como no jogo.
+
+### O teste — `--tubetest <mapa> [prefixo]`
+
+Um CC com armazéns encostados, dois Agridomes a ligar (um abaixo, um à
+direita), um Tokamak solto e o Earthworker partindo de longe. Retas pelo
+comando de verdade: a vertical liga o Agridome de baixo; a horizontal termina
+na **doca** do da direita e não liga; um tubo de uma casa encostado numa célula
+ocupada liga; e uma reta da direita para a esquerda sai inteira. Casa a casa,
+o tique em que ficou pronta. Enquanto assenta, a animação é sempre a de
+trabalho (2283 tiques, todos no conjunto 2). Com o prefixo, salva o quadro
+com o veículo trabalhando. 10 casos.
+
 ---
 
 ## 6. Build e execução
@@ -2719,6 +2787,7 @@ São 109 modos. Os que cobrem regressão de verdade:
 | `--drawordertest <mapa>` | a ordem de desenho: veículo atrás de prédio, efeitos por cima, desastres por último, a doca |
 | `--detourtest <mapa>` | quem vem de frente dá passagem: o encontro no corredor, a tabela de decisão do `sub_44BBA0` e o desvio inalcançável |
 | `--exitbeeptest` | o bipe da saída: toca o `beep5.wav` e espera 3,5 s uma vez por sessão; sem som, não espera |
+| `--tubetest <mapa> [prefixo]` | o Earthworker ligando prédios com tubo: retas inteiras, a doca que não liga, a animação de trabalho |
 | `--waypointtest <mapa> [bmp]` | pontos de passagem com Ctrl + clique: limites por comando, o pacote com os pontos antes do alvo, a unidade passando por eles, patrulha e obra, e o desenho |
 | `--selecttest <mapa>` | a área de clique das unidades, e a seleção com Shift e com o botão do meio (soma, tira, caixa que soma, as exceções) |
 | `--stacktest <DLL> [bmp]` | estresse do empurrão: todos os veículos do jogador indo e voltando em grupo; nunca dois no mesmo tile, e ninguém sobra andando ao fim de cada perna |

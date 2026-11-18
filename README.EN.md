@@ -178,7 +178,7 @@ fullscreen, the menu skin (`MenuSkin`), horizontal map wrap (`MapWrap`), the
 map's bottom row (`ShowBottomRow`) and the one-click ore route
 (`AutoOreRoute`); they are documented in `PORT_STATUS.EN.md`.
 
-There are **113 command-line modes** for tests and captures, among them a
+There are **114 command-line modes** for tests and captures, among them a
 regression battery (`--savetest` proves save/reload determinism). The list is
 in `PORT_STATUS.EN.md`.
 
@@ -212,7 +212,7 @@ and what was checked and discarded from the cheat lists that circulate.
 
 ```
 src/
-  main.cpp        entry point + the 113 test/capture modes
+  main.cpp        entry point + the 114 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -233,6 +233,16 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
 ---
 
 ## Recent changes
+
+### 2026-11-18
+
+- **Work vehicles show their work animation**, as in the original: the
+  Earthworker laying tube or wall, the ConVec building or repairing, the Spider
+  and the repair vehicle repairing, the Robo-Dozer bulldozing. They used to
+  spin their driving animation while standing still.
+- **A tube touching a building's dock does not connect the building**, always,
+  as in the original. It used to connect or not depending on the order of the
+  buildings — the tube looked done and the building stayed off.
 
 ### 2026-11-17
 

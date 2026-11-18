@@ -9,6 +9,47 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
 
 ---
 
+## 2026-11-18
+
+### Português
+
+**Corrigido**
+
+- **Os veículos de trabalho mostram a animação de trabalho**, como no original:
+  o Earthworker assentando tubo ou muro, o ConVec construindo ou reparando, a
+  Spider e o veículo de reparo reparando, e o Robo-Dozer terraplanando. Antes
+  eles ficavam com a animação de andar girando, parados no lugar.
+- **O tubo ligado à doca de um prédio.** Um tubo que terminava na doca (a casa
+  onde o caminhão atraca) às vezes ligava o prédio e às vezes não, conforme a
+  ordem dos prédios — o tubo parecia pronto e o prédio continuava desligado.
+  Agora é sempre como no original: **a doca não liga**; o tubo tem de encostar
+  numa parte do prédio que não seja a doca.
+
+**Para quem acompanha o código:** seção 5.34 do PORT_STATUS; o modo de teste
+`--tubetest`; o gerador `tools/extract_anim_tables.py` extrai os quatro
+conjuntos de animação dos veículos.
+
+### English
+
+**Fixed**
+
+- **Work vehicles show their work animation**, as in the original: the
+  Earthworker laying tube or wall, the ConVec building or repairing, the Spider
+  and the repair vehicle repairing, and the Robo-Dozer bulldozing. They used to
+  spin their driving animation while standing still.
+- **A tube connected at a building's dock.** A tube ending at the dock (the
+  tile where trucks dock) sometimes connected the building and sometimes did
+  not, depending on the order of the buildings — the tube looked finished and
+  the building stayed off. It now always matches the original: **the dock does
+  not connect**; the tube has to touch a part of the building that is not the
+  dock.
+
+**For those following the code:** section 5.34 of PORT_STATUS; the
+`--tubetest` test mode; the `tools/extract_anim_tables.py` generator extracts
+the four animation sets of the vehicles.
+
+---
+
 ## 2026-11-17
 
 ### Português

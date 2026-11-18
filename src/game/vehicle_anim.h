@@ -15,6 +15,16 @@ namespace op2 {
 // Retorna o índice da animação no op2_art (g_art), ou -1 se o tipo não tem tabela.
 int vehicleAnimIndex(int type, int rotation, bool isEden);
 
+// sub_44C4F0 por inteiro: o descritor tem QUATRO conjuntos de 16 direcoes --
+// 0 parado, 1 andando, 2 trabalhando (acao = desc+0x44C), 3 acao = desc+0x450.
+// vehicleAnimSet escolhe o conjunto como o original: sub-estado 1 com
+// velocidade ou giro ([st+0x58]/[st+0x5C]/[st+0x60]) = 1; fora do sub-estado 1,
+// a acao igual a desc+0x44C = 2, a desc+0x450 = 3; senao 0. Entrada vazia no
+// conjunto cai na do conjunto 0.
+int vehicleAnimSet(int type, int action, int subState, bool movingNow);
+int vehicleAnimIndexSet(int type, int rotation, bool isEden, int set);
+int vehicleWorkAction(int type, int which);   // desc+0x44C (0) / +0x450 (1); 0x35 = nenhuma
+
 // Nº de direções válido? (tem tabela)
 bool hasVehicleAnim(int type);
 

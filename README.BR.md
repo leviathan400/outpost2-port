@@ -179,7 +179,7 @@ demo, tela cheia, a pele dos menus (`MenuSkin`), a volta horizontal do mapa
 (`MapWrap`), a última linha do mapa (`ShowBottomRow`) e a rota de minério num
 clique (`AutoOreRoute`); estão documentadas no `PORT_STATUS.BR.md`.
 
-Há **113 modos de linha de comando** para testes e capturas, entre eles uma
+Há **114 modos de linha de comando** para testes e capturas, entre eles uma
 bateria de regressão (`--savetest` prova o determinismo de salvar/recarregar).
 A lista está no `PORT_STATUS.BR.md`.
 
@@ -213,7 +213,7 @@ e descartado das listas de cheat que circulam por aí.
 
 ```
 src/
-  main.cpp        entrada + os 113 modos de teste/captura
+  main.cpp        entrada + os 114 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -235,6 +235,16 @@ cursores `.ANI`.
 ---
 
 ## Mudanças recentes
+
+### 2026-11-18
+
+- **Os veículos de trabalho mostram a animação de trabalho**, como no original:
+  o Earthworker assentando tubo ou muro, o ConVec construindo ou reparando, a
+  Spider e o veículo de reparo reparando, o Robo-Dozer terraplanando. Antes eles
+  ficavam com a animação de andar girando parados no lugar.
+- **Tubo encostado na doca de um prédio não liga o prédio**, sempre, como no
+  original. Antes ligava ou não dependendo da ordem dos prédios — o tubo
+  parecia feito e o prédio continuava desligado.
 
 ### 2026-11-17
 

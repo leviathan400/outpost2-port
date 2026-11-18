@@ -20,6 +20,7 @@
 #include "app/cursors.h"
 #include "game/game_map.h"
 #include "game/walls.h"
+#include "game/vehicle_anim.h"
 #include "game/garage.h"
 #include "audio/music.h"
 #include "audio/sound.h"
@@ -4658,6 +4659,161 @@ static int runWaypointTest(const std::string& mapName, const std::string& shot) 
     return ruins ? 1 : 0;
 }
 
+// --tubetest <mapa> [prefixo]: o Earthworker ligando predios com tubo, como o
+// jogador faz -- retas que ENCOSTAM nos predios, na vertical e na horizontal,
+// com o veiculo partindo de longe. Mede casa a casa (quando cada uma ficou
+// pronta), vigia se ele trava, e confere a animacao de TRABALHO (sub_44C4F0,
+// conjunto 2: acao = desc+0x44C = 7) enquanto assenta. Com o prefixo, salva o
+// quadro com o veiculo trabalhando.
+static int runTubeTest(const std::string& mapName, const std::string& prefix) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 tubetest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    op2::resetUnits();
+    const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
+    int bx = -1, by = -1;
+    for (int y = 4; y < H - 20 && bx < 0; ++y)
+        for (int x = 4; x < W - 24 && bx < 0; ++x) {
+            bool ok = true;
+            for (int dy = -2; dy <= 16 && ok; ++dy)
+                for (int dx = -3; dx <= 18 && ok; ++dx)
+                    if (!op2::g_gameMap.isPassable(op2::LOCATION{x + dx, y + dy})) ok = false;
+            if (ok) { bx = x; by = y; }
+        }
+    if (bx < 0) { std::printf("[Tube] sem area livre\n"); return 3; }
+    struct Caso { std::string nome; long long obtido, esperado; };
+    std::vector<Caso> casos;
+    op2::PlayerData& pd = op2::g_playerData[0];
+    // Um CC e dois predios a ligar, que PRECISAM do tubo (Agridomes): um ABAIXO
+    // e um a DIREITA. (Usina nao precisa: o Tokamak opera solto -- ele fica
+    // longe so para dar energia.)
+    op2::Unit cc, tk1, tk2, ew, usina;
+    const op2::map_id kAgri = static_cast<op2::map_id>(0x27);
+    op2::TethysGame::CreateUnit(cc, op2::mapCommandCenter, op2::LOCATION{bx + 1, by + 1}, 0);
+    op2::TethysGame::CreateUnit(tk1, kAgri, op2::LOCATION{bx + 1, by + 10}, 0);
+    op2::TethysGame::CreateUnit(tk2, kAgri, op2::LOCATION{bx + 12, by + 1}, 0);
+    op2::TethysGame::CreateUnit(usina, op2::mapTokamak, op2::LOCATION{bx + 16, by + 8}, 0);
+    op2::TethysGame::CreateUnit(ew, op2::mapEarthworker, op2::LOCATION{bx + 8, by + 12}, 0);
+    {   // armazens ENCOSTADOS no CC (so armazem operando, ligado, da capacidade)
+        int sw = 0, sh = 0; op2::buildingFootprint(static_cast<op2::map_id>(0x19), sw, sh);
+        int cw0 = 0, ch0 = 0; op2::buildingFootprint(op2::mapCommandCenter, cw0, ch0);
+        const int l = bx + 1 - cw0 / 2;
+        op2::placeBuilding(0x19, l - sw + sw / 2, by + 1 - ch0 / 2 + sh / 2, 0);   // Common Storage
+        op2::placeBuilding(0x1A, l - sw + sw / 2, by + 1 - ch0 / 2 + sh + sh / 2, 0);   // Rare Storage
+    }
+    pd.workers = 20; pd.scientists = 5;
+    for (int t = 0; t < 10; ++t) gs.onIdle(renderer, 0.2501f / 4.0f);
+    pd.ore = 20000; pd.rareOre = 5000;
+    int cw = 0, ch = 0; op2::buildingFootprint(op2::mapCommandCenter, cw, ch);
+    int kw = 0, kh = 0; op2::buildingFootprint(kAgri, kw, kh);
+    const int ccL = bx + 1 - cw / 2, ccT = by + 1 - ch / 2;
+    std::printf("[Tube] CC %dx%d em (%d,%d); Agridome %dx%d\n", cw, ch, ccL, ccT, kw, kh);
+    const op2::UnitRecord& e = op2::g_units[ew.id()];
+    const std::vector<int> sel{ew.id()};
+    auto ct = [](int x, int y) { return (int)(op2::g_gameMap.rawCell(x, y) & 0x1F); };
+    bool salvou = false;
+    int ticksTrabalho = 0, ticksTrabalhoComAnim = 0;
+    // Uma reta de tubo (x0,y0)-(x1,y1) inclusiva, pelo comando de verdade.
+    auto reta = [&](const char* nome, int x0, int y0, int x1, int y1, int maxT) {
+        op2::uiCommandClick(op2::UC_TUBE, sel);
+        const op2::UiClick r = op2::uiCommandArea(op2::UC_TUBE, sel, std::min(x0, x1), std::min(y0, y1),
+                                                  std::max(x0, x1) + 1, std::max(y0, y1) + 1);
+        const int n = std::abs(x1 - x0) + std::abs(y1 - y0) + 1;
+        std::vector<int> pronta(static_cast<size_t>(n), -1);
+        int t = 0, ultimoProgresso = 0, feitas = 0;
+        for (; t < maxT; ++t) {
+            gs.onIdle(renderer, 0.2501f / 4.0f);
+            for (int k = 0; k < n; ++k) {
+                const int x = x0 + (x1 > x0 ? k : x1 < x0 ? -k : 0), y = y0 + (y1 > y0 ? k : y1 < y0 ? -k : 0);
+                if (pronta[static_cast<size_t>(k)] < 0 && ct(x, y) == 0x1A) { pronta[static_cast<size_t>(k)] = t; ++feitas; ultimoProgresso = t; }
+            }
+            if (e.action == 7 && e.field22 == 0x0A) {
+                ++ticksTrabalho;
+                const bool eden = op2::g_playerData[0].isEden != 0;
+                const int set = op2::vehicleAnimSet(e.type, e.action, e.field22, e.velX || e.velY || e.turnStep);
+                const int a = op2::vehicleAnimIndexSet(e.type, e.rotation, eden, set);
+                if (set == 2 && a != op2::vehicleAnimIndex(e.type, e.rotation, eden)) ++ticksTrabalhoComAnim;
+                if (!salvou && !prefix.empty() && feitas >= 2) {
+                    gs.setCamera((e.pixelX) - 200, (e.pixelY) - 150);
+                    gs.onIdle(renderer, 0.0f);
+                    writeBmp32(prefix + "_trabalho.bmp", renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
+                    salvou = true;
+                }
+            }
+            if (std::getenv("TUBE_TRACE") && (t % 10 == 0 || e.action == 0))
+                std::printf("[Tube]   t=%d pos(%d,%d) acao=%d f20=%d f22=0x%X f23=0x%X cel(%d,%d) ordem=%d rota=%d/%d minerio=%d raro=%d%c",
+                            t, e.pixelX >> 5, e.pixelY >> 5, e.action, e.field20, e.field22, e.field23, e.wallCurX, e.wallCurY,
+                            (int)e.hasOrder, e.routeIdx, (int)e.routeDirs.size(), pd.ore, pd.rareOre, 10);
+            if (e.action == 0 && t > 5) break;
+            if (t - ultimoProgresso > 2500) break;           // travou
+        }
+        std::printf("[Tube] %s: aceito=%d, %d de %d casas, fim em t=%d (acao %d, f22 0x%X, pos (%d,%d)) | casas:",
+                    nome, (int)r, feitas, n, t, e.action, e.field22, e.pixelX >> 5, e.pixelY >> 5);
+        for (int k = 0; k < n; ++k) std::printf(" %d", pronta[static_cast<size_t>(k)]);
+        std::printf("\n");
+        return feitas == n && e.action == 0;
+    };
+    auto opera = [&](const op2::Unit& u) {
+        for (int k = 0; k < 4; ++k) gs.onIdle(renderer, 0.2501f / 4.0f);   // a rede refaz no tique
+        return op2::structureOperational(op2::g_units[u.id()]) ? 1 : 0;
+    };
+    casos.push_back({"antes dos tubos, o Agridome de baixo esta desligado", opera(tk1), 0});
+    casos.push_back({"... e o da direita tambem", opera(tk2), 0});
+    // 1) Vertical: da linha logo abaixo do CC ate a linha logo acima do Tokamak.
+    const int vx = bx + 1, vy0 = ccT + ch, vy1 = by + 10 - kh / 2 - 1;
+    casos.push_back({"vertical: todas as casas e o fim da ordem", reta("vertical", vx, vy0, vx, vy1, 30000) ? 1 : 0, 1});
+    casos.push_back({"... e o Agridome de baixo passa a operar (ligado)", opera(tk1), 1});
+    // 2) Horizontal: da coluna logo a direita do CC ate logo a esquerda do Tokamak 2.
+    const int hy = by + 1, hx0 = ccL + cw, hx1 = bx + 12 - kw / 2 - 1;
+    casos.push_back({"horizontal: todas as casas e o fim da ordem", reta("horizontal", hx0, hy, hx1, hy, 30000) ? 1 : 0, 1});
+    // Essa reta termina na DOCA do Agridome (a casa de baixo a esquerda, sem
+    // ocupante): como no original (sub_42F000/sub_42EC40), a doca nao liga.
+    casos.push_back({"... terminando na DOCA, o Agridome nao liga (original)", opera(tk2), 0});
+    // Um tubo de uma casa logo acima do fim, encostado numa celula OCUPADA: liga.
+    casos.push_back({"tubo de uma casa encostado no predio", reta("ligacao", hx1, hy - 1, hx1, hy - 1, 6000) ? 1 : 0, 1});
+    casos.push_back({"... e agora o Agridome da direita opera", opera(tk2), 1});
+    if (std::getenv("TUBE_TRACE")) {
+        for (const op2::Unit* u : {&tk1, &tk2}) {
+            const op2::UnitRecord& b = op2::g_units[u->id()];
+            std::printf("[Tube]   predio %d em (%d,%d): flags 0x%X (energia %d, trabalhadores %d) estado 0x%X%c", u->id(),
+                        b.pixelX >> 5, b.pixelY >> 5, b.flags, (b.flags & op2::UNIT_POWERED) ? 1 : 0,
+                        (b.flags & op2::UNIT_WORKERS) ? 1 : 0, (b.state34 >> 16) & 0xFFFF, 10);
+        }
+        const op2::ColonyState& c = op2::g_colony[0];
+        for (size_t k = 0; k < c.components.size(); ++k)
+            std::printf("[Tube]   componente %d: predios %d, CCs %d, ligado %d%c", (int)k, c.components[k].structures,
+                        c.components[k].ccs, c.components[k].connected, 10);
+        for (int y = hy - 3; y <= hy + 2; ++y) {
+            std::printf("[Tube]   ocupacao y=%d:", y);
+            for (int x = hx1 - 1; x <= hx1 + 5; ++x) std::printf(" %3d", op2::g_gameMap.cellOccupant(x, y));
+            std::printf("%c", 10);
+        }
+        std::printf("[Tube]   tubos na linha y=%d:", hy);
+        for (int x = hx0 - 1; x <= hx1 + 2; ++x) std::printf(" %02X", ct(x, hy));
+        std::printf("%c", 10);
+    }
+    // 3) Horizontal da DIREITA para a ESQUERDA (o arrasto ao contrario), longe.
+    casos.push_back({"horizontal invertida: todas as casas", reta("invertida", bx + 10, by + 14, bx + 4, by + 14, 30000) ? 1 : 0, 1});
+    std::printf("[Tube] trabalhando %d tiques, com a animacao de trabalho %d\n", ticksTrabalho, ticksTrabalhoComAnim);
+    casos.push_back({"assentando, a animacao e a de trabalho (conjunto 2)",
+                     (ticksTrabalho > 0 && ticksTrabalhoComAnim == ticksTrabalho) ? 1 : 0, 1});
+    int ruins = 0;
+    for (const Caso& k : casos) {
+        const bool ok = k.obtido == k.esperado;
+        if (!ok) ++ruins;
+        std::printf("[Tube] %-50s %lld (esperado %lld) %s\n", k.nome.c_str(), k.obtido, k.esperado, ok ? "ok" : "FALHOU");
+    }
+    std::printf("[Tube] %d casos, %d falhas\n", (int)casos.size(), ruins);
+    renderer.shutdown();
+    SDL_Quit();
+    return ruins ? 1 : 0;
+}
+
 // --detourtest <mapa>: o DESVIO de quem vem de frente (sub_44BBA0, ramo do
 // bloqueador em movimento -> sub_44BFD0; a parada de 32 tiques em loc_44C1D2).
 // Tres partes. (1) Dois veiculos, com ordem de mover dada pelo clique direito
@@ -7974,6 +8130,8 @@ int main(int argc, char* argv[]) {
             return runOptMenuTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--waypointtest") == 0 && i + 1 < argc)
             return runWaypointTest(argv[i + 1], i + 2 < argc && argv[i + 2][0] != '-' ? argv[i + 2] : "");
+        if (std::strcmp(argv[i], "--tubetest") == 0 && i + 1 < argc)
+            return runTubeTest(argv[i + 1], i + 2 < argc && argv[i + 2][0] != '-' ? argv[i + 2] : "");
         if (std::strcmp(argv[i], "--exitbeeptest") == 0)
             return runExitBeepTest();
         if (std::strcmp(argv[i], "--stacktest") == 0 && i + 1 < argc)

@@ -302,21 +302,28 @@ def emit():
     for n, i in ids.items(): byid.setdefault(i, n)
     flds = init_fields_by_name()
     BIAS = 0x65
-    # ---- veiculos (map_id 1..0x10), valor CRU (com vies) como o descritor
-    rowsA, rowsB = [], []
+    # ---- veiculos (map_id 1..0x10), valor CRU (com vies) como o descritor.
+    # QUATRO conjuntos de 16 direcoes por faccao (sub_44C4F0): A = +0x24C +
+    # conjunto*0x40, B = +0x34C + conjunto*0x40. E as acoes de trabalho
+    # desc+0x44C (conjunto 2) / +0x450 (conjunto 3); o construtor-base
+    # (sub_44B400) poe 0x35 nas duas -- uma acao que nao existe.
+    rowsA, rowsB, rowsW = [], [], []
+    fmt = lambda r: "{" + ", ".join(f"{v:4d}" for v in r) + " }" if any(r) else "{0}"
     for t in range(0x11):
         n = byid.get(t, "none")
         p, f = flds.get(n, ("-", {}))
-        A = [f.get(0x24C + i * 4, 0) for i in range(16)]
-        B = [f.get(0x34C + i * 4, 0) for i in range(16)]
         lab = f"/* 0x{t:02X} {n:<12} {p:<10} */"
-        fmt = lambda r: "{" + ", ".join(f"{v:4d}" for v in r) + " }" if any(r) else "{0}"
-        rowsA.append(f"    {lab} {fmt(A)},")
-        rowsB.append(f"    {lab} {fmt(B)},")
+        for base, rows in ((0x24C, rowsA), (0x34C, rowsB)):
+            sets = [[f.get(base + c * 0x40 + i * 4, 0) for i in range(16)] for c in range(4)]
+            rows.append(f"    {lab} {{")
+            for c in range(4):
+                rows.append(f"        {fmt(sets[c])},")
+            rows.append("    },")
+        rowsW.append(f"    {{ 0x{f.get(0x44C, 0x35):02X}, 0x{f.get(0x450, 0x35):02X} }},  // 0x{t:02X} {n}")
     vnames = "\n".join(f'    "{byid[t]}",  // 0x{t:02X}' if t in byid else f"    nullptr,  // 0x{t:02X}"
                        for t in range(0x11))
     veh = (VEH_TMPL.replace("@A@", "\n".join(rowsA)).replace("@B@", "\n".join(rowsB))
-           .replace("@NAMES@", vnames))
+           .replace("@W@", "\n".join(rowsW)).replace("@NAMES@", vnames))
     open("src/game/vehicle_anim.cpp", "w", encoding="utf-8", newline="\n").write(veh)
     # ---- estruturas (map_id 0x15..0x3A), SEM o vies
     rows = []
@@ -341,16 +348,26 @@ namespace op2 {
 
 // Tabelas de animacao dos VEICULOS por map_id REAL (indice de off_4E1340, = enum
 // do SDK), GERADAS por tools/extract_anim_tables.py --emit. NAO EDITAR a mao.
-// Fonte: init do descritor (vt[4] da vtable cujo vt[1] e GetName):
-//   +0x24C tabela A (16 direcoes) / +0x34C tabela B.
-// Valores CRUS como no descritor (indiceReal + 0x65); 0 = sem tabela.
-static const int kVehicleAnim[0x11][16] = {
+// Fonte: init do descritor (vt[4] da vtable cujo vt[1] e GetName). QUATRO
+// conjuntos de 16 direcoes por faccao (sub_44C4F0):
+//   A (Eden, [unit+0x44] & 0x1000): +0x24C + conjunto*0x40
+//   B (Plymouth):                   +0x34C + conjunto*0x40
+//   conjunto 0 parado, 1 andando, 2 trabalhando (acao = desc+0x44C), 3 acao =
+//   desc+0x450. Entrada 0 = cai na do conjunto 0.
+// Valores CRUS como no descritor (indiceReal + 0x65); 0 = sem entrada.
+static const int kVehicleAnim[0x11][4][16] = {
 @A@
 };
 
 // Tabela B (+0x34C).
-static const int kVehicleAnimB[0x11][16] = {
+static const int kVehicleAnimB[0x11][4][16] = {
 @B@
+};
+
+// As acoes que pedem os conjuntos 2 e 3: desc+0x44C / +0x450 (0x35 = nenhuma,
+// o padrao do construtor-base sub_44B400).
+static const int kVehicleWorkAction[0x11][2] = {
+@W@
 };
 
 // Vies entre o valor guardado no descritor/[unit+0x40] e o indice real no array
@@ -358,18 +375,40 @@ static const int kVehicleAnimB[0x11][16] = {
 static const int kAnimIndexBias = 0x65;
 
 bool hasVehicleAnim(int type) {
-    return type >= 1 && type <= 0x10 && kVehicleAnim[type][0] != 0;
+    return type >= 1 && type <= 0x10 && kVehicleAnim[type][0][0] != 0;
 }
 
-int vehicleAnimIndex(int type, int rotation, bool isEden) {
+int vehicleAnimIndexSet(int type, int rotation, bool isEden, int set) {
     if (!hasVehicleAnim(type)) return -1;
     int dir = ((rotation + 8) & 0xF0) >> 4;   // 16 direcoes (sub_44C5C0/sub_410E50)
     if (dir < 0 || dir > 15) dir = 0;
-    int a = isEden ? kVehicleAnim[type][dir] : kVehicleAnimB[type][dir];
-    if (!a) a = kVehicleAnim[type][dir];       // fallback p/ tabela A (sub_44C4F0)
+    if (set < 0 || set > 3) set = 0;
+    // sub_44C4F0: [desc + base + (conjunto*16 + dir)*4]; 0 -> o do conjunto 0
+    // da MESMA tabela. (O porte cai ainda na tabela A se a B nao tiver nada.)
+    const int (*tab)[16] = isEden ? kVehicleAnim[type] : kVehicleAnimB[type];
+    int a = tab[set][dir];
+    if (!a) a = tab[0][dir];
+    if (!a) a = kVehicleAnim[type][0][dir];
     if (!a) return -1;
     int idx = a - kAnimIndexBias;
     return idx >= 0 ? idx : -1;
+}
+
+int vehicleAnimIndex(int type, int rotation, bool isEden) {
+    return vehicleAnimIndexSet(type, rotation, isEden, 0);
+}
+
+int vehicleAnimSet(int type, int action, int subState, bool movingNow) {
+    if (type < 1 || type > 0x10) return 0;
+    if (subState == 1 && movingNow) return 1;                   // andando (velocidade ou giro)
+    if (subState != 1 && action == kVehicleWorkAction[type][0]) return 2;
+    if (subState != 1 && action == kVehicleWorkAction[type][1]) return 3;
+    return 0;
+}
+
+int vehicleWorkAction(int type, int which) {
+    if (type < 1 || type > 0x10 || which < 0 || which > 1) return 0x35;
+    return kVehicleWorkAction[type][which];
 }
 
 // Code_Name (GetName = vt[1] do descritor) por map_id 0x00..0x10.

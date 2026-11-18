@@ -55,7 +55,12 @@
 > yet) and **5.33** (Ctrl+click waypoints: with a command armed, the targeting
 > object `dword_547170` keeps up to N points — 7 for most commands, 6 patrol, 5
 > ore route, 0 walls — sent before the target with a 2-tile arrival slack
-> (`sub_451420`), drawn as numbered red squares; `--waypointtest`). The recent
+> (`sub_451420`), drawn as numbered red squares; `--waypointtest`) and **5.34**
+> (the four animation sets of a vehicle, `sub_44C4F0`: idle, moving, working on
+> the action at `desc+0x44C`, and `desc+0x450` — the Earthworker, ConVec,
+> Spider, repair vehicle and Robo-Dozer now show their work animation; and a
+> building's dock is not part of its tube-network search, as in `sub_42F000`,
+> so a tube touching only the dock never connects). The recent
 > changes are summarised in
 > [README.EN.md](README.EN.md).
 
@@ -107,7 +112,7 @@ coverage by comparing the DLLs' import tables against the registry in
 
 ```
 src/
-  main.cpp        entry point + the 113 test/capture modes
+  main.cpp        entry point + the 114 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -694,7 +699,7 @@ mission DLLs and the original resources from the working directory).
 
 ### Command-line tests
 
-There are 113 modes. The ones that cover real regressions:
+There are 114 modes. The ones that cover real regressions:
 
 | Mode | What it proves |
 |---|---|

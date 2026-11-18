@@ -307,6 +307,14 @@ static void computeComponents(int player, std::vector<int>& comp) {
         const int cid = next++;
         comp[sid] = cid;
         stack.clear();
+        // sub_42F000: a busca de um predio parte do CENTRO dele ([+14h]/[+18h])
+        // e se espalha pelas celulas que ele OCUPA (sub_42EC40: predio sem no
+        // = entra). A DOCA nao tem ocupante -- fica livre para o caminhao --,
+        // entao fica de fora: tubo encostado so na doca nao liga o predio, nos
+        // dois sentidos. O porte empilhava o retangulo inteiro (com a doca): a
+        // busca que saia do predio achava o tubo pela doca, mas a que vinha
+        // pelo tubo nao achava o predio -- e o resultado dependia da ordem dos
+        // predios na lista.
         auto pushFootprint = [&](int id) {
             const UnitRecord& u = g_units[id];
             int w, h; buildingFootprint(u.type, w, h);
@@ -315,6 +323,7 @@ static void computeComponents(int player, std::vector<int>& comp) {
                 for (int dx = 0; dx < w; ++dx) {
                     int x = (tlx + dx) & (W - 1), y = tly + dy;
                     if (y < 0 || y >= H) continue;
+                    if (g_gameMap.cellOccupant(x, y) != id) continue;   // a doca (e o que nao e dele) fica de fora
                     size_t k = static_cast<size_t>(y) * W + x;
                     if (!seen[k]) { seen[k] = 1; stack.push_back(static_cast<int>(k)); }
                 }
