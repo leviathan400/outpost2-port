@@ -120,7 +120,7 @@ coverage by comparing the DLLs' import tables against the registry in
 
 ```
 src/
-  main.cpp        entry point + the 116 test/capture modes
+  main.cpp        entry point + the 117 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -707,7 +707,7 @@ mission DLLs and the original resources from the working directory).
 
 ### Command-line tests
 
-There are 116 modes. The ones that cover real regressions:
+There are 117 modes. The ones that cover real regressions:
 
 | Mode | What it proves |
 |---|---|

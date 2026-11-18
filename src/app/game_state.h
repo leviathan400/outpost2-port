@@ -345,6 +345,8 @@ public:
     bool debugWantFullscreen() const { return m_gameOptions.wantFullscreen(); }
     bool debugConfirmOpen() const { return m_confirm.isOpen(); }
     void debugConfirmYes() { clickCommand(kCmdYes); }     // --dumptest: o &YES da pergunta
+    void debugConfirmNo() { clickCommand(kCmdNo); }
+    void debugPrintCommandButtons() const;   // --dumpmission: a botoeira atual
     // --dumptest: o centro (coords nativas) do botao de texto do painel ou da
     // botoeira de rotulo/comando dado; false se nao ha.
     bool debugButtonCenter(const std::string& rotulo, int& nx, int& ny) {

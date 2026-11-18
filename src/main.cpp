@@ -4930,7 +4930,9 @@ static int runDumpTest(const std::string& mapName) {
     op2::g_ResManager.init(".");
     op2::g_art.load();
     op2::Renderer renderer;
-    if (!renderer.init("OP2 dumptest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    const int jw = std::getenv("DUMP_W") ? std::atoi(std::getenv("DUMP_W")) : 1280;
+    const int jh = std::getenv("DUMP_H") ? std::atoi(std::getenv("DUMP_H")) : 960;
+    if (!renderer.init("OP2 dumptest", jw, jh, false)) { SDL_Quit(); return 1; }
     op2::GameState gs;
     if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
     gs.onActivate();
@@ -4956,9 +4958,15 @@ static int runDumpTest(const std::string& mapName) {
         const int antes = op2::g_units[id].cargo;
         int bxn = 0, byn = 0;
         const bool temBotao = gs.debugCommandButtonCenter(op2::UC_DUMP_CARGO, bxn, byn);
+        if (std::getenv("DUMP_GRID") && nome.find("tipo 4") != std::string::npos) {
+            writeBmp32(std::getenv("DUMP_GRID"), renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
+            gs.debugPrintCommandButtons();
+        }
         if (temBotao) gs.debugClickNative(renderer, bxn, byn);
         const bool pergunta = gs.debugConfirmOpen();
         gs.onIdle(renderer, 0.0f);
+        if (std::getenv("DUMP_SHOT") && nome.find("tipo 4") != std::string::npos)
+            writeBmp32(std::getenv("DUMP_SHOT"), renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
         int yx = 0, yy = 0;
         if (gs.debugButtonCenter("&YES", yx, yy)) gs.debugClickNative(renderer, yx, yy);
         int t = 0;
@@ -4978,6 +4986,30 @@ static int runDumpTest(const std::string& mapName) {
         op2::TethysGame::CreateUnit(tr, op2::mapCargoTruck, op2::LOCATION{bx + (k % 5) * 2, by + 12 + (k / 5) * 2}, 0);
         op2::unitSetTruckCargo(tr.id(), k, 1000);
         descarta(tr.id(), "parado, carga tipo " + std::to_string(k));
+    }
+    // 1b) Com cada ABA do painel aberta (na missao o painel costuma estar em
+    //     uma delas -- os Objetivos, por exemplo).
+    for (int aba = 0; aba < 6; ++aba) {
+        op2::Unit tr;
+        op2::TethysGame::CreateUnit(tr, op2::mapCargoTruck, op2::LOCATION{bx + 12 + aba, by + 14}, 0);
+        op2::unitSetTruckCargo(tr.id(), 4, 1000);
+        gs.setSelection({});
+        gs.onIdle(renderer, 0.0f);
+        gs.debugTab(aba);
+        gs.setSelection({tr.id()});
+        gs.onIdle(renderer, 0.0f);
+        int bxn = 0, byn = 0;
+        const bool temBotao = gs.debugCommandButtonCenter(op2::UC_DUMP_CARGO, bxn, byn);
+        if (temBotao) gs.debugClickNative(renderer, bxn, byn);
+        const bool pergunta = gs.debugConfirmOpen();
+        gs.onIdle(renderer, 0.0f);
+        int yx = 0, yy = 0;
+        const bool temSim = gs.debugButtonCenter("&YES", yx, yy);
+        std::printf("[Dump] aba %d aberta: aba agora %d, botao DUMP %d, pergunta %d, &YES na tela %d%c", aba,
+                    gs.debugTabNow(), (int)temBotao, (int)pergunta, (int)temSim, 10);
+        if (temSim) gs.debugClickNative(renderer, yx, yy);
+        for (int t = 0; t < 60; ++t) gs.onIdle(renderer, 0.2501f / 4.0f);
+        casos.push_back({"com a aba " + std::to_string(aba) + " aberta, a carga some", op2::g_units[tr.id()].cargo == 0 ? 1 : 0, 1});
     }
     // 2) ConVec com kit.
     {
@@ -5081,6 +5113,45 @@ static int runDumpTest(const std::string& mapName) {
     renderer.shutdown();
     SDL_Quit();
     return falhas ? 1 : 0;
+}
+
+// --dumpmission <DLL>: o botao DUMP num caminhao carregado de uma missao de
+// verdade (com o painel e a botoeira do jogo), pelo mouse.
+static int runDumpMission(const std::string& dll) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 dumpmission", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    for (int k = 0; k < 20; ++k) gs.onIdle(renderer, 0.2501f / 4.0f);
+    const int me = op2::TethysGame::localPlayer();
+    int achou = 0;
+    for (size_t i = 1; i < op2::g_units.size() && achou < 3; ++i) {
+        const op2::UnitRecord& r = op2::g_units[i];
+        if (r.id == -1 || (r.flags & op2::UNIT_DEAD) || (r.owner & 0x0F) != me) continue;
+        if (r.type != op2::mapCargoTruck && r.type != op2::mapConVec) continue;
+        const int id = static_cast<int>(i);
+        gs.setCamera(r.pixelX - 300, r.pixelY - 300);
+        gs.setSelection({id});
+        gs.onIdle(renderer, 0.0f);
+        int bxn = 0, byn = 0;
+        const bool temBotao = gs.debugCommandButtonCenter(op2::UC_DUMP_CARGO, bxn, byn);
+        std::printf("[DumpM] unidade %d tipo 0x%X carga 0x%X acao 0x%X f22 0x%X | botao DUMP na botoeira: %d em (%d,%d)\n",
+                    id, r.type, r.cargo, r.action, r.field22, (int)temBotao, bxn, byn);
+        gs.debugPrintCommandButtons();
+        if (temBotao) {
+            gs.debugClickNative(renderer, bxn, byn);
+            std::printf("[DumpM]   depois do clique: pergunta aberta %d\n", (int)gs.debugConfirmOpen());
+            gs.debugConfirmNo();
+        }
+        ++achou;
+    }
+    renderer.shutdown();
+    SDL_Quit();
+    return 0;
 }
 
 // --detourtest <mapa>: o DESVIO de quem vem de frente (sub_44BBA0, ramo do
@@ -8406,6 +8477,8 @@ int main(int argc, char* argv[]) {
                               i + 2 < argc && argv[i + 2][0] != '-' ? argv[i + 2] : "");
         if (std::strcmp(argv[i], "--dumptest") == 0 && i + 1 < argc)
             return runDumpTest(argv[i + 1]);
+        if (std::strcmp(argv[i], "--dumpmission") == 0 && i + 1 < argc)
+            return runDumpMission(argv[i + 1]);
         if (std::strcmp(argv[i], "--exitbeeptest") == 0)
             return runExitBeepTest();
         if (std::strcmp(argv[i], "--stacktest") == 0 && i + 1 < argc)

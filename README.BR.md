@@ -179,7 +179,7 @@ demo, tela cheia, a pele dos menus (`MenuSkin`), a volta horizontal do mapa
 (`MapWrap`), a última linha do mapa (`ShowBottomRow`) e a rota de minério num
 clique (`AutoOreRoute`); estão documentadas no `PORT_STATUS.BR.md`.
 
-Há **116 modos de linha de comando** para testes e capturas, entre eles uma
+Há **117 modos de linha de comando** para testes e capturas, entre eles uma
 bateria de regressão (`--savetest` prova o determinismo de salvar/recarregar).
 A lista está no `PORT_STATUS.BR.md`.
 
@@ -213,7 +213,7 @@ e descartado das listas de cheat que circulam por aí.
 
 ```
 src/
-  main.cpp        entrada + os 116 modos de teste/captura
+  main.cpp        entrada + os 117 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,

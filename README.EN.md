@@ -178,7 +178,7 @@ fullscreen, the menu skin (`MenuSkin`), horizontal map wrap (`MapWrap`), the
 map's bottom row (`ShowBottomRow`) and the one-click ore route
 (`AutoOreRoute`); they are documented in `PORT_STATUS.EN.md`.
 
-There are **116 command-line modes** for tests and captures, among them a
+There are **117 command-line modes** for tests and captures, among them a
 regression battery (`--savetest` proves save/reload determinism). The list is
 in `PORT_STATUS.EN.md`.
 
@@ -212,7 +212,7 @@ and what was checked and discarded from the cheat lists that circulate.
 
 ```
 src/
-  main.cpp        entry point + the 116 test/capture modes
+  main.cpp        entry point + the 117 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,

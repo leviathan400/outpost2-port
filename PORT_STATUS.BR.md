@@ -48,7 +48,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 116 modos de teste/captura
+  main.cpp        entrada + os 117 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -2829,8 +2829,13 @@ curta como os outros empurrados.
 
 ### O teste — `--dumptest <mapa>`
 
-15 casos: os estados acima, e depois do descarte na doca da mina, outro
-caminhão ainda carrega ali (antes: 3000 tiques sem carregar; agora, 113).
+21 casos: os estados acima, o descarte com cada uma das 6 abas do painel aberta,
+e depois do descarte na doca da mina, outro caminhão ainda carrega ali (antes:
+3000 tiques sem carregar; agora, 113). `DUMP_W`/`DUMP_H` mudam o tamanho da
+janela (passa em 800×600, 1280×960, 1366×768 e 1920×1080); `DUMP_GRID` e
+`DUMP_SHOT` salvam a botoeira e a pergunta. E `--dumpmission <DLL>` mostra a
+botoeira de cada caminhão/ConVec de uma missão de verdade e clica no DUMP: na
+E02 eles começam **vazios**, e sem carga o botão nem aparece (como no original).
 
 ---
 
@@ -2882,6 +2887,7 @@ São 109 modos. Os que cobrem regressão de verdade:
 | `--detourtest <mapa>` | quem vem de frente dá passagem: o encontro no corredor, a tabela de decisão do `sub_44BBA0` e o desvio inalcançável |
 | `--exitbeeptest` | o bipe da saída: toca o `beep5.wav` e espera 3,5 s uma vez por sessão; sem som, não espera |
 | `--dumptest <mapa>` | o botão DUMP pelo mouse em todos os estados do caminhão, e a mina que segue carregando depois do descarte na doca |
+| `--dumpmission <DLL>` | a botoeira de cada caminhão/ConVec de uma missão e o clique no DUMP |
 | `--e02test [DLL] [bmp]` | missão 2 do Eden: a praga se espalha e é desenhada com o Overlay, e os objetivos de pesquisa são cumpridos |
 | `--tubetest <mapa> [prefixo]` | o Earthworker ligando prédios com tubo: retas inteiras, a doca que não liga, a animação de trabalho |
 | `--waypointtest <mapa> [bmp]` | pontos de passagem com Ctrl + clique: limites por comando, o pacote com os pontos antes do alvo, a unidade passando por eles, patrulha e obra, e o desenho |

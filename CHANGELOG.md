@@ -39,7 +39,7 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   numa parte do prédio que não seja a doca.
 
 **Para quem acompanha o código:** seções 5.34 a 5.36 do PORT_STATUS; os modos de
-teste `--tubetest`, `--e02test` e `--dumptest`; o gerador `tools/extract_anim_tables.py` extrai os quatro
+teste `--tubetest`, `--e02test`, `--dumptest` e `--dumpmission`; o gerador `tools/extract_anim_tables.py` extrai os quatro
 conjuntos de animação dos veículos.
 
 ### English
@@ -71,7 +71,7 @@ conjuntos de animação dos veículos.
   dock.
 
 **For those following the code:** sections 5.34 to 5.36 of PORT_STATUS; the
-`--tubetest`, `--e02test` and `--dumptest` test modes; the `tools/extract_anim_tables.py` generator extracts
+`--tubetest`, `--e02test`, `--dumptest` and `--dumpmission` test modes; the `tools/extract_anim_tables.py` generator extracts
 the four animation sets of the vehicles.
 
 ---

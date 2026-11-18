@@ -1872,6 +1872,11 @@ void GameState::debugMouse(Renderer& r, int wx, int wy, int button, bool down, b
     SDL_SetModState(KMOD_NONE);
 }
 
+void GameState::debugPrintCommandButtons() const {
+    for (const CmdButton& b : commandButtons())
+        std::printf("[DumpM]     botao cmd %d em (%d,%d)-(%d,%d) '%s'\n", b.cmd, b.l, b.t, b.r, b.b, b.tip.c_str());
+}
+
 void GameState::debugClickNative(Renderer& r, int nx, int ny) {
     int sx = 0, sy = 0;
     r.nativeToScreen(nx, ny, sx, sy);
