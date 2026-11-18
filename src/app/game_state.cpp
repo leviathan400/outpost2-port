@@ -1131,6 +1131,9 @@ void GameState::onIdle(Renderer& renderer, float dt) {
             if (r.type == mapCargoTruck) {               // vt[0x80] sub_4062B0 (carga/doca)
                 const int raw = truckAnimRaw(r, ((r.rotation + 8) & 0xF0) >> 4);
                 if (raw) anim = raw - 0x65;
+            } else if (r.type == mapConVec) {            // vt[0x80] sub_410E00 (doca da fábrica)
+                const int raw = convecDockAnimRaw(r);
+                if (raw) anim = raw - 0x65;
             }
             if (anim >= 0) {
                 int nf = g_art.ok() && anim < g_art.numAnimations()
@@ -1168,6 +1171,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
                 // Cor do dono: campo +0x30 do registro do jogador (colorNumber),
                 // que indexa as rampas de 24 cores de color.bmp (sub_4A8D70).
                 if (r.type == mapCargoTruck) frame = truckFrame(r, (int)i);   // vt[8] sub_44C7B0
+                else if (r.type == mapConVec && anim >= 0) frame = convecFrame(r, (int)i, anim + 0x65);   // vt[0x20] sub_410E50
                 int pc = (ow >= 0 && ow < kMaxPlayers) ? g_playerData[ow].colorNumber : 0;
                 drew = drawSprite(anim, frame, ucx, ucy, pc);
                 if (drew) recDeco((int)i, ucx, ucy, anim, frame);

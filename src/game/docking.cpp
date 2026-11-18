@@ -12,6 +12,7 @@
 #include "unit.h"
 #include "vehicle_anim.h"
 #include "mining.h"
+#include "weapon.h"
 #include "../gfx/artfile.h"
 
 namespace op2 {
@@ -25,6 +26,49 @@ static bool commandable(const UnitRecord& r) {
 static bool isEdenBuilt(const UnitRecord& r) {          // [+0x44] & 0x1000 (prédio de Eden)
     const int o = ownerOf(r);
     return o < kMaxPlayers && g_playerData[o].isEden != 0;
+}
+
+// vt[0x80] do ConVec (sub_410E00): na doca (sub-estado 0x0D), a animacao crua
+// em que a porta da fabrica abre e o ConVec desce -- 0x1C8 (Eden) / 0x1CA
+// (Plymouth), +1 na 2a fase (bit 0x1000000, a volta); fora dela, 0 (o chamador
+// usa a animacao comum, sub_44C4F0).
+int convecDockAnimRaw(const UnitRecord& u) {
+    if (u.field22 != 0x0D) return 0;
+    const bool eden = ownerOf(u) < kMaxPlayers && g_playerData[ownerOf(u)].isEden;
+    return (eden ? 0x1C8 : 0x1CA) + ((u.flags & 0x1000000u) ? 1 : 0);
+}
+
+// vt[0x20] do ConVec (sub_410E50), o quadro: na doca ou no descarte (0x0E),
+// conta desde [+0x5E] e para no ultimo (no descarte ja andando, volta ao 0);
+// sem acao, ou na acao 0x1E sem andar, 0; com qualquer outra acao, cicla
+// ((relogio >> bit 0x10000) + id) % quadros.
+int convecFrame(const UnitRecord& u, int id, int raw) {
+    if (!raw) return 0;
+    const int last = artLastFrameRaw(raw);                    // sub_404C70
+    if (u.field22 == 0x0D || u.action == 0x0E) {
+        const int f = (TethysGame::tick() - u.dockTick) & 0xFFFF;   // sub_44DFE0
+        if (last > f) return f;
+        if (u.action == 0x0E && u.field22 == 1) return 0;
+        return last - 1 > 0 ? last - 1 : 0;
+    }
+    if (!u.action) return 0;
+    if (u.action == 0x1E && u.field22 != 1) return 0;
+    const int t = static_cast<int>(TethysGame::tick() >> ((u.flags & 0x10000u) ? 1 : 0)) + id;
+    return t % (last + 1);
+}
+
+// [+0x3C] de cada fase da doca = vt[0x80](0) -> sub_404C70 (quadros - 1).
+static int dockPhaseTicks(const UnitRecord& u) {
+    if (u.type == mapCargoTruck) return truckDockPhaseTicks(u);
+    int n = 0;
+    if (const int raw = convecDockAnimRaw(u)) n = artLastFrameRaw(raw);
+    else {
+        const bool eden = ownerOf(u) < kMaxPlayers && g_playerData[ownerOf(u)].isEden;
+        const int anim = vehicleAnimIndex(u.type, u.rotation, eden);
+        n = (g_art.ok() && anim >= 0 && anim < g_art.numAnimations())
+                ? static_cast<int>(g_art.animation(anim).frames.size()) : 1;
+    }
+    return n > 0 ? n : 1;
 }
 
 bool dockCell(int buildingId, int& x, int& y) {          // sub_482F80
@@ -98,12 +142,8 @@ bool processBayTransfer(int owner, int buildingId, int bay) {   // sub_40E210 ca
     u.flags &= ~0x1000000u;                               // 1ª fase
     u.dockBay = static_cast<int16_t>(bay);                // [+0x5C]
     u.field22 = 0x0D;
-    // [+0x3C] = nº de frames da animação parada do veículo (vt[0x80](0) → sub_404C70).
-    const bool eden = ownerOf(u) < kMaxPlayers && g_playerData[ownerOf(u)].isEden;
-    const int anim = vehicleAnimIndex(u.type, u.rotation, eden);
-    u.field3C = (g_art.ok() && anim >= 0 && anim < g_art.numAnimations())
-                    ? static_cast<int>(g_art.animation(anim).frames.size()) : 1;
-    if (u.field3C <= 0) u.field3C = 1;
+    // [+0x3C] = vt[0x80](0) -> sub_404C70: no ConVec, a animação da doca.
+    u.field3C = dockPhaseTicks(u);
     soundPlayAt(unitOX(u), unitOY(u), 0x3F);
     return true;
 }
@@ -162,13 +202,9 @@ void dockTransferTick(int vehicleId) {                    // sub_43DE50 case 13
     else truckDockExchange(vehicleId);                    // vt[0x98] (sub_406610)
     u.dockTick = static_cast<int16_t>(TethysGame::tick());
     u.flags |= 0x1000000u;
-    const bool eden = ownerOf(u) < kMaxPlayers && g_playerData[ownerOf(u)].isEden;
-    const int anim = vehicleAnimIndex(u.type, u.rotation, eden);
-    u.field3C = (g_art.ok() && anim >= 0 && anim < g_art.numAnimations())
-                    ? static_cast<int>(g_art.animation(anim).frames.size()) : 1;
-    if (u.field3C <= 0) u.field3C = 1;
-    // Caminhão: último frame da animação de doca da 2ª fase (vt[0x80] sub_4062B0).
-    if (u.type == mapCargoTruck) u.field3C = truckDockPhaseTicks(u);
+    // 2ª fase: 4 com a trapaça dword_56DE68; senão vt[0x80](0) -> sub_404C70
+    // (caminhão sub_4062B0, ConVec sub_410E00 -- a animação da volta).
+    u.field3C = TethysGame::cheatFlag(4) ? 4 : dockPhaseTicks(u);
 }
 
 } // namespace op2

@@ -48,7 +48,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 117 modos de teste/captura
+  main.cpp        entrada + os 119 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -2837,6 +2837,67 @@ janela (passa em 800×600, 1280×960, 1366×768 e 1920×1080); `DUMP_GRID` e
 botoeira de cada caminhão/ConVec de uma missão de verdade e clica no DUMP: na
 E02 eles começam **vazios**, e sem carga o botão nem aparece (como no original).
 
+## 5.37. O ConVec: o kit no quadro e a doca da Structure Factory (2026-11-18)
+
+Pedido: *ao guardar ou pegar um kit (Agridome, Smelter...) na Structure
+Factory, não há a animação da doca abrindo e de parte do ConVec descendo; e o
+quadro do ConVec não diz que kit ele leva — só dá para saber que leva algo
+porque aparece o botão de construir.*
+
+### O texto do quadro de veículo (`sub_46D880`)
+
+O quadro do porte desenhava o nome, o ícone, a blindagem e os pontos de vida de
+um veículo e parava ali: a parte de texto só existia para prédios. O original
+monta, para **um** veículo selecionado, um texto marcado no mesmo retângulo das
+seções dos prédios (`13..W-14`, abaixo do cabeçalho):
+
+- duas linhas de **melhoria** do tipo — o texto da tecnologia em `+0x3C`/`+0x40`
+  do bloco do dono das estatísticas; a segunda some se repetir a primeira;
+- e, pelo tipo:
+  - **ConVec**: `Cargo` e, à direita, o **nome do kit** (`desc+0x1F8`); no kit
+    do Guard Post (`0x17`), o nome da **arma** dele (`[+0x4F]`); sem kit,
+    `(empty)`;
+  - **caminhão**: `Cargo` e o nome da carga (`sub_406210`) com `:quantidade` —
+    sem a quantidade quando ela é 0 ou a carga é entulho, espacial ou destroço;
+  - **tanques** (Scorpion, Lynx, Panther, Tiger): mais duas linhas, as
+    melhorias da **arma**;
+  - **Evacuation Transport**: `Cargo` e `Colonists` ou `(empty)`.
+
+Os nomes de carga do caminhão ganharam os dois que faltavam: `Wreckage` (9) e
+`Gene Bank` (10).
+
+### A doca do ConVec (`sub_410E00` / `sub_410E50`)
+
+A vtable do ConVec (`off_4CF990`) tem duas entradas próprias para isso:
+
+- **`vt[0x80]` (`sub_410E00`)**, a animação: no sub-estado `0x0D` (na doca),
+  `0x1C8` (Eden) ou `0x1CA` (Plymouth) na ida — a porta da fábrica abre, o kit
+  desce para o fosso — e `+1` na volta (bit `0x1000000`); fora da doca, a
+  animação comum (`sub_44C4F0`).
+- **`vt[0x20]` (`sub_410E50`)**, o quadro: na doca, conta desde `[+0x5E]` e
+  para no último; fora dela, parado sem ação ou na ação `0x1E` sem andar, e
+  ciclando com qualquer outra ação.
+
+O porte já punha o ConVec no sub-estado `0x0D` e trocava o kit, mas desenhava a
+animação comum e media as duas fases por ela — poucos tiques, em vez dos ~120
+de cada fase da doca, e por isso os sons da garra e da porta (no contador em
+`0x51`/`0x25` e `0x4D`/`0x1C`) nunca tocavam. Agora `[+0x3C]` de cada fase é
+`vt[0x80](0)` → `sub_404C70` (quadros − 1) como no original (`sub_415880` e o
+`case 13` de `sub_43DE50`), com o atalho de 4 tiques da trapaça
+`dword_56DE68` só na segunda fase, e o desenho e o teste de clique usam a
+animação da doca.
+
+### Os testes
+
+- `--vehpanetest <mapa> [tela.bmp]` — 9 casos: ConVec vazio, com Agridome, com
+  Tokamak e com Guard Post (a arma); caminhão com comida (com a quantidade), com
+  entulho (sem ela) e vazio; Evacuation Transport; Lynx (sem linha de carga).
+- `--convecdocktest <mapa> [prefixo]` — 40 casos, nas duas facções e nos dois
+  sentidos (guardar o kit na baia e pegá-lo de volta), um tique por vez: entra
+  na doca, cada fase dura a animação inteira (119 e 126 tiques), desenha a ida e
+  a volta, o quadro chega ao fim de cada uma, sai da doca e o kit trocou de
+  lugar. Com `<prefixo>`, grava quadros da animação.
+
 ---
 
 ## 6. Build e execução
@@ -2888,6 +2949,8 @@ São 109 modos. Os que cobrem regressão de verdade:
 | `--exitbeeptest` | o bipe da saída: toca o `beep5.wav` e espera 3,5 s uma vez por sessão; sem som, não espera |
 | `--dumptest <mapa>` | o botão DUMP pelo mouse em todos os estados do caminhão, e a mina que segue carregando depois do descarte na doca |
 | `--dumpmission <DLL>` | a botoeira de cada caminhão/ConVec de uma missão e o clique no DUMP |
+| `--vehpanetest <mapa> [tela.bmp]` | o texto do quadro de veículo: o kit do ConVec, a carga do caminhão, os colonos |
+| `--convecdocktest <mapa> [prefixo]` | a doca do ConVec na Structure Factory: a animação, a duração das fases e a troca do kit |
 | `--e02test [DLL] [bmp]` | missão 2 do Eden: a praga se espalha e é desenhada com o Overlay, e os objetivos de pesquisa são cumpridos |
 | `--tubetest <mapa> [prefixo]` | o Earthworker ligando prédios com tubo: retas inteiras, a doca que não liga, a animação de trabalho |
 | `--waypointtest <mapa> [bmp]` | pontos de passagem com Ctrl + clique: limites por comando, o pacote com os pontos antes do alvo, a unidade passando por eles, patrulha e obra, e o desenho |

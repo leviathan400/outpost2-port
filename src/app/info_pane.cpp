@@ -185,6 +185,65 @@ static int drawUpgradesSection(uint32_t* fb, int fbW, int fbH, const PaneRect& r
     return 2 * lh;
 }
 
+// ---- O texto do quadro de VEICULO (sub_46D880) -------------------------------
+// So com UM veiculo selecionado. Duas linhas de melhoria do tipo -- o texto
+// (+0x34) da tecnologia em +0x3C/+0x40 do bloco do dono das estatisticas
+// ([unit+0x1D] >> 4); a segunda some se for igual a primeira -- e depois, pelo
+// tipo:
+//   caminhao (1): "Cargo" e, a direita, o nome da carga (sub_406210) e
+//                 ":quantidade" -- sem a quantidade quando ela e 0 ou a carga e
+//                 entulho (6/7), espacial (8) ou destroco (9);
+//   ConVec (2):   "Cargo" e o NOME DO KIT (desc+0x1F8); no kit do Guard Post
+//                 (0x17), o nome da arma dele ([+0x4F]); sem kit, "(empty)";
+//   tanques (4..7): mais duas linhas, as melhorias da ARMA ([+0x24]);
+//   evacuacao (0x0D): "Cargo" e "Colonists" ou "(empty)".
+// Cada linha e uma linha do texto marcado, mesmo vazia ("%s\n%s\n...").
+std::string vehicleInfoText(const UnitRecord& r) {
+    const int p = (r.owner >> 4) & 0x0F;
+    auto par = [&](int type, std::string& a, std::string& b) {
+        a = improveText(blockDword(type, p, 0x3C));
+        b = improveText(blockDword(type, p, 0x40));
+        if (b == a) b.clear();                               // repetida: Default (vazio)
+    };
+    std::string a, b;
+    par(r.type, a, b);
+    std::string txt;
+    char linha[160];
+    switch (r.type) {
+        case mapCargoTruck: {
+            const int k = r.cargo & 0x0F, n = (r.cargo >> 4) & 0xFFF;
+            if (n && k != 6 && k != 7 && k != 8 && k != 9)
+                std::snprintf(linha, sizeof(linha), "%s<R>%s:%i", "Cargo", truckCargoName(r), n);
+            else
+                std::snprintf(linha, sizeof(linha), "%s<R>%s", "Cargo", truckCargoName(r));
+            txt = a + "\n" + b + "\n" + linha;
+            break;
+        }
+        case mapConVec: {
+            const int kit = static_cast<int16_t>(r.cargo);
+            const char* nome = kit == 0x17 ? unitDisplayName(r.kitWeapon)
+                             : kit ? unitDisplayName(kit) : "(empty)";
+            std::snprintf(linha, sizeof(linha), "%s<R>%s", "Cargo", nome);
+            txt = a + "\n" + b + "\n" + linha;
+            break;
+        }
+        case 4: case 5: case 6: case 7: {                    // Scorpion, Lynx, Panther, Tiger
+            std::string c, d;
+            par(static_cast<int16_t>(r.cargo), c, d);
+            txt = a + "\n" + b + "\n" + c + "\n" + d;
+            break;
+        }
+        case 0x0D:                                           // Evacuation Transport
+            std::snprintf(linha, sizeof(linha), "%s<R>%s", "Cargo", r.cargo ? "Colonists" : "(empty)");
+            txt = a + "\n" + b + "\n" + linha;
+            break;
+        default:
+            txt = a + "\n" + b;
+            break;
+    }
+    return txt;
+}
+
 // ---- Recurso do armazém (sub_45BD50) -----------------------------------------
 static int drawResourceSection(uint32_t* fb, int fbW, int fbH, const PaneRect& rc, const UnitRecord& r) {
     if (r.type != 0x19 && r.type != 0x1A) return 0;
@@ -543,9 +602,12 @@ void drawUnitInfoPane(uint32_t* fb, int fbW, int fbH, const PaneRect& pane,
         fillRect(fb, fbW, fbH, tx + 1, by + 1, inner, bh - 2, rgb555(0x3DEF));
         if (cur > 0) fillRect(fb, fbW, fbH, tx + 1, by + 1, cur, bh - 2, rgb555(col));
     }
-    if (!isBld) return;
     // Seções (sub_45A510): retângulo 13..W-14, a partir de topo + título + 0x3C.
     PaneRect sec{pane.l + 13, pane.t + lh + 0x3C, pane.l + W - 14, pane.b - 1};
+    if (!isBld) {                                                 // sub_46D880 (o quadro de veículo)
+        drawMarkupText(fb, fbW, fbH, sec, vehicleInfoText(r), kTextGreen, false, kMarkupLine);
+        return;
+    }
     // Ordem de sub_45A510 (vt 9, 10, 11, 17, 14, 13, 16, 19, 12, 18, +0xA, 15).
     sec.t += drawUpgradesSection(fb, fbW, fbH, sec, r);          // sub_45A690
     sec.t += drawStatusSection(fb, fbW, fbH, sec, r, localPlayer);

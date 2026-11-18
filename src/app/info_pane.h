@@ -12,6 +12,7 @@ namespace op2 {
 // Arma, Observatório, Unidades, Launch Pad, Treinamento) entram com os
 // subsistemas correspondentes.
 struct PaneRect { int l, t, r, b; };
+struct UnitRecord;
 
 // Texto marcado do renderizador unk_5772A8 (sub_416650/sub_416A00): '\n'
 // quebra linha; <L> alinha à esquerda, <R> à direita, <X> centraliza; <Cn>
@@ -37,6 +38,9 @@ void drawProgressBar(uint32_t* fb, int fbW, int fbH, int l, int t, int r, int b,
                      uint16_t c1, uint16_t c2);
 
 // Desenha o quadro no retângulo do painel (coordenadas de tela).
+// O texto do quadro de um veiculo (sub_46D880): melhorias e carga, em texto marcado.
+std::string vehicleInfoText(const UnitRecord& r);
+
 void drawUnitInfoPane(uint32_t* fb, int fbW, int fbH, const PaneRect& pane,
                       int unitId, int numSelected, int localPlayer);
 

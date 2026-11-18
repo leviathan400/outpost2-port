@@ -19,6 +19,7 @@
 #include "mining.h"
 #include "vehicle_anim.h"
 #include "../gfx/artfile.h"
+#include "../game/docking.h"
 #include "../mission/mission.h"
 
 namespace op2 {
@@ -466,6 +467,7 @@ static int unitSpriteRaw(const UnitRecord& r) {
     }
     const int dir = ((r.rotation + 8) & 0xF0) >> 4;
     if (r.type == mapCargoTruck) return truckAnimRaw(r, dir);
+    if (r.type == mapConVec) { if (const int raw = convecDockAnimRaw(r)) return raw; }
     const int ow = r.owner & 0x0F;
     const int a = vehicleAnimIndex(r.type, (dir & 15) << 4, ow < kMaxPlayers ? g_playerData[ow].isEden != 0 : true);
     return a >= 0 ? a + 0x65 : 0;

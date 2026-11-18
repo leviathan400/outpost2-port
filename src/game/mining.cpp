@@ -445,6 +445,8 @@ const char* truckCargoName(const UnitRecord& u) {             // sub_406210
     const int k = cargoKind(u);
     if (k < 8) return kNames[k];
     if (k == 8) return unitDisplayName(cargoAmount(u));       // módulo/carga espacial
+    if (k == 9) return "Wreckage";                            // loc_406270
+    if (k == 10) return "Gene Bank";                          // loc_406276
     return "";
 }
 

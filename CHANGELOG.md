@@ -15,6 +15,16 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
 
 **Corrigido**
 
+- **O quadro do ConVec mostra o kit que ele leva.** Ao selecionar um ConVec,
+  o quadro de informações não dizia nada sobre a carga — só o botão de
+  construir denunciava que havia um kit. Agora aparece, como no original,
+  "Cargo" e o nome do kit (ou "(empty)"); o caminhão mostra a carga e a
+  quantidade, os tanques as melhorias da arma, e o Evacuation Transport os
+  colonos.
+- **A doca da Structure Factory abre.** Quando o ConVec guarda ou pega um kit
+  na fábrica, faltava a animação: a porta da doca abrindo e o kit descendo para
+  dentro e voltando. Agora ela aparece, com a duração do original e os sons da
+  garra e da porta, que antes não tocavam.
 - **A mina não trava mais depois de um descarte na doca.** Um caminhão que
   descartava a carga (botão DUMP) atracado na mina ficava preso na doca, e a
   mina não carregava mais nenhum outro caminhão.
@@ -38,14 +48,23 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   Agora é sempre como no original: **a doca não liga**; o tubo tem de encostar
   numa parte do prédio que não seja a doca.
 
-**Para quem acompanha o código:** seções 5.34 a 5.36 do PORT_STATUS; os modos de
-teste `--tubetest`, `--e02test`, `--dumptest` e `--dumpmission`; o gerador `tools/extract_anim_tables.py` extrai os quatro
+**Para quem acompanha o código:** seções 5.34 a 5.37 do PORT_STATUS; os modos de
+teste `--tubetest`, `--e02test`, `--dumptest`, `--dumpmission`, `--vehpanetest` e `--convecdocktest`; o gerador `tools/extract_anim_tables.py` extrai os quatro
 conjuntos de animação dos veículos.
 
 ### English
 
 **Fixed**
 
+- **The ConVec info pane shows the kit it carries.** Selecting a ConVec showed
+  nothing about its cargo — only the build button gave away that it had a kit.
+  Now, as in the original, it shows "Cargo" and the kit name (or "(empty)");
+  the truck shows its cargo and amount, tanks their weapon upgrades, and the
+  Evacuation Transport its colonists.
+- **The Structure Factory dock opens.** When a ConVec stored or picked up a kit
+  at the factory, the animation was missing: the dock door opening and the kit
+  going down inside and back up. It now plays, with the original's timing and
+  the claw and door sounds, which did not play before.
 - **A mine no longer jams after a dump at its dock.** A truck that dumped its
   cargo (DUMP button) while docked at a mine got stuck on the dock, and the mine
   loaded no other truck.
@@ -70,8 +89,8 @@ conjuntos de animação dos veículos.
   not connect**; the tube has to touch a part of the building that is not the
   dock.
 
-**For those following the code:** sections 5.34 to 5.36 of PORT_STATUS; the
-`--tubetest`, `--e02test`, `--dumptest` and `--dumpmission` test modes; the `tools/extract_anim_tables.py` generator extracts
+**For those following the code:** sections 5.34 to 5.37 of PORT_STATUS; the
+`--tubetest`, `--e02test`, `--dumptest`, `--dumpmission`, `--vehpanetest` and `--convecdocktest` test modes; the `tools/extract_anim_tables.py` generator extracts
 the four animation sets of the vehicles.
 
 ---

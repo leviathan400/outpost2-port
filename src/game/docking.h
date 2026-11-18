@@ -2,6 +2,8 @@
 
 namespace op2 {
 
+struct UnitRecord;
+
 // Docas dos prédios e transferência de carga com o veículo parado nelas.
 //   sub_482F80  célula da doca (coluna dockLoc E/P na última linha do prédio)
 //   sub_483010  veículo na doca (parado, comandável, do tipo aceito pelas
@@ -23,5 +25,10 @@ void sendBayTransfer(int buildingId, int bay);
 bool processBayTransfer(int owner, int buildingId, int bay);
 // Sub-estado 0x0D do veículo (1 tick).
 void dockTransferTick(int vehicleId);
+
+// ConVec: vt[0x80] (sub_410E00) -- a animação crua da doca, 0 fora dela; e
+// vt[0x20] (sub_410E50) -- o quadro da animação crua `raw` que está desenhada.
+int convecDockAnimRaw(const UnitRecord& u);
+int convecFrame(const UnitRecord& u, int id, int raw);
 
 } // namespace op2

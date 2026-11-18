@@ -66,6 +66,7 @@
 #include "gfx/art_blit.h"
 #include "app/tapp.h"
 #include "app/game_state.h"
+#include "app/info_pane.h"
 #include "app/shell_state.h"
 #include "net/net_game.h"
 #include "net/net_lobby.h"
@@ -5154,6 +5155,183 @@ static int runDumpMission(const std::string& dll) {
     return 0;
 }
 
+// --vehpanetest <mapa> [shot.bmp]: o texto do quadro de VEICULO (sub_46D880):
+// o ConVec mostra o kit que leva ("Cargo" / nome do kit, ou "(empty)"; no kit
+// do Guard Post, a arma), o caminhao a carga e a quantidade, o Evacuation
+// Transport os colonos. Com <shot>, grava a tela com o ConVec do Agridome
+// selecionado.
+static int runVehPaneTest(const std::string& mapName, const char* shot) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 vehpanetest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    op2::resetUnits();
+    const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
+    int bx = -1, by = -1;
+    for (int y = 3; y < H - 10 && bx < 0; ++y)
+        for (int x = 3; x < W - 20 && bx < 0; ++x) {
+            bool ok = true;
+            for (int dy = 0; dy <= 6 && ok; ++dy)
+                for (int dx = 0; dx <= 16 && ok; ++dx)
+                    if (!op2::g_gameMap.isPassable(op2::LOCATION{x + dx, y + dy})) ok = false;
+            if (ok) { bx = x; by = y; }
+        }
+    if (bx < 0) { std::printf("[VehPane] sem area livre\n"); return 3; }
+    int n = 0;
+    auto cria = [&](op2::map_id t, int cargo) {
+        op2::Unit u;
+        op2::TethysGame::CreateUnit(u, t, op2::LOCATION{bx + (n % 8) * 2, by + (n / 8) * 3}, 0,
+                                    static_cast<op2::map_id>(cargo));
+        ++n;
+        return u.id();
+    };
+    struct Caso { std::string nome, procura; bool deve; int id; };
+    std::vector<Caso> casos;
+    const int cvVazio = cria(op2::mapConVec, op2::kMapIdNone);
+    const int cvAgri = cria(op2::mapConVec, 0x27);            // Agridome
+    const int cvTok = cria(op2::mapConVec, op2::mapTokamak);
+    const int cvGP = cria(op2::mapConVec, 0x17);              // Guard Post
+    op2::g_units[cvGP].kitWeapon = 0x3D;                      // Laser
+    const int trOre = cria(op2::mapCargoTruck, op2::kMapIdNone);
+    op2::unitSetTruckCargo(trOre, 1, 1000);
+    const int trRub = cria(op2::mapCargoTruck, op2::kMapIdNone);
+    op2::unitSetTruckCargo(trRub, 6, 1000);
+    const int trVazio = cria(op2::mapCargoTruck, op2::kMapIdNone);
+    const int evac = cria(op2::mapEvacuationTransport, op2::kMapIdNone);
+    op2::g_units[evac].cargo = 1;
+    const int lynx = cria(op2::mapLynx, 0x3D);
+    const std::string kitAgri = op2::unitDisplayName(0x27), kitTok = op2::unitDisplayName(op2::mapTokamak),
+                      laser = op2::unitDisplayName(0x3D);
+    casos.push_back({"ConVec vazio: (empty)", "Cargo<R>(empty)", true, cvVazio});
+    casos.push_back({"ConVec com Agridome", "Cargo<R>" + kitAgri, true, cvAgri});
+    casos.push_back({"ConVec com Tokamak", "Cargo<R>" + kitTok, true, cvTok});
+    casos.push_back({"ConVec com Guard Post: a arma", "Cargo<R>" + laser, true, cvGP});
+    casos.push_back({"caminhao com comida: quantidade", ":1000", true, trOre});
+    casos.push_back({"caminhao com entulho: sem quantidade", ":1000", false, trRub});
+    casos.push_back({"caminhao vazio: Cargo", "Cargo<R>", true, trVazio});
+    casos.push_back({"Evacuation Transport: Colonists", "Cargo<R>Colonists", true, evac});
+    casos.push_back({"Lynx: sem linha de carga", "Cargo", false, lynx});
+    int falhas = 0;
+    for (const Caso& c : casos) {
+        std::string t = op2::vehicleInfoText(op2::g_units[c.id]);
+        const bool tem = t.find(c.procura) != std::string::npos;
+        const bool ok = tem == c.deve;
+        if (!ok) ++falhas;
+        for (char& ch : t) if (ch == '\n') ch = '|';
+        std::printf("[VehPane] %-40s %s  [%s]\n", c.nome.c_str(), ok ? "ok" : "FALHOU", t.c_str());
+    }
+    if (shot) {
+        gs.setCamera(op2::g_units[cvAgri].pixelX - 300, op2::g_units[cvAgri].pixelY - 300);
+        gs.setSelection({cvAgri});
+        gs.onIdle(renderer, 0.0f);
+        writeBmp32(shot, renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
+        std::printf("[VehPane] tela -> %s\n", shot);
+    }
+    std::printf("[VehPane] %d casos, %d falhas\n", (int)casos.size(), falhas);
+    renderer.shutdown();
+    SDL_Quit();
+    return falhas ? 1 : 0;
+}
+
+// --convecdocktest <mapa> [prefixo]: a DOCA do ConVec na Structure Factory
+// (pacote 0x0A -> sub_415880 -> sub-estado 0x0D). Nas duas faces (Eden e
+// Plymouth) e nos dois sentidos (guardar o kit na baia, pegar o kit da baia):
+// a animacao desenhada e a da doca (vt[0x80] sub_410E00: 0x1C8/0x1CA na ida,
+// +1 na volta), cada fase dura a animacao inteira (sub_404C70) e o quadro
+// avanca do 0 ao ultimo (vt[0x20] sub_410E50); no fim, o kit trocou de lugar.
+// Com <prefixo>, grava quadros da animacao (<prefixo>_<face>_<n>.bmp).
+static int runConvecDockTest(const std::string& mapName, const char* prefix) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 convecdocktest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    struct Caso { std::string nome; long long obtido, esperado; };
+    std::vector<Caso> casos;
+    for (int face = 0; face < 2; ++face) {
+        const bool eden = face == 0;
+        const char* fn = eden ? "Eden" : "Plymouth";
+        op2::resetUnits();
+        op2::g_playerData[0].isEden = eden ? 1 : 0;
+        const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
+        int bx = -1, by = -1;
+        for (int y = 3; y < H - 10 && bx < 0; ++y)
+            for (int x = 3; x < W - 12 && bx < 0; ++x) {
+                bool ok = true;
+                for (int dy = -1; dy <= 6 && ok; ++dy)
+                    for (int dx = -2; dx <= 8 && ok; ++dx)
+                        if (!op2::g_gameMap.isPassable(op2::LOCATION{x + dx, y + dy})) ok = false;
+                if (ok) { bx = x; by = y; }
+            }
+        if (bx < 0) { std::printf("[CvDock] sem area livre\n"); return 3; }
+        op2::Unit sf, cv;
+        op2::TethysGame::CreateUnit(sf, op2::mapStructureFactory, op2::LOCATION{bx + 2, by + 1}, 0);
+        int dx = 0, dy = 0;
+        op2::dockCell(sf.id(), dx, dy);
+        op2::TethysGame::CreateUnit(cv, op2::mapConVec, op2::LOCATION{dx, dy}, 0, op2::mapTokamak);
+        op2::UnitRecord& s = op2::g_units[sf.id()];
+        const op2::UnitRecord& c = op2::g_units[cv.id()];
+        gs.setCamera(c.pixelX - 300, c.pixelY - 260);
+        for (int k = 0; k < 4; ++k) gs.onIdle(renderer, 0.2501f / 4.0f);
+        const int ida = eden ? 0x1C8 : 0x1CA;
+        const int ultimoIda = op2::artLastFrameRaw(ida), ultimoVolta = op2::artLastFrameRaw(ida + 1);
+        std::printf("[CvDock] %s: doca (%d,%d), convec na doca %d; animacao 0x%X (%d quadros) / 0x%X (%d)\n", fn,
+                    dx, dy, op2::dockedVehicle(sf.id()), ida, ultimoIda + 1, ida + 1, ultimoVolta + 1);
+        // Dois sentidos: guardar o Tokamak na baia 0 (vazia), depois pega-lo de volta.
+        for (int sentido = 0; sentido < 2; ++sentido) {
+            const std::string tag = std::string(fn) + (sentido ? ", pegar o kit" : ", guardar o kit");
+            const int cargaAntes = c.cargo, baiaAntes = s.bayType[0];
+            op2::sendBayTransfer(sf.id(), 0);
+            gs.onIdle(renderer, 0.0f);
+            const int tempo1 = c.field3C;
+            casos.push_back({tag + ": entra na doca (0x0D)", c.field22, 0x0D});
+            casos.push_back({tag + ": 1a fase dura a animacao", tempo1, ultimoIda});
+            int t = 0, maxQ1 = -1, maxQ2 = -1, anim1 = 0, anim2 = 0, fase2 = -1, foto = 0;
+            for (; t < 1000 && c.field22 == 0x0D; ++t) {
+                const bool segunda = (c.flags & 0x1000000u) != 0;
+                const int raw = op2::convecDockAnimRaw(c);
+                const int q = op2::convecFrame(c, cv.id(), raw);
+                if (!segunda) { anim1 = raw; if (q > maxQ1) maxQ1 = q; }
+                else { if (fase2 < 0) fase2 = c.field3C; anim2 = raw; if (q > maxQ2) maxQ2 = q; }
+                if (prefix && sentido == 0 && t % 12 == 0 && foto < 16) {
+                    gs.onIdle(renderer, 0.0f);
+                    char nm[512];
+                    std::snprintf(nm, sizeof(nm), "%s_%s_%02d.bmp", prefix, fn, foto++);
+                    writeBmp32(nm, renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
+                }
+                gs.simTick();                                    // um tique exato
+            }
+            std::printf("[CvDock] %s: %d tiques; ida 0x%X quadro max %d, volta 0x%X (fase %d) quadro max %d; carga 0x%X->0x%X baia 0x%X->0x%X\n",
+                        tag.c_str(), t, anim1, maxQ1, anim2, fase2, maxQ2, cargaAntes, c.cargo, baiaAntes, s.bayType[0]);
+            casos.push_back({tag + ": desenha a ida", anim1, ida});
+            casos.push_back({tag + ": desenha a volta", anim2, ida + 1});
+            casos.push_back({tag + ": 2a fase dura a animacao", fase2, ultimoVolta});
+            casos.push_back({tag + ": o quadro chega ao fim da ida", maxQ1 >= ultimoIda - 1 ? 1 : 0, 1});
+            casos.push_back({tag + ": o quadro chega ao fim da volta", maxQ2 >= ultimoVolta - 1 ? 1 : 0, 1});
+            casos.push_back({tag + ": sai da doca", c.field22 != 0x0D ? 1 : 0, 1});
+            casos.push_back({tag + ": o kit trocou de lugar", (c.cargo == (uint16_t)baiaAntes && s.bayType[0] == cargaAntes) ? 1 : 0, 1});
+            casos.push_back({tag + ": fora da doca, animacao comum", op2::convecDockAnimRaw(c), 0});
+        }
+    }
+    int falhas = 0;
+    for (const Caso& c : casos) {
+        const bool ok = c.obtido == c.esperado;
+        if (!ok) ++falhas;
+        std::printf("[CvDock] %-56s %lld (esperado %lld) %s\n", c.nome.c_str(), c.obtido, c.esperado, ok ? "ok" : "FALHOU");
+    }
+    std::printf("[CvDock] %d casos, %d falhas\n", (int)casos.size(), falhas);
+    renderer.shutdown();
+    SDL_Quit();
+    return falhas ? 1 : 0;
+}
+
 // --detourtest <mapa>: o DESVIO de quem vem de frente (sub_44BBA0, ramo do
 // bloqueador em movimento -> sub_44BFD0; a parada de 32 tiques em loc_44C1D2).
 // Tres partes. (1) Dois veiculos, com ordem de mover dada pelo clique direito
@@ -8479,6 +8657,10 @@ int main(int argc, char* argv[]) {
             return runDumpTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--dumpmission") == 0 && i + 1 < argc)
             return runDumpMission(argv[i + 1]);
+        if (std::strcmp(argv[i], "--vehpanetest") == 0 && i + 1 < argc)
+            return runVehPaneTest(argv[i + 1], i + 2 < argc ? argv[i + 2] : nullptr);
+        if (std::strcmp(argv[i], "--convecdocktest") == 0 && i + 1 < argc)
+            return runConvecDockTest(argv[i + 1], i + 2 < argc ? argv[i + 2] : nullptr);
         if (std::strcmp(argv[i], "--exitbeeptest") == 0)
             return runExitBeepTest();
         if (std::strcmp(argv[i], "--stacktest") == 0 && i + 1 < argc)

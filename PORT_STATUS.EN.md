@@ -67,7 +67,12 @@
 > the computer overlay, a checkerboard of colour `0x3018` cut by the corner
 > masks from `VIRMASK.RAW`) and **5.36** (the DUMP button works in every truck
 > state; after dumping while docked at a mine, the truck kept its old route
-> order and, when pushed, never left the dock — the mine stopped loading).
+> order and, when pushed, never left the dock — the mine stopped loading)
+> and **5.37** (the vehicle info pane text, `sub_46D880`: the ConVec shows
+> the kit it carries, the truck its cargo and amount; and the ConVec dock at
+> the Structure Factory now plays its own animation, `vt[0x80]` `sub_410E00`
+> — anims `0x1C8`/`0x1CA`, `+1` on the way back — with each phase lasting the
+> whole animation).
 > The recent
 > changes are summarised in
 > [README.EN.md](README.EN.md).
@@ -120,7 +125,7 @@ coverage by comparing the DLLs' import tables against the registry in
 
 ```
 src/
-  main.cpp        entry point + the 117 test/capture modes
+  main.cpp        entry point + the 119 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -707,7 +712,7 @@ mission DLLs and the original resources from the working directory).
 
 ### Command-line tests
 
-There are 117 modes. The ones that cover real regressions:
+There are 119 modes. The ones that cover real regressions:
 
 | Mode | What it proves |
 |---|---|

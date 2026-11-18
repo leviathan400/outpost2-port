@@ -178,7 +178,7 @@ fullscreen, the menu skin (`MenuSkin`), horizontal map wrap (`MapWrap`), the
 map's bottom row (`ShowBottomRow`) and the one-click ore route
 (`AutoOreRoute`); they are documented in `PORT_STATUS.EN.md`.
 
-There are **117 command-line modes** for tests and captures, among them a
+There are **119 command-line modes** for tests and captures, among them a
 regression battery (`--savetest` proves save/reload determinism). The list is
 in `PORT_STATUS.EN.md`.
 
@@ -212,7 +212,7 @@ and what was checked and discarded from the cheat lists that circulate.
 
 ```
 src/
-  main.cpp        entry point + the 117 test/capture modes
+  main.cpp        entry point + the 119 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -236,6 +236,12 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
 
 ### 2026-11-18
 
+- **The ConVec info pane shows the kit it carries** ("Cargo" and the kit
+  name, or "(empty)"), as in the original; the truck's shows its cargo and
+  amount.
+- **The Structure Factory dock opens** when a ConVec stores or picks up a kit:
+  the door opens, the kit goes down and back up, with the claw and door
+  sounds.
 - **A mine no longer jams after a dump at its dock.** A truck that dumped its
   cargo while docked at a mine got stuck there, and the mine loaded no other
   truck.

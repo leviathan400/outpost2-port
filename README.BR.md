@@ -179,7 +179,7 @@ demo, tela cheia, a pele dos menus (`MenuSkin`), a volta horizontal do mapa
 (`MapWrap`), a última linha do mapa (`ShowBottomRow`) e a rota de minério num
 clique (`AutoOreRoute`); estão documentadas no `PORT_STATUS.BR.md`.
 
-Há **117 modos de linha de comando** para testes e capturas, entre eles uma
+Há **119 modos de linha de comando** para testes e capturas, entre eles uma
 bateria de regressão (`--savetest` prova o determinismo de salvar/recarregar).
 A lista está no `PORT_STATUS.BR.md`.
 
@@ -213,7 +213,7 @@ e descartado das listas de cheat que circulam por aí.
 
 ```
 src/
-  main.cpp        entrada + os 117 modos de teste/captura
+  main.cpp        entrada + os 119 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -238,6 +238,11 @@ cursores `.ANI`.
 
 ### 2026-11-18
 
+- **O quadro do ConVec mostra o kit que ele leva** ("Cargo" e o nome do
+  kit, ou "(empty)"), como no original; o do caminhão mostra a carga e a
+  quantidade.
+- **A doca da Structure Factory abre** quando o ConVec guarda ou pega um kit:
+  a porta abre, o kit desce e volta, com os sons da garra e da porta.
 - **A mina não trava mais depois de um descarte na doca.** Um caminhão que
   descartava a carga atracado na mina ficava preso ali, e a mina não carregava
   mais nenhum outro.
