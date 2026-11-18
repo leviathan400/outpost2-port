@@ -179,7 +179,7 @@ demo, tela cheia, a pele dos menus (`MenuSkin`), a volta horizontal do mapa
 (`MapWrap`), a última linha do mapa (`ShowBottomRow`) e a rota de minério num
 clique (`AutoOreRoute`); estão documentadas no `PORT_STATUS.BR.md`.
 
-Há **119 modos de linha de comando** para testes e capturas, entre eles uma
+Há **120 modos de linha de comando** para testes e capturas, entre eles uma
 bateria de regressão (`--savetest` prova o determinismo de salvar/recarregar).
 A lista está no `PORT_STATUS.BR.md`.
 
@@ -213,7 +213,7 @@ e descartado das listas de cheat que circulam por aí.
 
 ```
 src/
-  main.cpp        entrada + os 119 modos de teste/captura
+  main.cpp        entrada + os 120 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -238,6 +238,9 @@ cursores `.ANI`.
 
 ### 2026-11-18
 
+- **A praga aparece no minimapa** e cresce nele junto com a infecção, como no
+  original. O minimapa também ganhou as cores puras dos jogadores do original e
+  passou a marcar em branco os mining beacons e os destroços conhecidos.
 - **O quadro do ConVec mostra o kit que ele leva** ("Cargo" e o nome do
   kit, ou "(empty)"), como no original; o do caminhão mostra a carga e a
   quantidade.

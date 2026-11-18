@@ -40,6 +40,11 @@ void lavaTick();
 // INTERNOS; spread != 0 infecta, 0 limpa).
 void setMicrobeSpreadSpeed(int speed);
 void setVirusUL(int x, int y, int spread);
+// A praga no minimapa (a superficie de sub_48D1E0, cor 0x301B), por celula de
+// x INTERNO: marcada no espalhamento; sub_49E2D0 repinta as de 4 cantos.
+bool microbeMinimapMark(int x, int y);
+void microbeMinimapReset();                  // a superficie refeita (sub_437250)
+void microbeMinimapRepaint();                // sub_49E2D0
 
 bool isDisaster(int type);
 

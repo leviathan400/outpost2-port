@@ -4843,12 +4843,76 @@ static int runE02Test(const std::string& dll, const std::string& shot) {
                         t.kind == op2::kTrigResearch ? "PESQUISA" : "VITORIA", t.enabled, t.f30, t.f34, t.playerMask);
     for (const std::string& o : op2::missionObjectives()) std::printf("[E02]   objetivo: %s\n", o.c_str());
     int v0 = conta(0x40000000u);
+    // A praga no minimapa (sub_48D1E0, cor 0x301B): marcas por celula e pixels
+    // 0x6000D8 (0x301B em 8 bits) na tela -- a vista principal usa 0x6300C6.
+    const int IW = op2::g_gameMap.internalWidth(), XO = op2::g_gameMap.internalXOffset();
+    auto celI = [&](int x, int y) -> uint32_t {               // celula pelo x INTERNO (o do microbio)
+        const int px = (x & (IW - 1)) - XO;
+        return px >= 0 && px < W && y >= 0 && y < H ? op2::g_gameMap.rawCell(px, y) : 0u;
+    };
+    auto marcas = [&]() {
+        int n = 0;
+        for (int y = 0; y < H; ++y) for (int x = 0; x < IW; ++x) if (op2::microbeMinimapMark(x, y)) ++n;
+        return n;
+    };
+    auto marcasSemVirus = [&]() {
+        int n = 0;
+        for (int y = 0; y < H; ++y)
+            for (int x = 0; x < IW; ++x)
+                if (op2::microbeMinimapMark(x, y) && !(celI(x, y) & 0x40000000u)) ++n;
+        return n;
+    };
+    auto pixelsMini = [&]() {
+        const int dia = op2::TethysGame::daylightEverywhere();
+        op2::TethysGame::SetDaylightEverywhere(1);           // sem a noite, a cor sai exata
+        gs.onIdle(renderer, 0.0f);
+        op2::TethysGame::SetDaylightEverywhere(dia);
+        const uint32_t* fb = renderer.getFramebuffer();
+        int n = 0;
+        for (int i = 0; i < renderer.getWidth() * renderer.getHeight(); ++i)
+            if ((fb[i] & 0xFFFFFF) == 0x6000D8) ++n;
+        return n;
+    };
+    const int marcas0 = marcas();
+    std::vector<int> crescimento;
     for (int t = 1; t <= (std::getenv("E02_T") ? std::atoi(std::getenv("E02_T")) : 8000); ++t) {
         gs.onIdle(renderer, 0.2501f / 4.0f);
-        if (t % 1000 == 0)
-            std::printf("[E02] t=%d: virus %d, infectados %d\n", t, conta(0x40000000u), conta(0x20000000u));
+        if (t % 1000 == 0) {
+            crescimento.push_back(marcas());
+            std::printf("[E02] t=%d: virus %d, infectados %d, no minimapa %d\n", t, conta(0x40000000u),
+                        conta(0x20000000u), crescimento.back());
+        }
     }
     const int v1 = conta(0x40000000u);
+    const int marcas1 = marcas(), semVirus1 = marcasSemVirus(), pix1 = pixelsMini();
+    if (!shot.empty()) {
+        const std::string mshot = shot.substr(0, shot.size() > 4 ? shot.size() - 4 : shot.size()) + "_mini.bmp";
+        writeBmp32(mshot, renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
+        std::printf("[E02] minimapa salvo em %s\n", mshot.c_str());
+    }
+    // A superficie refeita (vista tatica / carga) e a repintura (sub_49E2D0):
+    // so as celulas com os 4 cantos infectados voltam.
+    op2::microbeMinimapReset();
+    const int pixReset = pixelsMini();
+    op2::microbeMinimapRepaint();
+    const int marcasRep = marcas(), pix2 = pixelsMini();
+    int quatro = 0;
+    for (int y = 0; y < H - 1; ++y)
+        for (int x = 0; x < IW; ++x) {
+            auto v = [&](int a, int b) { return (celI(a, b) & 0x40000000u) != 0; };
+            if (v(x, y) && v(x + 1, y) && v(x, y + 1) && v(x + 1, y + 1)) ++quatro;
+        }
+    // A correcao: o canto limpo (SetVirusUL(x, y, 0)) leva a marca junto.
+    int lx = -1, ly = -1;
+    for (int y = 0; y < H && lx < 0; ++y)
+        for (int x = 0; x < IW && lx < 0; ++x) if (op2::microbeMinimapMark(x, y)) { lx = x; ly = y; }
+    int limpa = -1;
+    if (lx >= 0) { op2::setVirusUL(lx, ly, 0); limpa = op2::microbeMinimapMark(lx, ly) ? 1 : 0; }
+    // E a praga continua a aparecer no minimapa: mais 1000 tiques.
+    for (int t = 0; t < 1000; ++t) gs.onIdle(renderer, 0.2501f / 4.0f);
+    const int marcas3 = marcas();
+    std::printf("[E02] minimapa: marcas %d -> %d (sem virus %d), pixels %d; refeita %d px; repintada %d marcas (4 cantos %d), %d px; +1000 tiques %d\n",
+                marcas0, marcas1, semVirus1, pix1, pixReset, marcasRep, quatro, pix2, marcas3);
 
     // O desenho: a camera sobre uma celula com virus; conta os pixels roxos
     // (0x3018) na vista com o Overlay ligado e desligado.
@@ -4907,6 +4971,17 @@ static int runE02Test(const std::string& dll, const std::string& shot) {
     casos.push_back({"a praga e plantada e se espalha (mais de 100 celulas)", v1 > 100 ? 1 : 0, 1});
     casos.push_back({"com o Overlay, a praga aparece (pixels roxos)", roxoCom > 200 ? 1 : 0, 1});
     casos.push_back({"sem o Overlay, nao aparece (como o original)", roxoSem, 0});
+    casos.push_back({"minimapa: a praga aparece (mais de 100 celulas)", marcas1 > 100 ? 1 : 0, 1});
+    bool cresce = crescimento.size() >= 2;
+    for (size_t k = 1; k < crescimento.size(); ++k) if (crescimento[k] < crescimento[k - 1]) cresce = false;
+    casos.push_back({"minimapa: a mancha cresce com a praga", (cresce && crescimento.back() > crescimento.front()) ? 1 : 0, 1});
+    casos.push_back({"minimapa: toda marca tem virus no canto", semVirus1, 0});
+    casos.push_back({"minimapa: os pixels roxos (0x301B) na tela", pix1 >= marcas1 / 8 && pix1 > 0 ? 1 : 0, 1});
+    casos.push_back({"minimapa: superficie refeita fica sem roxo", pixReset, 0});
+    casos.push_back({"minimapa: repintura = celulas com 4 cantos", marcasRep, quatro});
+    casos.push_back({"minimapa: repintada, o roxo volta", pix2 > 0 ? 1 : 0, 1});
+    casos.push_back({"minimapa: canto limpo leva a marca (correcao)", limpa, 0});
+    casos.push_back({"minimapa: segue marcando depois da repintura", marcas3 > marcasRep ? 1 : 0, 1});
     int pesquisas = 0;
     for (const std::string& o : op2::missionObjectives())
         if (o.find("Reconstruct") != std::string::npos && o.rfind("<C0>", 0) == 0) ++pesquisas;
@@ -5327,6 +5402,116 @@ static int runConvecDockTest(const std::string& mapName, const char* prefix) {
         std::printf("[CvDock] %-56s %lld (esperado %lld) %s\n", c.nome.c_str(), c.obtido, c.esperado, ok ? "ok" : "FALHOU");
     }
     std::printf("[CvDock] %d casos, %d falhas\n", (int)casos.size(), falhas);
+    renderer.shutdown();
+    SDL_Quit();
+    return falhas ? 1 : 0;
+}
+
+namespace op2 {
+uint16_t minimapPlayerColor555(int player);
+uint32_t minimapPlayerColor(int player);
+bool minimapEffectMark(const UnitRecord& r, int me);
+
+}
+// --minimaptest <DLL> [tela.bmp]: o que o minimapa desenha alem do terreno
+// (sub_48CCD0). A cor de cada jogador e sub_490C00: a entrada 4 da rampa dele
+// com cada canal saturado (0 ou 31); quem nao e jogador sai branco (0x7FFF). E
+// a lista de efeitos, em branco: o mining beacon sem mina (o de minerio raro so
+// depois da pesquisa da Rare Ore Mine) e o destroco que o jogador ja conhece.
+static int runMinimapTest(const std::string& dll, const char* shot) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 minimaptest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    const int me = op2::TethysGame::localPlayer(), np = op2::TethysGame::noPlayers();
+    struct Caso { std::string nome; long long obtido, esperado; };
+    std::vector<Caso> casos;
+    // 1) As cores.
+    bool saturadas = true;
+    for (int p = 0; p < np; ++p) {
+        const uint16_t c = op2::minimapPlayerColor555(p);
+        for (int k = 0; k < 3; ++k) {
+            const int ch = (c >> (k * 5)) & 31;
+            if (ch != 0 && ch != 31) saturadas = false;
+        }
+        const uint32_t rampa = op2::g_art.playerRampColor(op2::g_playerData[p].colorNumber, 4);
+        std::printf("[Mini] jogador %d cor %d: rampa 0x%06X -> minimapa 0x%04X\n", p,
+                    op2::g_playerData[p].colorNumber, rampa & 0xFFFFFF, c);
+    }
+    casos.push_back({"cor do jogador: canais saturados (0 ou 31)", saturadas ? 1 : 0, 1});
+    casos.push_back({"quem nao e jogador: branco 0x7FFF", op2::minimapPlayerColor555(6), 0x7FFF});
+    casos.push_back({"jogador 0 nao e branco", op2::minimapPlayerColor555(0) != 0x7FFF ? 1 : 0, 1});
+    // 2) A lista de efeitos.
+    const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
+    int bx = -1, by = -1;
+    for (int y = H / 3; y < H - 6 && bx < 0; ++y)
+        for (int x = 4; x < W - 12 && bx < 0; ++x) {
+            bool ok = true;
+            for (int dy = 0; dy < 4 && ok; ++dy)
+                for (int dx = 0; dx < 10 && ok; ++dx)
+                    if (!op2::g_gameMap.isPassable(op2::LOCATION{x + dx, y + dy}) ||
+                        op2::g_gameMap.cellOccupant(x + dx, y + dy)) ok = false;
+            if (ok) { bx = x; by = y; }
+        }
+    if (bx < 0) { std::printf("[Mini] sem area livre\n"); return 3; }
+    auto beacon = [&](int x, int y, int raro) {               // createBeacon devolve 1, nao o id
+        op2::createBeacon(0x51, x, y, raro, 0, 0);
+        for (int i = 1; i < (int)op2::g_units.size(); ++i) {
+            const op2::UnitRecord& r = op2::g_units[i];
+            if (r.id != -1 && r.type == 0x51 && (r.pixelX >> 5) == x && (r.pixelY >> 5) == y) return i;
+        }
+        return 0;
+    };
+    const int comum = beacon(bx, by, 0);
+    const int raro = beacon(bx + 3, by, 1);
+    const int usado = beacon(bx + 6, by, 0);
+    std::printf("[Mini] beacons %d %d %d (raro %d), destroco a seguir\n", comum, raro, usado,
+                op2::g_units[raro].beaconRare);
+    op2::g_units[usado].beaconHasMine = 1;
+    op2::Unit wr;
+    op2::TethysGame::CreateUnit(wr, static_cast<op2::map_id>(0x54), op2::LOCATION{bx + 1, by + 3}, 6);
+    const int dest = wr.id();
+    const int topico = op2::researchTopicIndex(0x16);
+    const bool tinhaRaro = topico >= 0 && op2::researchHas(me, topico);
+    casos.push_back({"beacon comum sem mina aparece", op2::minimapEffectMark(op2::g_units[comum], me) ? 1 : 0, 1});
+    casos.push_back({"beacon raro sem a pesquisa nao aparece", (tinhaRaro || op2::minimapEffectMark(op2::g_units[raro], me)) ? 1 : 0, tinhaRaro ? 1 : 0});
+    casos.push_back({"beacon com mina nao aparece", op2::minimapEffectMark(op2::g_units[usado], me) ? 1 : 0, 0});
+    casos.push_back({"destroco desconhecido nao aparece", dest > 0 && op2::minimapEffectMark(op2::g_units[dest], me) ? 1 : 0, 0});
+    if (dest > 0) op2::wreckDiscover(dest, me);
+    casos.push_back({"destroco conhecido aparece", dest > 0 && op2::minimapEffectMark(op2::g_units[dest], me) ? 1 : 0, 1});
+    if (topico >= 0) op2::researchMarkComplete(me, topico);
+    casos.push_back({"beacon raro depois da pesquisa aparece", op2::minimapEffectMark(op2::g_units[raro], me) ? 1 : 0, 1});
+    // 3) Na tela: pixels brancos (0xF8F8F8) e da cor do jogador 0 no minimapa.
+    op2::TethysGame::SetDaylightEverywhere(1);
+    gs.onIdle(renderer, 0.0f);
+    const uint32_t* fb = renderer.getFramebuffer();
+    const int FW = renderer.getWidth(), FH = renderer.getHeight();
+    int brancos = 0, doJogador = 0;
+    const uint32_t cj = op2::minimapPlayerColor(0) & 0xFFFFFF;
+    for (int y = 0; y < 200 && y < FH; ++y)
+        for (int x = FW - 210; x < FW; ++x) {
+            const uint32_t c = fb[y * FW + x] & 0xFFFFFF;
+            if (c == 0xF8F8F8) ++brancos;
+            if (c == cj) ++doJogador;
+        }
+    std::printf("[Mini] tela: %d pixels brancos, %d da cor do jogador 0 (0x%06X)\n", brancos, doJogador, cj);
+    casos.push_back({"na tela: marcadores brancos", brancos > 0 ? 1 : 0, 1});
+    casos.push_back({"na tela: a cor do jogador 0", doJogador > 0 ? 1 : 0, 1});
+    if (shot) {
+        writeBmp32(shot, fb, FW, FH);
+        std::printf("[Mini] tela -> %s\n", shot);
+    }
+    int falhas = 0;
+    for (const Caso& c : casos) {
+        const bool ok = c.obtido == c.esperado;
+        if (!ok) ++falhas;
+        std::printf("[Mini] %-44s %lld (esperado %lld) %s\n", c.nome.c_str(), c.obtido, c.esperado, ok ? "ok" : "FALHOU");
+    }
+    std::printf("[Mini] %d casos, %d falhas\n", (int)casos.size(), falhas);
     renderer.shutdown();
     SDL_Quit();
     return falhas ? 1 : 0;
@@ -8661,6 +8846,8 @@ int main(int argc, char* argv[]) {
             return runVehPaneTest(argv[i + 1], i + 2 < argc ? argv[i + 2] : nullptr);
         if (std::strcmp(argv[i], "--convecdocktest") == 0 && i + 1 < argc)
             return runConvecDockTest(argv[i + 1], i + 2 < argc ? argv[i + 2] : nullptr);
+        if (std::strcmp(argv[i], "--minimaptest") == 0 && i + 1 < argc)
+            return runMinimapTest(argv[i + 1], i + 2 < argc ? argv[i + 2] : nullptr);
         if (std::strcmp(argv[i], "--exitbeeptest") == 0)
             return runExitBeepTest();
         if (std::strcmp(argv[i], "--stacktest") == 0 && i + 1 < argc)

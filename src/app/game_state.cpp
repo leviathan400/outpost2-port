@@ -56,6 +56,11 @@
 
 namespace op2 {
 
+// Minimapa (definidas junto ao desenho da praga): sub_490C00 e a lista de efeitos.
+uint16_t minimapPlayerColor555(int player);
+uint32_t minimapPlayerColor(int player);
+bool minimapEffectMark(const UnitRecord& r, int me);
+
 GameState::GameState() = default;
 GameState::~GameState() = default;
 
@@ -291,6 +296,8 @@ bool GameState::loadMap(const std::string& mapName) {
     // Sem o 4o botao nao ha globo: sub_458930 zera dword_5748A0 nesse caso.
     if (g_gameMap.internalXOffset()) m_mini.setGlobe(false);
     m_globeTex.clear();
+    microbeMinimapReset();                       // sub_48C8F0 (a superficie nova)...
+    microbeMinimapRepaint();                     // ...e sub_49E2D0, como sub_435CC0
     m_globeCamX = m_camX;
     m_globe.setSpinTarget(globeSpinTargetOf(m_camX));
     return true;
@@ -455,6 +462,8 @@ bool GameState::startMission(std::unique_ptr<MissionScript> mission, const GameS
             resetTriggers();
             return false;
         }
+        microbeMinimapReset();                   // as celulas do arquivo: a praga
+        microbeMinimapRepaint();                 // repintada (sub_435CC0 -> sub_49E2D0)
         std::cout << "[Load] ok: tick " << TethysGame::tick() << ", unidades " << (g_units.size() - 1) << std::endl;
         return true;
     }
@@ -1691,6 +1700,7 @@ void GameState::buildGlobeTerrain() {
             line[tx] = (m_mini.tactical() && !(cell & 0x08000000u))
                      ? terrainTacticalColor(static_cast<int>(cell & 0x1F))
                      : m_terrain.minimapColor(g_gameMap.getTile(LOCATION{tx, ty}));
+            if (microbeMinimapMark(tx, ty)) line[tx] = 0x301B;      // a praga ([+0x10A4])
         }
     }
 }
@@ -1727,8 +1737,7 @@ void GameState::drawGlobe(uint32_t* fb) {
     // No demo de atracao o inimigo aparece mesmo no escuro (ver escondeInimigo
     // no minimapa, logo abaixo): a cena fica confusa sem quem esta atirando.
     const bool escondeInimigo = shade && !demoGame();
-    // As mesmas cores de dono do minimapa, em RGB555 (a textura e de 16 bits).
-    static const uint16_t kOC5[7] = { 0x219F, 0x7D48, 0x234E, 0x7F48, 0x619F, 0x239C, 0x7E46 };
+    // As mesmas cores de dono do minimapa (sub_490C00), em RGB555.
     m_globeDirty.clear();
     for (int i = 1; i < static_cast<int>(g_units.size()); ++i) {
         const UnitRecord& r = g_units[i];
@@ -1745,7 +1754,16 @@ void GameState::drawGlobe(uint32_t* fb) {
         if (ty < 0 || ty >= h) continue;
         const size_t idx = static_cast<size_t>(ty + pad) * w + tx;
         m_globeDirty.emplace_back(static_cast<int>(idx), m_globeTex[idx]);
-        m_globeTex[idx] = kOC5[ow % 7];
+        m_globeTex[idx] = minimapPlayerColor555(ow);
+    }
+    for (int i = 1; i < static_cast<int>(g_units.size()); ++i) {      // a lista de efeitos
+        const UnitRecord& r = g_units[i];
+        if (!minimapEffectMark(r, me)) continue;
+        const int tx = (r.pixelX >> 5) & (w - 1), ty = r.pixelY >> 5;
+        if (ty < 0 || ty >= h) continue;
+        const size_t idx = static_cast<size_t>(ty + pad) * w + tx;
+        m_globeDirty.emplace_back(static_cast<int>(idx), m_globeTex[idx]);
+        m_globeTex[idx] = minimapPlayerColor555(6);
     }
 
     m_globe.draw(fb, m_fbW, kColX, kMiniMapY,
@@ -1942,6 +1960,25 @@ void loadVirMask() {
 }  // namespace
 
 bool blightMaskFromFile() { loadVirMask(); return s_virFromFile; }
+
+// sub_490C00 / a tabela [+0x1060] do minimapa (ver o desenho).
+uint16_t minimapPlayerColor555(int player) {
+    if (player < 0 || player >= TethysGame::noPlayers() || player >= 8) return 0x7FFF;
+    const uint32_t c = g_art.playerRampColor(g_playerData[player].colorNumber, 4);
+    const int r5 = (c >> 19) & 31, g5 = (c >> 11) & 31, b5 = (c >> 3) & 31;
+    return static_cast<uint16_t>((r5 > 16 ? 0x7C00 : 0) | (g5 > 16 ? 0x3E0 : 0) | (b5 > 16 ? 0x1F : 0));
+}
+uint32_t minimapPlayerColor(int player) {
+    const uint16_t c = minimapPlayerColor555(player);
+    return 0xFF000000u | (uint32_t((c >> 10) & 31) << 19) | (uint32_t((c >> 5) & 31) << 11) | (uint32_t(c & 31) << 3);
+}
+// A lista de efeitos no minimapa (sub_48CCD0, depois dos jogadores).
+bool minimapEffectMark(const UnitRecord& r, int me) {
+    if (r.id == -1 || (r.flags & UNIT_DEAD)) return false;
+    if (r.type == 0x51) return !r.beaconHasMine && (!r.beaconRare || researchHas(me, researchTopicIndex(0x16)));
+    if (r.type == 0x54) return wreckKnownBy(r, me);
+    return false;
+}
 
 // sub_46FF60 (o laco dos tiles do terreno): com a opcao Overlay (dword_57562C)
 // ligada, o tile com o bit 0x20000000 (tocado pela praga) leva a mascara dos 4
@@ -2333,8 +2370,13 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
                 const int k = (nx - bx0) / 16;
                 if (k == 0 && m_mini.canZoomIn()) { soundPlay(0x57); m_mini.zoomIn(); }
                 else if (k == 1 && m_mini.canZoomOut()) { soundPlay(0x57); m_mini.zoomOut(); }
-                else if (k == 2) { soundPlay(0x57); m_mini.toggleTactical(); }   // sub_48E960
+                else if (k == 2) {                                                // sub_48E960
+                    soundPlay(0x57);
+                    m_mini.toggleTactical();
+                    microbeMinimapReset();                 // refaz a superficie (sub_437250)
+                }
                 else if (k == 3) { soundPlay(0x57); m_mini.toggleGlobe(); }       // sub_48E9E0
+                microbeMinimapRepaint();                   // sub_458B40: depois de qualquer botao
                 return;
             }
         }
@@ -3354,6 +3396,7 @@ void GameState::renderPanel(Renderer& renderer) {
                     c = terrainTacticalColor(static_cast<int>(cell & 0x1F));
                 else
                     c = m_terrain.minimapColor(g_gameMap.getTile(LOCATION{tx, ty}));
+                if (microbeMinimapMark(tx + xoffT, ty)) c = 0x301B;   // a praga (sub_48D1E0)
                 int r5 = (c >> 10) & 31, g5 = (c >> 5) & 31, b5 = c & 31;
                 if (shade) {
                     const int b = brightness(tx);
@@ -3364,8 +3407,10 @@ void GameState::renderPanel(Renderer& renderer) {
             }
         }
     }
-    static const uint32_t kOC[7] = { 0xFF4060FF,0xFFFF5040,0xFF40D070,0xFFFFD040,
-                                     0xFFC060FF,0xFF40E0E0,0xFFFF9030 };
+    // Cores (tabela [+0x1060], 8 entradas): a do jogador i e sub_490C00 -- a
+    // entrada 4 da rampa dele (word_57C420, luz 0) com cada canal SATURADO
+    // (> 16 vira 31, senao 0); quem nao e jogador (i >= numero de jogadores)
+    // fica 0x7FFF, branco.
     for (int i = 1; i < (int)g_units.size(); ++i) {
         const UnitRecord& r = g_units[i];
         if (r.id == -1 || (r.flags & UNIT_DEAD) || !(r.flags & (UNIT_VEHICLE | UNIT_BUILDING))) continue;
@@ -3380,7 +3425,18 @@ void GameState::renderPanel(Renderer& renderer) {
         }
         const int tx = r.pixelX >> 5, ty = r.pixelY >> 5;
         mmFill(mapX(tx), mapY(ty), std::max(1, mapX(tx + 1) - mapX(tx)),
-               std::max(1, mapY(ty + 1) - mapY(ty)), kOC[ow % 7]);
+               std::max(1, mapY(ty + 1) - mapY(ty)), minimapPlayerColor(ow));
+    }
+    // A lista de efeitos (dword_5737D0), na cor [+0x106C] -- a 7a entrada, branca
+    // com menos de 7 jogadores: o mining beacon (0x51) ainda sem mina ([+0x66]),
+    // e o de minerio raro (vt[0x98]) so para quem ja pesquisou a Rare Ore Mine
+    // (desc 0x16 +0x1E4); e o destroco (0x54) que o jogador ja conhece (vt[0x9C]).
+    for (int i = 1; i < (int)g_units.size(); ++i) {
+        const UnitRecord& r = g_units[i];
+        if (!minimapEffectMark(r, me)) continue;
+        const int tx = r.pixelX >> 5, ty = r.pixelY >> 5;
+        mmFill(mapX(tx), mapY(ty), std::max(1, mapX(tx + 1) - mapX(tx)),
+               std::max(1, mapY(ty + 1) - mapY(ty)), minimapPlayerColor(6));
     }
     {
         const int ctx = ((m_camX / 32) % mw + mw) % mw, cty = m_camY / 32;

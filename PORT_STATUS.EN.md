@@ -72,7 +72,11 @@
 > the kit it carries, the truck its cargo and amount; and the ConVec dock at
 > the Structure Factory now plays its own animation, `vt[0x80]` `sub_410E00`
 > — anims `0x1C8`/`0x1CA`, `+1` on the way back — with each phase lasting the
-> whole animation).
+> whole animation) and **5.38** (the minimap: the Blight is painted on it as
+> it spreads, `sub_48D1E0(x, y, 0x301B)`, and repainted by `sub_49E2D0` after
+> loading and after any minimap button; player colours are `sub_490C00` —
+> ramp entry 4 with each channel saturated —; mining beacons and known wreckage
+> are drawn in white).
 > The recent
 > changes are summarised in
 > [README.EN.md](README.EN.md).
@@ -125,7 +129,7 @@ coverage by comparing the DLLs' import tables against the registry in
 
 ```
 src/
-  main.cpp        entry point + the 119 test/capture modes
+  main.cpp        entry point + the 120 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -712,7 +716,7 @@ mission DLLs and the original resources from the working directory).
 
 ### Command-line tests
 
-There are 119 modes. The ones that cover real regressions:
+There are 120 modes. The ones that cover real regressions:
 
 | Mode | What it proves |
 |---|---|

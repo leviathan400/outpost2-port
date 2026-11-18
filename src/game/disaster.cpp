@@ -1,4 +1,5 @@
 #include "disaster.h"
+#include <vector>
 #include "../audio/sound.h"
 
 #include <cstdio>
@@ -778,6 +779,40 @@ void disasterSerialize(SaveStream& s) { s.io(s_lava); s.io(s_microbe); }
 
 static bool virusAt(int tx, int ty) { return (cellAt(tx & iMask(), ty) & 0x40000000u) != 0; }
 
+// ---- A praga no MINIMAPA ------------------------------------------------------
+// O original nao a desenha a cada quadro: o sub_48D1E0(x, y, 0x301B) grava a
+// cor (roxa, RGB555) direto na superficie do minimapa ([+0x10A0]) e na textura
+// do globo ([+0x10A4]), e ela fica la ate a superficie ser refeita (sub_437250:
+// a carga e a vista tatica). Quem grava: o espalhamento (sub_49DC90), na celula
+// do canto que acabou de pegar o virus; e o sub_49E2D0 (vt[8] do microbio), que
+// repinta toda celula com os QUATRO cantos infectados -- chamado depois da
+// carga do mapa/jogo salvo (sub_435CC0) e de cada botao do minimapa (sub_458B40).
+// O porte refaz o terreno do minimapa a cada quadro, entao a superficie da
+// praga e esta camada a parte, por celula (x interno).
+static std::vector<uint8_t> s_miniBlight;
+static bool miniBlightFit() {
+    const size_t n = static_cast<size_t>(iW()) * static_cast<size_t>(mapH());
+    if (!n) return false;
+    if (s_miniBlight.size() != n) s_miniBlight.assign(n, 0);
+    return true;
+}
+static void miniBlightSet(int x, int y, bool on) {          // sub_48D1E0 (com on)
+    if (y < 0 || y >= mapH() || !miniBlightFit()) return;
+    s_miniBlight[static_cast<size_t>(y) * iW() + (x & iMask())] = on ? 1 : 0;
+}
+bool microbeMinimapMark(int x, int y) {
+    if (y < 0 || y >= mapH() || s_miniBlight.size() != static_cast<size_t>(iW()) * mapH()) return false;
+    return s_miniBlight[static_cast<size_t>(y) * iW() + (x & iMask())] != 0;
+}
+void microbeMinimapReset() { s_miniBlight.clear(); miniBlightFit(); }   // sub_437250: superficie refeita
+void microbeMinimapRepaint() {                               // sub_49E2D0
+    if (!miniBlightFit()) return;
+    for (int y = 0; y < mapH() - 1; ++y)
+        for (int x = 0; x < iW(); ++x)
+            if (virusAt(x, y) && virusAt(x + 1, y) && virusAt(x, y + 1) && virusAt(x + 1, y + 1))
+                miniBlightSet(x, y, true);
+}
+
 static int maxHPOfAny(const UnitRecord& t);
 
 // sub_49E3A0 (vt[4]): reavalia os tiles (x−1..x, y−1..y) que tocam o canto (x,y).
@@ -839,9 +874,13 @@ static void microbeClearAround(int x, int y) {               // sub_49E680 (vt[5
     if (y < 0 || mapH() - 1 < y) return;
     setCellAt(x, y, cellAt(x, y) & ~0x40000000u);
     setCellAt((x + 1) & iMask(), y, cellAt((x + 1) & iMask(), y) & ~0x40000000u);
+    miniBlightSet(x, y, false);                               // correcao: ver setVirusUL
+    miniBlightSet(x + 1, y, false);
     if (mapH() - 1 > y) {
         setCellAt(x, y + 1, cellAt(x, y + 1) & ~0x40000000u);
         setCellAt((x + 1) & iMask(), y + 1, cellAt((x + 1) & iMask(), y + 1) & ~0x40000000u);
+        miniBlightSet(x, y + 1, false);
+        miniBlightSet(x + 1, y + 1, false);
     }
     microbeRetile(x, y);
 }
@@ -885,7 +924,10 @@ static void microbeSpreadAt(int x, int y) {                  // sub_49DC90 (vt[0
     if (wall) return;
     if (cellAt(nx, ny) & 0x8000000u) return;                 // lava
     microbeSetVirus(nx, ny);
-    // (minimapa: sub_48D1E0(…, 0x301B), e a área redesenhada.)
+    // sub_48D1E0(nx, ny, 0x301B): sem mapa redondo, sempre; no de 512 (com
+    // deslocamento), so na metade visivel (deslocamento < x <= deslocamento + W/2).
+    const int off = g_gameMap.internalXOffset();             // dword_54EBF0
+    if (!off || (off < nx && nx <= off + iW() / 2)) miniBlightSet(nx, ny, true);
 }
 
 void setMicrobeSpreadSpeed(int speed) {                      // sub_49E240
@@ -899,6 +941,10 @@ void setVirusUL(int x, int y, int spread) {                  // ?SetVirusUL (x I
     x &= iMask();
     if (y < 0 || mapH() - 1 < y) return;
     setCellAt(x, y, cellAt(x, y) & ~0x40000000u);
+    // CORRECAO: no original o roxo do minimapa ficava ate a superficie ser
+    // refeita (vista tatica ou carga), mesmo com o virus ja apagado -- o mapa
+    // mostrava praga onde nao havia mais. Aqui o canto limpo leva a marca junto.
+    miniBlightSet(x, y, false);
     microbeRetile(x, y);
 }
 

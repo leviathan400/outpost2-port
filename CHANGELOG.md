@@ -15,6 +15,16 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
 
 **Corrigido**
 
+- **A praga aparece no minimapa.** O micróbio se espalhava pelo mapa, mas o
+  minimapa não mostrava nada. Agora, como no original, cada pedaço infectado
+  fica roxo no minimapa, e dá para acompanhar a mancha surgir e crescer.
+  Diferente do original, quando a praga é apagada (pela lava, por exemplo) o
+  roxo some junto — lá ele ficava até trocar a vista tática.
+- **O minimapa com as cores do original.** As unidades de cada jogador
+  aparecem nas cores puras do original (azul, vermelho, verde…), no lugar dos
+  tons pastel de antes; e os mining beacons ainda sem mina e os destroços já
+  encontrados aparecem em branco, o que antes faltava. O beacon de minério raro
+  só aparece depois da pesquisa que permite a mina de minério raro.
 - **O quadro do ConVec mostra o kit que ele leva.** Ao selecionar um ConVec,
   o quadro de informações não dizia nada sobre a carga — só o botão de
   construir denunciava que havia um kit. Agora aparece, como no original,
@@ -48,14 +58,24 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   Agora é sempre como no original: **a doca não liga**; o tubo tem de encostar
   numa parte do prédio que não seja a doca.
 
-**Para quem acompanha o código:** seções 5.34 a 5.37 do PORT_STATUS; os modos de
-teste `--tubetest`, `--e02test`, `--dumptest`, `--dumpmission`, `--vehpanetest` e `--convecdocktest`; o gerador `tools/extract_anim_tables.py` extrai os quatro
+**Para quem acompanha o código:** seções 5.34 a 5.38 do PORT_STATUS; os modos de
+teste `--tubetest`, `--e02test`, `--dumptest`, `--dumpmission`, `--vehpanetest`, `--convecdocktest` e `--minimaptest`; o gerador `tools/extract_anim_tables.py` extrai os quatro
 conjuntos de animação dos veículos.
 
 ### English
 
 **Fixed**
 
+- **The Blight shows on the minimap.** The microbe spread across the map, but
+  the minimap showed nothing. Now, as in the original, every infected spot turns
+  purple on the minimap, so you can watch the patch appear and grow. Unlike the
+  original, when the Blight is wiped out (by lava, for example) the purple goes
+  with it — there it stayed until the tactical view was toggled.
+- **The minimap uses the original's colours.** Each player's units show in the
+  original's pure colours (blue, red, green…) instead of the pastel tones used
+  before; and mining beacons with no mine yet and wreckage already found show in
+  white, which was missing. A rare ore beacon only shows after the research that
+  allows the rare ore mine.
 - **The ConVec info pane shows the kit it carries.** Selecting a ConVec showed
   nothing about its cargo — only the build button gave away that it had a kit.
   Now, as in the original, it shows "Cargo" and the kit name (or "(empty)");
@@ -89,8 +109,8 @@ conjuntos de animação dos veículos.
   not connect**; the tube has to touch a part of the building that is not the
   dock.
 
-**For those following the code:** sections 5.34 to 5.37 of PORT_STATUS; the
-`--tubetest`, `--e02test`, `--dumptest`, `--dumpmission`, `--vehpanetest` and `--convecdocktest` test modes; the `tools/extract_anim_tables.py` generator extracts
+**For those following the code:** sections 5.34 to 5.38 of PORT_STATUS; the
+`--tubetest`, `--e02test`, `--dumptest`, `--dumpmission`, `--vehpanetest`, `--convecdocktest` and `--minimaptest` test modes; the `tools/extract_anim_tables.py` generator extracts
 the four animation sets of the vehicles.
 
 ---

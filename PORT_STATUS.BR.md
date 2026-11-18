@@ -48,7 +48,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 119 modos de teste/captura
+  main.cpp        entrada + os 120 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -2898,6 +2898,71 @@ animação da doca.
   a volta, o quadro chega ao fim de cada uma, sai da doca e o kit trocou de
   lugar. Com `<prefixo>`, grava quadros da animação.
 
+## 5.38. O minimapa: a praga, as cores dos jogadores, os beacons e os destroços (2026-11-18)
+
+Pedido: *o micróbio não aparece no minimapa — no original aparece, em escala, o
+surgimento e o crescimento dele.*
+
+### A praga no minimapa (`sub_48D1E0`)
+
+O original não desenha a praga no minimapa a cada quadro: o `sub_48D1E0(x, y,
+0x301B)` grava a cor (roxo, RGB555) **direto na superfície** do minimapa
+(`[+0x10A0]`) e na textura do globo (`[+0x10A4]`), e ela fica lá. Só o micróbio
+chama essa função — tornado, raio, meteoro e terremoto não marcam o minimapa
+(o minimapa percorre a lista de efeitos, mas dela só marca os beacons e os
+destroços — ver abaixo). Os dois chamadores:
+
+- o **espalhamento** (`sub_49DC90`): cada canto que pega o vírus marca a sua
+  célula — é assim que a mancha cresce no minimapa junto com a praga. No mapa de
+  largura 512, só na metade visível (deslocamento < x ≤ deslocamento + W/2);
+- a **repintura** (`sub_49E2D0`, `vt[8]` do micróbio): toda célula com os
+  **quatro** cantos infectados. Roda depois da carga do mapa e do jogo salvo
+  (`sub_435CC0`) e depois de **qualquer** botão do minimapa (`sub_458B40`).
+
+A superfície só é refeita (`sub_437250`) na carga e na vista tática; o zoom e o
+globo não a refazem, só repintam por cima. O porte já tinha o lugar anotado no
+espalhamento, mas nada pintava. Como ele refaz o terreno do minimapa a cada
+quadro, a superfície da praga virou uma camada à parte, por célula (x interno),
+que o minimapa e o globo leem.
+
+**Correção:** no original o roxo ficava no minimapa até a superfície ser refeita
+mesmo depois de o vírus sumir (a lava apaga os cantos, `sub_49E680`, e o
+`SetVirusUL(x, y, 0)` também) — o mapa mostrava praga onde não havia mais. Aqui o
+canto limpo leva a marca junto.
+
+### As cores dos jogadores (`sub_490C00`)
+
+O porte pintava as unidades com uma tabela fixa de 7 cores em tons pastel. O
+original monta a tabela `[+0x1060]` (8 entradas) com `sub_490C00` para cada
+jogador: a entrada 4 da rampa da cor dele (`word_57C420`, a luz 0 — o
+`playerRampColor(cor, 4)` do porte) com cada canal **saturado**: acima de 16
+vira 31, senão 0. Sai azul, vermelho, verde, amarelo… puros. As entradas sem
+jogador ficam `0x7FFF` (branco).
+
+### Os beacons e os destroços (a lista `dword_5737D0`)
+
+Depois dos jogadores, o `sub_48CCD0` percorre a lista de efeitos e marca, na
+cor `[+0x106C]` (a 7ª entrada — branca):
+
+- o **mining beacon** (`0x51`) ainda sem mina (`[+0x66]`); o de minério raro
+  (`vt[0x98]`) só para quem já pesquisou a tecnologia da Rare Ore Mine
+  (`desc 0x16 +0x1E4`);
+- o **destroço** (`0x54`) que o jogador já conhece (`vt[0x9C]`).
+
+O porte não marcava nenhum dos dois.
+
+### Os testes
+
+- `--e02test` ganhou 9 casos (13 no total): a praga aparece no minimapa
+  (1432 células em 8000 tiques) e a mancha cresce a cada 1000 tiques; toda
+  marca tem vírus no canto; os pixels `0x301B` estão na tela; a superfície
+  refeita fica sem roxo e a repintura traz de volta exatamente as células de
+  quatro cantos; o canto limpo leva a marca; e a praga segue marcando depois.
+- `--minimaptest <DLL> [tela.bmp]` — 11 casos: as cores saturadas, o branco de
+  quem não é jogador, os beacons (comum, raro antes e depois da pesquisa, com
+  mina), o destroço antes e depois de conhecido, e os pixels na tela. Passa
+  na E02 (Eden, azul) e na P04 (Plymouth, vermelho).
+
 ---
 
 ## 6. Build e execução
@@ -2951,7 +3016,8 @@ São 109 modos. Os que cobrem regressão de verdade:
 | `--dumpmission <DLL>` | a botoeira de cada caminhão/ConVec de uma missão e o clique no DUMP |
 | `--vehpanetest <mapa> [tela.bmp]` | o texto do quadro de veículo: o kit do ConVec, a carga do caminhão, os colonos |
 | `--convecdocktest <mapa> [prefixo]` | a doca do ConVec na Structure Factory: a animação, a duração das fases e a troca do kit |
-| `--e02test [DLL] [bmp]` | missão 2 do Eden: a praga se espalha e é desenhada com o Overlay, e os objetivos de pesquisa são cumpridos |
+| `--minimaptest <DLL> [tela.bmp]` | o minimapa além do terreno: as cores dos jogadores, os beacons e os destroços |
+| `--e02test [DLL] [bmp]` | missão 2 do Eden: a praga se espalha e é desenhada com o Overlay, e os objetivos de pesquisa são cumpridos; e a praga no minimapa |
 | `--tubetest <mapa> [prefixo]` | o Earthworker ligando prédios com tubo: retas inteiras, a doca que não liga, a animação de trabalho |
 | `--waypointtest <mapa> [bmp]` | pontos de passagem com Ctrl + clique: limites por comando, o pacote com os pontos antes do alvo, a unidade passando por eles, patrulha e obra, e o desenho |
 | `--selecttest <mapa>` | a área de clique das unidades, e a seleção com Shift e com o botão do meio (soma, tira, caixa que soma, as exceções) |
