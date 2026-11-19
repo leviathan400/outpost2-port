@@ -256,6 +256,10 @@ cursores `.ANI`.
   antes com o direito, como lá. O esquema dos RTS modernos que o porte usava
   (o esquerdo seleciona, o direito dá a ordem) continua disponível: opção
   **Right-Click Orders** nas preferências e na aba Options.
+- **Todas as opções do porte vêm desligadas.** O padrão é sempre o jogo
+  original; as evoluções do porte se ligam no `GAME PREFERENCES`. A rota de
+  minério num clique (**Auto Ore Route**) e a câmera que passeia no demo
+  (**Demo Camera**), que vinham ligadas, agora vêm desligadas.
 - **A noite como no original: a luz das unidades.** À noite, cada veículo com
   os faróis acesos e cada prédio com energia abre um círculo de luz no escuro,
   do tamanho do alcance de visão dele, com a borda pontilhada — a luz anda com

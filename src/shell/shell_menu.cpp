@@ -459,7 +459,8 @@ void ShellMenu::rebuildControls() {
         addCheck("Structure Shadows",     cy, &m_prefStructShadows);
         // A coluna dos extras do porte (o titulo, o rotulo da barra e a nota
         // saem no render). Em todas, DESMARCADA e o comportamento do original
-        // -- menos AutoOreRoute e DemoCamera, que nascem ligadas.
+        // -- e todas nascem desmarcadas (desde a 5.45, tambem AutoOreRoute e
+        // DemoCamera, que nasciam ligadas).
         // Oito caixas a 18 px (62..188): a ultima termina em +202, antes do
         // rotulo da noite (+210). Nao cabe mais nenhuma sem mexer nele.
         addCheck("Auto Ore Route",     kPrY + 62,  &m_prefAutoOreRoute, kPrExtraX, kPrExtraW, 1204);

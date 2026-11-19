@@ -170,7 +170,7 @@ private:
     bool uiStateLoad(const std::vector<uint8_t>& blob);
     int m_endPhase = 0;
     int m_pauseCount = 0;          // TFrame+0x1E0: as pausas empilhadas
-    bool m_autoOreRoute = true;    // "AutoOreRoute" (so deste porte)
+    bool m_autoOreRoute = false;   // "AutoOreRoute" (so deste porte; padrao 0 = original, 5.45)
     bool m_rightClickOrders = false; // "RightClickOrders" (idem, 5.44; 0 = mouse do original)
     bool defaultCommandClick(int vx, int vy);
     uint32_t m_endWaitStart = 0;
@@ -187,7 +187,7 @@ private:
     bool onScreen(int sx, int sy) const;
     int m_maxX = 0, m_maxY = 0;
     // --- passeio da camera no demo de atracao (so deste porte) ---
-    bool m_demoCam = true;         // "[Game] DemoCamera"
+    bool m_demoCam = false;        // "[Game] DemoCamera" (padrao 0 = original, 5.45)
     int  m_demoCamHold = 0;        // tiques ate escolher o proximo ponto
     int  m_demoCamSeq = 0;         // rodizio entre os candidatos (sem usar o RNG)
     int  m_demoTargX = -1, m_demoTargY = -1;   // centro de vista perseguido

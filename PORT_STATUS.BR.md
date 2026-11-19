@@ -131,12 +131,12 @@ preferências; o original ignora chaves que não conhece.
 | `AILevel` | 0..3 | 0 (AUTO) | Força o nível da IA nas campanhas e colônias. AUTO = o comportamento do original. **Não se aplica em rede**, onde a dificuldade é por jogador e vem do lobby. |
 | `NightDarkness` | 0..100 | 100 | Quanto da curva de escurecimento noturno se aplica (100 = o original, que leva a noite plena a ~15% do brilho; fora da luz das unidades o terreno quase some — ver 5.41). Até 2026-11-19 o padrão era 75. |
 | `AudioVolume` | 0..100 | 50 | Volume mestre sobre a mistura final (sons e música). O original só tem `MusicVol`/`SoundVol`, por canal e em 6 degraus. |
-| `DemoCamera` | 0/1 | 1 | No demo de atração a câmera passeia pelos pontos de ação (desastre, combate, unidades). 0 devolve a câmera parada do original. |
+| `DemoCamera` | 0/1 | 0 | No demo de atração a câmera passeia pelos pontos de ação (desastre, combate, unidades). 0 = a câmera parada do original (o padrão desde a 5.45; era 1). |
 | `Fullscreen` | 0/1 | 1 | Abre em tela cheia (sem troca de modo de vídeo). Alt+Enter alterna a qualquer momento, e dentro do jogo há o par de rádio **Screen Mode** no fim da lista do `PREFERENCES` (ver 5.8). |
 | `MenuSkin` | 0/1 | 0 | Estilo dos menus. 0 = o visual do próprio porte (painéis azul-escuros, menu principal à direita); 1 = a pele de diálogo do OP2 original (fundo "blueprint", molduras vermelhas, texto verde, arte do `OP2SHRES.DLL`). |
 | `MapWrap` | 0/1 | 0 | Volta horizontal do mapa. 0 = como no original: a vista para nas bordas esquerda/direita do mapa, e só os mapas "around the world" (512 tiles de largura) dão a volta; 1 = todo mapa dá a volta (o comportamento antigo do porte). |
 | `ShowBottomRow` | 0/1 | 0 | Última linha de tiles do mapa. 0 = como no original: a vista para no fundo do clip rect do mapa, e a última linha fica escondida; 1 = a vista pode descer até mostrá-la. |
-| `AutoOreRoute` | 0/1 | 1 | Rota de minério num clique (acréscimo deste porte): com caminhões vazios selecionados, o clique direito na doca de uma mina monta o ciclo até a fundição compatível disponível mais próxima (ver 5.23). 0 = só o comando de três cliques, como no original. Também se troca pelo jogo: a caixa **Auto Ore Route** no `GAME PREFERENCES` do menu e a linha de mesmo nome no `Game Preferences` da aba Options (ver 5.29). |
+| `AutoOreRoute` | 0/1 | 0 | Rota de minério num clique (acréscimo deste porte): com caminhões vazios selecionados, o clique da ordem (o esquerdo; o direito com `RightClickOrders`) na doca de uma mina monta o ciclo até a fundição compatível disponível mais próxima (ver 5.23). 0 = só o comando de três cliques, como no original (o padrão desde a 5.45; era 1). Também se troca pelo jogo: a caixa **Auto Ore Route** no `GAME PREFERENCES` do menu e a linha de mesmo nome no `Game Preferences` da aba Options (ver 5.29). |
 | `CommandDebug` | 0/1 | 0 | Diagnóstico (acréscimo deste porte): cada comando de prédio recusado — produzir, pesquisar, treinar, o repetido que o anel descarta — vira uma linha no registro de mensagens com o motivo (`not enough workers`, `needs 400 common ore`…). 0 = mudo, como no original. Também se troca pelo jogo: a caixa **Command Debug** no `GAME PREFERENCES` do menu e a linha de mesmo nome no `Game Preferences` da aba Options (ver 5.39). |
 | `ProductionQueue` | 0/1 | 0 | Fila de produção (acréscimo deste porte): cada clique num item da lista da fábrica soma +1 ao pedido (o número aparece na frente do item; clique direito tira 1), o `BUILD IT` manda o pedido para a fila e a fábrica produz um item atrás do outro; o clique que o minério não cobre não soma. 0 = um item por ordem, como no original. Também se troca pelo jogo: a caixa **Production Queue** no `GAME PREFERENCES` do menu e a linha de mesmo nome no `Game Preferences` da aba Options (ver 5.40). |
 | `RightClickOrders` | 0/1 | 0 | O esquema de mouse dos RTS modernos (veio do fork): o esquerdo só seleciona e o **direito** dá a ordem (o comando padrão da 5.42). 0 = como o original: o **esquerdo** faz tudo — com seleção, executa o comando padrão quando ele aceita o alvo, senão seleciona — e o direito cancela a mira e desseleciona. Também se troca pelo jogo: a caixa **Right-Click Orders** no `GAME PREFERENCES` do menu e a linha de mesmo nome na aba Options (ver 5.44). |
@@ -3397,6 +3397,17 @@ usar o botão da ordem do esquema em vigor, então os testes antigos de ordem
 valem nos dois. Mutações: o direito com mira sem desselecionar, o esquerdo
 sem o comando padrão, o direito sem desselecionar e a opção não lida no
 `&APPLY` — 4 de 4 pegas.
+
+## 5.45. Todas as opções do porte nascem desligadas: `AutoOreRoute` e `DemoCamera` em 0 (2026-11-19)
+
+Regra do usuário: *o padrão é sempre o comportamento do original* — toda
+evolução do porte é uma opção do `GAME PREFERENCES` que se liga. Das doze
+chaves extras, duas nasciam ligadas: `AutoOreRoute` (a rota de minério num
+clique, 5.23) e `DemoCamera` (a câmera que passeia no demo de atração). As
+duas passam a valer **0** quando o `OUTPOST2.INI` não as traz
+(`src/core/config.h` e os membros do `GameState`); quem já gravou um valor nas
+preferências continua com ele. O `--autoroutetest`, cujo assunto é a rota num
+clique, liga a opção explicitamente.
 
 ## 6. Build e execução
 

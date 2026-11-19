@@ -107,7 +107,9 @@
 > command and clears the selection. That is now the default; the fork's
 > modern scheme, left selects / right orders, is the port's
 > `[Game] RightClickOrders` key, with a check box in `GAME PREFERENCES` and a
-> line in the Options tab).
+> line in the Options tab) and **5.45** (every port option now defaults to
+> off, the original's behaviour: `AutoOreRoute` and `DemoCamera`, which used
+> to default to 1, now default to 0).
 > The recent
 > changes are summarised in
 > [README.EN.md](README.EN.md).
@@ -242,12 +244,12 @@ preferences screen; the original ignores keys it doesn't know.
 | `AILevel` | 0..3 | 0 (AUTO) | Forces the AI level in campaigns and colonies. AUTO = the original's behavior. **Does not apply in network play**, where difficulty is per player and comes from the lobby. |
 | `NightDarkness` | 0..100 | 100 | How much of the night darkening curve is applied (100 = the original, which takes full night to ~15% brightness; outside the units' light the terrain nearly vanishes — see 5.41 in the BR status). The default was 75 until 2026-11-19. |
 | `AudioVolume` | 0..100 | 50 | Master volume over the final mix (sounds and music). The original only has `MusicVol`/`SoundVol`, per channel and in 6 steps. |
-| `DemoCamera` | 0/1 | 1 | In the attract demo the camera tours the action spots (disaster, combat, units). 0 restores the original's static camera. |
+| `DemoCamera` | 0/1 | 0 | In the attract demo the camera tours the action spots (disaster, combat, units). 0 = the original's static camera (the default since 5.45; it was 1). |
 | `Fullscreen` | 0/1 | 1 | Opens fullscreen (no video mode change). Alt+Enter toggles at any time, and in game there is the **Screen Mode** radio pair at the end of the `PREFERENCES` list (see 5.8 in the BR status). |
 | `MenuSkin` | 0/1 | 0 | Menu style. 0 = the port's own look (dark-blue panels, main menu on the right); 1 = the original OP2 dialog skin (blueprint background, red frames, green text, art from `OP2SHRES.DLL`). |
 | `MapWrap` | 0/1 | 0 | Horizontal map wrap. 0 = as in the original: the view stops at the left/right edges of the map, and only "around the world" maps (512 tiles wide) wrap; 1 = every map wraps (the port's old behaviour). |
 | `ShowBottomRow` | 0/1 | 0 | Map's last tile row. 0 = as in the original: the view stops at the bottom of the map's clip rect, so the last row is hidden; 1 = the view can scroll down to show it. |
-| `AutoOreRoute` | 0/1 | 1 | One-click ore route (an addition of this port): with empty trucks selected, right-clicking a mine's dock builds the cycle to the nearest available compatible smelter (see 5.23 in the BR status). 0 = only the three-click command, as in the original. It can also be changed in game: the **Auto Ore Route** check box in the main menu's `GAME PREFERENCES`, and the line of the same name in the Options tab's `Game Preferences` (see 5.29). |
+| `AutoOreRoute` | 0/1 | 1 | One-click ore route (an addition of this port): with empty trucks selected, the order click (left; right with `RightClickOrders`) on a mine's dock builds the cycle to the nearest available compatible smelter (see 5.23 in the BR status). 0 = only the three-click command, as in the original (the default since 5.45; it was 1). It can also be changed in game: the **Auto Ore Route** check box in the main menu's `GAME PREFERENCES`, and the line of the same name in the Options tab's `Game Preferences` (see 5.29). |
 | `CommandDebug` | 0/1 | 0 | Diagnostics (an addition of this port): every refused building command — produce, research, train, the repeat the anti-duplicate ring drops — becomes a line in the message log with the reason (`not enough workers`, `needs 400 common ore`…). 0 = silent, as in the original. It can also be changed in game: the **Command Debug** check box in the main menu's `GAME PREFERENCES`, and the line of the same name in the Options tab's `Game Preferences` (see 5.39 in the BR status). |
 | `ProductionQueue` | 0/1 | 0 | Production queue (an addition of this port): each click on an item in a factory's list adds +1 to the order (the count shows in front of the item; right-click removes 1), `BUILD IT` sends the order to the queue, and the factory produces one item after another; a click the ore cannot cover does not add. 0 = one item per order, as in the original. It can also be changed in game: the **Production Queue** check box in the main menu's `GAME PREFERENCES`, and the line of the same name in the Options tab's `Game Preferences` (see 5.40 in the BR status). |
 | `RightClickOrders` | 0/1 | 0 | The modern RTS mouse scheme (from the fork): the left button only selects and the **right** button gives the order (the default command, 5.42). 0 = as in the original: the **left** button does it all — with a selection it runs the default command when it accepts the target, otherwise it selects — and the right button cancels the armed command and clears the selection. It can also be changed in game: the **Right-Click Orders** check box in the main menu's `GAME PREFERENCES`, and the line of the same name in the Options tab (see 5.44 in the BR status). |

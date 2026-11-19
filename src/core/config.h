@@ -97,7 +97,8 @@ struct GameSettings {
     // "DemoCamera": idem, so deste porte. 1 = no demo de atracao a camera
     // passeia pelos pontos de acao; 0 = fica parada onde o InitProc do ademo
     // a pos, que e o comportamento do original. Ver GameState::demoCameraTick.
-    int demoCamera = 1;
+    // Padrao 0, o original (5.45: toda evolucao do porte nasce desligada).
+    int demoCamera = 0;
     // "Fullscreen": idem, so deste porte. 1 = a janela abre em tela cheia
     // (FULLSCREEN_DESKTOP: sem troca de modo de video, a vista de 640x480
     // escalada mantendo a proporcao); 0 = janela. Alt+Enter alterna em
@@ -111,13 +112,14 @@ struct GameSettings {
     // background, red frames, green text -- see DialogSkin).
     int menuSkin = 0;
     // "AutoOreRoute": acrescimo DESTE porte, nao existe no original. 1 = o
-    // clique DIREITO na doca de uma mina, com caminhoes de carga vazios
+    // clique da ORDEM (o esquerdo; o direito com RightClickOrders) na doca de
+    // uma mina, com caminhoes de carga vazios
     // selecionados, monta a rota inteira sozinho: escolhe a fundicao
     // compativel mais proxima e manda o mesmo pacote 0x27 dos tres cliques.
-    // 0 = o clique direito so manda atracar, como no original. O comando de
-    // tres cliques (S&et an ore-hauling route) continua existindo nos dois
-    // casos. Ver op2::autoOreRoute.
-    int autoOreRoute = 1;
+    // 0 = o clique so manda atracar, como no original (o padrao desde a 5.45).
+    // O comando de tres cliques (S&et an ore-hauling route) continua
+    // existindo nos dois casos. Ver op2::autoOreRoute.
+    int autoOreRoute = 0;
     // "CommandDebug": acrescimo DESTE porte (5.39). 1 = cada comando de predio
     // recusado (produzir, pesquisar, treinar, o repetido do anel) vira uma linha
     // no registro de mensagens com o motivo. 0 = mudo, como no original.

@@ -41,6 +41,12 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   direito dá a ordem); agora o padrão é o do original, e o outro esquema virou
   a opção **Right-Click Orders** (preferências do menu e aba Options; ou
   `RightClickOrders=1` na seção `[Game]` do `OUTPOST2.INI`).
+- **Todas as opções do porte vêm desligadas.** O padrão é sempre o
+  comportamento do original, e cada evolução do porte é uma opção que se liga
+  no `GAME PREFERENCES`. Duas vinham ligadas e agora vêm desligadas: a rota de
+  minério num clique (**Auto Ore Route**) e a câmera que passeia no demo de
+  atração (**Demo Camera**). Quem já gravou um valor nas preferências continua
+  com ele.
 
 - **A noite como no original: a luz das unidades.** No original, à noite,
   cada veículo com os faróis acesos e cada prédio com energia abre um círculo
@@ -77,7 +83,7 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   A fila é só da interface: a partida em rede funciona como sempre, mas ela não
   é gravada no jogo salvo. Desligada (o padrão), é o jogo original.
 
-**Para quem acompanha o código:** seções 5.40 a 5.44 do PORT_STATUS; os modos
+**Para quem acompanha o código:** seções 5.40 a 5.45 do PORT_STATUS; os modos
 de teste `--prodqueuetest`, `--lighttest` e `--truckjamtest` (e o `--cursortest`
 ampliado); os módulos
 `src/game/production_queue.cpp` e `src/game/light_map.cpp`.
@@ -111,6 +117,12 @@ ampliado); os módulos
   the other scheme became the **Right-Click Orders** option (main menu
   preferences and the Options tab; or `RightClickOrders=1` in the `[Game]`
   section of `OUTPOST2.INI`).
+- **Every port option now defaults to off.** The default is always the
+  original's behaviour, and each of the port's additions is an option to
+  switch on in `GAME PREFERENCES`. Two used to default to on and now default
+  to off: the one-click ore route (**Auto Ore Route**) and the touring camera
+  of the attract demo (**Demo Camera**). Anyone who already saved a value in
+  the preferences keeps it.
 - **Night as in the original: the units' light.** In the original, at night,
   every vehicle with its headlights on and every powered building opens a
   circle of light in the dark, as large as its sight range, with a dotted
@@ -147,7 +159,7 @@ ampliado); os módulos
   The queue lives in the interface only: network games work as always, but it
   is not stored in saved games. Off (the default), it is the original game.
 
-**For those following the code:** sections 5.40 to 5.44 of PORT_STATUS; the
+**For those following the code:** sections 5.40 to 5.45 of PORT_STATUS; the
 `--prodqueuetest`, `--lighttest` and `--truckjamtest` test modes (and the
 extended `--cursortest`); the
 `src/game/production_queue.cpp` and `src/game/light_map.cpp` modules.

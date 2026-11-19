@@ -6580,6 +6580,7 @@ static int runAutoRouteTest(const std::string& mapName) {
     op2::GameState gs;
     if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
     gs.onActivate();
+    gs.debugAutoOreRoute(true);                  // o assunto do teste (padrao 0 desde a 5.45)
     op2::resetUnits();
 
     // Uma faixa livre e larga o bastante para tudo. O segundo cenario procura

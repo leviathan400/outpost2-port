@@ -256,6 +256,10 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
   The modern RTS scheme the port used (left selects, right orders) is still
   there: the **Right-Click Orders** option in the preferences and the Options
   tab.
+- **Every port option now defaults to off.** The default is always the
+  original game; the port's additions are switched on in `GAME PREFERENCES`.
+  The one-click ore route (**Auto Ore Route**) and the touring demo camera
+  (**Demo Camera**), which used to default to on, now default to off.
 - **Night as in the original: the units' light.** At night, every vehicle with
   its headlights on and every powered building opens a circle of light in the
   dark, as large as its sight range, with a dotted edge — the light moves with
