@@ -189,6 +189,7 @@ void GameSettings::loadFrom(const Config& cfg) {
     autoOreRoute      = cfg.getInt("Game", "AutoOreRoute", autoOreRoute);
     commandDebug      = cfg.getInt("Game", "CommandDebug", commandDebug);
     productionQueue   = cfg.getInt("Game", "ProductionQueue", productionQueue);
+    rightClickOrders  = cfg.getInt("Game", "RightClickOrders", rightClickOrders);
     showBottomRow     = cfg.getInt("Game", "ShowBottomRow", showBottomRow);
     name              = cfg.getString("Game", "Name", name);
 
@@ -222,6 +223,7 @@ void GameSettings::saveTo(Config& cfg) const {
     cfg.setInt("Game", "AutoOreRoute", autoOreRoute);
     cfg.setInt("Game", "CommandDebug", commandDebug);
     cfg.setInt("Game", "ProductionQueue", productionQueue);
+    cfg.setInt("Game", "RightClickOrders", rightClickOrders);
     cfg.setInt("Game", "ShowBottomRow", showBottomRow);
     cfg.setString("Game", "Name", name);
 

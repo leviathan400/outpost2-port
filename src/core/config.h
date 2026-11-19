@@ -126,6 +126,12 @@ struct GameSettings {
     // da lista de producao soma +1 ao pedido, o BUILD IT o manda para a fila da
     // fabrica, que produz um item atras do outro. 0 = como o original.
     int productionQueue = 0;
+    // "RightClickOrders": acrescimo DESTE porte (5.44), o esquema de mouse dos
+    // RTS modernos que o fork trouxe. 1 = o esquerdo so seleciona e o DIREITO
+    // da a ordem (o comando padrao). 0 = como o original (sub_41AAA0): o
+    // ESQUERDO faz tudo -- com selecao, executa o comando padrao se ele aceitar
+    // o alvo, senao seleciona -- e o direito cancela a mira e desseleciona.
+    int rightClickOrders = 0;
     // Fork: "MapWrap". 0 = like the original: the map view stops at the map's
     // left/right edges; only "around the world" maps (512 tiles wide) wrap.
     // 1 = every map wraps horizontally (the port's old behaviour).

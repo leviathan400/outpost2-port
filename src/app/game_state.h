@@ -171,6 +171,8 @@ private:
     int m_endPhase = 0;
     int m_pauseCount = 0;          // TFrame+0x1E0: as pausas empilhadas
     bool m_autoOreRoute = true;    // "AutoOreRoute" (so deste porte)
+    bool m_rightClickOrders = false; // "RightClickOrders" (idem, 5.44; 0 = mouse do original)
+    bool defaultCommandClick(int vx, int vy);
     uint32_t m_endWaitStart = 0;
     void beginGameEnd();
     void finishGameEnd();
@@ -390,6 +392,10 @@ public:
     // A camera vai antes para o tile, senao o clique cai fora da vista.
     void debugRightClickTile(Renderer& r, int tileX, int tileY);
     void debugAutoOreRoute(bool on) { m_autoOreRoute = on; }
+    void debugRightClickOrders(bool on) { m_rightClickOrders = on; }
+    bool debugRightClickOrdersOn() const { return m_rightClickOrders; }
+    int debugTargetCmd() const { return m_targetCmd; }
+    const std::vector<int>& debugSelection() const { return m_selected; }
     bool debugAutoOreRouteOn() const { return m_autoOreRoute; }
     bool debugMapWrapAll() const { return m_mapWrapAll; }
     bool debugShowBottomRowOn() const { return m_showBottomRow; }

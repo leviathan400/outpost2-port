@@ -139,6 +139,7 @@ preferências; o original ignora chaves que não conhece.
 | `AutoOreRoute` | 0/1 | 1 | Rota de minério num clique (acréscimo deste porte): com caminhões vazios selecionados, o clique direito na doca de uma mina monta o ciclo até a fundição compatível disponível mais próxima (ver 5.23). 0 = só o comando de três cliques, como no original. Também se troca pelo jogo: a caixa **Auto Ore Route** no `GAME PREFERENCES` do menu e a linha de mesmo nome no `Game Preferences` da aba Options (ver 5.29). |
 | `CommandDebug` | 0/1 | 0 | Diagnóstico (acréscimo deste porte): cada comando de prédio recusado — produzir, pesquisar, treinar, o repetido que o anel descarta — vira uma linha no registro de mensagens com o motivo (`not enough workers`, `needs 400 common ore`…). 0 = mudo, como no original. Também se troca pelo jogo: a caixa **Command Debug** no `GAME PREFERENCES` do menu e a linha de mesmo nome no `Game Preferences` da aba Options (ver 5.39). |
 | `ProductionQueue` | 0/1 | 0 | Fila de produção (acréscimo deste porte): cada clique num item da lista da fábrica soma +1 ao pedido (o número aparece na frente do item; clique direito tira 1), o `BUILD IT` manda o pedido para a fila e a fábrica produz um item atrás do outro; o clique que o minério não cobre não soma. 0 = um item por ordem, como no original. Também se troca pelo jogo: a caixa **Production Queue** no `GAME PREFERENCES` do menu e a linha de mesmo nome no `Game Preferences` da aba Options (ver 5.40). |
+| `RightClickOrders` | 0/1 | 0 | O esquema de mouse dos RTS modernos (veio do fork): o esquerdo só seleciona e o **direito** dá a ordem (o comando padrão da 5.42). 0 = como o original: o **esquerdo** faz tudo — com seleção, executa o comando padrão quando ele aceita o alvo, senão seleciona — e o direito cancela a mira e desseleciona. Também se troca pelo jogo: a caixa **Right-Click Orders** no `GAME PREFERENCES` do menu e a linha de mesmo nome na aba Options (ver 5.44). |
 
 Todas, menos `AILevel` dentro da partida, também se trocam pelas telas de
 preferências — ver 5.29.
@@ -2409,6 +2410,7 @@ estavam em tela nenhuma.
 | `NightDarkness` | **novo:** barra *Night Darkness* (1209, 0..100%) | **novo:** *Night Darkness*, `L&ESS`/`&MORE` de 5 em 5% |
 | `CommandDebug` | **novo (5.39):** caixa *Command Debug* (1210) | **novo (5.39):** *Command Debug* `On`/`Off` |
 | `ProductionQueue` | **novo (5.40):** caixa *Production Queue* (1211) | **novo (5.40):** *Production Queue* `On`/`Off` |
+| `RightClickOrders` | **novo (5.44):** caixa *Right-Click Orders* (1212) | **novo (5.44):** *Right-Click Orders* `On`/`Off` |
 
 **No menu principal**, o diálogo ficou **160 px mais largo** (360 → 520;
 `kPrX` 140 → 60) e ganhou uma **coluna à direita**, *"Port extras:"*, que
@@ -3256,8 +3258,9 @@ aceitar dá o cursor (`vt[9]`); nenhum aceitando, a seta. O clique
 (`sub_455350`) executa esse mesmo comando.
 
 **No porte:** `uiDefaultCommand` (`src/game/commands.cpp`) faz a escolha, o
-cursor sem comando armado passa a segui-la, e o **clique direito** — que no
-porte é a ação padrão (ver 5.32, a seleção) — executa o mesmo comando: sobre o
+cursor sem comando armado passa a segui-la, e o clique da ordem — o
+**esquerdo**, como no original, ou o **direito** com `RightClickOrders` (5.44)
+— executa o mesmo comando: sobre o
 inimigo **ataca** (antes só movia até ele), com um Spider sobre um inimigo
 paralisado **reprograma**, sobre uma unidade sua **não faz nada** (a seta
 avisa), e no chão ou na doca move/atraca. O atalho da rota de minério
@@ -3337,6 +3340,63 @@ esperando bloqueando, o parado sem desvio, o desvio sem devolver o ponto e sem
 a troca de lugar — 4 de 4 pegas.
 
 ---
+
+## 5.44. O mouse do original: o esquerdo faz tudo (`RightClickOrders`, opção do porte) (2026-11-19)
+
+Pergunta do usuário: *como é a movimentação no original, com o botão direito
+ou o esquerdo?* No original, **o esquerdo faz tudo**. O porte usava o esquema
+dos RTS modernos que veio do fork (o esquerdo só seleciona, o direito dá a
+ordem). Agora o padrão é o do original, e o esquema do fork virou opção.
+
+**O original** (`sub_41AAA0`, o tratador de mouse da vista):
+
+- **`WM_LBUTTONDOWN`** com um comando armado — estado 3, o que inclui o
+  **comando padrão** composto da 5.42 quando há seleção e nada foi escolhido
+  no painel: pergunta o `vt[4]` do comando no ponto; aceitando, guarda o ponto
+  e executa (`vt[3]`). Não aceitando, um comando escolhido no painel não faz
+  nada; o padrão (`[esi+30h]`) cai na **seleção** da unidade sob o ponteiro.
+  Com `MK_SHIFT` o comando é pulado e o clique vai direto para a seleção (já
+  portado, 5.32);
+- **`WM_RBUTTONDOWN`** (caso 516): cancela o comando armado (`vt[6]`) e **zera
+  a seleção** (`dword_5471D0 = 0`), tudo no mesmo clique.
+
+Ou seja: com unidades selecionadas, o clique esquerdo no chão move, no inimigo
+ataca, na doca atraca e numa unidade sua a seleciona; o direito desseleciona.
+A **caixa** de seleção só começa no caminho da seleção quando não há unidade
+sob o clique (`loc_41B174`: guarda o ponto e faz o SetCapture) — com unidades
+selecionadas o comando padrão aceita o chão antes, e o arrasto vira ordem de
+mover. Para traçar uma caixa nova, desseleciona-se antes com o direito.
+
+**No porte:**
+
+- `GameState::defaultCommandClick` executa o comando padrão no ponto (a rota de
+  minério num clique, `AutoOreRoute`, vem antes) e diz se algum aceitou;
+- **`RightClickOrders=0`** (o padrão, o original): o esquerdo sem Ctrl/Shift e
+  sem mira chama o `defaultCommandClick`; se nenhum aceitar, segue para a
+  seleção de sempre (clique ou caixa). O direito desseleciona; com mira, a
+  cancela **e** desseleciona;
+- **`RightClickOrders=1`** (o esquema do fork): o esquerdo só seleciona, o
+  direito executa o comando padrão e, com mira, só a cancela.
+
+A chave tem caixa no `GAME PREFERENCES` (*Right-Click Orders*, 1212 — as oito
+caixas da coluna dos extras passaram a 18 px, de +62 a +188, para caber antes
+do rótulo da noite) e a linha *Right-Click Orders* na aba Options; vale na
+hora, no `&APPLY`.
+
+**Teste:** o `--cursortest` ganhou 8 casos (33 no total): com a opção, o
+esquerdo no chão não dá ordem; sem ela, o esquerdo no inimigo ataca, no chão
+move (e a seleção fica), numa unidade sua a seleciona sem dar ordem à
+anterior, o direito desseleciona, o direito com mira cancela e desseleciona,
+e o esquerdo sem seleção não faz nada. O `--selecttest` roda os casos da
+caixa com a opção ligada e ganhou 4 do original: com seleção, o arrasto no
+chão não faz caixa e manda mover; o direito desseleciona; e aí a caixa marca.
+O `--optmenutest` confere a linha, o
+clique, o `&APPLY` gravando `RightClickOrders=1` e valendo na hora; o
+`--uitest` confere a caixa 1212. O `debugRightClickTile` dos testes passou a
+usar o botão da ordem do esquema em vigor, então os testes antigos de ordem
+valem nos dois. Mutações: o direito com mira sem desselecionar, o esquerdo
+sem o comando padrão, o direito sem desselecionar e a opção não lida no
+`&APPLY` — 4 de 4 pegas.
 
 ## 6. Build e execução
 

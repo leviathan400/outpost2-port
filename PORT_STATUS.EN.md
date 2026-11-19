@@ -100,7 +100,14 @@
 > runs it: it attacks the enemy under the pointer) and **5.43** (ore trucks
 > jamming at the dock: route trucks were always impassable, `sub_44BD60`; the
 > push detour overwrote a visited waypoint, `sub_44BFD0`, which broke looping
-> routes; and in a dense crowd two head-on route trucks now swap places).
+> routes; and in a dense crowd two head-on route trucks now swap places)
+> and **5.44** (the original's mouse, `sub_41AAA0`: the LEFT button does it
+> all — with a selection it runs the default command when it accepts the
+> target, otherwise it selects — and the right button cancels the armed
+> command and clears the selection. That is now the default; the fork's
+> modern scheme, left selects / right orders, is the port's
+> `[Game] RightClickOrders` key, with a check box in `GAME PREFERENCES` and a
+> line in the Options tab).
 > The recent
 > changes are summarised in
 > [README.EN.md](README.EN.md).
@@ -243,6 +250,7 @@ preferences screen; the original ignores keys it doesn't know.
 | `AutoOreRoute` | 0/1 | 1 | One-click ore route (an addition of this port): with empty trucks selected, right-clicking a mine's dock builds the cycle to the nearest available compatible smelter (see 5.23 in the BR status). 0 = only the three-click command, as in the original. It can also be changed in game: the **Auto Ore Route** check box in the main menu's `GAME PREFERENCES`, and the line of the same name in the Options tab's `Game Preferences` (see 5.29). |
 | `CommandDebug` | 0/1 | 0 | Diagnostics (an addition of this port): every refused building command — produce, research, train, the repeat the anti-duplicate ring drops — becomes a line in the message log with the reason (`not enough workers`, `needs 400 common ore`…). 0 = silent, as in the original. It can also be changed in game: the **Command Debug** check box in the main menu's `GAME PREFERENCES`, and the line of the same name in the Options tab's `Game Preferences` (see 5.39 in the BR status). |
 | `ProductionQueue` | 0/1 | 0 | Production queue (an addition of this port): each click on an item in a factory's list adds +1 to the order (the count shows in front of the item; right-click removes 1), `BUILD IT` sends the order to the queue, and the factory produces one item after another; a click the ore cannot cover does not add. 0 = one item per order, as in the original. It can also be changed in game: the **Production Queue** check box in the main menu's `GAME PREFERENCES`, and the line of the same name in the Options tab's `Game Preferences` (see 5.40 in the BR status). |
+| `RightClickOrders` | 0/1 | 0 | The modern RTS mouse scheme (from the fork): the left button only selects and the **right** button gives the order (the default command, 5.42). 0 = as in the original: the **left** button does it all — with a selection it runs the default command when it accepts the target, otherwise it selects — and the right button cancels the armed command and clears the selection. It can also be changed in game: the **Right-Click Orders** check box in the main menu's `GAME PREFERENCES`, and the line of the same name in the Options tab (see 5.44 in the BR status). |
 
 All of them can also be changed on the preferences screens — see 5.29 in the
 BR status.

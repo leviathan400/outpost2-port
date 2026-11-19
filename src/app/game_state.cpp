@@ -97,6 +97,7 @@ void GameState::loadSettings() {
     m_demoCam = gs.demoCamera != 0;                    // "DemoCamera" (idem)
     m_mapWrapAll = gs.mapWrap != 0;                    // "MapWrap" (fork)
     m_autoOreRoute = gs.autoOreRoute != 0;             // "AutoOreRoute" (so deste porte)
+    m_rightClickOrders = gs.rightClickOrders != 0;     // "RightClickOrders" (idem, 5.44)
     setCommandDebug(gs.commandDebug != 0);             // "CommandDebug" (idem, 5.39)
     setProductionQueue(gs.productionQueue != 0);       // "ProductionQueue" (idem, 5.40)
     m_showBottomRow = gs.showBottomRow != 0;           // "ShowBottomRow" (fork)
@@ -1952,12 +1953,16 @@ void GameState::debugRightClickTile(Renderer& r, int tileX, int tileY) {
     const int vx = tileX * 32 + 16 - m_camX, vy = tileY * 32 + 16 - m_camY;
     int sx = 0, sy = 0;
     r.nativeToScreen(vx + kViewX, vy + kViewY, sx, sy);
+    // O clique da ORDEM no esquema em vigor (5.44): o direito com
+    // RightClickOrders; sem ela, o esquerdo, como no original (desce e sobe,
+    // para fechar a selecao se o comando padrao nao aceitar o alvo).
     SDL_Event ev{};
     ev.type = SDL_MOUSEBUTTONDOWN;
-    ev.button.button = SDL_BUTTON_RIGHT;
+    ev.button.button = m_rightClickOrders ? SDL_BUTTON_RIGHT : SDL_BUTTON_LEFT;
     ev.button.clicks = 1;
     ev.button.x = sx; ev.button.y = sy;
     handleEvent(r, ev);
+    if (!m_rightClickOrders) { SDL_Event u = ev; u.type = SDL_MOUSEBUTTONUP; handleEvent(r, u); }
 }
 
 // ---- A praga (Blight) -------------------------------------------------------
@@ -2195,6 +2200,21 @@ void GameState::selectBox(int x0, int y0, int x1, int y1, bool additive) {
     // sub_41AAA0: 1 unidade → som dela (desc+0x1F0); várias → 0x55.
     if (m_selected.size() == 1) soundPlay(unitSelectSound(g_units[m_selected[0]].type));
     else if (!m_selected.empty()) soundPlay(0x55);
+}
+
+// O COMANDO PADRAO no ponto da vista (sub_455350): a rota de minerio num
+// clique (AutoOreRoute) vem antes; depois o primeiro de atacar, reprogramar e
+// mover/atracar que aceitar o alvo. Devolve se algum aceitou -- no esquema do
+// original o clique esquerdo que nenhum aceita cai na selecao.
+bool GameState::defaultCommandClick(int vx, int vy) {
+    if (m_selected.empty() || !g_gameMap.ok()) return false;
+    const int tileX = ((m_camX + vx) / 32) & (g_gameMap.width() - 1), tileY = (m_camY + vy) / 32;
+    uiSetCursorPixel((m_camX + vx) & (g_gameMap.width() * 32 - 1), m_camY + vy);
+    if (autoRouteClick(tileX, tileY)) return true;
+    const int c = uiDefaultCommand(m_selected, tileX, tileY);
+    if (c < 0) return false;
+    uiCommandTarget(c, m_selected, tileX, tileY);
+    return true;
 }
 
 void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
@@ -2506,9 +2526,21 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
                 m_targetCmd = -1;                            // Patrulhar: 2 cliques
         } else if (e.button.button == SDL_BUTTON_RIGHT && m_targetCmd >= 0) {
             m_targetCmd = -1;                                // cancela a mira
+            // sub_41AAA0 caso 516 (WM_RBUTTONDOWN): no original o direito
+            // cancela o comando E zera a selecao (dword_5471D0 = 0).
+            if (!m_rightClickOrders && inView) m_selected.clear();
+        } else if (e.button.button == SDL_BUTTON_LEFT && inView && !m_rightClickOrders &&
+                   defaultCommandClick(vx, vy)) {
+            // Mouse do original (5.44): com selecao, o ESQUERDO executa o
+            // comando padrao quando ele aceita o alvo (sub_41AAA0, estado 3:
+            // vt[4] e vt[3] do comando); nao aceitando ([esi+30h] do padrao),
+            // o clique segue para a selecao, no ramo de baixo.
         } else if (e.button.button == SDL_BUTTON_LEFT && inView) {
             m_dragging = true; m_dragSX = vx; m_dragSY = vy;
             m_dragShift = false; m_dragButton = SDL_BUTTON_LEFT;
+        } else if (e.button.button == SDL_BUTTON_RIGHT && inView && !m_selected.empty() && !m_rightClickOrders) {
+            // Mouse do original: o direito so DESSELECIONA (caso 516).
+            m_selected.clear();
         } else if (e.button.button == SDL_BUTTON_RIGHT && inView && !m_selected.empty()) {
             // Mover os SELECIONADOS para o tile clicado (pipeline real + espiral).
             // Fork: (1) o tile vem das coordenadas DA VISTA (vx/vy), não das do
@@ -2517,16 +2549,11 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
             // caminho do botão MOVE (sub_451280 em uiCommandTarget): clicar na
             // doca de um prédio com um veículo que atraca manda o pacote de
             // doca (3, ou 4 na garagem de Eden), não um "mover" simples.
-            int tileX = (m_camX + vx) / 32, tileY = (m_camY + vy) / 32;
-            if (g_gameMap.ok()) tileX &= (g_gameMap.width() - 1);
-            uiSetCursorPixel(g_gameMap.ok() ? (m_camX + vx) & (g_gameMap.width() * 32 - 1) : m_camX + vx, m_camY + vy);
             // O comando padrao do original (sub_455350, 5.42): atacar o inimigo
             // sob o ponteiro, reprogramar (Spider) ou mover/atracar -- o mesmo
-            // que o cursor mostra. Nenhum aceitando, nada.
-            if (!autoRouteClick(tileX, tileY)) {
-                const int c = uiDefaultCommand(m_selected, tileX, tileY);
-                if (c >= 0) uiCommandTarget(c, m_selected, tileX, tileY);
-            }
+            // que o cursor mostra. Nenhum aceitando, nada. So com a opcao
+            // RightClickOrders (5.44); sem ela, este e o papel do esquerdo.
+            defaultCommandClick(vx, vy);
         }
     }
     if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT && m_miniDrag) {

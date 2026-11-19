@@ -29,8 +29,18 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   fazer: sobre um inimigo, o de **ataque**; sobre o chão, o de mover; sobre a
   doca de um prédio seu, o de atracar; com um Spider sobre um inimigo
   paralisado, o de reprogramar; sobre uma unidade sua, a seta. E o clique
-  direito faz exatamente isso — sobre o inimigo ele agora **ataca** (antes só
-  movia até ele).
+  faz exatamente isso — sobre o inimigo ele agora **ataca** (antes só movia
+  até ele).
+- **O mouse como no original: o botão esquerdo faz tudo.** No original, com
+  unidades selecionadas, o clique **esquerdo** dá a ordem (move, ataca,
+  atraca, reprograma — o que o cursor mostrar) e, numa unidade sua, a
+  seleciona; o **direito** desseleciona e cancela o comando escolhido (para
+  traçar uma caixa nova com unidades selecionadas, desseleciona-se antes com
+  o direito). O porte
+  usava o esquema dos RTS modernos, herdado do fork (o esquerdo seleciona, o
+  direito dá a ordem); agora o padrão é o do original, e o outro esquema virou
+  a opção **Right-Click Orders** (preferências do menu e aba Options; ou
+  `RightClickOrders=1` na seção `[Game]` do `OUTPOST2.INI`).
 
 - **A noite como no original: a luz das unidades.** No original, à noite,
   cada veículo com os faróis acesos e cada prédio com energia abre um círculo
@@ -67,7 +77,7 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   A fila é só da interface: a partida em rede funciona como sempre, mas ela não
   é gravada no jogo salvo. Desligada (o padrão), é o jogo original.
 
-**Para quem acompanha o código:** seções 5.40 a 5.43 do PORT_STATUS; os modos
+**Para quem acompanha o código:** seções 5.40 a 5.44 do PORT_STATUS; os modos
 de teste `--prodqueuetest`, `--lighttest` e `--truckjamtest` (e o `--cursortest`
 ampliado); os módulos
 `src/game/production_queue.cpp` e `src/game/light_map.cpp`.
@@ -89,8 +99,18 @@ ampliado); os módulos
   selected and no command chosen, the cursor shows what the click will do:
   over an enemy, the **attack** cursor; over the ground, move; over one of your
   buildings' dock, dock; with a Spider over a paralysed enemy, reprogram; over
-  one of your own units, the arrow. And the right click does exactly that —
-  over an enemy it now **attacks** (it used to just move to it).
+  one of your own units, the arrow. And the click does exactly that — over an
+  enemy it now **attacks** (it used to just move to it).
+- **The mouse as in the original: the left button does it all.** In the
+  original, with units selected, the **left** click gives the order (move,
+  attack, dock, reprogram — whatever the cursor shows) and, on one of your
+  units, selects it; the **right** button clears the selection and cancels
+  the chosen command (to drag a new box while units are selected, clear the
+  selection with the right button first). The port used the modern RTS scheme inherited from the
+  fork (left selects, right orders); the original's is now the default, and
+  the other scheme became the **Right-Click Orders** option (main menu
+  preferences and the Options tab; or `RightClickOrders=1` in the `[Game]`
+  section of `OUTPOST2.INI`).
 - **Night as in the original: the units' light.** In the original, at night,
   every vehicle with its headlights on and every powered building opens a
   circle of light in the dark, as large as its sight range, with a dotted
@@ -127,7 +147,7 @@ ampliado); os módulos
   The queue lives in the interface only: network games work as always, but it
   is not stored in saved games. Off (the default), it is the original game.
 
-**For those following the code:** sections 5.40 to 5.43 of PORT_STATUS; the
+**For those following the code:** sections 5.40 to 5.44 of PORT_STATUS; the
 `--prodqueuetest`, `--lighttest` and `--truckjamtest` test modes (and the
 extended `--cursortest`); the
 `src/game/production_queue.cpp` and `src/game/light_map.cpp` modules.

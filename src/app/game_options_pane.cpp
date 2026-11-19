@@ -168,6 +168,8 @@ std::vector<std::string> GameOptionsPane::items() const {
     add("Command Debug<R>%s", onOff(g_opt.commandDebug));
     // Extra deste porte (5.40): a fila de producao.
     add("Production Queue<R>%s", onOff(g_opt.productionQueue));
+    // Extra deste porte (5.44): o direito da a ordem, o esquerdo so seleciona.
+    add("Right-Click Orders<R>%s", onOff(g_opt.rightClickOrders));
     return out;
 }
 
@@ -246,6 +248,7 @@ void GameOptionsPane::bump(int i, int dir) {
     case OPT_BOTTOM_ROW:    g_opt.showBottomRow = !g_opt.showBottomRow; break;
     case OPT_CMD_DEBUG:     g_opt.commandDebug = !g_opt.commandDebug; break;
     case OPT_PROD_QUEUE:    g_opt.productionQueue = !g_opt.productionQueue; break;
+    case OPT_RIGHT_CLICK:   g_opt.rightClickOrders = !g_opt.rightClickOrders; break;
     default: return;
     }
     clampAll();

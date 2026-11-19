@@ -68,6 +68,8 @@ public:
         OPT_CMD_DEBUG,
         // A fila de producao ([Game] ProductionQueue, 5.40).
         OPT_PROD_QUEUE,
+        // O clique direito dando ordens ([Game] RightClickOrders, 5.44).
+        OPT_RIGHT_CLICK,
         OPT_COUNT
     };
 

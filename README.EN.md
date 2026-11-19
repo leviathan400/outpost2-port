@@ -172,12 +172,13 @@ outpost2_modern.exe                      # main menu
 outpost2_modern.exe --game eden01.map    # opens a map directly
 ```
 
-The game's `OUTPOST2.INI` file is respected. The port adds eleven keys the
+The game's `OUTPOST2.INI` file is respected. The port adds twelve keys the
 original doesn't have — AI level, night darkness, volume, demo camera,
 fullscreen, the menu skin (`MenuSkin`), horizontal map wrap (`MapWrap`), the
 map's bottom row (`ShowBottomRow`), the one-click ore route
-(`AutoOreRoute`), refused-command diagnostics (`CommandDebug`) and the
-production queue (`ProductionQueue`); they are documented in `PORT_STATUS.EN.md`.
+(`AutoOreRoute`), refused-command diagnostics (`CommandDebug`), the
+production queue (`ProductionQueue`) and right-click orders
+(`RightClickOrders`); they are documented in `PORT_STATUS.EN.md`.
 
 There are **124 command-line modes** for tests and captures, among them a
 regression battery (`--savetest` proves save/reload determinism). The list is
@@ -244,8 +245,17 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
   on a single smelter.
 - **The attack cursor as in the original.** With units selected, hovering an
   enemy shows the attack cursor (the move cursor over the ground, the dock
-  cursor over a dock), and the right click does what the cursor shows: over an
+  cursor over a dock), and the click does what the cursor shows: over an
   enemy, it **attacks**.
+- **The mouse as in the original: the left button does it all.** With units
+  selected, the left click gives the order — on the ground it moves, on an
+  enemy it attacks, on a dock it docks — and on one of your units it selects
+  it; the right button clears the selection (and cancels the chosen command)
+  — to drag a new selection box, clear the selection with the right button
+  first, as there.
+  The modern RTS scheme the port used (left selects, right orders) is still
+  there: the **Right-Click Orders** option in the preferences and the Options
+  tab.
 - **Night as in the original: the units' light.** At night, every vehicle with
   its headlights on and every powered building opens a circle of light in the
   dark, as large as its sight range, with a dotted edge — the light moves with

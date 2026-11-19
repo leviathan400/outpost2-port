@@ -173,12 +173,13 @@ outpost2_modern.exe                      # menu principal
 outpost2_modern.exe --game eden01.map    # abre um mapa direto
 ```
 
-O arquivo `OUTPOST2.INI` do jogo é respeitado. O porte acrescenta onze chaves
+O arquivo `OUTPOST2.INI` do jogo é respeitado. O porte acrescenta doze chaves
 que o original não tem — nível da IA, escuridão da noite, volume, câmera do
 demo, tela cheia, a pele dos menus (`MenuSkin`), a volta horizontal do mapa
 (`MapWrap`), a última linha do mapa (`ShowBottomRow`), a rota de minério num
-clique (`AutoOreRoute`), o diagnóstico de comando recusado (`CommandDebug`) e a
-fila de produção (`ProductionQueue`); estão documentadas no `PORT_STATUS.BR.md`.
+clique (`AutoOreRoute`), o diagnóstico de comando recusado (`CommandDebug`), a
+fila de produção (`ProductionQueue`) e o clique direito dando ordens
+(`RightClickOrders`); estão documentadas no `PORT_STATUS.BR.md`.
 
 Há **124 modos de linha de comando** para testes e capturas, entre eles uma
 bateria de regressão (`--savetest` prova o determinismo de salvar/recarregar).
@@ -246,8 +247,15 @@ cursores `.ANI`.
   até 25 caminhões numa só fundição.
 - **O cursor de ataque como no original.** Com unidades selecionadas, passar o
   mouse sobre um inimigo mostra o cursor de ataque (sobre o chão, o de mover;
-  sobre a doca, o de atracar), e o clique direito faz o que o cursor mostra:
-  sobre o inimigo, **ataca**.
+  sobre a doca, o de atracar), e o clique faz o que o cursor mostra: sobre o
+  inimigo, **ataca**.
+- **O mouse como no original: o botão esquerdo faz tudo.** Com unidades
+  selecionadas, o clique esquerdo dá a ordem — no chão move, no inimigo ataca,
+  na doca atraca — e numa unidade sua a seleciona; o direito desseleciona (e
+  cancela o comando escolhido) — para traçar uma caixa nova, desselecione
+  antes com o direito, como lá. O esquema dos RTS modernos que o porte usava
+  (o esquerdo seleciona, o direito dá a ordem) continua disponível: opção
+  **Right-Click Orders** nas preferências e na aba Options.
 - **A noite como no original: a luz das unidades.** À noite, cada veículo com
   os faróis acesos e cada prédio com energia abre um círculo de luz no escuro,
   do tamanho do alcance de visão dele, com a borda pontilhada — a luz anda com

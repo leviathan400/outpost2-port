@@ -7269,6 +7269,7 @@ static int runOptMenuTest(const std::string& dll) {
         poeK("AudioVolume", 50); poeK("NightDarkness", 50); poeK("MapWrap", 0); poeK("ShowBottomRow", 0);
         poeK("CommandDebug", 0);
         poeK("ProductionQueue", 0);
+        poeK("RightClickOrders", 0);
         gs.debugOptionsScreen(1);
         texto("a linha do volume mestre", gs.debugOptItem(GOP::OPT_AUDIO_VOL), "Audio Volume\n\tMaster Volume:<R>50%");
         texto("a linha da noite", gs.debugOptItem(GOP::OPT_NIGHT), "Night Darkness\n\tNight Darkness:<R>50%");
@@ -7292,6 +7293,10 @@ static int runOptMenuTest(const std::string& dll) {
         texto("a linha da fila de producao", gs.debugOptItem(GOP::OPT_PROD_QUEUE), "Production Queue<R>Off");
         gs.debugOptRow(GOP::OPT_PROD_QUEUE);
         texto("o clique liga a fila", gs.debugOptItem(GOP::OPT_PROD_QUEUE), "Production Queue<R>On");
+        texto("a linha do clique direito", gs.debugOptItem(GOP::OPT_RIGHT_CLICK), "Right-Click Orders<R>Off");
+        gs.debugOptRow(GOP::OPT_RIGHT_CLICK);
+        texto("o clique liga o direito dando ordens", gs.debugOptItem(GOP::OPT_RIGHT_CLICK), "Right-Click Orders<R>On");
+        casos.push_back({"o mouse do original vale antes do &APPLY", gs.debugRightClickOrdersOn() ? 1 : 0, 0});
         texto("o clique liga o diagnostico", gs.debugOptItem(GOP::OPT_CMD_DEBUG), "Command Debug<R>On");
         casos.push_back({"nada disso vale antes do &APPLY",
                          (op2::nightDarkness() == 50 && !gs.debugMapWrapAll() && !gs.debugShowBottomRowOn() &&
@@ -7305,6 +7310,8 @@ static int runOptMenuTest(const std::string& dll) {
         casos.push_back({"... e o diagnostico liga na hora", op2::commandDebug() ? 1 : 0, 1});
         casos.push_back({"... ProductionQueue=1", leK("ProductionQueue"), 1});
         casos.push_back({"... e a fila liga na hora", op2::productionQueueOn() ? 1 : 0, 1});
+        casos.push_back({"... RightClickOrders=1", leK("RightClickOrders"), 1});
+        casos.push_back({"... e o direito passa a dar ordens na hora", gs.debugRightClickOrdersOn() ? 1 : 0, 1});
         casos.push_back({"e o jogo usa na hora: a noite", op2::nightDarkness(), 60});
         casos.push_back({"... o volume mestre", op2::soundMasterVolume(), 5});
         casos.push_back({"... a volta e a ultima linha",
@@ -8522,7 +8529,10 @@ static int runSelectTest(const std::string& mapName) {
         clica(cx(8), cy, SDL_BUTTON_LEFT, false);
         casos.push_back({"clique simples troca a selecao", sel({L2}), 1});
 
-        // A caixa: sem Shift substitui; com Shift soma, sem repetir.
+        // A caixa: sem Shift substitui; com Shift soma, sem repetir. Com o
+        // mouse do fork (RightClickOrders=1, 5.44): no do original, com
+        // selecao, o esquerdo no chao e ORDEM -- ver os casos do fim.
+        gs.debugRightClickOrders(true);
         arrasta(cx(6) - 24, cy - 24, cx(8) + 24, cy + 24, SDL_BUTTON_LEFT, false);
         casos.push_back({"caixa simples marca L1 e L2", sel({L1, L2}), 1});
         arrasta(cx(10) - 24, cy - 24, cx(10) + 24, cy + 24, SDL_BUTTON_LEFT, false);
@@ -8549,6 +8559,21 @@ static int runSelectTest(const std::string& mapName) {
         arrasta(cx(6) - 24, cy - 24, cx(10) + 24, cy + 24, SDL_BUTTON_LEFT, false);
         casos.push_back({"EMP: a caixa o deixa de fora", sel({L1, L3}), 1});
         op2::g_units[L2].field22 = 0;
+
+        // O mouse do ORIGINAL (padrao, 5.44): a caixa so comeca no caminho da
+        // selecao (sub_41AAA0, loc_41B174); com unidades selecionadas, o
+        // comando padrao aceita o chao antes -- o arrasto vira ordem de mover
+        // e a selecao fica. Desselecionar com o direito libera a caixa.
+        gs.debugRightClickOrders(false);
+        clica(cx(8), cy, SDL_BUTTON_LEFT, false);              // so o L2
+        op2::g_units[L2].action = 0;
+        arrasta(cx(6) - 24, cy - 24, cx(10) + 24, cy + 24, SDL_BUTTON_LEFT, false);
+        casos.push_back({"original: com selecao, o arrasto no chao nao faz caixa", sel({L2}), 1});
+        casos.push_back({"... e manda mover (2)", op2::g_units[L2].action, op2::CMD_MOVE});
+        clica(cx(6) - 24, cy - 24, SDL_BUTTON_RIGHT, false);
+        casos.push_back({"original: o direito desseleciona", gs.debugSelectedCount(), 0});
+        arrasta(cx(6) - 24, cy - 24, cx(10) + 24, cy + 24, SDL_BUTTON_LEFT, false);
+        casos.push_back({"... e ai a caixa marca os tres", sel({L1, L2, L3}), 1});
     }
 
     int ruins = 0;
@@ -8725,7 +8750,9 @@ static int runCursorTest(const std::string& mapName) {
     op2::g_units[ini.id()].flags |= 0x80000u;
     casos.push_back({"Spider, inimigo com EMP: reprog", emTile(lx + 4, ly, -1), op2::CUR_REPROG});
     op2::g_units[ini.id()].flags &= ~0x80000u;
-    // O clique direito: atacar o inimigo, nada sobre unidade minha, mover no chao.
+    // O clique direito COM RightClickOrders (5.44): atacar o inimigo, nada
+    // sobre unidade minha, mover no chao.
+    gs.debugRightClickOrders(true);
     gs.debugSetSelection({meu.id()});
     auto direito = [&](int tx, int ty) {
         gs.debugMouse(renderer, (tx << 5) + 16, (ty << 5) + 16, SDL_BUTTON_RIGHT, true, false);
@@ -8738,6 +8765,41 @@ static int runCursorTest(const std::string& mapName) {
     casos.push_back({"direito sobre o inimigo: ataca (0x24)", op2::g_units[meu.id()].action, op2::CMD_ATTACK});
     direito(lx, ly + 1);
     casos.push_back({"direito no chao: move (2)", op2::g_units[meu.id()].action, op2::CMD_MOVE});
+    // ... e o esquerdo, com a opcao, so seleciona: no chao nao da ordem.
+    op2::g_units[meu.id()].action = 0;
+    auto esquerdo = [&](int tx, int ty) {
+        gs.debugMouse(renderer, (tx << 5) + 16, (ty << 5) + 16, SDL_BUTTON_LEFT, true, false);
+        gs.debugMouse(renderer, (tx << 5) + 16, (ty << 5) + 16, SDL_BUTTON_LEFT, false, false);
+    };
+    esquerdo(lx, ly + 1);
+    casos.push_back({"opcao ligada, esquerdo no chao: sem ordem", op2::g_units[meu.id()].action, 0});
+
+    // O MOUSE DO ORIGINAL (padrao, sub_41AAA0): o esquerdo faz tudo e o
+    // direito desseleciona.
+    gs.debugRightClickOrders(false);
+    gs.debugSetSelection({meu.id()});
+    op2::g_units[meu.id()].action = 0;
+    esquerdo(lx + 4, ly);
+    casos.push_back({"original, esquerdo no inimigo: ataca (0x24)", op2::g_units[meu.id()].action, op2::CMD_ATTACK});
+    esquerdo(lx, ly + 1);
+    casos.push_back({"original, esquerdo no chao: move (2)", op2::g_units[meu.id()].action, op2::CMD_MOVE});
+    casos.push_back({"... e a selecao fica", (long long)gs.debugSelection().size(), 1});
+    op2::g_units[meu.id()].action = 0;
+    esquerdo(lx + 2, ly + 2);                                 // a outra unidade minha
+    casos.push_back({"original, esquerdo na unidade minha: seleciona ela",
+                     gs.debugSelection().size() == 1 && gs.debugSelection()[0] == meu2.id() ? 1 : 0, 1});
+    casos.push_back({"... sem dar ordem a anterior", op2::g_units[meu.id()].action, 0});
+    direito(lx, ly + 1);
+    casos.push_back({"original, direito: desseleciona", (long long)gs.debugSelection().size(), 0});
+    // Com um comando armado, o direito cancela E desseleciona (caso 516).
+    gs.debugSetSelection({meu.id()});
+    gs.debugCursor(0, 0, op2::UC_MOVE);
+    direito(lx, ly + 1);
+    casos.push_back({"original, direito com mira: cancela", gs.debugTargetCmd(), -1});
+    casos.push_back({"... e desseleciona", (long long)gs.debugSelection().size(), 0});
+    // Sem nada selecionado, o esquerdo no chao so seleciona (nada).
+    esquerdo(lx, ly + 1);
+    casos.push_back({"original, esquerdo sem selecao: nada", (long long)gs.debugSelection().size(), 0});
     // Selecao VELHA (ids fora da tabela ou mortos): o cursor pergunta a cada
     // quadro -- nada de derrubar o jogo, so a seta.
     gs.debugSetSelection({(int)op2::g_units.size() + 5});

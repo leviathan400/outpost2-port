@@ -125,7 +125,7 @@ namespace {
     // acrescimo do porte (como ja eram o combo da IA e a barra do volume).
     // +160 de largura: a coluna da direita, com as chaves que sao extras do
     // porte (AutoOreRoute, MapWrap, ShowBottomRow, DemoCamera, MenuSkin,
-    // CommandDebug, ProductionQueue e a barra do NightDarkness). A altura nao tinha mais para onde crescer em
+    // CommandDebug, ProductionQueue, RightClickOrders e a barra do NightDarkness). A altura nao tinha mais para onde crescer em
     // 480. A coluna comeca depois dos botoes LESS/MORE (que vao ate x+306).
     constexpr int kPrX = 60, kPrY = 59, kPrW = 520, kPrH = 390;
     constexpr int kPrExtraX = kPrX + 320;   // a coluna dos extras
@@ -460,13 +460,16 @@ void ShellMenu::rebuildControls() {
         // A coluna dos extras do porte (o titulo, o rotulo da barra e a nota
         // saem no render). Em todas, DESMARCADA e o comportamento do original
         // -- menos AutoOreRoute e DemoCamera, que nascem ligadas.
-        addCheck("Auto Ore Route",     kPrY + 64,  &m_prefAutoOreRoute, kPrExtraX, kPrExtraW, 1204);
-        addCheck("Wrap All Maps",      kPrY + 84,  &m_prefMapWrap,      kPrExtraX, kPrExtraW, 1205);
-        addCheck("Show Bottom Row",    kPrY + 104, &m_prefBottomRow,    kPrExtraX, kPrExtraW, 1206);
-        addCheck("Demo Camera",        kPrY + 124, &m_prefDemoCamera,   kPrExtraX, kPrExtraW, 1207);
-        addCheck("Original Menu Skin", kPrY + 144, &m_prefMenuSkin,     kPrExtraX, kPrExtraW, 1208);
-        addCheck("Command Debug",      kPrY + 164, &m_prefCmdDebug,     kPrExtraX, kPrExtraW, 1210);
-        addCheck("Production Queue",   kPrY + 184, &m_prefProdQueue,    kPrExtraX, kPrExtraW, 1211);
+        // Oito caixas a 18 px (62..188): a ultima termina em +202, antes do
+        // rotulo da noite (+210). Nao cabe mais nenhuma sem mexer nele.
+        addCheck("Auto Ore Route",     kPrY + 62,  &m_prefAutoOreRoute, kPrExtraX, kPrExtraW, 1204);
+        addCheck("Wrap All Maps",      kPrY + 80,  &m_prefMapWrap,      kPrExtraX, kPrExtraW, 1205);
+        addCheck("Show Bottom Row",    kPrY + 98,  &m_prefBottomRow,    kPrExtraX, kPrExtraW, 1206);
+        addCheck("Demo Camera",        kPrY + 116, &m_prefDemoCamera,   kPrExtraX, kPrExtraW, 1207);
+        addCheck("Original Menu Skin", kPrY + 134, &m_prefMenuSkin,     kPrExtraX, kPrExtraW, 1208);
+        addCheck("Command Debug",      kPrY + 152, &m_prefCmdDebug,     kPrExtraX, kPrExtraW, 1210);
+        addCheck("Production Queue",   kPrY + 170, &m_prefProdQueue,    kPrExtraX, kPrExtraW, 1211);
+        addCheck("Right-Click Orders", kPrY + 188, &m_prefRightClick,   kPrExtraX, kPrExtraW, 1212);
         // NightDarkness: quanto da noite do original se aplica (0..100%).
         addSlider(1209, &m_prefNightDarkness, 0, 100, kPrExtraX, kPrY + 228, kPrExtraW, 16);
         // Velocidades: os botoes LESS/MORE do Dialog 142, com os ids do
@@ -1843,6 +1846,7 @@ void ShellMenu::loadPrefs() {
     m_prefMenuSkin     = gs.menuSkin != 0;
     m_prefCmdDebug     = gs.commandDebug != 0;
     m_prefProdQueue    = gs.productionQueue != 0;
+    m_prefRightClick   = gs.rightClickOrders != 0;
     m_prefNightDarkness = gs.nightDarkness < 0 ? 0 : (gs.nightDarkness > 100 ? 100 : gs.nightDarkness);
 }
 
@@ -1867,6 +1871,7 @@ void ShellMenu::savePrefs() {
     gs.menuSkin          = m_prefMenuSkin ? 1 : 0;
     gs.commandDebug      = m_prefCmdDebug ? 1 : 0;
     gs.productionQueue   = m_prefProdQueue ? 1 : 0;
+    gs.rightClickOrders  = m_prefRightClick ? 1 : 0;
     gs.nightDarkness     = m_prefNightDarkness;
     applyMenuSkin(gs.menuSkin != 0);             // a pele troca ja no ACCEPT
     m_prefApplyScreen    = true;                 // o render troca a janela
