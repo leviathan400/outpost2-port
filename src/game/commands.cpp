@@ -764,6 +764,14 @@ int uiDefaultCommand(const std::vector<int>& selIn, int tileX, int tileY) {
     return -1;
 }
 
+bool uiOreRouteTargetOk(const std::vector<int>& sel, int tileX, int tileY) {
+    const UnitRecord* u = first(sel);
+    if (!u || !g_gameMap.ok()) return false;
+    const int stage = !s_ore.mine ? 0 : !s_ore.smelter ? 1 : 2;
+    return oreRouteTarget(stage, s_ore.mine, u->owner & 0x0F,
+                          tileX & (g_gameMap.width() - 1), tileY) != 0;
+}
+
 UiClick uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int tileY) {
     if (cmd == UC_REPAIR || cmd == UC_TAKE_OVER || cmd == UC_DISMANTLE) { sendRepairLike(cmd, sel); return UiClick::DONE; }
     if (cmd == UC_BUILD_MINE) {                              // sub_452010

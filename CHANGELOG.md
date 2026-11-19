@@ -47,6 +47,13 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   minério num clique (**Auto Ore Route**) e a câmera que passeia no demo de
   atração (**Demo Camera**). Quem já gravou um valor nas preferências continua
   com ele.
+- **O botão da rota de minério de três cliques mostra o cursor.** Ao apertar o
+  botão (o das duas setas, `S&et an ore-hauling route`), o cursor ficava a
+  seta, e parecia que o botão não tinha armado. Os cliques até funcionavam, mas
+  só valem exatamente na doca, e um clique fora era recusado sem aviso. Agora,
+  como no original, o cursor é o de **atracar** sobre a doca que vale naquela
+  etapa (a da mina, depois a da fundição, depois a da mina de novo) e o de "não
+  atracar" no resto.
 
 - **A noite como no original: a luz das unidades.** No original, à noite,
   cada veículo com os faróis acesos e cada prédio com energia abre um círculo
@@ -83,7 +90,7 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   A fila é só da interface: a partida em rede funciona como sempre, mas ela não
   é gravada no jogo salvo. Desligada (o padrão), é o jogo original.
 
-**Para quem acompanha o código:** seções 5.40 a 5.45 do PORT_STATUS; os modos
+**Para quem acompanha o código:** seções 5.40 a 5.46 do PORT_STATUS; os modos
 de teste `--prodqueuetest`, `--lighttest` e `--truckjamtest` (e o `--cursortest`
 ampliado); os módulos
 `src/game/production_queue.cpp` e `src/game/light_map.cpp`.
@@ -123,6 +130,13 @@ ampliado); os módulos
   to off: the one-click ore route (**Auto Ore Route**) and the touring camera
   of the attract demo (**Demo Camera**). Anyone who already saved a value in
   the preferences keeps it.
+- **The three-click ore route button shows its cursor.** After pressing the
+  button (the two-arrow one, `S&et an ore-hauling route`), the cursor stayed
+  the arrow, and the button seemed not to have armed. The clicks did work, but
+  they only count exactly on the dock, and a click elsewhere was refused with
+  no visual hint. Now, as in the original, the cursor is the **dock** cursor
+  over the dock that counts at that step (the mine's, then the smelter's, then
+  the mine's again) and the "no dock" cursor elsewhere.
 - **Night as in the original: the units' light.** In the original, at night,
   every vehicle with its headlights on and every powered building opens a
   circle of light in the dark, as large as its sight range, with a dotted
@@ -159,7 +173,7 @@ ampliado); os módulos
   The queue lives in the interface only: network games work as always, but it
   is not stored in saved games. Off (the default), it is the original game.
 
-**For those following the code:** sections 5.40 to 5.45 of PORT_STATUS; the
+**For those following the code:** sections 5.40 to 5.46 of PORT_STATUS; the
 `--prodqueuetest`, `--lighttest` and `--truckjamtest` test modes (and the
 extended `--cursortest`); the
 `src/game/production_queue.cpp` and `src/game/light_map.cpp` modules.

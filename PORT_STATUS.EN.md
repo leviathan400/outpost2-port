@@ -109,7 +109,10 @@
 > `[Game] RightClickOrders` key, with a check box in `GAME PREFERENCES` and a
 > line in the Options tab) and **5.45** (every port option now defaults to
 > off, the original's behaviour: `AutoOreRoute` and `DemoCamera`, which used
-> to default to 1, now default to 0).
+> to default to 1, now default to 0) and **5.46** (the three-click ore route
+> command showed the arrow: the original's `vt[4]`, `sub_454290`, also writes
+> the cursor — dock, index 13, on the dock the current step accepts (mine,
+> smelter, mine), nodock, index 14, elsewhere).
 > The recent
 > changes are summarised in
 > [README.EN.md](README.EN.md).

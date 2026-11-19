@@ -260,6 +260,11 @@ cursores `.ANI`.
   original; as evoluções do porte se ligam no `GAME PREFERENCES`. A rota de
   minério num clique (**Auto Ore Route**) e a câmera que passeia no demo
   (**Demo Camera**), que vinham ligadas, agora vêm desligadas.
+- **O botão da rota de minério de três cliques mostra o cursor certo.** Ao
+  apertar o botão (o das duas setas), o cursor vira o de **atracar** sobre a
+  doca que vale naquela etapa — a da mina, depois a da fundição, depois a da
+  mina de novo — e o de "não atracar" no resto, como no original. Antes ficava
+  a seta, e o botão parecia não funcionar.
 - **A noite como no original: a luz das unidades.** À noite, cada veículo com
   os faróis acesos e cada prédio com energia abre um círculo de luz no escuro,
   do tamanho do alcance de visão dele, com a borda pontilhada — a luz anda com

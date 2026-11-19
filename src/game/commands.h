@@ -67,6 +67,10 @@ void uiSetCursorPixel(int px, int py);
 // selecionadas e nenhum comando armado, o primeiro de atacar, reprogramar
 // (Spider) e mover/atracar que aceita o alvo sob o cursor (uiSetCursorPixel).
 // UC_ATTACK / UC_TAKE_OVER / UC_MOVE, ou -1 (nenhum: a seta).
+// A rota de minerio de tres cliques (S&et an ore-hauling route) aceitaria
+// este tile na etapa em que esta (mina, fundicao, mina)? E o vt[4] do comando
+// (sub_454290), que tambem da o cursor: DOCK aceitando, NODOCK nao (5.46).
+bool uiOreRouteTargetOk(const std::vector<int>& sel, int tileX, int tileY);
 int uiDefaultCommand(const std::vector<int>& sel, int tileX, int tileY);
 // Comandos de ÁREA (arrastar): muro/tubo (modo 4, reta) e terraplanar (modo 1).
 bool uiCommandIsArea(int cmd);

@@ -204,6 +204,10 @@ int GameState::cursorForHover() const {
         }
         case UC_GUARD:     return CUR_GUARD;
         case UC_PATROL:    return CUR_WAYPOINT;
+        // sub_454290 grava o cursor no 3o argumento: dword_56DDFC (indice 13,
+        // DOCK) com a doca aceita na etapa da rota, dword_56DE00 (14, NODOCK)
+        // fora dela. O porte caia na seta e o botao parecia nao armar (5.46).
+        case UC_ORE_ROUTE: return uiOreRouteTargetOk(m_selected, tx, ty) ? CUR_DOCK : CUR_NODOCK;
         case UC_SELF_DESTRUCT: return CUR_DESTRUCT;
         case UC_MOVE: {
             // Sobre a doca de um prédio, o mover vira atracar -- e o cursor

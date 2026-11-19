@@ -260,6 +260,11 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
   original game; the port's additions are switched on in `GAME PREFERENCES`.
   The one-click ore route (**Auto Ore Route**) and the touring demo camera
   (**Demo Camera**), which used to default to on, now default to off.
+- **The three-click ore route button shows the right cursor.** After pressing
+  the button (the two-arrow one), the cursor becomes the **dock** cursor over
+  the dock that counts at that step — the mine's, then the smelter's, then the
+  mine's again — and the "no dock" cursor elsewhere, as in the original. It
+  used to stay the arrow, and the button seemed not to work.
 - **Night as in the original: the units' light.** At night, every vehicle with
   its headlights on and every powered building opens a circle of light in the
   dark, as large as its sight range, with a dotted edge — the light moves with

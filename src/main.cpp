@@ -6792,6 +6792,42 @@ static int runAutoRouteTest(const std::string& mapName) {
         gs.debugAutoOreRoute(true);
     }
 
+    // O BOTAO de tres cliques (S&et an ore-hauling route), com a rota num
+    // clique DESLIGADA (o padrao): o botao de verdade arma a mira, o cursor
+    // diz DOCK so na doca da etapa (sub_454290 -> indices 13/14) e os tres
+    // cliques -- mina, fundicao, mina -- montam o ciclo (5.46).
+    {
+        op2::Unit t4;
+        op2::TethysGame::CreateUnit(t4, op2::mapCargoTruck, op2::LOCATION{mineX - 3, mineY + 4}, 0);
+        gs.setSelection({t4.id()});
+        gs.debugAutoOreRoute(false);
+        gs.onIdle(renderer, 0.0f);
+        int bnx = 0, bny = 0;
+        const bool achou = gs.debugCommandButtonCenter(op2::UC_ORE_ROUTE, bnx, bny);
+        casos.push_back({"o botao da rota esta na botoeira do caminhao vazio", achou ? 1 : 0, 1});
+        if (achou) gs.debugClickNative(renderer, bnx, bny);
+        casos.push_back({"o botao arma a mira da rota", gs.debugTargetCmd() == op2::UC_ORE_ROUTE ? 1 : 0, 1});
+        auto cursorEm = [&](int tx, int ty) {
+            gs.setCamera(tx * 32 - 200, ty * 32 - 150);
+            return gs.debugCursor((tx << 5) + 16 - gs.camX(), (ty << 5) + 16 - gs.camY(), op2::UC_ORE_ROUTE);
+        };
+        casos.push_back({"1a etapa: cursor DOCK na doca da mina", cursorEm(mdx, mdy), op2::CUR_DOCK});
+        casos.push_back({"... NODOCK na doca da fundicao", cursorEm(pdx, pdy), op2::CUR_NODOCK});
+        casos.push_back({"... NODOCK no chao", cursorEm(mdx - 3, mdy + 3), op2::CUR_NODOCK});
+        gs.debugRightClickTile(renderer, mdx, mdy);            // o clique da ordem (esquerdo)
+        casos.push_back({"o 1o clique deixa a mira armada", gs.debugTargetCmd() == op2::UC_ORE_ROUTE ? 1 : 0, 1});
+        casos.push_back({"2a etapa: cursor DOCK na doca da fundicao", cursorEm(pdx, pdy), op2::CUR_DOCK});
+        casos.push_back({"... NODOCK na doca da mina", cursorEm(mdx, mdy), op2::CUR_NODOCK});
+        gs.debugRightClickTile(renderer, pdx, pdy);
+        casos.push_back({"3a etapa: cursor DOCK de volta na mina", cursorEm(mdx, mdy), op2::CUR_DOCK});
+        gs.debugRightClickTile(renderer, mdx, mdy);
+        for (int t = 0; t < 8; ++t) gs.onIdle(renderer, 0.2501f / 4.0f);
+        casos.push_back({"os tres cliques montam a rota (0x27)", op2::g_units[t4.id()].action, 0x27});
+        casos.push_back({"... para a fundicao clicada", op2::g_units[t4.id()].routeSmelter, perto});
+        casos.push_back({"... e a mira desarma", gs.debugTargetCmd(), -1});
+        gs.debugAutoOreRoute(true);
+    }
+
     // Caminhao CHEIO nao serve: o atalho recusa e o clique segue o caminho normal.
     {
         op2::Unit t3;

@@ -3409,6 +3409,34 @@ duas passam a valer **0** quando o `OUTPOST2.INI` não as traz
 preferências continua com ele. O `--autoroutetest`, cujo assunto é a rota num
 clique, liga a opção explicitamente.
 
+## 5.46. O cursor da rota de minério de três cliques (2026-11-19)
+
+Relato: *com o Auto Ore Route desligado, o botão dos 3 passos para a mina
+(o das duas setas, de ir e voltar) não funciona — o cursor não muda.*
+
+O botão arma o comando (`S&et an ore-hauling route`, ícone `0x486`, vtable
+`off_4D4D38`) e os três cliques já funcionavam. Mas o `cursorForHover` não
+tinha o caso dele e mostrava a **seta**, então o botão parecia não armar. E um
+clique fora da doca é recusado com o som `0x58`, sem aviso visual. No original,
+o `vt[4]` do comando (`sub_454290`), além de aceitar ou recusar o tile, grava o
+cursor no 3º argumento:
+
+- alvo aceito na etapa → `dword_56DDFC` = `dword_56DDC8[13]`, o cursor **dock**;
+- recusado → `dword_56DE00` = `[14]`, o **nodock**.
+
+As etapas são as de `oreRouteTarget`: 1º a **doca da mina** (ou do Magma
+Well), 2º a **doca da fundição** compatível, 3º a doca da mina de novo.
+
+**No porte:** `uiOreRouteTargetOk` (`src/game/commands.cpp`) pergunta o mesmo
+`oreRouteTarget` na etapa atual, e o `cursorForHover` mostra dock/nodock.
+
+**Teste:** o `--autoroutetest` ganhou 12 casos (48 no total). Com a rota num
+clique desligada, ele aperta o botão de verdade na botoeira do caminhão vazio,
+confere que a mira armou e confere o cursor em cada etapa: dock na doca certa,
+nodock na outra doca e no chão. Depois faz os três cliques e confere a rota
+montada (ação `0x27`, fundição clicada) e a mira desarmada. Mutação: sem o
+caso do cursor, 6 falhas.
+
 ## 6. Build e execução
 
 **Toolchain:** CMake >= 3.15 + MSVC, C++17, SDL2 2.30.9 (em `third_party/`).
