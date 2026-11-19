@@ -23,6 +23,10 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   prédios e veículos fora dela escurecem — os do inimigo mais que os seus e
   os dos aliados —, como lá (antes as unidades nunca escureciam, por causa de
   uma leitura errada do código original).
+- **A noite agora vem escura como no original.** A opção `Night Darkness`
+  passou a vir em **100%** (era 75%, uma noite mais clara que o porte usava
+  porque não havia a luz das unidades). Quem já gravou outro valor nas
+  preferências continua com ele.
 
 **Novo**
 
@@ -62,6 +66,10 @@ de teste `--prodqueuetest` e `--lighttest`; os módulos
   buildings and vehicles outside it darken — the enemy's more than yours and
   your allies' —, as there (units used to never darken, because of a misread
   of the original code).
+- **Night is now as dark as in the original.** The `Night Darkness` option now
+  defaults to **100%** (it was 75%, a lighter night the port used because the
+  units' light was missing). Anyone who already saved another value in the
+  preferences keeps it.
 
 **New**
 

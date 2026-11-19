@@ -243,7 +243,8 @@ cursores `.ANI`.
   os faróis acesos e cada prédio com energia abre um círculo de luz no escuro,
   do tamanho do alcance de visão dele, com a borda pontilhada — a luz anda com
   o veículo. E os prédios e veículos fora da luz passam a escurecer, os do
-  inimigo mais que os seus, como lá.
+  inimigo mais que os seus, como lá. A escuridão da noite (`Night Darkness`)
+  passou a vir em 100%, a do original.
 - **Fila de produção (opcional).** Com a opção **Production Queue** ligada nas
   preferências, cada clique num item da lista da fábrica soma +1 ao pedido (o
   número aparece na frente do item; o clique direito tira 1), dá para misturar

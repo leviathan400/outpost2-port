@@ -226,7 +226,7 @@ preferences screen; the original ignores keys it doesn't know.
 | Key | Range | Default | What it does |
 |---|---|---|---|
 | `AILevel` | 0..3 | 0 (AUTO) | Forces the AI level in campaigns and colonies. AUTO = the original's behavior. **Does not apply in network play**, where difficulty is per player and comes from the lobby. |
-| `NightDarkness` | 0..100 | 75 | How much of the night darkening curve is applied (100 = the original, which takes full night to ~15% brightness; outside the units' light the terrain nearly vanishes — see 5.41 in the BR status). |
+| `NightDarkness` | 0..100 | 100 | How much of the night darkening curve is applied (100 = the original, which takes full night to ~15% brightness; outside the units' light the terrain nearly vanishes — see 5.41 in the BR status). The default was 75 until 2026-11-19. |
 | `AudioVolume` | 0..100 | 50 | Master volume over the final mix (sounds and music). The original only has `MusicVol`/`SoundVol`, per channel and in 6 steps. |
 | `DemoCamera` | 0/1 | 1 | In the attract demo the camera tours the action spots (disaster, combat, units). 0 restores the original's static camera. |
 | `Fullscreen` | 0/1 | 1 | Opens fullscreen (no video mode change). Alt+Enter toggles at any time, and in game there is the **Screen Mode** radio pair at the end of the `PREFERENCES` list (see 5.8 in the BR status). |

@@ -6,7 +6,7 @@
 
 namespace op2 {
 
-namespace { int s_nightDarkness = 75; }
+namespace { int s_nightDarkness = 100; }
 
 void setNightDarkness(int percent) {
     if (percent < 0) percent = 0;

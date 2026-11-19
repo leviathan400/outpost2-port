@@ -241,7 +241,8 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
   its headlights on and every powered building opens a circle of light in the
   dark, as large as its sight range, with a dotted edge — the light moves with
   the vehicle. And buildings and vehicles outside the light now darken, the
-  enemy's more than yours, as there.
+  enemy's more than yours, as there. Night darkness (`Night Darkness`) now
+  defaults to 100%, the original's.
 - **Production queue (optional).** With the **Production Queue** option on in
   the preferences, each click on an item in a factory's list adds +1 to the
   order (the count shows in front of the item; right-click removes 1), items

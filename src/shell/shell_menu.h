@@ -312,7 +312,7 @@ private:
     bool m_prefDemoCamera = true, m_prefMenuSkin = false;
     bool m_prefCmdDebug = false;      // "CommandDebug" (5.39), caixa 1210
     bool m_prefProdQueue = false;     // "ProductionQueue" (5.40), caixa 1211
-    int  m_prefNightDarkness = 75;
+    int  m_prefNightDarkness = 100;
     void applyMenuSkin(bool on);
     bool m_prefApplyScreen = false;   // aplicar o escolhido (ACCEPT)
     void loadPrefs();   // le o [Game] do OUTPOST2.INI para a tela

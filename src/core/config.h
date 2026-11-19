@@ -86,8 +86,9 @@ struct GameSettings {
     int aiLevel = 0;
     // "NightDarkness": tambem so deste porte. Quanto da curva de escurecimento
     // noturno do original se aplica, em porcento (100 = o jogo tal como e,
-    // 0 = sem noite). Ver op2::setNightDarkness.
-    int nightDarkness = 75;
+    // 0 = sem noite). Ver op2::setNightDarkness. Padrao 100 desde 2026-11-19
+    // (a luz das unidades, 5.41, deixa o terreno visivel onde importa).
+    int nightDarkness = 100;
     // "AudioVolume": idem, 0..100 por cento. Volume MESTRE, que multiplica a
     // mistura final (sons e musica juntos) sem mexer nas atenuacoes do
     // original -- o jogo so tem MusicVol/SoundVol, cada um em 6 degraus e cada

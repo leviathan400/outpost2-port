@@ -129,7 +129,7 @@ preferências; o original ignora chaves que não conhece.
 | Chave | Faixa | Padrão | O que faz |
 |---|---|---|---|
 | `AILevel` | 0..3 | 0 (AUTO) | Força o nível da IA nas campanhas e colônias. AUTO = o comportamento do original. **Não se aplica em rede**, onde a dificuldade é por jogador e vem do lobby. |
-| `NightDarkness` | 0..100 | 75 | Quanto da curva de escurecimento noturno se aplica (100 = o original, que leva a noite plena a ~15% do brilho; fora da luz das unidades o terreno quase some — ver 5.41). |
+| `NightDarkness` | 0..100 | 100 | Quanto da curva de escurecimento noturno se aplica (100 = o original, que leva a noite plena a ~15% do brilho; fora da luz das unidades o terreno quase some — ver 5.41). Até 2026-11-19 o padrão era 75. |
 | `AudioVolume` | 0..100 | 50 | Volume mestre sobre a mistura final (sons e música). O original só tem `MusicVol`/`SoundVol`, por canal e em 6 degraus. |
 | `DemoCamera` | 0/1 | 1 | No demo de atração a câmera passeia pelos pontos de ação (desastre, combate, unidades). 0 devolve a câmera parada do original. |
 | `Fullscreen` | 0/1 | 1 | Abre em tela cheia (sem troca de modo de vídeo). Alt+Enter alterna a qualquer momento, e dentro do jogo há o par de rádio **Screen Mode** no fim da lista do `PREFERENCES` (ver 5.8). |
@@ -3203,6 +3203,11 @@ recebe um gancho (`setArtLight`) que deixa claro o pixel dentro da luz quando
 há escuridão. A escuridão de cada sprite segue a coluna, com a curva dos
 aliados. A opção `NightDarkness` continua valendo para tudo (a 100 é o
 original).
+
+**O padrão da `NightDarkness` passou de 75 para 100** (pedido do usuário, no
+mesmo dia): com a luz das unidades, o terreno fica visível onde importa — em
+volta da base e dos veículos —, e a noite mais clara do porte deixou de ser
+necessária. Quem já tem a chave no INI continua com o valor gravado.
 
 ### O teste
 
