@@ -242,6 +242,18 @@ void gorfRecycle(int gorf, int type) {
     g_playerData[p].rareOre += rare * pct / 100;
 }
 
+// O custo que processProducePacket desconta (bloco do criador, arma, e o 2x da
+// arma do 0x71). Usado pela fila do porte (production_queue.cpp).
+void produceCost(int factoryId, uint32_t item, int& common, int& rare) {
+    common = rare = 0;
+    if (!validFactory(factoryId)) return;
+    const int hb = ownerHi(g_units[factoryId]);
+    const int type = static_cast<int>(item & 0xFFFF), weapon = static_cast<int>(item >> 16);
+    common = costOf(type, hb, 0x0C); rare = costOf(type, hb, 0x10);
+    if (weapon) { common += costOf(weapon, hb, 0x0C); rare += costOf(weapon, hb, 0x10); }
+    if (type == 0x71) { common += 2 * costOf(weapon, hb, 0x0C); rare += 2 * costOf(weapon, hb, 0x10); }
+}
+
 void sendProduce(int factoryId, uint32_t item) {            // sub_456B50: pacote 9
     CommandPacket pkt;
     pkt.type = CMD_PRODUCE;

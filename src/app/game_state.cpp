@@ -11,6 +11,7 @@
 
 #include "tapp.h"
 #include "info_pane.h"
+#include "../game/production_queue.h"
 #include "../game/command_debug.h"
 #include "../game/production.h"
 #include "../game/construction.h"
@@ -96,6 +97,7 @@ void GameState::loadSettings() {
     m_mapWrapAll = gs.mapWrap != 0;                    // "MapWrap" (fork)
     m_autoOreRoute = gs.autoOreRoute != 0;             // "AutoOreRoute" (so deste porte)
     setCommandDebug(gs.commandDebug != 0);             // "CommandDebug" (idem, 5.39)
+    setProductionQueue(gs.productionQueue != 0);       // "ProductionQueue" (idem, 5.40)
     m_showBottomRow = gs.showBottomRow != 0;           // "ShowBottomRow" (fork)
     if (g_gameMap.ok() && m_terrain.mapPixelHeight() > 0) { m_maxY = viewMaxY(); clampCamera(); }
     // "Fullscreen" NAO entra aqui: a janela nao pode pular de modo a cada
@@ -450,6 +452,7 @@ bool GameState::startMission(std::unique_ptr<MissionScript> mission, const GameS
     musicEndGame();                         // sub_489FB0 → sub_4506C0 (partida anterior)
     musicStartGame(d->missionType, false);  // sub_4507B0 (antes do InitProc)
     resetMessages();
+    productionQueueReset();                  // fila do porte (5.40): e so da interface
     resetUnits();
     lavaReset();                                 // sub_4322A0 (início da partida)
     TethysGame::SetDaylightMoves(0);
@@ -522,6 +525,7 @@ bool GameState::load(const std::string& mapName) {
     loadSpaceSheet();
     loadMoraleSheet();
     resetMessages();
+    productionQueueReset();                  // fila do porte (5.40): e so da interface
     resetUnits();
     lavaReset();                                 // sub_4322A0 (início da partida)
     // Dia/noite como as missões de colônia configuram (SetDaylightMoves(1) /
@@ -860,6 +864,9 @@ bool GameState::simTick() {
     // The original raises the tick after the unit loop (ProcessGameCycle: call 0x43AD30 at 0x48A01B, then
     // [GameImpl+0x84] += 1 at 0x48A020..0x48A02D): everything in the cycle sees the previous tick.
     TethysGame::advanceTick();
+    // Fila de producao (extra do porte, 5.40): da a vez ao proximo item das
+    // fabricas paradas, pelo mesmo pacote 9 do BUILD IT. Desligada, nada.
+    productionQueueTick();
     demoCameraTick();                        // só a vista; não mexe na simulação
     if ((TethysGame::tick() & 3) == 2) {     // sub_47EA60: listener = centro da vista
         soundSetListener(m_camX + viewportW() / 2, m_camY + viewportH() / 2);
@@ -2391,6 +2398,9 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
                 paneHit = true;
             }
         }
+        if (e.button.button == SDL_BUTTON_RIGHT && !inView && m_produce.isOpen() &&
+            m_produce.rightClick(infoPaneRect(), nx, ny))
+            paneHit = true;                                  // fila do porte: -1 no pedido
         if (e.button.button == SDL_BUTTON_LEFT && !inView && m_produce.isOpen()) {
             bool buildNow = false;
             paneHit = m_produce.click(infoPaneRect(), nx, ny, e.button.clicks >= 2, buildNow);
@@ -2906,9 +2916,21 @@ std::vector<GameState::TextButton> GameState::structureButtons() const {
         // sub_4682C0: "&BUILD IT" (desabilitado até escolher um item pagável) e
         // "&STATUS" — ambos voltam ao painel de status (dword_564A80).
         TextButton b{};
-        b.cmd = kCmdBuildIt; b.label = "&BUILD IT"; b.tip = "&Build selected item"; b.hotkey = 'B';
+        b.cmd = kCmdBuildIt; b.label = "&BUILD IT"; b.hotkey = 'B';
+        b.tip = productionQueueOn() ? "&Build the items ordered (queue)" : "&Build selected item";
         b.disabled = !m_produce.buildEnabled();
         out.push_back(b);
+        // Fila do porte (5.40): ST&OP embaixo da lista -- para o item atual e
+        // cancela o resto da fila (o mesmo ST&OP do quadro de status).
+        if (productionQueueOn()) {
+            const int f = m_produce.factory();
+            const bool ativa = f > 0 && f < static_cast<int>(g_units.size()) &&
+                               (g_units[f].action == 9 || !productionQueueOf(f).empty());
+            b = TextButton{};
+            b.cmd = UC_STOP; b.label = "ST&OP"; b.tip = "St&op this item and the rest of the queue"; b.hotkey = 'O';
+            b.disabled = !ativa;
+            out.push_back(b);
+        }
         b = TextButton{};
         b.cmd = kCmdStatus; b.label = "&STATUS"; b.tip = "Back to Structure &Status"; b.hotkey = 'S';
         out.push_back(b);
@@ -3043,6 +3065,14 @@ PaneRect GameState::infoPaneRect() const {
 
 // BUILD IT (sub_467D50): item escolhido → sub_456B50 (pacote 9); volta ao status.
 void GameState::produceBuildIt() {
+    if (productionQueueOn()) {
+        // Fila do porte (5.40): o pedido montado na lista vai para a fila da
+        // fabrica; o tique da fila manda um pacote 9 por item, na vez de cada um.
+        if (!m_produce.isOpen() || !m_produce.buildEnabled()) return;
+        productionQueueAppend(m_produce.factory(), m_produce.takeDraft());
+        m_produce.close();
+        return;
+    }
     if (!m_produce.isOpen() || !m_produce.buildEnabled() || !m_produce.selected()) return;
     sendProduce(m_produce.factory(), m_produce.selected());
     m_produce.close();

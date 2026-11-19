@@ -173,13 +173,14 @@ outpost2_modern.exe                      # menu principal
 outpost2_modern.exe --game eden01.map    # abre um mapa direto
 ```
 
-O arquivo `OUTPOST2.INI` do jogo é respeitado. O porte acrescenta dez chaves
+O arquivo `OUTPOST2.INI` do jogo é respeitado. O porte acrescenta onze chaves
 que o original não tem — nível da IA, escuridão da noite, volume, câmera do
 demo, tela cheia, a pele dos menus (`MenuSkin`), a volta horizontal do mapa
 (`MapWrap`), a última linha do mapa (`ShowBottomRow`), a rota de minério num
-clique (`AutoOreRoute`) e o diagnóstico de comando recusado (`CommandDebug`); estão documentadas no `PORT_STATUS.BR.md`.
+clique (`AutoOreRoute`), o diagnóstico de comando recusado (`CommandDebug`) e a
+fila de produção (`ProductionQueue`); estão documentadas no `PORT_STATUS.BR.md`.
 
-Há **121 modos de linha de comando** para testes e capturas, entre eles uma
+Há **122 modos de linha de comando** para testes e capturas, entre eles uma
 bateria de regressão (`--savetest` prova o determinismo de salvar/recarregar).
 A lista está no `PORT_STATUS.BR.md`.
 
@@ -213,7 +214,7 @@ e descartado das listas de cheat que circulam por aí.
 
 ```
 src/
-  main.cpp        entrada + os 121 modos de teste/captura
+  main.cpp        entrada + os 122 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -235,6 +236,15 @@ cursores `.ANI`.
 ---
 
 ## Mudanças recentes
+
+### 2026-11-19
+
+- **Fila de produção (opcional).** Com a opção **Production Queue** ligada nas
+  preferências, cada clique num item da lista da fábrica soma +1 ao pedido (o
+  número aparece na frente do item; o clique direito tira 1), dá para misturar
+  itens, e o `BUILD IT` manda tudo para a fila: a fábrica produz um atrás do
+  outro sozinha. O clique que o minério não cobre não soma. `ST&OP` para o item
+  atual e o resto da fila. Desligada (o padrão), é o jogo original.
 
 ### 2026-11-18
 

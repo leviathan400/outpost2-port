@@ -9,6 +9,65 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
 
 ---
 
+## 2026-11-19
+
+### Português
+
+**Novo**
+
+- **Fila de produção** (opção **Production Queue**, nas preferências do menu e
+  na aba Options durante a partida; ou `ProductionQueue=1` na seção `[Game]` do
+  `OUTPOST2.INI`). No original a fábrica produz um item por ordem: escolher,
+  `BUILD IT`, esperar, e repetir. Com a opção ligada:
+  - cada clique num item da lista soma **+1** ao pedido, e o número aparece na
+    frente do item; o clique direito tira 1; dá para misturar itens, e eles
+    saem na ordem dos cliques;
+  - o clique que o minério não cobre — contando o que já está nas filas de
+    todas as fábricas — não soma, com o som de "sem recursos" do jogo;
+  - o **`BUILD IT`** manda o pedido para a fila, e a fábrica produz um item
+    atrás do outro sozinha, cada um quando houver minério, baia livre e
+    operários;
+  - enquanto produz, a lista continua aberta para somar mais, com o item atual,
+    a porcentagem e uma barra de progresso acima dos botões, e o quadro de
+    status mostra quantos estão na fila e qual é o próximo;
+  - o **`ST&OP`** para o item atual e cancela o resto da fila.
+
+  A fila é só da interface: a partida em rede funciona como sempre, mas ela não
+  é gravada no jogo salvo. Desligada (o padrão), é o jogo original.
+
+**Para quem acompanha o código:** seção 5.40 do PORT_STATUS; o modo de teste
+`--prodqueuetest`; o módulo `src/game/production_queue.cpp`.
+
+### English
+
+**New**
+
+- **Production queue** (the **Production Queue** option, in the main menu's
+  preferences and in the Options tab during a game; or `ProductionQueue=1` in
+  the `[Game]` section of `OUTPOST2.INI`). In the original a factory produces
+  one item per order: pick it, `BUILD IT`, wait, and repeat. With the option on:
+  - each click on an item in the list adds **+1** to the order, and the count
+    shows in front of the item; right-click removes 1; items can be mixed, and
+    they come out in the order of the clicks;
+  - a click the ore cannot cover — counting what is already in the queues of
+    every factory — does not add, with the game's "insufficient resources"
+    sound;
+  - **`BUILD IT`** sends the order to the queue, and the factory produces one
+    item after another on its own, each one when there is ore, a free bay and
+    workers;
+  - while it produces, the list stays open to add more, with the current item,
+    its percentage and a progress bar above the buttons, and the status pane
+    shows how many are queued and which one is next;
+  - **`ST&OP`** stops the current item and cancels the rest of the queue.
+
+  The queue lives in the interface only: network games work as always, but it
+  is not stored in saved games. Off (the default), it is the original game.
+
+**For those following the code:** section 5.40 of PORT_STATUS; the
+`--prodqueuetest` test mode; the `src/game/production_queue.cpp` module.
+
+---
+
 ## 2026-11-18
 
 ### Português

@@ -311,6 +311,7 @@ private:
     bool m_prefMapWrap = false, m_prefBottomRow = false;
     bool m_prefDemoCamera = true, m_prefMenuSkin = false;
     bool m_prefCmdDebug = false;      // "CommandDebug" (5.39), caixa 1210
+    bool m_prefProdQueue = false;     // "ProductionQueue" (5.40), caixa 1211
     int  m_prefNightDarkness = 75;
     void applyMenuSkin(bool on);
     bool m_prefApplyScreen = false;   // aplicar o escolhido (ACCEPT)

@@ -121,6 +121,10 @@ struct GameSettings {
     // recusado (produzir, pesquisar, treinar, o repetido do anel) vira uma linha
     // no registro de mensagens com o motivo. 0 = mudo, como no original.
     int commandDebug = 0;
+    // "ProductionQueue": acrescimo DESTE porte (5.40). 1 = cada clique num item
+    // da lista de producao soma +1 ao pedido, o BUILD IT o manda para a fila da
+    // fabrica, que produz um item atras do outro. 0 = como o original.
+    int productionQueue = 0;
     // Fork: "MapWrap". 0 = like the original: the map view stops at the map's
     // left/right edges; only "around the world" maps (512 tiles wide) wrap.
     // 1 = every map wraps horizontally (the port's old behaviour).

@@ -107,6 +107,7 @@ add_executable(outpost2_modern
     src/game/cheat.cpp
     src/game/messages.cpp
     src/game/command_debug.cpp
+    src/game/production_queue.cpp
     src/game/terrain_renderer.cpp
     src/game/game_rng.cpp
     src/game/tethys_game.cpp

@@ -29,7 +29,8 @@ public:
     bool isOpen() const { return m_open; }
     int  factory() const { return m_factory; }
     uint32_t selected() const { return m_sel; }          // [+0x434]
-    bool buildEnabled() const { return m_buildOk; }     // botão BUILD IT habilitado
+    // Botão BUILD IT habilitado. Com a fila do porte (5.40): há pedido montado.
+    bool buildEnabled() const;
     // Texto que a lista manda ao objeto de ajuda (unk_575570) — o custo do item
     // sob o cursor; vazio quando o cursor não está sobre nenhum.
     const std::string& helpText() const { return m_help; }
@@ -44,6 +45,15 @@ public:
     // item pagável (sub_4683B0 aciona o BUILD IT).
     bool click(const PaneRect& pane, int x, int y, bool dbl, bool& buildNow);
 
+    // Fila de produção (extra do porte, 5.40; productionQueueOn()). O clique
+    // num item soma +1 ao PEDIDO (o que o minério não cobre não soma, com o
+    // som 0x58 do original); o clique direito tira 1. O BUILD IT leva o pedido
+    // (takeDraft) para a fila da fábrica. Sair sem BUILD IT descarta.
+    bool rightClick(const PaneRect& pane, int x, int y);
+    const std::vector<uint32_t>& draft() const { return m_draft; }
+    std::vector<uint32_t> takeDraft();
+    int draftCount(uint32_t item) const;
+
 private:
     struct Layout { PaneRect list, up, down; int lineH, rows; };
     Layout layout(const PaneRect& pane) const;
@@ -56,6 +66,9 @@ private:
     uint32_t m_sel = 0;
     int  m_top = 0;                                      // 1º item visível
     bool m_buildOk = false;
+    std::vector<uint32_t> m_draft;                       // o pedido, na ordem dos cliques
+    int  itemAt(const PaneRect& pane, int x, int y) const;   // índice em m_items (-1 = nenhum)
+    void drawQueueGauge(uint32_t* fb, int fbW, int fbH, int l, int t, int r) const;
     int  m_lastTick = -1;
     mutable std::string m_help;                          // preenchido no desenho
 };

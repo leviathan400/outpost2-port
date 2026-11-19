@@ -27,6 +27,8 @@ std::string produceItemCost(uint32_t item, int player);
 // BUILD IT (sub_456B50): pacote 9 {fábrica, tipo, arma, grupo 0xFFFF} do
 // jogador local, processado na hora (sub_40E210 case 9).
 void sendProduce(int factoryId, uint32_t item);
+// O custo que o pacote 9 desconta desta fabrica por `item` (minerio comum/raro).
+void produceCost(int factoryId, uint32_t item, int& common, int& rare);
 // sub_40E210 case 9: fábrica parada e operando, minério do dono suficiente →
 // ação 9 e desconta o custo. false se recusou.
 bool processProducePacket(int owner, int factoryId, int type, int weapon, int group);

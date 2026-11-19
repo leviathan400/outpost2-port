@@ -188,6 +188,7 @@ void GameSettings::loadFrom(const Config& cfg) {
     mapWrap           = cfg.getInt("Game", "MapWrap", mapWrap);
     autoOreRoute      = cfg.getInt("Game", "AutoOreRoute", autoOreRoute);
     commandDebug      = cfg.getInt("Game", "CommandDebug", commandDebug);
+    productionQueue   = cfg.getInt("Game", "ProductionQueue", productionQueue);
     showBottomRow     = cfg.getInt("Game", "ShowBottomRow", showBottomRow);
     name              = cfg.getString("Game", "Name", name);
 
@@ -220,6 +221,7 @@ void GameSettings::saveTo(Config& cfg) const {
     cfg.setInt("Game", "MapWrap", mapWrap);
     cfg.setInt("Game", "AutoOreRoute", autoOreRoute);
     cfg.setInt("Game", "CommandDebug", commandDebug);
+    cfg.setInt("Game", "ProductionQueue", productionQueue);
     cfg.setInt("Game", "ShowBottomRow", showBottomRow);
     cfg.setString("Game", "Name", name);
 

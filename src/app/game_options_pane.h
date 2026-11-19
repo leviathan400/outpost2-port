@@ -66,6 +66,8 @@ public:
         // O diagnostico de comando recusado ([Game] CommandDebug, 5.39): vale
         // na hora, entao mora aqui tambem.
         OPT_CMD_DEBUG,
+        // A fila de producao ([Game] ProductionQueue, 5.40).
+        OPT_PROD_QUEUE,
         OPT_COUNT
     };
 

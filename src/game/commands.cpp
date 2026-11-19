@@ -1,3 +1,4 @@
+#include "production_queue.h"
 #include "../net/net_game.h"
 #include "salvage.h"
 #include "commands.h"
@@ -164,6 +165,12 @@ bool uiCommandAvailable(int cmd, const std::vector<int>& sel) {
         case UC_BUILD: {                                    // sub_456000
             if (n != 1) return false;
             const int a = u->action;
+            // Fila de producao (extra do porte, 5.40): o BUILD abre a lista
+            // tambem com a fabrica produzindo, para somar mais itens a fila. A
+            // fila confere as regras abaixo por conta propria antes de cada item.
+            if (productionQueueOn() && a == 9 && !(u->flags & 0x40000u) &&
+                (u->type == 0x2D || u->type == 0x2E || u->type == 0x2F || u->type == 0x30 || u->type == 0x37))
+                return true;
             if (a == 0x21 || a == 0x22 || a == 0x12 || a == 9 || (u->flags & 0x40000u)) return false;
             if (!structureOperational(*u)) return false;
             const int np = TethysGame::noPlayers() - 1 > 0 ? TethysGame::noPlayers() - 1 : 0;
@@ -562,7 +569,11 @@ UiClick uiCommandClick(int cmd, const std::vector<int>& sel) {
 static UiClick uiCommandClickImpl(int cmd, const std::vector<int>& sel) {
     s_hint.clear();
     switch (cmd) {
-        case UC_STOP: sendStop(sel); return UiClick::DONE;              // sub_455540 (pacote 5)
+        case UC_STOP:                                                    // sub_455540 (pacote 5)
+            // Fila de producao (5.40): parar a fabrica para tambem o resto da fila.
+            if (productionQueueOn()) for (int id : sel) productionQueueClear(id);
+            sendStop(sel);
+            return UiClick::DONE;
         case UC_SELF_DESTRUCT: sendSelfDestruct(sel); return UiClick::DONE;   // sub_4555F0 (0x14)
         case UC_MOVE: return UiClick::TARGET;                           // sub_451260 (estado 3, ate 7 pontos)
         case UC_STAND_GROUND: return UiClick::TARGET;                   // sub_4518E0 (estado 3, ate 7 pontos)

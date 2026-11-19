@@ -48,7 +48,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 121 modos de teste/captura
+  main.cpp        entrada + os 122 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -138,6 +138,7 @@ preferências; o original ignora chaves que não conhece.
 | `ShowBottomRow` | 0/1 | 0 | Última linha de tiles do mapa. 0 = como no original: a vista para no fundo do clip rect do mapa, e a última linha fica escondida; 1 = a vista pode descer até mostrá-la. |
 | `AutoOreRoute` | 0/1 | 1 | Rota de minério num clique (acréscimo deste porte): com caminhões vazios selecionados, o clique direito na doca de uma mina monta o ciclo até a fundição compatível disponível mais próxima (ver 5.23). 0 = só o comando de três cliques, como no original. Também se troca pelo jogo: a caixa **Auto Ore Route** no `GAME PREFERENCES` do menu e a linha de mesmo nome no `Game Preferences` da aba Options (ver 5.29). |
 | `CommandDebug` | 0/1 | 0 | Diagnóstico (acréscimo deste porte): cada comando de prédio recusado — produzir, pesquisar, treinar, o repetido que o anel descarta — vira uma linha no registro de mensagens com o motivo (`not enough workers`, `needs 400 common ore`…). 0 = mudo, como no original. Também se troca pelo jogo: a caixa **Command Debug** no `GAME PREFERENCES` do menu e a linha de mesmo nome no `Game Preferences` da aba Options (ver 5.39). |
+| `ProductionQueue` | 0/1 | 0 | Fila de produção (acréscimo deste porte): cada clique num item da lista da fábrica soma +1 ao pedido (o número aparece na frente do item; clique direito tira 1), o `BUILD IT` manda o pedido para a fila e a fábrica produz um item atrás do outro; o clique que o minério não cobre não soma. 0 = um item por ordem, como no original. Também se troca pelo jogo: a caixa **Production Queue** no `GAME PREFERENCES` do menu e a linha de mesmo nome no `Game Preferences` da aba Options (ver 5.40). |
 
 Todas, menos `AILevel` dentro da partida, também se trocam pelas telas de
 preferências — ver 5.29.
@@ -2406,6 +2407,7 @@ estavam em tela nenhuma.
 | `MenuSkin` | **novo:** caixa *Original Menu Skin* (1208) | — só vale nos menus |
 | `NightDarkness` | **novo:** barra *Night Darkness* (1209, 0..100%) | **novo:** *Night Darkness*, `L&ESS`/`&MORE` de 5 em 5% |
 | `CommandDebug` | **novo (5.39):** caixa *Command Debug* (1210) | **novo (5.39):** *Command Debug* `On`/`Off` |
+| `ProductionQueue` | **novo (5.40):** caixa *Production Queue* (1211) | **novo (5.40):** *Production Queue* `On`/`Off` |
 
 **No menu principal**, o diálogo ficou **160 px mais largo** (360 → 520;
 `kPrX` 140 → 60) e ganhou uma **coluna à direita**, *"Port extras:"*, que
@@ -3059,6 +3061,85 @@ Mutações: o anel sem o turno (pega nos dois testes), o anel mudo, o
 laboratório parado mudo, o motivo dos trabalhadores apagado e a chave ignorada —
 6 de 6 pegas.
 
+## 5.40. Fila de produção: vários itens num pedido só (`ProductionQueue`, acréscimo deste porte) (2026-11-19)
+
+Pedido: *é um saco mandar construir um, esperar e mandar o próximo. Como em
+Dark Colony, cada clique numa unidade soma +1, dá para pedir várias coisas em
+fila, e o clique que o minério não cobre não soma — mas com uma opção no Game
+Preferences, mantendo o jeito do original quando desligada.*
+
+**O original não tem fila.** A fábrica produz um item por ordem: escolhe na
+lista (`sub_4683F0`), `BUILD IT` (`sub_467D50` → pacote 9), e o painel volta ao
+status até o item ficar pronto (`sub_467FF0` fecha a lista com a ação 9). Com
+`ProductionQueue=0` (o padrão) tudo continua exatamente assim.
+
+### Com a opção ligada
+
+- **O pedido.** Cada clique num item da lista soma +1 (o duplo conta dois); o
+  número aparece em amarelo **na frente** do item, numa coluna fixa, e o
+  segundo título vira *"Click +1, Right-click -1"*. O clique direito tira a
+  **última** unidade pedida daquele item. Itens diferentes entram na ordem dos
+  cliques. Sair pelo `STATUS` sem confirmar descarta o pedido.
+- **A conferência.** O clique só soma se o minério comum e o raro (e a comida
+  da Food Cargo) cobrem o pedido **mais o que já está nas filas de todas as
+  fábricas** do jogador — o minério é um só. Senão não soma e toca o `0x58`, o
+  mesmo som de "sem recursos" do original.
+- **`BUILD IT`** (embaixo da lista, onde sempre esteve) manda o pedido para a
+  fila da fábrica. **`ST&OP`**, ao lado dele e também no quadro de status, para
+  o item atual e cancela o resto da fila.
+- **A produção.** A cada tique, a fábrica parada recebe o próximo item da fila
+  pelo **mesmo pacote 9** do `BUILD IT`, desde que valham as regras do botão
+  `BUILD` (`sub_456000`: operando, baia livre na Structure Factory, limite de
+  unidades) e do `BUILD IT` (`sub_468430`: minério, plataforma do Spaceport).
+  Falta alguma coisa? O item espera na fila até dar. O minério só sai quando o
+  item **começa**, como no original.
+- **Produzindo**, o `BUILD` continua disponível e a lista fica aberta, para
+  somar mais itens. Acima dos botões aparece o item em produção com a
+  porcentagem e a mesma barra do quadro de status (`0x3E0` sobre `0x1E0`), e à
+  direita quantos ainda esperam (`+N`); parada, *"Waiting: <próximo>"*. No
+  quadro de status da fábrica, abaixo da barra de progresso, *"Queued"* e
+  *"Next"*.
+
+### Por que não muda a simulação
+
+A fila mora só do lado do jogador local (`src/game/production_queue.cpp`): a
+simulação continua recebendo um pacote 9 por item, igual ao do clique. A
+partida em rede segue no lockstep (o outro lado vê só os pacotes, e cada
+jogador pode ter a opção como quiser), o anel anti-duplicata não estranha
+(entre dois itens passa a produção inteira) e o jogo salvo não muda de formato.
+O preço disso: a fila **não é gravada** no jogo salvo — ao carregar, as fábricas
+voltam sem fila. Na rede o pacote leva `kTurnLead` turnos; a fila espera a
+fábrica começar e, passados 24 tiques sem isso, tenta de novo.
+
+Desligar a opção no meio da partida apaga as filas na hora.
+
+### Telas
+
+A caixa **Production Queue** (1211) na coluna *Port extras* do `GAME
+PREFERENCES` do menu (as caixas da coluna passaram a 20 px uma da outra, para
+a nota *"(not in the original)"* não encostar no valor do volume) e a linha
+*Production Queue* `On`/`Off` no `Game Preferences` da aba Options, que vale já
+no `&APPLY`.
+
+### Os testes
+
+- `--prodqueuetest <DLL> [tela.bmp]` — 30 casos na Structure Factory da missão
+  (E03 e P03): desligada, o clique só seleciona, o duplo pede o `BUILD IT`, o
+  `BUILD` some produzindo e a lista fecha; ligada, +1 por clique na ordem, o
+  direito tira o último, o clique sem minério não soma (nem com o minério
+  comprometido pela fila), o `BUILD IT` enche a fila, a fábrica pega o 1º e o
+  minério só sai aí, a lista fica aberta produzindo com o "2x" e a barra, três
+  itens produzidos em seguida **na ordem dos cliques**, o item sem minério
+  espera e começa quando o minério chega, o `ST&OP` para o atual e o resto, e
+  desligar apaga as filas.
+- `--optmenutest` e `--uitest` passam a linha e a caixa novas pelo mesmo ciclo
+  das outras chaves do porte.
+
+Mutações: o tique da fila desligado, a fila sem comprometer o minério, a lista
+fechando produzindo, o direito tirando o primeiro, o `ST&OP` sem limpar, o
+`BUILD` fechado produzindo, desligar sem apagar, o clique sem conferir o
+minério e o clique sem pedido — 9 de 9 pegas.
+
 ---
 
 ## 6. Build e execução
@@ -3114,6 +3195,7 @@ São 109 modos. Os que cobrem regressão de verdade:
 | `--convecdocktest <mapa> [prefixo]` | a doca do ConVec na Structure Factory: a animação, a duração das fases e a troca do kit |
 | `--minimaptest <DLL> [tela.bmp]` | o minimapa além do terreno: as cores dos jogadores, os beacons e os destroços |
 | `--cmddebugtest <DLL>` | o anel anti-duplicata sem registro velho e cada motivo do diagnóstico `CommandDebug` (5.39) |
+| `--prodqueuetest <DLL> [tela.bmp]` | a fila de produção do porte: o pedido, a conferência do minério, a ordem, o ST&OP e o original com a opção desligada (5.40) |
 | `--e02test [DLL] [bmp]` | missão 2 do Eden: a praga se espalha e é desenhada com o Overlay, e os objetivos de pesquisa são cumpridos; e a praga no minimapa |
 | `--tubetest <mapa> [prefixo]` | o Earthworker ligando prédios com tubo: retas inteiras, a doca que não liga, a animação de trabalho |
 | `--waypointtest <mapa> [bmp]` | pontos de passagem com Ctrl + clique: limites por comando, o pacote com os pontos antes do alvo, a unidade passando por eles, patrulha e obra, e o desenho |

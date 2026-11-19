@@ -34,6 +34,7 @@
 #include "game/command.h"
 #include "game/command_apply.h"
 #include "game/command_debug.h"
+#include "game/production_queue.h"
 #include "game/movement.h"
 #include "game/structure.h"
 #include "game/weapon.h"
@@ -7145,6 +7146,7 @@ static int runOptMenuTest(const std::string& dll) {
         using GOP = op2::GameOptionsPane;
         poeK("AudioVolume", 50); poeK("NightDarkness", 50); poeK("MapWrap", 0); poeK("ShowBottomRow", 0);
         poeK("CommandDebug", 0);
+        poeK("ProductionQueue", 0);
         gs.debugOptionsScreen(1);
         texto("a linha do volume mestre", gs.debugOptItem(GOP::OPT_AUDIO_VOL), "Audio Volume\n\tMaster Volume:<R>50%");
         texto("a linha da noite", gs.debugOptItem(GOP::OPT_NIGHT), "Night Darkness\n\tNight Darkness:<R>50%");
@@ -7165,10 +7167,13 @@ static int runOptMenuTest(const std::string& dll) {
         gs.debugOptRow(GOP::OPT_MAP_WRAP);
         gs.debugOptRow(GOP::OPT_BOTTOM_ROW);
         gs.debugOptRow(GOP::OPT_CMD_DEBUG);
+        texto("a linha da fila de producao", gs.debugOptItem(GOP::OPT_PROD_QUEUE), "Production Queue<R>Off");
+        gs.debugOptRow(GOP::OPT_PROD_QUEUE);
+        texto("o clique liga a fila", gs.debugOptItem(GOP::OPT_PROD_QUEUE), "Production Queue<R>On");
         texto("o clique liga o diagnostico", gs.debugOptItem(GOP::OPT_CMD_DEBUG), "Command Debug<R>On");
         casos.push_back({"nada disso vale antes do &APPLY",
                          (op2::nightDarkness() == 50 && !gs.debugMapWrapAll() && !gs.debugShowBottomRowOn() &&
-                          !op2::commandDebug()) ? 1 : 0, 1});
+                          !op2::commandDebug() && !op2::productionQueueOn()) ? 1 : 0, 1});
         gs.debugOptClick("&APPLY");
         casos.push_back({"o &APPLY grava NightDarkness=60", leK("NightDarkness"), 60});
         casos.push_back({"... AudioVolume=5", leK("AudioVolume"), 5});
@@ -7176,6 +7181,8 @@ static int runOptMenuTest(const std::string& dll) {
         casos.push_back({"... ShowBottomRow=1", leK("ShowBottomRow"), 1});
         casos.push_back({"... CommandDebug=1", leK("CommandDebug"), 1});
         casos.push_back({"... e o diagnostico liga na hora", op2::commandDebug() ? 1 : 0, 1});
+        casos.push_back({"... ProductionQueue=1", leK("ProductionQueue"), 1});
+        casos.push_back({"... e a fila liga na hora", op2::productionQueueOn() ? 1 : 0, 1});
         casos.push_back({"e o jogo usa na hora: a noite", op2::nightDarkness(), 60});
         casos.push_back({"... o volume mestre", op2::soundMasterVolume(), 5});
         casos.push_back({"... a volta e a ultima linha",
@@ -7682,6 +7689,185 @@ static int runCmdDebugTest(const std::string& dll) {
                     c.esperado.c_str(), bom ? "ok" : "FALHOU");
     }
     std::printf("[CmdDbg] %d casos, %d falhas\n", static_cast<int>(casos.size()), falhas);
+    std::fflush(stdout);
+    renderer.shutdown(); SDL_Quit();
+    return falhas ? 1 : 0;
+}
+
+// --prodqueuetest <DLL> [tela.bmp]: a fila de producao do porte (5.40) na
+// Structure Factory da propria missao. Desligada, o painel e o botao BUILD sao
+// os do original; ligada, o pedido (+1 por clique, -1 no direito, ordem dos
+// cliques, o clique que o minerio nao cobre nao soma), o BUILD IT que manda o
+// pedido para a fila, a fabrica produzindo um item atras do outro na ordem, a
+// espera por minerio, o ST&OP que para o atual e o resto, e a barra do painel.
+static int runProdQueueTest(const std::string& dll, const char* shot) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 prodqueuetest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    const int me = op2::TethysGame::localPlayer();
+    for (int k = 0; k < 200; ++k) gs.simTick();
+    int sf = 0;
+    for (int i = 1; i < static_cast<int>(op2::g_units.size()) && !sf; ++i) {
+        const op2::UnitRecord& u = op2::g_units[i];
+        if (u.id != -1 && u.type == op2::mapStructureFactory && (u.owner & 0x0F) == me) sf = i;
+    }
+    if (!sf) { std::printf("[PQ] sem Structure Factory\n"); renderer.shutdown(); SDL_Quit(); return 3; }
+    op2::UnitRecord& f = op2::g_units[sf];
+    const std::vector<uint32_t> itens = op2::factoryProduceList(sf);
+    std::printf("[PQ] %s: Structure Factory %d, %d itens na lista\n", dll.c_str(), sf, static_cast<int>(itens.size()));
+    if (itens.size() < 2) { renderer.shutdown(); SDL_Quit(); return 4; }
+    const uint32_t A = itens[0], B = itens[1];
+    int cA = 0, rA = 0, cB = 0, rB = 0;
+    op2::produceCost(sf, A, cA, rA);
+    op2::produceCost(sf, B, cB, rB);
+    std::printf("[PQ] A = %s (%d), B = %s (%d)\n", op2::produceItemName(A).c_str(), cA,
+                op2::produceItemName(B).c_str(), cB);
+    struct Caso { std::string nome; long long obtido, esperado; };
+    std::vector<Caso> casos;
+    const op2::PaneRect pane{436, 198, 436 + 0xC0, 468};          // infoPaneRect() em 640x480
+    const int lh = op2::markupLineHeight();
+    // A linha i da lista (o mesmo calculo de ProducePane::layout).
+    auto linhaY = [&](int i) { return pane.t + 0x14 + 0xD + 2 + i * lh + lh / 2; };
+    const int lx = pane.l + 0x20;
+    op2::ProducePane pp;
+    auto clica = [&](int i) { bool b = false; pp.click(pane, lx, linhaY(i), false, b); return b; };
+    auto& pd = op2::g_playerData[me];
+    // Para a fila nao depender de operarios/energia/baias da missao.
+    auto pronta = [&]() {
+        f.flags |= op2::UNIT_POWERED | op2::UNIT_WORKERS | op2::UNIT_SCIENTISTS;
+        for (int b = 0; b < 6; ++b) f.bayType[b] = 0;
+    };
+    pronta();
+    f.action = 0;
+
+    // ---------------- desligada: o original ----------------
+    op2::setProductionQueue(false);
+    pd.ore = 100000; pd.rareOre = 100000;
+    pp.open(sf);
+    clica(0); clica(0);
+    casos.push_back({"desligada: clique nao monta pedido", static_cast<long long>(pp.draft().size()), 0});
+    casos.push_back({"desligada: o clique seleciona (BUILD IT do original)", pp.buildEnabled() ? 1 : 0, 1});
+    {
+        bool b = false;
+        pp.click(pane, lx, linhaY(0), true, b);
+        casos.push_back({"desligada: o duplo clique pede o BUILD IT", b ? 1 : 0, 1});
+    }
+    f.action = 9;
+    casos.push_back({"desligada: BUILD indisponivel produzindo",
+                     op2::uiCommandAvailable(op2::UC_BUILD, std::vector<int>{sf}) ? 1 : 0, 0});
+    pp.update(std::vector<int>{sf});
+    casos.push_back({"desligada: a lista fecha quando produz", pp.isOpen() ? 1 : 0, 0});
+    f.action = 0;
+
+    // ---------------- ligada: o pedido ----------------
+    op2::setProductionQueue(true);
+    pp.open(sf);
+    clica(0); clica(0); clica(1); clica(0);
+    casos.push_back({"3 cliques em A", pp.draftCount(A), 3});
+    casos.push_back({"1 clique em B", pp.draftCount(B), 1});
+    casos.push_back({"na ordem dos cliques (o 3o e B)", pp.draft().size() == 4 && pp.draft()[2] == B ? 1 : 0, 1});
+    casos.push_back({"BUILD IT habilitado com pedido", pp.buildEnabled() ? 1 : 0, 1});
+    pp.rightClick(pane, lx, linhaY(0));
+    casos.push_back({"clique direito tira 1 de A", pp.draftCount(A), 2});
+    casos.push_back({"... o ULTIMO A (B continua no meio)", pp.draft().size() == 3 && pp.draft()[2] == B ? 1 : 0, 1});
+    // O minerio cobre so dois A: o terceiro clique nao soma.
+    pp.open(sf);
+    pd.ore = 2 * cA + cA / 2; pd.rareOre = 2 * rA + 100000;
+    clica(0); clica(0); clica(0); clica(0);
+    casos.push_back({"sem minerio para mais, para de somar", pp.draftCount(A), 2});
+    // A fila de OUTRA fabrica tambem pesa: o minerio e um so. (O pedido ja
+    // compromete os dois A; com a fila deles, nem um a mais.)
+    std::vector<uint32_t> d = pp.takeDraft();
+    casos.push_back({"takeDraft esvazia o pedido", static_cast<long long>(pp.draft().size()), 0});
+    op2::productionQueueAppend(sf, d);
+    clica(0);
+    casos.push_back({"a fila compromete o minerio (nao soma)", static_cast<long long>(pp.draft().size()), 0});
+    op2::productionQueueClear(sf);
+
+    // ---------------- ligada: a fila produzindo ----------------
+    pd.ore = 100000; pd.rareOre = 100000;
+    pp.open(sf);
+    clica(1); clica(0); clica(1);                                // B, A, B
+    op2::productionQueueAppend(sf, pp.takeDraft());
+    casos.push_back({"BUILD IT: 3 itens na fila", static_cast<long long>(op2::productionQueueOf(sf).size()), 3});
+    gs.simTick();
+    casos.push_back({"a fabrica parada pega o 1o (B)", f.action == 9 && f.produceType == (B & 0xFFFF) ? 1 : 0, 1});
+    casos.push_back({"... e ele sai da fila", static_cast<long long>(op2::productionQueueOf(sf).size()), 2});
+    const int oreDepois = pd.ore;
+    casos.push_back({"o minerio so sai quando comeca", 100000 - oreDepois, cB});
+    casos.push_back({"BUILD disponivel produzindo (somar mais)",
+                     op2::uiCommandAvailable(op2::UC_BUILD, std::vector<int>{sf}) ? 1 : 0, 1});
+    pp.open(sf);
+    pp.update(std::vector<int>{sf});
+    casos.push_back({"a lista fica aberta produzindo", pp.isOpen() ? 1 : 0, 1});
+    // A barra do painel: o pedido "2x" (amarelo) e o progresso (verde 0x3E0).
+    clica(0); clica(0);
+    gs.simTick();
+    f.field3C = f.produceTotal / 2;                              // a meio caminho: 50%
+    std::vector<uint32_t> fb(640 * 480, 0);
+    pp.draw(fb.data(), 640, 480, pane, -1, -1);
+    int amarelo = 0, verde = 0;
+    const int kGaugeT = pane.b - 0x19 - 0x10 - 40;                // a faixa logo acima dos botoes
+    for (int y = 0; y < 480; ++y)
+        for (int x = pane.l; x < pane.r && x < 640; ++x) {
+            const uint32_t c = fb[y * 640 + x];
+            if (c == 0xFFFFD24Au) ++amarelo;
+            if (y >= kGaugeT && c == 0xFF00F800u) ++verde;
+        }
+    casos.push_back({"a quantidade pedida aparece (amarelo)", amarelo > 0 ? 1 : 0, 1});
+    casos.push_back({"a barra de progresso aparece", verde > 0 ? 1 : 0, 1});
+    if (shot) writeBmp32(shot, fb.data(), 640, 480);
+    pp.takeDraft();
+    // Termina o B: o proximo e o A, depois o B.
+    // Cada comeco novo chega com o contador cheio (> 1): registra o tipo e
+    // encurta para 1, para o item acabar no tique seguinte.
+    std::vector<int> ordem;
+    for (int k = 0; k < 3000; ++k) {
+        if (f.action == 9 && f.field3C > 1) { ordem.push_back(f.produceType); f.field3C = 1; }
+        if (f.action != 9 && op2::productionQueueOf(sf).empty()) break;
+        pronta();
+        gs.simTick();
+    }
+    casos.push_back({"produziu 3 em seguida", static_cast<long long>(ordem.size()), 3});
+    casos.push_back({"na ordem B, A, B", ordem.size() == 3 && ordem[0] == static_cast<int>(B & 0xFFFF) &&
+                     ordem[1] == static_cast<int>(A & 0xFFFF) && ordem[2] == static_cast<int>(B & 0xFFFF) ? 1 : 0, 1});
+    casos.push_back({"a fila esvaziou", static_cast<long long>(op2::productionQueueOf(sf).size()), 0});
+
+    // ---------------- espera por minerio ----------------
+    for (int k = 0; k < 400 && f.action == 9; ++k) { f.field3C = 1; gs.simTick(); }
+    f.action = 0; pronta();
+    pd.ore = 100000;
+    op2::productionQueueAppend(sf, std::vector<uint32_t>{A});
+    pd.ore = 0;
+    for (int k = 0; k < 40; ++k) gs.simTick();
+    casos.push_back({"sem minerio, o item espera na fila", f.action == 0 && op2::productionQueueOf(sf).size() == 1 ? 1 : 0, 1});
+    pd.ore = 100000;
+    for (int k = 0; k < 20 && f.action != 9; ++k) gs.simTick();
+    casos.push_back({"... e comeca quando o minerio chega", f.action == 9 ? 1 : 0, 1});
+
+    // ---------------- ST&OP ----------------
+    op2::productionQueueAppend(sf, std::vector<uint32_t>{A, B, A});
+    op2::uiCommandClick(op2::UC_STOP, std::vector<int>{sf});
+    casos.push_back({"ST&OP limpa o resto da fila", static_cast<long long>(op2::productionQueueOf(sf).size()), 0});
+    casos.push_back({"... e para o item atual", f.action == 9 ? 1 : 0, 0});
+
+    // Desligar no meio devolve o original: a fila some.
+    op2::productionQueueAppend(sf, std::vector<uint32_t>{A});
+    op2::setProductionQueue(false);
+    casos.push_back({"desligar apaga as filas", static_cast<long long>(op2::productionQueueOf(sf).size()), 0});
+
+    int falhas = 0;
+    for (const Caso& c : casos) {
+        const bool bom = c.obtido == c.esperado;
+        if (!bom) ++falhas;
+        std::printf("[PQ] %-48s %lld (esperado %lld) %s\n", c.nome.c_str(), c.obtido, c.esperado, bom ? "ok" : "FALHOU");
+    }
+    std::printf("[PQ] %d casos, %d falhas\n", static_cast<int>(casos.size()), falhas);
     std::fflush(stdout);
     renderer.shutdown(); SDL_Quit();
     return falhas ? 1 : 0;
@@ -9059,6 +9245,8 @@ int main(int argc, char* argv[]) {
             return runItem21Test(argv[i + 1]);
         if (std::strcmp(argv[i], "--cmddebugtest") == 0 && i + 1 < argc)
             return runCmdDebugTest(argv[i + 1]);
+        if (std::strcmp(argv[i], "--prodqueuetest") == 0 && i + 1 < argc)
+            return runProdQueueTest(argv[i + 1], i + 2 < argc ? argv[i + 2] : nullptr);
         if (std::strcmp(argv[i], "--cheattest") == 0 && i + 1 < argc)
             return runCheatTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--deletetest") == 0 && i + 1 < argc)

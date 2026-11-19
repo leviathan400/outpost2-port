@@ -81,7 +81,12 @@
 > and was never cleared, so 16 turns later a stale entry dropped a legitimate
 > command — 297 of 400 spaced orders in mission 3; each slot now also stores
 > its turn. Plus the port's `[Game] CommandDebug` key, which logs why a
-> building command was refused).
+> building command was refused) and **5.40** (the port's optional production
+> queue, `[Game] ProductionQueue`: each click on a factory list item adds +1
+> to the order, `BUILD IT` sends it to the factory's queue, and the factory
+> produces one item after another through the same packet 9; clicks the ore
+> cannot cover do not add. The queue lives on the local client only, so the
+> simulation, network play and saves are unchanged — and it is not saved).
 > The recent
 > changes are summarised in
 > [README.EN.md](README.EN.md).
@@ -134,7 +139,7 @@ coverage by comparing the DLLs' import tables against the registry in
 
 ```
 src/
-  main.cpp        entry point + the 121 test/capture modes
+  main.cpp        entry point + the 122 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -223,6 +228,7 @@ preferences screen; the original ignores keys it doesn't know.
 | `ShowBottomRow` | 0/1 | 0 | Map's last tile row. 0 = as in the original: the view stops at the bottom of the map's clip rect, so the last row is hidden; 1 = the view can scroll down to show it. |
 | `AutoOreRoute` | 0/1 | 1 | One-click ore route (an addition of this port): with empty trucks selected, right-clicking a mine's dock builds the cycle to the nearest available compatible smelter (see 5.23 in the BR status). 0 = only the three-click command, as in the original. It can also be changed in game: the **Auto Ore Route** check box in the main menu's `GAME PREFERENCES`, and the line of the same name in the Options tab's `Game Preferences` (see 5.29). |
 | `CommandDebug` | 0/1 | 0 | Diagnostics (an addition of this port): every refused building command — produce, research, train, the repeat the anti-duplicate ring drops — becomes a line in the message log with the reason (`not enough workers`, `needs 400 common ore`…). 0 = silent, as in the original. It can also be changed in game: the **Command Debug** check box in the main menu's `GAME PREFERENCES`, and the line of the same name in the Options tab's `Game Preferences` (see 5.39 in the BR status). |
+| `ProductionQueue` | 0/1 | 0 | Production queue (an addition of this port): each click on an item in a factory's list adds +1 to the order (the count shows in front of the item; right-click removes 1), `BUILD IT` sends the order to the queue, and the factory produces one item after another; a click the ore cannot cover does not add. 0 = one item per order, as in the original. It can also be changed in game: the **Production Queue** check box in the main menu's `GAME PREFERENCES`, and the line of the same name in the Options tab's `Game Preferences` (see 5.40 in the BR status). |
 
 All of them can also be changed on the preferences screens — see 5.29 in the
 BR status.
@@ -722,7 +728,7 @@ mission DLLs and the original resources from the working directory).
 
 ### Command-line tests
 
-There are 121 modes. The ones that cover real regressions:
+There are 122 modes. The ones that cover real regressions:
 
 | Mode | What it proves |
 |---|---|

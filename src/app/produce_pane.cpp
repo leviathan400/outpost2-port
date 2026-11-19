@@ -8,6 +8,8 @@
 #include "../gfx/font.h"
 #include "../gfx/ui_font.h"
 #include "../game/production.h"
+#include "../game/production_queue.h"
+#include "../audio/sound.h"
 #include "../game/structure.h"
 #include "../game/tethys_game.h"
 #include "../game/unit.h"
@@ -83,7 +85,22 @@ void ProducePane::open(int factoryId) {                     // sub_468090
     m_sel = 0;                                               // [+0x2CC] = 0, nada selecionado
     m_top = 0;
     m_buildOk = false;                                       // BUILD IT desabilitado (vt[0x14](0))
+    m_draft.clear();
     refresh();
+}
+
+bool ProducePane::buildEnabled() const {
+    return productionQueueOn() ? !m_draft.empty() : m_buildOk;
+}
+
+int ProducePane::draftCount(uint32_t item) const {
+    return static_cast<int>(std::count(m_draft.begin(), m_draft.end(), item));
+}
+
+std::vector<uint32_t> ProducePane::takeDraft() {
+    std::vector<uint32_t> d;
+    d.swap(m_draft);
+    return d;
 }
 
 void ProducePane::refresh() {                               // sub_468120
@@ -108,7 +125,9 @@ void ProducePane::update(const std::vector<int>& sel) {     // sub_467FF0
         m_factory >= static_cast<int>(g_units.size()) || g_units[m_factory].id == -1) {
         m_open = false; return;
     }
-    if (g_units[m_factory].action == 9) { m_open = false; return; }   // produzindo → STATUS
+    // Produzindo → STATUS. Com a fila do porte a lista fica aberta: é por ela
+    // que se soma mais itens enquanto a fábrica trabalha.
+    if (g_units[m_factory].action == 9 && !productionQueueOn()) { m_open = false; return; }
     const int t = TethysGame::tick();
     if (t != m_lastTick && (t & 3) == 1) refresh();          // dword_56DEDC & 3 == 1
 }
@@ -118,6 +137,9 @@ ProducePane::Layout ProducePane::layout(const PaneRect& pane) const {   // sub_4
     int aw, ah; artSize(kArrowUp, aw, ah);
     const int W = pane.r - pane.l;
     L.list = PaneRect{pane.l + 0xD, pane.t + 0x14 + 0xD, pane.l + W - 0xE, pane.b - ah - 0x19 - 0x10};
+    // Fila do porte (5.40): a lista encolhe para caber, entre as setas e os
+    // botoes, o item em producao com a barra de progresso.
+    if (productionQueueOn()) L.list.b -= markupLineHeight() + 10;
     L.up = PaneRect{L.list.l - 3, L.list.b + 2, L.list.l - 3 + aw, L.list.b + 2 + ah};
     int dw, dh; artSize(kArrowDown, dw, dh);
     L.down = PaneRect{L.list.r - dw - 2, L.list.b + 2, L.list.r - 2, L.list.b + 2 + dh};
@@ -130,7 +152,8 @@ void ProducePane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, int
     if (!m_open) return;
     const Layout L = layout(pane);
     // Título (sub_468320 → sub_459B60): nome da fábrica (vt+0x40) e a instrução.
-    std::string title = unitTitle(g_units[m_factory]) + "\nSelect Item to Produce";
+    std::string title = unitTitle(g_units[m_factory]) +
+        (productionQueueOn() ? "\nClick +1, Right-click -1" : "\nSelect Item to Produce");
     drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.t + 2, pane.r - 0xE, L.list.t}, title, 0xFF00FF00u, true, kMarkupLine);   // unk_578F08: verde
     // Lista (sub_430400): moldura 0x4E0, fundo, item selecionado com fundo
     // 0x1CE7 e moldura 0x3DEF; texto na fonte do painel (verde).
@@ -151,7 +174,18 @@ void ProducePane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, int
             fill(L.list.l + 2, y, L.list.r - L.list.l - 4, L.lineH, rgb555(0x1CE7));
             frame(L.list.l + 2, y, L.list.r - L.list.l - 4, L.lineH, rgb555(0x3DEF));
         }
-        UiFont::draw(fb, fbW, fbH, produceItemName(item), L.list.l + 4, y + 1, 0xFF00FF00u, false);
+        int nx = L.list.l + 4;
+        if (productionQueueOn()) {
+            // Fila do porte: a quantidade pedida NA FRENTE do item (amarelo),
+            // numa coluna fixa para os nomes ficarem alinhados.
+            const int n = draftCount(item);
+            if (n > 0) {
+                const std::string q = std::to_string(n) + "x";
+                UiFont::draw(fb, fbW, fbH, q, nx, y + 1, 0xFFFFD24Au, false);
+            }
+            nx += UiFont::width("99x ");
+        }
+        UiFont::draw(fb, fbW, fbH, produceItemName(item), nx, y + 1, 0xFF00FF00u, false);
         if (mx >= L.list.l && mx < L.list.r && my >= y && my < y + L.lineH) hoverItem = &m_items[m_top + i];
     }
     const bool canUp = m_top > 0, canDown = m_top + L.rows < static_cast<int>(m_items.size());
@@ -160,6 +194,37 @@ void ProducePane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, int
     // pede o texto ao provedor e o entrega ao objeto de texto unk_575570 — ele
     // sai na linha de estado, não numa caixa junto ao cursor.
     m_help = hoverItem ? produceItemCost(*hoverItem, TethysGame::localPlayer()) : std::string();
+    if (productionQueueOn()) drawQueueGauge(fb, fbW, fbH, L.list.l, L.up.b + 3, L.list.r);
+}
+
+// Fila do porte (5.40): acima dos botoes, o item em producao e a sua
+// porcentagem, com a mesma barra do quadro de status (sub_45B850: 0x3E0 sobre
+// 0x1E0); parada, o proximo da fila esperando, ou "Idle". A direita, quantos
+// ainda estao na fila.
+void ProducePane::drawQueueGauge(uint32_t* fb, int fbW, int fbH, int l, int t, int r) const {
+    const UnitRecord& f = g_units[m_factory];
+    const std::vector<uint32_t>& fila = productionQueueOf(m_factory);
+    std::string txt;
+    int cur = 0, max = 0;
+    if (f.action == 9 && f.produceTotal > 0) {
+        const uint32_t item = static_cast<uint32_t>(f.produceType) | (static_cast<uint32_t>(f.kitWeapon) << 16);
+        cur = f.produceTotal - f.field3C; max = f.produceTotal;
+        txt = produceItemName(item) + " " + std::to_string(cur * 100 / max) + "%";
+    } else if (!fila.empty()) {
+        txt = "Waiting: " + produceItemName(fila.front());
+    } else {
+        txt = "Idle";
+    }
+    std::string resto;
+    if (!fila.empty()) resto = "+" + std::to_string(fila.size() - (f.action == 9 ? 0 : 1));
+    if (resto == "+0") resto.clear();
+    const int rw = resto.empty() ? 0 : UiFont::width(resto) + 4;
+    // O nome longo e cortado para nao invadir o contador.
+    while (txt.size() > 1 && UiFont::width(txt) > r - l - rw) txt.erase(txt.size() - 2, 1);
+    UiFont::draw(fb, fbW, fbH, txt, l, t, 0xFF00FF00u, false);
+    if (!resto.empty()) UiFont::draw(fb, fbW, fbH, resto, r - UiFont::width(resto), t, 0xFFFFD24Au, false);
+    const int by = t + markupLineHeight();
+    drawProgressBar(fb, fbW, fbH, l, by, r, by + 6, cur, max > 0 ? max : 1, 0x3E0, 0x1E0);
 }
 
 bool ProducePane::click(const PaneRect& pane, int x, int y, bool dbl, bool& buildNow) {
@@ -173,10 +238,36 @@ bool ProducePane::click(const PaneRect& pane, int x, int y, bool dbl, bool& buil
         return true;
     }
     if (!in(L.list)) return false;
-    const int i = (y - L.list.t - 2) / L.lineH;
-    if (i < 0 || i >= L.rows || m_top + i >= static_cast<int>(m_items.size())) return true;
-    select(m_items[m_top + i]);
+    const int k = itemAt(pane, x, y);
+    if (k < 0) return true;
+    select(m_items[k]);
+    if (productionQueueOn()) {
+        // Cada clique (o duplo também conta dois) soma 1 ao pedido, se o
+        // minério e a comida -- descontado o que as filas já comprometem --
+        // ainda cobrem; senão não soma e toca o 0x58 do "sem recursos".
+        if (productionQueueCanAdd(m_factory, m_draft, m_items[k])) m_draft.push_back(m_items[k]);
+        else soundPlay(0x58);
+        return true;
+    }
     buildNow = dbl && m_buildOk;                             // sub_4683B0: duplo → BUILD IT
+    return true;
+}
+
+int ProducePane::itemAt(const PaneRect& pane, int x, int y) const {
+    const Layout L = layout(pane);
+    if (x < L.list.l || x >= L.list.r || y < L.list.t || y >= L.list.b) return -1;
+    const int i = (y - L.list.t - 2) / L.lineH;
+    if (i < 0 || i >= L.rows || m_top + i >= static_cast<int>(m_items.size())) return -1;
+    return m_top + i;
+}
+
+bool ProducePane::rightClick(const PaneRect& pane, int x, int y) {
+    if (!m_open || !productionQueueOn()) return false;
+    const int k = itemAt(pane, x, y);
+    if (k < 0) return false;
+    // Tira a ÚLTIMA unidade pedida desse item (a ordem dos outros fica).
+    for (auto it = m_draft.rbegin(); it != m_draft.rend(); ++it)
+        if (*it == m_items[k]) { m_draft.erase(std::next(it).base()); break; }
     return true;
 }
 

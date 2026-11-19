@@ -172,13 +172,14 @@ outpost2_modern.exe                      # main menu
 outpost2_modern.exe --game eden01.map    # opens a map directly
 ```
 
-The game's `OUTPOST2.INI` file is respected. The port adds ten keys the
+The game's `OUTPOST2.INI` file is respected. The port adds eleven keys the
 original doesn't have — AI level, night darkness, volume, demo camera,
 fullscreen, the menu skin (`MenuSkin`), horizontal map wrap (`MapWrap`), the
 map's bottom row (`ShowBottomRow`), the one-click ore route
-(`AutoOreRoute`) and refused-command diagnostics (`CommandDebug`); they are documented in `PORT_STATUS.EN.md`.
+(`AutoOreRoute`), refused-command diagnostics (`CommandDebug`) and the
+production queue (`ProductionQueue`); they are documented in `PORT_STATUS.EN.md`.
 
-There are **121 command-line modes** for tests and captures, among them a
+There are **122 command-line modes** for tests and captures, among them a
 regression battery (`--savetest` proves save/reload determinism). The list is
 in `PORT_STATUS.EN.md`.
 
@@ -212,7 +213,7 @@ and what was checked and discarded from the cheat lists that circulate.
 
 ```
 src/
-  main.cpp        entry point + the 121 test/capture modes
+  main.cpp        entry point + the 122 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -233,6 +234,16 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
 ---
 
 ## Recent changes
+
+### 2026-11-19
+
+- **Production queue (optional).** With the **Production Queue** option on in
+  the preferences, each click on an item in a factory's list adds +1 to the
+  order (the count shows in front of the item; right-click removes 1), items
+  can be mixed, and `BUILD IT` sends it all to the queue: the factory produces
+  one after another on its own. A click the ore cannot cover does not add.
+  `ST&OP` stops the current item and the rest of the queue. Off (the default),
+  it is the original game.
 
 ### 2026-11-18
 

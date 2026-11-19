@@ -7,6 +7,8 @@
 #include "../gfx/font.h"
 #include "../gfx/ui_font.h"
 #include "../gfx/art_blit.h"
+#include "../game/production.h"
+#include "../game/production_queue.h"
 #include "../game/unit.h"
 #include "../game/player.h"
 #include "../game/colony.h"
@@ -620,7 +622,17 @@ void drawUnitInfoPane(uint32_t* fb, int fbW, int fbH, const PaneRect& pane,
     sec.t += drawStorageSection(fb, fbW, fbH, sec, r, localPlayer);  // sub_45B070
     sec.t += drawLaunchPadSection(fb, fbW, fbH, sec, r);         // sub_45BE70
     sec.t += 0x0A;
-    drawProgressSection(fb, fbW, fbH, sec, r, localPlayer, pane);   // sub_45B850
+    sec.t += drawProgressSection(fb, fbW, fbH, sec, r, localPlayer, pane);   // sub_45B850
+    // Fila de producao (extra do porte, 5.40): quantos itens ainda esperam e
+    // qual e o proximo. Sem a chave ligada (ou com a fila vazia), nada.
+    if (productionQueueOn() && (r.owner & 0x0F) == localPlayer) {
+        const std::vector<uint32_t>& fila = productionQueueOf(unitId);
+        if (!fila.empty()) {
+            const std::string txt = "Queued:<R>" + std::to_string(fila.size()) +
+                                    "\n<L>Next:<R>" + produceItemName(fila.front());
+            drawMarkupText(fb, fbW, fbH, sec, txt, kTextGreen, false, kMarkupLine);
+        }
+    }
 }
 
 bool infoPaneButton(const PaneRect& pane, int unitId, int localPlayer, PaneButton& out) {
