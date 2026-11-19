@@ -15,6 +15,23 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
 
 **Corrigido**
 
+- **Os caminhões de minério não travam mais na doca.** Com vários caminhões
+  na mesma rota (uns 10 já bastavam), o que acabava de descarregar na
+  fundição ficava cercado pelos carregados que esperavam a vez: ele não
+  conseguia sair, eles não entravam, e o transporte parava de vez. Agora os
+  que esperam saem da frente — ou trocam de lugar com o que sai, quando estão
+  apertados demais. Junto, outro defeito que vinha do original: um caminhão
+  desviado às vezes **abandonava a rota** e parava carregado no meio do
+  caminho; isso também acabou (e a patrulha tinha o mesmo problema). Testado
+  com até 25 caminhões numa só fundição.
+- **O cursor de ataque (e os outros) como no original.** Com unidades
+  selecionadas e nenhum comando escolhido, o cursor mostra o que o clique vai
+  fazer: sobre um inimigo, o de **ataque**; sobre o chão, o de mover; sobre a
+  doca de um prédio seu, o de atracar; com um Spider sobre um inimigo
+  paralisado, o de reprogramar; sobre uma unidade sua, a seta. E o clique
+  direito faz exatamente isso — sobre o inimigo ele agora **ataca** (antes só
+  movia até ele).
+
 - **A noite como no original: a luz das unidades.** No original, à noite,
   cada veículo com os faróis acesos e cada prédio com energia abre um círculo
   de luz no escuro, do tamanho do alcance de visão dele, com a borda
@@ -50,14 +67,30 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   A fila é só da interface: a partida em rede funciona como sempre, mas ela não
   é gravada no jogo salvo. Desligada (o padrão), é o jogo original.
 
-**Para quem acompanha o código:** seções 5.40 e 5.41 do PORT_STATUS; os modos
-de teste `--prodqueuetest` e `--lighttest`; os módulos
+**Para quem acompanha o código:** seções 5.40 a 5.43 do PORT_STATUS; os modos
+de teste `--prodqueuetest`, `--lighttest` e `--truckjamtest` (e o `--cursortest`
+ampliado); os módulos
 `src/game/production_queue.cpp` e `src/game/light_map.cpp`.
 
 ### English
 
 **Fixed**
 
+- **Ore trucks no longer jam at the dock.** With several trucks on the same
+  route (about 10 was enough), the one that had just unloaded at the smelter
+  got boxed in by the loaded ones waiting their turn: it could not leave, they
+  could not get in, and hauling stopped for good. Now the waiting trucks get
+  out of the way — or swap places with the one leaving, when it is too
+  crowded. Along with it, another defect inherited from the original: a
+  truck that had been pushed aside sometimes **dropped its route** and stopped,
+  loaded, halfway; that is gone too (and patrols had the same problem). Tested
+  with up to 25 trucks on a single smelter.
+- **The attack cursor (and the others) as in the original.** With units
+  selected and no command chosen, the cursor shows what the click will do:
+  over an enemy, the **attack** cursor; over the ground, move; over one of your
+  buildings' dock, dock; with a Spider over a paralysed enemy, reprogram; over
+  one of your own units, the arrow. And the right click does exactly that —
+  over an enemy it now **attacks** (it used to just move to it).
 - **Night as in the original: the units' light.** In the original, at night,
   every vehicle with its headlights on and every powered building opens a
   circle of light in the dark, as large as its sight range, with a dotted
@@ -94,8 +127,9 @@ de teste `--prodqueuetest` e `--lighttest`; os módulos
   The queue lives in the interface only: network games work as always, but it
   is not stored in saved games. Off (the default), it is the original game.
 
-**For those following the code:** sections 5.40 and 5.41 of PORT_STATUS; the
-`--prodqueuetest` and `--lighttest` test modes; the
+**For those following the code:** sections 5.40 to 5.43 of PORT_STATUS; the
+`--prodqueuetest`, `--lighttest` and `--truckjamtest` test modes (and the
+extended `--cursortest`); the
 `src/game/production_queue.cpp` and `src/game/light_map.cpp` modules.
 
 ---

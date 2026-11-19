@@ -180,7 +180,7 @@ demo, tela cheia, a pele dos menus (`MenuSkin`), a volta horizontal do mapa
 clique (`AutoOreRoute`), o diagnóstico de comando recusado (`CommandDebug`) e a
 fila de produção (`ProductionQueue`); estão documentadas no `PORT_STATUS.BR.md`.
 
-Há **123 modos de linha de comando** para testes e capturas, entre eles uma
+Há **124 modos de linha de comando** para testes e capturas, entre eles uma
 bateria de regressão (`--savetest` prova o determinismo de salvar/recarregar).
 A lista está no `PORT_STATUS.BR.md`.
 
@@ -214,7 +214,7 @@ e descartado das listas de cheat que circulam por aí.
 
 ```
 src/
-  main.cpp        entrada + os 123 modos de teste/captura
+  main.cpp        entrada + os 124 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -239,6 +239,15 @@ cursores `.ANI`.
 
 ### 2026-11-19
 
+- **Os caminhões de minério não travam mais na doca.** Com vários caminhões na
+  mesma rota, o que acabava de descarregar ficava cercado pelos que esperavam
+  e o ciclo parava. Agora os que esperam saem da frente (ou trocam de lugar
+  com ele), e nenhum caminhão abandona a rota no meio do caminho. Testado com
+  até 25 caminhões numa só fundição.
+- **O cursor de ataque como no original.** Com unidades selecionadas, passar o
+  mouse sobre um inimigo mostra o cursor de ataque (sobre o chão, o de mover;
+  sobre a doca, o de atracar), e o clique direito faz o que o cursor mostra:
+  sobre o inimigo, **ataca**.
 - **A noite como no original: a luz das unidades.** À noite, cada veículo com
   os faróis acesos e cada prédio com energia abre um círculo de luz no escuro,
   do tamanho do alcance de visão dele, com a borda pontilhada — a luz anda com

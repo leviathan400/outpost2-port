@@ -93,7 +93,14 @@
 > blended through the `VIRMASK.RAW` templates, mode 2 of the pixel routine;
 > and unit sprites DO darken — buildings, vehicles and turrets pass the light
 > column, with the second, lighter curve for the local player and allies — an
-> old note said they did not).
+> old note said they did not), **5.42** (the default command: with units
+> selected and nothing armed, the original's composite command — attack, then
+> the lone Spider's reprogram, then move/dock, the first whose `vt[8]` accepts
+> the target, `sub_455390` — gives the cursor, and the port's right click now
+> runs it: it attacks the enemy under the pointer) and **5.43** (ore trucks
+> jamming at the dock: route trucks were always impassable, `sub_44BD60`; the
+> push detour overwrote a visited waypoint, `sub_44BFD0`, which broke looping
+> routes; and in a dense crowd two head-on route trucks now swap places).
 > The recent
 > changes are summarised in
 > [README.EN.md](README.EN.md).
@@ -146,7 +153,7 @@ coverage by comparing the DLLs' import tables against the registry in
 
 ```
 src/
-  main.cpp        entry point + the 123 test/capture modes
+  main.cpp        entry point + the 124 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -735,7 +742,7 @@ mission DLLs and the original resources from the working directory).
 
 ### Command-line tests
 
-There are 123 modes. The ones that cover real regressions:
+There are 124 modes. The ones that cover real regressions:
 
 | Mode | What it proves |
 |---|---|

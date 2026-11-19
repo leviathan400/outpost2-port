@@ -83,6 +83,13 @@ void wallBlockTarget(UnitRecord& u, int nx, int ny) {
 // rota sem ordem (unitPathTo). Isso fica de fora: o laço sem ordem do porte
 // não tem lista de pontos. Esse empurrado não recebe desvio; segue a rota
 // curta dele e, se travar, desiste em 20 esperas, como qualquer passo.
+// (5.43) Devolve o ponto que o desvio sobrescreveu.
+static void restoreDetourPoint(OrderBlock& ob) {
+    if (ob.detourIdx >= 0 && ob.detourIdx < static_cast<int>(ob.waypoints.size()))
+        ob.waypoints[static_cast<size_t>(ob.detourIdx)] = ob.detourOld;
+    ob.detourIdx = -1;
+}
+
 static bool insertDetour(int id, int tx, int ty, int mode) {
     UnitRecord& u = g_units[id];
     OrderBlock& ob = u.order;
@@ -93,7 +100,11 @@ static bool insertDetour(int id, int tx, int ty, int mode) {
     --ob.curWaypoint;
     const uint32_t wp = packLocation(tx, ty) | (static_cast<uint32_t>(mode) << 29);
     if (ob.curWaypoint < 0) ob.detourSlot = wp;
-    else ob.waypoints[static_cast<size_t>(ob.curWaypoint)] = wp;
+    else {
+        ob.detourIdx = ob.curWaypoint;                        // (5.43) guarda o ponto
+        ob.detourOld = ob.waypoints[static_cast<size_t>(ob.curWaypoint)];
+        ob.waypoints[static_cast<size_t>(ob.curWaypoint)] = wp;
+    }
     u.clearRoute();                                           // sub_44C2F0: replaneja
     return true;
 }
@@ -156,6 +167,14 @@ static void pushAside(int pusherId, int dir, int blockerId) {
         insertDetour(blockerId, mx, my, 0);
         return;
     }
+    // CORRECAO (5.43, junto da do pathfinder): o caminhao da rota de minerio
+    // PARADO (sub-estado 0) ainda tem a ordem da rota, e a rota sem ordem de
+    // vt[0x7C] nao vale para quem tem ordem (o laco segue a ordem): ele nunca
+    // saia da frente. Recebe o desvio na ordem, como quem anda.
+    if (b.action == 0x27 && b.hasOrder) {
+        if (insertDetour(blockerId, mx, my, 0)) { b.field20 = 1; b.field22 = 1; }
+        return;
+    }
     unitPathTo(blockerId, mx, my);               // vt[0x7C] (sub_44C350): so a ROTA
     b.field22 = 1;                               // incondicional, como no original
 }
@@ -211,6 +230,34 @@ static bool setupStep(int id, int dir) {
         const int occId = static_cast<int>((dcell & GameMap::CELL_OCCUPANCY) >> GameMap::CELL_OCC_SHIFT);
         if (occId != 0 && occId != id) {
             if (dcell & GameMap::CELL_WALLBITS) return false;     // loc_44B8F0 -> loc_44B998
+            // CORRECAO (5.43): a TROCA DE LUGAR. Dois caminhoes aliados da
+            // rota de minerio, B parado entre passos e com o proximo passo
+            // vindo DE FRENTE para a celula de A -- o que sai da doca e o que
+            // quer entrar, o tipico do engarrafamento --, cruzam um pelo outro
+            // no mesmo tique: o empurrao nao resolve quando B nao tem casa
+            // livre em volta (multidao). Os dois viram na hora para o passo,
+            // para nenhum ficar so girando com a celula do outro ja tomada.
+            {
+                UnitRecord& b = g_units[occId];
+                const int bDir = (dir + 4) & 7;
+                if (u.action == 0x27 && b.action == 0x27 && (b.owner & 0x0F) == (u.owner & 0x0F) &&
+                    b.field22 == 1 && !b.velX && !b.velY && !b.turnStep &&
+                    b.routeIdx < static_cast<int>(b.routeDirs.size()) &&
+                    (b.routeDirs[static_cast<size_t>(b.routeIdx)] & 7) == bDir) {
+                    u.rotation = static_cast<uint8_t>(dir << 5);
+                    b.rotation = static_cast<uint8_t>(bDir << 5);
+                    g_gameMap.clearUnitOccupancy(curX, curY);             // a de A, para B montar
+                    if (setupStep(occId, bDir)) {                         // B -> a de A (livre)
+                        const bool ok = setupStep(id, dir);               // A -> a de B (B a soltou)
+                        g_gameMap.setUnitOccupancy(curX, curY, occId);    // a de A e de B agora
+                        if (ok) return true;
+                        b.velX = b.velY = 0; b.turnStep = 0; b.stepTicks = 1;   // desfaz o passo de B
+                    }
+                    g_gameMap.setUnitOccupancy(curX, curY, id);           // nao deu: tudo como antes
+                    g_gameMap.setUnitOccupancy(nx, ny, occId);
+                    return false;
+                }
+            }
             if (!pfOccupantPassable(occId, id)) return false;     // loc_44B998
             pushAside(id, dir, occId);                            // sub_44BBA0
             if (u.pushWait++ >= 20) return false;                 // loc_44B998
@@ -436,6 +483,7 @@ static void stepUnit(int id) {
             // dando tempo para quem empurrou passar; depois retoma o caminho.
             if ((ob.flags & 2u) && avancou) {
                 ob.flags &= ~2u;
+                restoreDetourPoint(ob);                  // (5.43) o ponto volta
                 u.stepTicks = 0x20;
                 u.turnStep = 0;
                 u.velX = u.velY = 0;
@@ -461,6 +509,7 @@ static void stepUnit(int id) {
                 // outro desvio até lá.
                 if (ob.curWaypoint < ob.countMinus1 && guard < 64) {
                     ob.flags &= ~2u;
+                    restoreDetourPoint(ob);              // (5.43) o ponto volta
                     ++ob.curWaypoint; u.clearRoute(); continue;   // sub_44C2F0
                 }
                 // sub_4401F0: as vizinhas enteráveis passam pela função de custo

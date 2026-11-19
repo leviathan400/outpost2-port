@@ -118,6 +118,13 @@ struct OrderBlock {
     // DESVIO cai quando a unidade está no 1º ponto (sub_44BFD0 decrementa o
     // índice e grava ali); o índice nunca passa de −1. Ver wpAt (movement.cpp).
     uint32_t detourSlot = 0;
+    // CORRECAO (5.43): o ponto que o desvio sobrescreveu (indice >= 0) e o
+    // valor dele, devolvido quando o desvio termina. O original gravava o
+    // desvio por cima de um ponto ja visitado e nunca o devolvia -- numa ordem
+    // que repete os pontos (rota de minerio 0x27, patrulha 0x28) o ponto da
+    // doca ficava trocado pelo do desvio, e o caminhao abandonava a rota.
+    int detourIdx = -1;
+    uint32_t detourOld = 0;
     // [st+0x70]: a espera antes de tentar de novo quando nao ha rota para o
     // ultimo ponto (loc_44C227). Cresce a cada falha -- espera + GetRand(espera)
     // + 2, com teto de 0x53 -- e volta a 0 quando um ponto e alcancado

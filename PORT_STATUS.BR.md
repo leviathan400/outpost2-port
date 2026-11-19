@@ -48,7 +48,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 123 modos de teste/captura
+  main.cpp        entrada + os 124 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -1631,7 +1631,8 @@ quadros fora de ordem.
 - **`--cursortest <mapa>`**: o cursor que aparece em cada situação — mover em
   chão livre e em chão fechado, atacar sobre inimigo e sobre o vazio, reparar o
   meu machucado e o meu inteiro, reprogramar, terraplanar, guardar, patrulhar,
-  autodestruir e erguer muro.
+  autodestruir e erguer muro; desde a 5.42, também o comando padrão (com
+  seleção e sem mira) e o clique direito.
 
 Neutralizando: o par do ataque virando só "attack" **1** falha; a máscara AND
 do `.CUR` ignorada **17** (todo cursor vira um quadrado sólido); o `seq `
@@ -3223,6 +3224,118 @@ Mutações: o círculo que não marca, sem o `+1`, sem o `dy − 1`, o terreno e
 sprite ignorando a luz, sem a curva dos aliados, o farol ignorado, a luz em
 toda parte ignorada e a borda sem molde — 9 de 9 pegas.
 
+## 5.42. O comando padrão: o cursor de ataque (e os outros) sem comando armado (2026-11-19)
+
+Relato: *no original, quando se manda atacar, tem um cursor específico — e os
+demais cursores de ação também.*
+
+Os 17 cursores `.ANI` já estavam portados (`src/app/cursors.cpp`), mas o
+porte só os mostrava com um comando **armado** no painel. O original tem um
+**comando composto**, o comando padrão (`dword_5648A0`, vtable `off_4D4E00`):
+com unidades selecionadas e nada armado, `sub_4552C0` junta, **nesta ordem**,
+os comandos de `off_4E2C00` disponíveis para a seleção e arma o estado 3:
+
+1. **atacar** (`dword_56484C`) — o `vt[8]` (`sub_453260` → `sub_452E00`) aceita
+   qualquer unidade sob o ponteiro cujo dono **não** tem o jogador local como
+   aliado; com um Guard Post selecionado, só dentro do alcance (bloco `+0x18`,
+   distância em tiles `max + min/2`, com a volta do mapa). Cursor: `attack`;
+2. **reprogramar** (`dword_564988`, disponível só com **um Spider** sozinho —
+   `loc_454BA0`) — `sub_454E70`: veículo não aliado, que não seja Spider nem
+   Scorpion e esteja **paralisado pelo EMP** (`[+0x44] & 0x80000`). Cursor:
+   `reprog`;
+3. **mover** (`dword_56498C`) — `sub_451640`: sobre um **prédio** do jogador
+   local, só a doca dele; nela, o veículo que **não** atraca ali (`sub_44DA80`
+   = 0) é aceito como mover, e o que atraca só com a doca **livre** (célula
+   `0x7FF0000` = 0) — a doca ocupada fica para o botão MOVE, que continua
+   empurrando o parado (5.30); fora de prédio, aceita se não houver unidade do
+   jogador local sob o ponteiro. Cursor: o do `vt[4]` — `move`/`no_move`, ou
+   `dock`/`nodock` na doca.
+
+Sob o ponteiro, `sub_455390` pergunta o `vt[8]` de cada um e o **primeiro** que
+aceitar dá o cursor (`vt[9]`); nenhum aceitando, a seta. O clique
+(`sub_455350`) executa esse mesmo comando.
+
+**No porte:** `uiDefaultCommand` (`src/game/commands.cpp`) faz a escolha, o
+cursor sem comando armado passa a segui-la, e o **clique direito** — que no
+porte é a ação padrão (ver 5.32, a seleção) — executa o mesmo comando: sobre o
+inimigo **ataca** (antes só movia até ele), com um Spider sobre um inimigo
+paralisado **reprograma**, sobre uma unidade sua **não faz nada** (a seta
+avisa), e no chão ou na doca move/atraca. O atalho da rota de minério
+(`AutoOreRoute`) continua vindo antes.
+
+O cursor pergunta a **cada quadro**, com a seleção que estiver na tela; o
+`uiDefaultCommand` só considera ids vivos e dentro da tabela — uma seleção
+velha (unidades recriadas, jogo carregado) derrubava o `uiCommandAvailable`
+(achado pelo `--autoroutetest`, que recria as unidades entre os cenários).
+
+**Teste:** o `--cursortest <mapa>` ganhou 11 casos (25 no total): selecionado e
+sem mira, o cursor sobre o inimigo, no chão livre, no chão fechado e sobre uma
+unidade sua; o Spider sobre o inimigo sem e com EMP; o clique direito sobre
+a unidade sua, sobre o inimigo (ação `0x24`) e no chão (ação 2); e a seleção
+velha (id fora da tabela, unidade morta) dando a seta. O `--pushtest` passa a
+mandar o caminhão para a doca ocupada pelo botão MOVE. Mutações: o padrão sem
+atacar, o direito só movendo, o Spider sem exigir o EMP, o mover sobre unidade
+sua, o cursor sem o padrão e a seleção sem filtro — 6 de 6 pegas.
+
+## 5.43. Os caminhões da rota de minério que travavam na doca (2026-11-19)
+
+Relato: *com vários caminhões transportando o minério, às vezes o que está
+descarregando fica preso na plataforma, todos ficam esperando e ele não
+consegue sair. Isso tem de ter um tratamento.*
+
+O `--truckjamtest` (abaixo) reproduziu: com 10 caminhões o ciclo parava de vez
+depois de umas 14 entregas. Eram **três** defeitos, todos herdados do original.
+
+### 1. O caminhão da rota é sempre intransponível (`sub_44BD60`)
+
+A função que diz se um veículo pode ser contornado ou empurrado trata **todo**
+veículo com a ação `0x27` (a rota de minério) como ocupado de vez. Os
+carregados que esperam a doca da fundição cercam o que acabou de descarregar:
+ele não acha rota para sair (o planejador vê as vizinhas bloqueadas), eles não
+entram enquanto ele não sai. **Correção:** o caminhão da rota que está
+**parado entre passos** (sub-estado 0 ou 1, sem velocidade nem giro) e é aliado
+de quem passa deixa de bloquear — o planejador o atravessa (custo ×4, como
+quem anda) e o passo o manda sair da frente (`sub_44BBA0`). Para o que está no
+sub-estado 0, o empurrão do original (`vt[0x7C]`, uma rota sem ordem) não vale
+— o laço segue a ordem da rota —, então ele recebe o **desvio** na ordem, como
+quem anda.
+
+### 2. O desvio estragava a rota (`sub_44BFD0`)
+
+O empurrão de quem está andando insere um desvio na ordem: o índice do ponto
+atual recua um e o desvio é gravado **por cima do ponto já visitado** — que o
+original nunca devolve. Numa ordem de ida, tanto faz. Na rota de minério, que
+repete os pontos, o ponto sobrescrito podia ser o da doca da mina ou da
+fundição: na volta seguinte o caminhão terminava o trecho fora da doca, o
+`truckDockStatus` dava 0 e `sub_44DFB0` **abandonava a rota** — o caminhão
+parava carregado no meio do caminho (com 20 caminhões, 11 saíam da rota). A
+patrulha (`0x28`), que também repete pontos, tinha o mesmo defeito.
+**Correção:** o ponto sobrescrito é guardado (`detourIdx`/`detourOld` no
+`OrderBlock`) e devolvido quando o desvio termina — na chegada (`loc_44C1D2`)
+ou quando ele é pulado por falta de rota.
+
+### 3. A multidão: a troca de lugar
+
+Com 20 caminhões ou mais, o bloco em volta da doca fica tão denso que o
+empurrado não tem casa livre para onde ir. **Correção (acréscimo do porte):**
+dois caminhões aliados da rota, o da frente parado entre passos e com o
+próximo passo vindo **de frente** para a célula de quem anda — o que sai da
+doca e o que quer entrar —, **trocam de lugar** no mesmo tique, cruzando um
+pelo outro (`setupStep`). Os dois viram na hora para a direção do passo, para
+nenhum ficar só girando com a célula do outro já tomada.
+
+### O teste
+
+`--truckjamtest <mapa> [n] [tiques] [tela.bmp]` — uma colônia com fundição e
+mina, `n` caminhões (padrão 10) na rota pelo atalho, `tiques` (padrão 20000)
+de simulação: nenhuma janela de 2000 tiques sem entrega, ninguém parado numa
+doca por 1500 tiques, ninguém saindo da rota. Antes: 10 caminhões paravam em
+14 entregas, 20 em 3. Agora, com 3, 10, 14, 20 e 25 caminhões, cerca de 6
+entregas por janela (o limite da doca) e ninguém preso mais de ~500 tiques —
+inclusive em 60 mil tiques. Mutações (com 10 e 20 caminhões): o caminhão
+esperando bloqueando, o parado sem desvio, o desvio sem devolver o ponto e sem
+a troca de lugar — 4 de 4 pegas.
+
 ---
 
 ## 6. Build e execução
@@ -3280,6 +3393,7 @@ São 109 modos. Os que cobrem regressão de verdade:
 | `--cmddebugtest <DLL>` | o anel anti-duplicata sem registro velho e cada motivo do diagnóstico `CommandDebug` (5.39) |
 | `--prodqueuetest <DLL> [tela.bmp]` | a fila de produção do porte: o pedido, a conferência do minério, a ordem, o ST&OP e o original com a opção desligada (5.40) |
 | `--lighttest <DLL> [tela.bmp]` | a luz das unidades na noite: o círculo de `sub_43A200`, os cantos e o molde, o terreno e os sprites (5.41) |
+| `--truckjamtest <mapa> [n] [tiques] [tela.bmp]` | n caminhões na mesma rota de minério: o ciclo não para, ninguém preso na doca, ninguém sai da rota (5.43) |
 | `--e02test [DLL] [bmp]` | missão 2 do Eden: a praga se espalha e é desenhada com o Overlay, e os objetivos de pesquisa são cumpridos; e a praga no minimapa |
 | `--tubetest <mapa> [prefixo]` | o Earthworker ligando prédios com tubo: retas inteiras, a doca que não liga, a animação de trabalho |
 | `--waypointtest <mapa> [bmp]` | pontos de passagem com Ctrl + clique: limites por comando, o pacote com os pontos antes do alvo, a unidade passando por eles, patrulha e obra, e o desenho |

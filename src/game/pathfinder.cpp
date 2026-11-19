@@ -127,6 +127,18 @@ int pfOccupantPassable(int occId, int searcherId) {  // sub_44BD60
     }
 
     uint8_t action = o.action;                       // [+0x21]
+    // CORRECAO (5.43): no original o caminhao da rota de minerio (0x27) e
+    // SEMPRE intransponivel. Com varios na mesma rota, os carregados que
+    // esperam a doca da fundicao (sub-estado 1, parados entre dois passos --
+    // sem rota, ou com o passo para dentro da doca recusado) cercam o que
+    // acabou de descarregar: ele nao acha rota para sair, eles nao entram
+    // enquanto ele nao sai, e o ciclo para de vez. Aqui o caminhao da rota que
+    // esta PARADO entre passos e e aliado de quem passa deixa de bloquear: o
+    // planejador o contorna ou atravessa (custo x4, como quem anda) e o passo
+    // o manda sair da frente (sub_44BBA0 -> o desvio de 32 tiques). Quem esta
+    // no meio de um passo, atracado ou trocando carga continua bloqueando.
+    if (action == 0x27 && allied && (o.field22 == 0 || o.field22 == 1) && !o.velX && !o.velY && !o.turnStep)
+        action = 0;
     switch (action) {                                // ações ocupadas → bloqueia
         case 0x27: case 0x28: case 3: case 1:
         case 0x26: case 0x1F: case 0x0F:

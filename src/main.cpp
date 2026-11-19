@@ -6276,7 +6276,8 @@ static int runPushTest(const std::string& mapName) {
     casos.push_back({"... e pode ser empurrado (premissa)",
                      op2::pfOccupantPassable(parado, chega.id()), 1});
     gs.setSelection({chega.id()});
-    gs.debugRightClickTile(renderer, dx, dy);                  // mandado atracar ali
+    op2::uiSetCursorPixel(dx * 32 + 16, dy * 32 + 16);   // botao MOVE (a doca OCUPADA
+    op2::uiCommandTarget(op2::UC_MOVE, {chega.id()}, dx, dy); // o comando padrao recusa, 5.42)
     int saiu = -1, chegou = -1, esperaMax = 0, docaLivre = -1, docaDele = -1;
     for (int t = 0; t < 800; ++t) {
         gs.onIdle(renderer, 0.2501f / 4.0f);
@@ -6343,7 +6344,7 @@ static int runPushTest(const std::string& mapName) {
         op2::Unit c2;
         op2::TethysGame::CreateUnit(c2, op2::mapCargoTruck, op2::LOCATION{dx + 6, dy + 4}, 0);
         gs.setSelection({c2.id()});
-        gs.debugRightClickTile(renderer, dx, dy);
+        op2::uiSetCursorPixel(dx * 32 + 16, dy * 32 + 16); op2::uiCommandTarget(op2::UC_MOVE, {c2.id()}, dx, dy);
         int invadiu = 0, tanqueSaiu = 0, esperou = 0;
         for (int t = 0; t < 400; ++t) {
             gs.onIdle(renderer, 0.2501f / 4.0f);
@@ -6403,7 +6404,7 @@ static int runPushTest(const std::string& mapName) {
         op2::Unit c4;
         op2::TethysGame::CreateUnit(c4, op2::mapCargoTruck, op2::LOCATION{dx, dy + 4}, 0);
         gs.setSelection({c4.id()});
-        gs.debugRightClickTile(renderer, dx, dy);
+        op2::uiSetCursorPixel(dx * 32 + 16, dy * 32 + 16); op2::uiCommandTarget(op2::UC_MOVE, {c4.id()}, dx, dy);
         int esperaMax4 = 0, presoSaiu = -1, desistencias = 0, antes = 0, atracou = -1;
         for (int t = 0; t < 600; ++t) {
             gs.onIdle(renderer, 0.2501f / 4.0f);
@@ -6443,6 +6444,126 @@ static int runPushTest(const std::string& mapName) {
     renderer.shutdown();
     SDL_Quit();
     return ruins ? 1 : 0;
+}
+
+// --truckjamtest <mapa> [n] [tiques] [tela.bmp]: n caminhoes (padrao 10) na mesma
+// rota mina -> fundicao (5.43). Conta as entregas por janela de 2000 tiques, o
+// maior tempo que um caminhao ficou parado numa doca e quem saiu da rota. No
+// original (e no porte antes da correcao) o ciclo parava de vez: os carregados
+// cercavam a doca da fundicao e o que descarregou nao saia.
+static int runTruckJamTest(const std::string& mapName, int n, int tiques, const char* shot) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 truckjamtest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    op2::resetUnits();
+    const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
+    int bx = -1, by = -1;
+    for (int y = 3; y < H - 16 && bx < 0; ++y)
+        for (int x = 3; x < W - 30 && bx < 0; ++x) {
+            bool ok = true;
+            for (int dy = -1; dy <= 14 && ok; ++dy)
+                for (int dx = -2; dx <= 26 && ok; ++dx)
+                    if (!op2::g_gameMap.isPassable(op2::LOCATION{x + dx, y + dy})) ok = false;
+            if (ok) { bx = x; by = y; }
+        }
+    if (bx < 0) { std::printf("[Jam] sem area livre\n"); return 3; }
+    const int mineX = bx + 20, mineY = by + 6;
+    op2::createBeacon(0x51, mineX, mineY, 0, 0, 0);
+    const int mine = op2::placeBuilding(0x15, mineX, mineY, 0);
+    op2::Unit cc, tok;
+    op2::TethysGame::CreateUnit(cc, op2::mapCommandCenter, op2::LOCATION{bx + 4, by + 6}, 0);
+    op2::TethysGame::CreateUnit(tok, op2::mapTokamak, op2::LOCATION{bx + 4, by + 10}, 0);
+    const int smelter = op2::placeBuilding(0x36, bx + 4, by + 2, 0);
+    op2::g_playerData[0].workers = 60;
+    op2::g_playerData[0].scientists = 20;
+    op2::colonyMarkDirty(0);
+    if (!mine || !smelter) { std::printf("[Jam] faltou predio\n"); return 4; }
+    for (int t = 0; t < 60; ++t) gs.simTick();
+    std::vector<int> trucks;
+    for (int i = 0; i < n; ++i) {
+        op2::Unit tr;
+        op2::TethysGame::CreateUnit(tr, op2::mapCargoTruck, op2::LOCATION{mineX - 3 - (i % 4), mineY + 3 + i / 4}, 0);
+        if (tr.id()) trucks.push_back(tr.id());
+    }
+    const bool rota = op2::autoOreRoute(trucks, mine);
+    int sdx, sdy, mdx, mdy;
+    op2::dockCell(smelter, sdx, sdy);
+    op2::dockCell(mine, mdx, mdy);
+    std::printf("[Jam] %d caminhoes, rota %d, doca da fundicao (%d,%d), da mina (%d,%d), operando %d\n",
+                (int)trucks.size(), (int)rota, sdx, sdy, mdx, mdy, (int)op2::structureOperational(op2::g_units[smelter]));
+    op2::g_playerData[0].ore = 0;
+    int ultimo = op2::g_playerData[0].ore, entregas = 0, janela = 0;
+    std::vector<int> naDoca(op2::g_units.size() + 8, 0);
+    int pior = 0, piorId = 0;
+    std::vector<int> porJanela;
+    std::vector<int> acaoAntes(op2::g_units.size() + 8, 0x27), f22Antes(op2::g_units.size() + 8, 0);
+    int saidas = 0;
+    for (int t = 0; t < tiques; ++t) {
+        gs.simTick();
+        const int ore = op2::g_playerData[0].ore;
+        if (ore > ultimo) { ++entregas; ++janela; }
+        op2::g_playerData[0].ore = 0;                        // o estoque nunca enche
+        ultimo = 0;
+        // A colonia do teste nao tem agridome: sem isto a comida acaba, os
+        // trabalhadores somem e a fundicao para -- o caminhao espera na doca
+        // (sub-estado 6), o que e o certo, mas nao e o que se mede aqui.
+        op2::g_playerData[0].foodStored = 50000;
+        if (op2::g_playerData[0].workers < 60) op2::g_playerData[0].workers = 60;
+        for (int id : trucks) {
+            const op2::UnitRecord& u = op2::g_units[id];
+            if (u.action != 0x27 && acaoAntes[id] == 0x27 && saidas < 6) {
+                ++saidas;
+                std::printf("[Jam] tique %d: #%d saiu da rota -> acao 0x%X f22 0x%X (antes f22 0x%X) tile (%d,%d) carga 0x%X ordem %d\n",
+                            t, id, u.action, u.field22, f22Antes[id], u.pixelX >> 5, u.pixelY >> 5, u.cargo, (int)u.hasOrder);
+            }
+            acaoAntes[id] = u.action; f22Antes[id] = u.field22;
+            const int tx = (u.pixelX >> 5), ty = (u.pixelY >> 5);
+            const bool doca = (tx == sdx && ty == sdy) || (tx == mdx && ty == mdy);
+            naDoca[id] = doca ? naDoca[id] + 1 : 0;
+            if (naDoca[id] > pior) { pior = naDoca[id]; piorId = id; }
+        }
+        if ((t + 1) % 2000 == 0) { porJanela.push_back(janela); janela = 0; }
+    }
+    std::printf("[Jam] fundicao operando no fim: %d\n", (int)op2::structureOperational(op2::g_units[smelter]));
+    std::printf("[Jam] entregas %d; por 2000 tiques:", entregas);
+    for (int v : porJanela) std::printf(" %d", v);
+    std::printf("\n[Jam] maior tempo parado numa doca: %d tiques (caminhao %d)\n", pior, piorId);
+    // Os casos: o ciclo nao para, ninguem fica preso numa doca, ninguem sai da rota.
+    int minJanela = 1 << 30;
+    for (size_t k = 1; k < porJanela.size(); ++k) minJanela = std::min(minJanela, porJanela[k]);
+    struct Caso { std::string nome; long long obtido, esperado; };
+    std::vector<Caso> casos;
+    casos.push_back({"a rota foi montada", rota ? 1 : 0, 1});
+    casos.push_back({"nenhuma janela de 2000 tiques sem entrega", minJanela > 0 ? 1 : 0, 1});
+    casos.push_back({"ninguem parado numa doca por 1500 tiques", pior < 1500 ? 1 : 0, 1});
+    casos.push_back({"nenhum caminhao saiu da rota", saidas, 0});
+    int falhas = 0;
+    for (const Caso& c : casos) {
+        const bool bom = c.obtido == c.esperado;
+        if (!bom) ++falhas;
+        std::printf("[Jam] %-44s %lld (esperado %lld) %s\n", c.nome.c_str(), c.obtido, c.esperado, bom ? "ok" : "FALHOU");
+    }
+    if (falhas)
+        for (int id : trucks) {
+            const op2::UnitRecord& u = op2::g_units[id];
+            std::printf("[Jam]   #%d tile (%d,%d) acao 0x%X f22 0x%X carga 0x%X ordem %d rota %d/%d push %d parado %d\n",
+                        id, u.pixelX >> 5, u.pixelY >> 5, u.action, u.field22, u.cargo, (int)u.hasOrder,
+                        u.routeIdx, (int)u.routeDirs.size(), u.pushWait, naDoca[id]);
+        }
+    std::printf("[Jam] %d casos, %d falhas\n", (int)casos.size(), falhas);
+    if (shot) {
+        const op2::UnitRecord& s = op2::g_units[smelter];
+        gs.setCamera(s.pixelX - 300, s.pixelY - 200);
+        gs.onIdle(renderer, 0.0f);
+        writeBmp32(shot, renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
+    }
+    renderer.shutdown(); SDL_Quit();
+    return falhas ? 1 : 0;
 }
 
 // --autoroutetest <mapa>: o atalho da rota de minerio (acrescimo deste porte,
@@ -8584,6 +8705,49 @@ static int runCursorTest(const std::string& mapName) {
     casos.push_back({"REPAIR sobre o meu inteiro: norepair",
                      emTile(lx + 7, ly, op2::UC_REPAIR), op2::CUR_NOREPAIR});
 
+    // ---- O COMANDO PADRAO (5.42): com selecao e SEM mira, o cursor do
+    // primeiro de atacar / reprogramar / mover que aceita o alvo (sub_455390),
+    // e o clique direito faz o mesmo (sub_455350).
+    op2::Unit meu2;
+    op2::TethysGame::CreateUnit(meu2, op2::mapLynx, op2::LOCATION{lx + 2, ly + 2}, 0, 0x3D);
+    gs.debugSetSelection({meu.id()});
+    casos.push_back({"selecionado, sobre o inimigo: attack", emTile(lx + 4, ly, -1), op2::CUR_ATTACK});
+    casos.push_back({"selecionado, chao livre: move", emTile(lx, ly + 1, -1), op2::CUR_MOVE});
+    if (bx >= 0)
+        casos.push_back({"selecionado, chao fechado: no_move", emTile(bx, by, -1), op2::CUR_NOMOVE});
+    casos.push_back({"selecionado, sobre uma unidade minha: seta", emTile(lx + 2, ly + 2, -1), op2::CUR_ARROW});
+    // Um Spider sozinho: sem arma, nao ataca; o inimigo so e "reprogramavel"
+    // paralisado pelo EMP (0x80000) -- senao, mover.
+    op2::Unit sp;
+    op2::TethysGame::CreateUnit(sp, op2::mapSpider, op2::LOCATION{lx + 8, ly + 2}, 0, 0);
+    gs.debugSetSelection({sp.id()});
+    casos.push_back({"Spider, inimigo sem EMP: move", emTile(lx + 4, ly, -1), op2::CUR_MOVE});
+    op2::g_units[ini.id()].flags |= 0x80000u;
+    casos.push_back({"Spider, inimigo com EMP: reprog", emTile(lx + 4, ly, -1), op2::CUR_REPROG});
+    op2::g_units[ini.id()].flags &= ~0x80000u;
+    // O clique direito: atacar o inimigo, nada sobre unidade minha, mover no chao.
+    gs.debugSetSelection({meu.id()});
+    auto direito = [&](int tx, int ty) {
+        gs.debugMouse(renderer, (tx << 5) + 16, (ty << 5) + 16, SDL_BUTTON_RIGHT, true, false);
+        gs.debugMouse(renderer, (tx << 5) + 16, (ty << 5) + 16, SDL_BUTTON_RIGHT, false, false);
+    };
+    op2::g_units[meu.id()].action = 0;
+    direito(lx + 2, ly + 2);
+    casos.push_back({"direito sobre unidade minha: nada", op2::g_units[meu.id()].action, 0});
+    direito(lx + 4, ly);
+    casos.push_back({"direito sobre o inimigo: ataca (0x24)", op2::g_units[meu.id()].action, op2::CMD_ATTACK});
+    direito(lx, ly + 1);
+    casos.push_back({"direito no chao: move (2)", op2::g_units[meu.id()].action, op2::CMD_MOVE});
+    // Selecao VELHA (ids fora da tabela ou mortos): o cursor pergunta a cada
+    // quadro -- nada de derrubar o jogo, so a seta.
+    gs.debugSetSelection({(int)op2::g_units.size() + 5});
+    casos.push_back({"selecao velha (id fora da tabela): seta", emTile(lx, ly + 1, -1), op2::CUR_ARROW});
+    op2::g_units[meu2.id()].flags |= op2::UNIT_DEAD;
+    gs.debugSetSelection({meu2.id()});
+    casos.push_back({"selecao velha (unidade morta): seta", emTile(lx, ly + 1, -1), op2::CUR_ARROW});
+    op2::g_units[meu2.id()].flags &= ~op2::UNIT_DEAD;
+    gs.debugSetSelection({meu.id()});
+
     int ruins = 0;
     for (const Caso& c : casos) {
         const bool ok = c.obtido == c.esperado;
@@ -9396,6 +9560,9 @@ int main(int argc, char* argv[]) {
             return runItem21Test(argv[i + 1]);
         if (std::strcmp(argv[i], "--cmddebugtest") == 0 && i + 1 < argc)
             return runCmdDebugTest(argv[i + 1]);
+        if (std::strcmp(argv[i], "--truckjamtest") == 0 && i + 1 < argc)
+            return runTruckJamTest(argv[i + 1], i + 2 < argc ? atoi(argv[i + 2]) : 10,
+                                   i + 3 < argc ? atoi(argv[i + 3]) : 20000, i + 4 < argc ? argv[i + 4] : nullptr);
         if (std::strcmp(argv[i], "--lighttest") == 0 && i + 1 < argc)
             return runLightTest(argv[i + 1], i + 2 < argc ? argv[i + 2] : nullptr);
         if (std::strcmp(argv[i], "--prodqueuetest") == 0 && i + 1 < argc)

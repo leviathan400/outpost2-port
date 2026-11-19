@@ -683,6 +683,87 @@ static void sendRepairLike(int cmd, const std::vector<int>& sel) {
     soundPlay(0x56);
 }
 
+// O COMANDO PADRAO do original (dword_5648A0, vtable off_4D4E00): com unidades
+// selecionadas e nenhum comando armado, sub_4552C0 junta, NESTA ORDEM, os
+// comandos de off_4E2C00 disponiveis para a selecao -- atacar (dword_56484C),
+// reprogramar do Spider (dword_564988) e mover (dword_56498C) -- e arma o
+// estado 3. Sob o ponteiro, sub_455390 pergunta o vt[8] de cada um e o
+// PRIMEIRO que aceitar da o cursor (vt[9]); o clique (sub_455350) executa
+// esse. Nenhum aceitando: a seta, e o clique fica com a selecao.
+//   atacar (sub_453260 -> sub_452E00): qualquer unidade sob o ponteiro cujo
+//     dono NAO tem o jogador local como aliado; com um Guard Post
+//     selecionado, so dentro do alcance (bloco + 0x18, distancia em tiles
+//     max + min/2 com a volta do mapa);
+//   reprogramar (sub_454E70; disponivel so com UM Spider selecionado,
+//     loc_454BA0): veiculo nao aliado, que nao seja Spider nem Scorpion, e
+//     paralisado pelo EMP ([+0x44] & 0x80000);
+//   mover (sub_451640): sobre um PREDIO do jogador local, so a doca dele,
+//     livre e que o veiculo possa usar (vira atracar, sub_44DA80); fora de
+//     predio, aceita se nao houver unidade do jogador local sob o ponteiro.
+int uiDefaultCommand(const std::vector<int>& selIn, int tileX, int tileY) {
+    // O cursor pergunta a CADA quadro, com a selecao que estiver na tela: so
+    // entram ids vivos e dentro da tabela (uma selecao velha -- unidades
+    // recriadas, jogo carregado -- derrubava o uiCommandAvailable, 5.42).
+    std::vector<int> sel;
+    for (int id : selIn)
+        if (id > 0 && id < static_cast<int>(g_units.size()) && g_units[id].id != -1 &&
+            !(g_units[id].flags & UNIT_DEAD))
+            sel.push_back(id);
+    if (sel.empty() || !g_gameMap.ok()) return -1;
+    const int me = TethysGame::localPlayer();
+    auto aliadoDeMim = [&](int id) {
+        const int o = g_units[id].owner & 0x0F;
+        return o < kMaxPlayers && (g_playerData[o].allyMask & (1u << me)) != 0;
+    };
+    auto sob = [&](uint32_t playerMask, uint32_t flagMask) {
+        MapPointIter it;
+        mapPointIterInit(it, s_curPX + g_gameMap.internalXOffset() * 32, s_curPY, playerMask, flagMask);
+        return mapPointIterNext(it);
+    };
+    if (uiCommandAvailable(UC_ATTACK, sel)) {                // dword_56484C
+        const int t = sob(0xFFFFFFFFu, 0xFFFFFFFFu);
+        if (t && !aliadoDeMim(t)) {
+            bool ok = true;
+            const UnitRecord& f = g_units[sel[0]];
+            if (f.type == 0x17) {                            // Guard Post: o alcance
+                const UnitRecord& a = g_units[t];
+                const int W = g_gameMap.width() * 32;
+                int dx = std::abs(f.pixelX - a.pixelX);
+                if (dx > W / 2) dx = W - dx;
+                const int dy = std::abs(f.pixelY - a.pixelY);
+                const int d = (std::max(dx, dy) + std::min(dx, dy) / 2) >> 5;
+                const uint8_t* b = unitStatBlock(f.type, f.owner & 0x0F);
+                int32_t alcance = 0;
+                if (b) std::memcpy(&alcance, b + 0x18, 4);
+                ok = alcance >= d;
+            }
+            if (ok) return UC_ATTACK;
+        }
+    }
+    if (uiCommandAvailable(UC_TAKE_OVER, sel)) {             // dword_564988
+        const int t = sob(0xFFFFFFFFu, 2u);
+        if (t && !aliadoDeMim(t)) {
+            const UnitRecord& a = g_units[t];
+            if (a.type != 3 && a.type != 4 && (a.flags & 0x80000u)) return UC_TAKE_OVER;
+        }
+    }
+    if (uiCommandAvailable(UC_MOVE, sel)) {                  // dword_56498C
+        const int b = sob(1u << me, 4u);                     // predio do jogador local
+        if (b) {
+            int dx = 0, dy = 0;
+            const int occ = g_gameMap.cellOccupant(tileX & (g_gameMap.width() - 1), tileY);
+            // sub_451640: fora da doca, recusa. NA doca: quem nao atraca ali
+            // (sub_44DA80 = 0) e aceito como mover; quem atraca, so com a
+            // doca livre (7FF0000 da celula).
+            if (!dockCell(b, dx, dy) || dx != tileX || dy != tileY) return -1;
+            if (!vehicleCanDock(sel[0], b, true)) return UC_MOVE;
+            return occ <= 0 ? UC_MOVE : -1;
+        }
+        if (!sob(1u << me, 0xFFFFFFFFu)) return UC_MOVE;
+    }
+    return -1;
+}
+
 UiClick uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int tileY) {
     if (cmd == UC_REPAIR || cmd == UC_TAKE_OVER || cmd == UC_DISMANTLE) { sendRepairLike(cmd, sel); return UiClick::DONE; }
     if (cmd == UC_BUILD_MINE) {                              // sub_452010

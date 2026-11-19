@@ -285,6 +285,7 @@ public:
     // com ou sem Shift (SDL_SetModState). A camera fica onde esta.
     void debugMouse(Renderer& r, int wx, int wy, int button, bool down, bool shift, bool ctrl = false);
     void debugClearSelection() { m_selected.clear(); }
+    void debugSetSelection(const std::vector<int>& ids) { m_selected = ids; m_targetCmd = -1; }
     int debugSelectedCount() const { return static_cast<int>(m_selected.size()); }
     int debugSelectedId(int i) const {
         return (i >= 0 && i < static_cast<int>(m_selected.size())) ? m_selected[i] : 0;

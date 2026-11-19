@@ -63,6 +63,11 @@ UiClick uiCommandTarget(int cmd, const std::vector<int>& sel, int tileX, int til
 // Pixel do cursor no mapa (px do port; dword_547174/78) p/ o teste de unidade
 // sob o cursor dos comandos com alvo.
 void uiSetCursorPixel(int px, int py);
+// O comando padrao do original (sub_4552C0/sub_455390/sub_455350): com unidades
+// selecionadas e nenhum comando armado, o primeiro de atacar, reprogramar
+// (Spider) e mover/atracar que aceita o alvo sob o cursor (uiSetCursorPixel).
+// UC_ATTACK / UC_TAKE_OVER / UC_MOVE, ou -1 (nenhum: a seta).
+int uiDefaultCommand(const std::vector<int>& sel, int tileX, int tileY);
 // Comandos de ÁREA (arrastar): muro/tubo (modo 4, reta) e terraplanar (modo 1).
 bool uiCommandIsArea(int cmd);
 bool uiCommandIsLine(int cmd);

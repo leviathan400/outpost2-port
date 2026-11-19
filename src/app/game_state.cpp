@@ -160,16 +160,26 @@ int GameState::cursorForHover() const {
     if (!m_mission && !g_gameMap.ok()) return CUR_ARROW;
     const int vx = m_mouseNX - kViewX, vy = m_mouseNY - kViewY;
     if (vx < 0 || vy < 0 || vx >= viewportW() || vy >= viewportH()) return CUR_ARROW;
-    if (m_targetCmd < 0) return CUR_ARROW;
 
     const int wm = g_gameMap.ok() ? (g_gameMap.width() - 1) : 0;
     const int tx = ((m_camX + vx) >> 5) & wm, ty = (m_camY + vy) >> 5;
+    // Sem comando armado, com unidades selecionadas: o COMANDO PADRAO do
+    // original (sub_455390, 5.42) -- o cursor do primeiro de atacar,
+    // reprogramar (Spider) e mover/atracar que aceita o alvo; nenhum, a seta.
+    // E o mesmo que o clique direito do porte executa.
+    int cmd = m_targetCmd;
+    if (cmd < 0) {
+        if (m_selected.empty() || !g_gameMap.ok()) return CUR_ARROW;
+        uiSetCursorPixel((m_camX + vx) & (g_gameMap.width() * 32 - 1), m_camY + vy);
+        cmd = uiDefaultCommand(m_selected, tx, ty);
+        if (cmd < 0) return CUR_ARROW;
+    }
 
     // Comandos de área (muro, tubo, kit, mina, terraplanar, recolher): vale o
     // mesmo teste de célula que pinta o retângulo do arrasto.
-    if (uiCommandIsArea(m_targetCmd)) {
-        const bool ok = uiCommandCellOk(m_targetCmd, m_selected, tx, ty);
-        switch (m_targetCmd) {
+    if (uiCommandIsArea(cmd)) {
+        const bool ok = uiCommandCellOk(cmd, m_selected, tx, ty);
+        switch (cmd) {
             case UC_BULLDOZE: return CUR_BULLDOZE;
             case UC_SALVAGE:  return CUR_SALVAGE;
             default:          return ok ? CUR_BUILD : CUR_NOBUILD;
@@ -184,7 +194,7 @@ int GameState::cursorForHover() const {
         return o != me && !(o < kMaxPlayers && (g_playerData[o].allyMask & (1u << me)));
     };
 
-    switch (m_targetCmd) {
+    switch (cmd) {
         case UC_ATTACK:    return inimigo(sob) ? CUR_ATTACK : CUR_NOATTACK;
         case UC_TAKE_OVER: return inimigo(sob) ? CUR_REPROG : CUR_NOREPROG;
         case UC_REPAIR: {
@@ -2510,7 +2520,13 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
             int tileX = (m_camX + vx) / 32, tileY = (m_camY + vy) / 32;
             if (g_gameMap.ok()) tileX &= (g_gameMap.width() - 1);
             uiSetCursorPixel(g_gameMap.ok() ? (m_camX + vx) & (g_gameMap.width() * 32 - 1) : m_camX + vx, m_camY + vy);
-            if (!autoRouteClick(tileX, tileY)) uiCommandTarget(UC_MOVE, m_selected, tileX, tileY);
+            // O comando padrao do original (sub_455350, 5.42): atacar o inimigo
+            // sob o ponteiro, reprogramar (Spider) ou mover/atracar -- o mesmo
+            // que o cursor mostra. Nenhum aceitando, nada.
+            if (!autoRouteClick(tileX, tileY)) {
+                const int c = uiDefaultCommand(m_selected, tileX, tileY);
+                if (c >= 0) uiCommandTarget(c, m_selected, tileX, tileY);
+            }
         }
     }
     if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT && m_miniDrag) {
