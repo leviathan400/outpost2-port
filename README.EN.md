@@ -179,7 +179,7 @@ map's bottom row (`ShowBottomRow`), the one-click ore route
 (`AutoOreRoute`), refused-command diagnostics (`CommandDebug`) and the
 production queue (`ProductionQueue`); they are documented in `PORT_STATUS.EN.md`.
 
-There are **122 command-line modes** for tests and captures, among them a
+There are **123 command-line modes** for tests and captures, among them a
 regression battery (`--savetest` proves save/reload determinism). The list is
 in `PORT_STATUS.EN.md`.
 
@@ -213,7 +213,7 @@ and what was checked and discarded from the cheat lists that circulate.
 
 ```
 src/
-  main.cpp        entry point + the 122 test/capture modes
+  main.cpp        entry point + the 123 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -237,6 +237,11 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
 
 ### 2026-11-19
 
+- **Night as in the original: the units' light.** At night, every vehicle with
+  its headlights on and every powered building opens a circle of light in the
+  dark, as large as its sight range, with a dotted edge — the light moves with
+  the vehicle. And buildings and vehicles outside the light now darken, the
+  enemy's more than yours, as there.
 - **Production queue (optional).** With the **Production Queue** option on in
   the preferences, each click on an item in a factory's list adds +1 to the
   order (the count shows in front of the item; right-click removes 1), items

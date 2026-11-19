@@ -86,7 +86,14 @@
 > to the order, `BUILD IT` sends it to the factory's queue, and the factory
 > produces one item after another through the same packet 9; clicks the ore
 > cannot cover do not add. The queue lives on the local client only, so the
-> simulation, network play and saves are unchanged — and it is not saved).
+> simulation, network play and saves are unchanged — and it is not saved) and
+> **5.41** (the units' light at night: every vehicle with headlights and every
+> powered building lights a circle of radius = its sight range, `sub_43A200`,
+> on a per-tile bitmap; tiles read their four corners and partial ones are
+> blended through the `VIRMASK.RAW` templates, mode 2 of the pixel routine;
+> and unit sprites DO darken — buildings, vehicles and turrets pass the light
+> column, with the second, lighter curve for the local player and allies — an
+> old note said they did not).
 > The recent
 > changes are summarised in
 > [README.EN.md](README.EN.md).
@@ -139,7 +146,7 @@ coverage by comparing the DLLs' import tables against the registry in
 
 ```
 src/
-  main.cpp        entry point + the 122 test/capture modes
+  main.cpp        entry point + the 123 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -219,7 +226,7 @@ preferences screen; the original ignores keys it doesn't know.
 | Key | Range | Default | What it does |
 |---|---|---|---|
 | `AILevel` | 0..3 | 0 (AUTO) | Forces the AI level in campaigns and colonies. AUTO = the original's behavior. **Does not apply in network play**, where difficulty is per player and comes from the lobby. |
-| `NightDarkness` | 0..100 | 75 | How much of the night darkening curve is applied (100 = the original, which takes full night to ~15% brightness and makes units, which never darken, stand out against the black). |
+| `NightDarkness` | 0..100 | 75 | How much of the night darkening curve is applied (100 = the original, which takes full night to ~15% brightness; outside the units' light the terrain nearly vanishes — see 5.41 in the BR status). |
 | `AudioVolume` | 0..100 | 50 | Master volume over the final mix (sounds and music). The original only has `MusicVol`/`SoundVol`, per channel and in 6 steps. |
 | `DemoCamera` | 0/1 | 1 | In the attract demo the camera tours the action spots (disaster, combat, units). 0 restores the original's static camera. |
 | `Fullscreen` | 0/1 | 1 | Opens fullscreen (no video mode change). Alt+Enter toggles at any time, and in game there is the **Screen Mode** radio pair at the end of the `PREFERENCES` list (see 5.8 in the BR status). |
@@ -728,7 +735,7 @@ mission DLLs and the original resources from the working directory).
 
 ### Command-line tests
 
-There are 122 modes. The ones that cover real regressions:
+There are 123 modes. The ones that cover real regressions:
 
 | Mode | What it proves |
 |---|---|

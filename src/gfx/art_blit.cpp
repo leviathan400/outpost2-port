@@ -29,6 +29,9 @@ static void buildShadeLut() {
     s_shadeLutGen = nightDarkness();
 }
 
+static bool (*s_lightAt)(int, int) = nullptr;
+void setArtLight(bool (*litAt)(int screenX, int screenY)) { s_lightAt = litAt; }
+
 uint32_t shadeArgb(uint32_t argb, int darkness) {
     if (darkness <= 0) return argb;
     if (darkness > 31) darkness = 31;
@@ -95,6 +98,8 @@ bool blitArtFrame(uint32_t* fb, int fbW, int fbH, int animIdx, int frameIdx,
                     // Sombra: escurece o fundo (~50%), não desenha a cor.
                     const uint32_t rr = ((d >> 16) & 0xFF) / 2, gg = ((d >> 8) & 0xFF) / 2, bb = (d & 0xFF) / 2;
                     d = 0xFF000000u | (rr << 16) | (gg << 8) | bb;
+                } else if (darkness > 0 && s_lightAt && s_lightAt(pxs, py)) {
+                    d = c | 0xFF000000u;         // na luz de uma unidade (sub_470810, 5.41)
                 } else {
                     d = shadeArgb(c | 0xFF000000u, darkness);
                 }

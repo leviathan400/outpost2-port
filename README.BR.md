@@ -180,7 +180,7 @@ demo, tela cheia, a pele dos menus (`MenuSkin`), a volta horizontal do mapa
 clique (`AutoOreRoute`), o diagnóstico de comando recusado (`CommandDebug`) e a
 fila de produção (`ProductionQueue`); estão documentadas no `PORT_STATUS.BR.md`.
 
-Há **122 modos de linha de comando** para testes e capturas, entre eles uma
+Há **123 modos de linha de comando** para testes e capturas, entre eles uma
 bateria de regressão (`--savetest` prova o determinismo de salvar/recarregar).
 A lista está no `PORT_STATUS.BR.md`.
 
@@ -214,7 +214,7 @@ e descartado das listas de cheat que circulam por aí.
 
 ```
 src/
-  main.cpp        entrada + os 122 modos de teste/captura
+  main.cpp        entrada + os 123 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -239,6 +239,11 @@ cursores `.ANI`.
 
 ### 2026-11-19
 
+- **A noite como no original: a luz das unidades.** À noite, cada veículo com
+  os faróis acesos e cada prédio com energia abre um círculo de luz no escuro,
+  do tamanho do alcance de visão dele, com a borda pontilhada — a luz anda com
+  o veículo. E os prédios e veículos fora da luz passam a escurecer, os do
+  inimigo mais que os seus, como lá.
 - **Fila de produção (opcional).** Com a opção **Production Queue** ligada nas
   preferências, cada clique num item da lista da fábrica soma +1 ao pedido (o
   número aparece na frente do item; o clique direito tira 1), dá para misturar

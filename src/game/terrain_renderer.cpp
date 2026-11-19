@@ -1,3 +1,4 @@
+#include "light_map.h"
 #include "terrain_renderer.h"
 
 #include <algorithm>
@@ -69,6 +70,13 @@ void TerrainRenderer::render(uint32_t* dst, int dstW, int dstH, int camX, int ca
             // A escuridao e por COLUNA DE TILE, uma paleta por blit.
             const uint32_t* pal = ts->palette(darkOf ? darkOf(tx) : 0);
             const int idxStride = ts->indexStride();
+            // A luz das unidades (sub_46FF60 -> sub_4A88D0, 5.41): os 4 cantos
+            // iluminados = paleta base; nenhum = a da coluna; o resto, pixel a
+            // pixel pelo molde (bit ligado = claro).
+            const int lm = darkOf ? lightTileMask(tx, ty) : 0xF;
+            const uint32_t* palLit = ts->palette(0);
+            if (lm == 0xF) pal = palLit;
+            const uint32_t* molde = (lm != 0 && lm != 0xF) ? virMaskRows(lm) : nullptr;
 
             int screenX = tx * 32 - camX;   // canto do tile na tela
             int screenY = ty * 32 - camY;
@@ -83,7 +91,13 @@ void TerrainRenderer::render(uint32_t* dst, int dstW, int dstH, int camX, int ca
             for (int sy = sy0; sy < sy1; ++sy) {
                 const uint8_t* srcRow = idx + static_cast<size_t>(sy) * idxStride;
                 uint32_t* dstRow = dst + static_cast<size_t>(screenY + sy) * dstW + (screenX + sx0);
-                for (int sx = sx0; sx < sx1; ++sx) *dstRow++ = pal[srcRow[sx]];
+                if (molde) {
+                    const uint32_t linha = molde[sy];
+                    for (int sx = sx0; sx < sx1; ++sx)
+                        *dstRow++ = ((linha << sx) & 0x80000000u) ? palLit[srcRow[sx]] : pal[srcRow[sx]];
+                } else {
+                    for (int sx = sx0; sx < sx1; ++sx) *dstRow++ = pal[srcRow[sx]];
+                }
             }
         }
     }

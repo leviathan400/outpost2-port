@@ -117,6 +117,9 @@ public:
     int internalWidth() const { return m_internalWidth; }
     int internalXOffset() const { return m_internalXOff; }
     int lightDarkness(int internalX) const { return m_light[internalX & (m_internalWidth - 1)]; }
+    // A segunda curva (+0x25C, byte_54EC14 + 0x200): a dos predios e veiculos
+    // do jogador local e dos aliados dele -- a mesma noite, 9 niveis mais clara.
+    int lightDarkness2(int internalX) const { return m_light2[internalX & (m_internalWidth - 1)]; }
     // Registro de mapeamento de tile (seção "TILE SET", 8 bytes): +0 tileset
     // (slot), +2 tile dentro do tileset. O tileIndex da célula indexa estes.
     struct TileMapping { int16_t tileset = 0, tile = 0; };

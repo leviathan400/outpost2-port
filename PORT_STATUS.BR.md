@@ -48,7 +48,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 122 modos de teste/captura
+  main.cpp        entrada + os 123 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -129,7 +129,7 @@ preferências; o original ignora chaves que não conhece.
 | Chave | Faixa | Padrão | O que faz |
 |---|---|---|---|
 | `AILevel` | 0..3 | 0 (AUTO) | Força o nível da IA nas campanhas e colônias. AUTO = o comportamento do original. **Não se aplica em rede**, onde a dificuldade é por jogador e vem do lobby. |
-| `NightDarkness` | 0..100 | 75 | Quanto da curva de escurecimento noturno se aplica (100 = o original, que leva a noite plena a ~15% do brilho e faz as unidades, que nunca escurecem, recortarem contra o preto). |
+| `NightDarkness` | 0..100 | 75 | Quanto da curva de escurecimento noturno se aplica (100 = o original, que leva a noite plena a ~15% do brilho; fora da luz das unidades o terreno quase some — ver 5.41). |
 | `AudioVolume` | 0..100 | 50 | Volume mestre sobre a mistura final (sons e música). O original só tem `MusicVol`/`SoundVol`, por canal e em 6 degraus. |
 | `DemoCamera` | 0/1 | 1 | No demo de atração a câmera passeia pelos pontos de ação (desastre, combate, unidades). 0 devolve a câmera parada do original. |
 | `Fullscreen` | 0/1 | 1 | Abre em tela cheia (sem troca de modo de vídeo). Alt+Enter alterna a qualquer momento, e dentro do jogo há o par de rádio **Screen Mode** no fim da lista do `PREFERENCES` (ver 5.8). |
@@ -3140,6 +3140,84 @@ fechando produzindo, o direito tirando o primeiro, o `ST&OP` sem limpar, o
 `BUILD` fechado produzindo, desligar sem apagar, o clique sem conferir o
 minério e o clique sem pedido — 9 de 9 pegas.
 
+## 5.41. A luz das unidades na noite, e os sprites que escurecem (2026-11-19)
+
+Relato, comparando com um vídeo do original (Eden, missão 4): *por onde os
+nossos veículos passam o escuro se abre, e onde eles saem o escuro volta — no
+porte é diferente.* Os prints do original mostram, à noite, um **círculo de
+luz** em volta de cada prédio e de cada veículo, com a borda pontilhada, e os
+prédios fora da luz **apagados**.
+
+### O mapa de luz (`sub_49EA90` → `sub_43A200`)
+
+A vista do original guarda um mapa de bits, um bit por tile (`[vista+0x810]`).
+A cada quadro, sem luz em toda parte (`dword_56DEA4`), `sub_49EA90` o zera e
+chama o `vt[7]` de cada unidade visível. Nos veículos e prédios esse é
+`sub_43A200`: com a luz acesa (`[+0x44]` bit 0 — os faróis dos veículos; os
+prédios ligam junto com a energia), marca um **círculo** cujo raio é o
+**alcance de visão** da ficha (bloco do dono `+0x18`, o "Sight range" das
+planilhas):
+
+```
+para dy = -r .. r:   t = dy > 0 ? dy - 1 : dy
+                     w = isqrt(r*r - t*t)          (byte_4E0C68: isqrt de 0 a 81)
+                     linha cy + dy, colunas cx - w .. cx + w + 1
+```
+
+`sub_46FD50`/`sub_46FE60` comparam com o quadro anterior e só redesenham os
+tiles que mudaram — é por isso que a luz acompanha o veículo.
+
+### O terreno (`sub_46FF60` → `sub_4A88D0`)
+
+Cada tile lê os bits dos **quatro cantos** — `(x,y)` = 1, `(x+1,y)` = 2,
+`(x,y+1)` = 4, `(x+1,y+1)` = 8 (daí o `+1` à direita e o `dy − 1` embaixo no
+círculo) — e `sub_4A88D0` o desenha: `0xF` com a paleta **base** (sem
+escuridão), `0` com a paleta da coluna, e o resto pixel a pixel pelo molde do
+`VIRMASK.RAW` — o mesmo da praga —, no **modo 2** da rotina de pixels
+(`0x586746`, código que o IDA deixou como bytes crus e que foi desmontado à
+parte): bit ligado = paleta clara, desligado = escura. É a borda pontilhada.
+
+### Os sprites escurecem (correção de uma leitura antiga)
+
+O porte não escurecia nenhuma unidade. A anotação antiga dizia que, "dos 84
+pontos que chamam `sub_403E00`, só dois passam a coluna de luz" — mas aquela
+conta só viu os `push 0FFFFFFFFh` literais. Os que passam **registrador**
+passam a coluna: prédios (`sub_408DB0`), veículos (`sub_44C910`), tanques e
+torres (`sub_484CF0`), o chão da garagem (`sub_401970`) e a fumarola
+(`sub_405840`). A coluna é a do tile da unidade; os do jogador local e dos
+**aliados** dele (`dword_56E2E0`) somam `0x200`, o que lê a **segunda curva**
+(`+0x25C`, a mesma noite 9 níveis mais clara). `sub_470810` desenha o sprite
+com o mesmo mapa de luz: dentro da luz sai claro, fora sai escuro, e na borda
+mistura pelo molde. Continuam sem escurecer, como lá, os efeitos
+(`sub_405160`), o beacon, o destroço, o brilho do EMP/ESG e a luz de status
+dos prédios.
+
+### No porte
+
+`src/game/light_map.cpp`: o mapa de luz (um byte por tile, com uma coluna e
+uma linha a mais, como a vista alargada do original), remontado a cada quadro
+para as unidades que podem tocar a vista; a máscara dos cantos; o pixel claro
+pelo molde; e os moldes do `VIRMASK.RAW`, que saíram do `game_state`. O
+`TerrainRenderer` escolhe a paleta (ou mistura) por tile; o `blitArtFrame`
+recebe um gancho (`setArtLight`) que deixa claro o pixel dentro da luz quando
+há escuridão. A escuridão de cada sprite segue a coluna, com a curva dos
+aliados. A opção `NightDarkness` continua valendo para tudo (a 100 é o
+original).
+
+### O teste
+
+`--lighttest <DLL> [tela.bmp]` — 20 casos (E04 e P04): o raio é o alcance de
+visão; o tile do veículo e os `r` tiles para os lados claros; na coluna
+`cx+r+1` só os cantos da esquerda (o `+1`); embaixo, o `dy − 1`; longe,
+escuro; a borda segue o molde pixel a pixel; farol apagado não ilumina; com
+luz em toda parte, nada; a curva dos aliados mais clara; o terreno na luz bem
+mais claro que fora; o Scout no escuro escurecido, o inimigo mais escuro que
+o do jogador, e o Scout na luz **idêntico**, pixel a pixel, ao de dia.
+
+Mutações: o círculo que não marca, sem o `+1`, sem o `dy − 1`, o terreno e o
+sprite ignorando a luz, sem a curva dos aliados, o farol ignorado, a luz em
+toda parte ignorada e a borda sem molde — 9 de 9 pegas.
+
 ---
 
 ## 6. Build e execução
@@ -3196,6 +3274,7 @@ São 109 modos. Os que cobrem regressão de verdade:
 | `--minimaptest <DLL> [tela.bmp]` | o minimapa além do terreno: as cores dos jogadores, os beacons e os destroços |
 | `--cmddebugtest <DLL>` | o anel anti-duplicata sem registro velho e cada motivo do diagnóstico `CommandDebug` (5.39) |
 | `--prodqueuetest <DLL> [tela.bmp]` | a fila de produção do porte: o pedido, a conferência do minério, a ordem, o ST&OP e o original com a opção desligada (5.40) |
+| `--lighttest <DLL> [tela.bmp]` | a luz das unidades na noite: o círculo de `sub_43A200`, os cantos e o molde, o terreno e os sprites (5.41) |
 | `--e02test [DLL] [bmp]` | missão 2 do Eden: a praga se espalha e é desenhada com o Overlay, e os objetivos de pesquisa são cumpridos; e a praga no minimapa |
 | `--tubetest <mapa> [prefixo]` | o Earthworker ligando prédios com tubo: retas inteiras, a doca que não liga, a animação de trabalho |
 | `--waypointtest <mapa> [bmp]` | pontos de passagem com Ctrl + clique: limites por comando, o pacote com os pontos antes do alvo, a unidade passando por eles, patrulha e obra, e o desenho |

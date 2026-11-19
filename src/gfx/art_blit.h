@@ -22,6 +22,11 @@ bool blitArtFrame(uint32_t* fb, int fbW, int fbH, int animIdx, int frameIdx,
                   int clipX0, int clipY0, int clipX1, int clipY1,
                   int darkness = 0);
 
+// A luz das unidades nos sprites (sub_470810, 5.41): com `darkness` > 0, o
+// pixel da tela em que litAt(x, y) e verdadeiro sai sem escurecer. nullptr =
+// tudo pela escuridao. Quem desenha o mundo liga; os paineis ficam sem.
+void setArtLight(bool (*litAt)(int screenX, int screenY));
+
 // A mesma rampa das paletas de sub_4A9BF0 aplicada a um ARGB: cada canal vira
 // canal * min(36 − d, 32) / 32, truncado a 5 bits.
 uint32_t shadeArgb(uint32_t argb, int darkness);

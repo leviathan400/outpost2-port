@@ -35,6 +35,7 @@
 #include "game/command_apply.h"
 #include "game/command_debug.h"
 #include "game/production_queue.h"
+#include "game/light_map.h"
 #include "game/movement.h"
 #include "game/structure.h"
 #include "game/weapon.h"
@@ -7873,6 +7874,156 @@ static int runProdQueueTest(const std::string& dll, const char* shot) {
     return falhas ? 1 : 0;
 }
 
+// --lighttest <DLL> [tela.bmp]: a luz das unidades na noite (5.41). Com a base
+// do jogador em plena noite: o circulo de sub_43A200 (raio = alcance de visao,
+// +1 a direita e embaixo), so com a luz acesa; a mascara dos 4 cantos e o
+// molde nas bordas; o terreno claro dentro e escuro fora; a curva dos aliados
+// (+0x200) mais clara que a dos inimigos; o sprite dentro da luz sem escurecer;
+// e, com a luz em toda parte, nada disso.
+static int runLightTest(const std::string& dll, const char* shot) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 lighttest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    op2::TethysGame::SetDaylightEverywhere(0);
+    op2::TethysGame::SetDaylightMoves(0);
+    struct Caso { std::string nome; long long obtido, esperado; };
+    std::vector<Caso> casos;
+    const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
+    // Um veiculo sozinho num canto: tudo apagado, menos ele.
+    op2::resetUnits();
+    for (int y = 0; y < H; ++y) for (int x = 0; x < W; ++x) op2::g_gameMap.clearUnitOccupancy(x, y);
+    const int cx = W / 2, cy = H / 2;
+    op2::Unit sc;
+    op2::TethysGame::CreateUnit(sc, op2::mapScout, op2::LOCATION{cx, cy}, 0, 0);
+    op2::UnitRecord& u = op2::g_units[sc.id()];
+    u.flags |= op2::UNIT_LIGHTS;
+    const int r = op2::unitLightRadius(sc.id());
+    std::printf("[Luz] Scout em (%d,%d), raio de luz %d\n", cx, cy, r);
+    casos.push_back({"o Scout tem raio (alcance de visao)", r > 0 ? 1 : 0, 1});
+    op2::lightMapBuild((cx - 10) * 32, (cy - 8) * 32, 640, 480, false);
+    casos.push_back({"mapa de luz ativo a noite", op2::lightMapActive() ? 1 : 0, 1});
+    casos.push_back({"o tile do Scout: 4 cantos claros", op2::lightTileMask(cx, cy), 15});
+    casos.push_back({"r tiles a esquerda ainda claro", op2::lightTileMask(cx - r, cy), 15});
+    casos.push_back({"r tiles a direita ainda claro (o +1)", op2::lightTileMask(cx + r, cy), 15});
+    // Na coluna cx+r+1 so os cantos da esquerda (1|4): o +1 de sub_43A200.
+    casos.push_back({"r+1 a direita: so os cantos de dentro (1|4)", op2::lightTileMask(cx + r + 1, cy), 1 | 4});
+    casos.push_back({"a borda esquerda: cantos de dentro (2|8)", op2::lightTileMask(cx - r - 1, cy), 2 | 8});
+    casos.push_back({"r acima ainda claro", op2::lightTileMask(cx, cy - r), 15});
+    // Embaixo o dy-1: a linha cy+r ainda e acesa (largura isqrt(2r-1)), a cy+r+1 nao.
+    casos.push_back({"r-1 abaixo ainda claro", op2::lightTileMask(cx, cy + r - 1), 15});
+    casos.push_back({"r abaixo: so os cantos de cima (1|2)", op2::lightTileMask(cx, cy + r), 1 | 2});
+    casos.push_back({"longe: escuro", op2::lightTileMask(cx + r + 4, cy + r + 4), 0});
+    // A borda pixel a pixel pelo molde (bit 31 = coluna 0).
+    {
+        const int m = op2::lightTileMask(cx - r - 1, cy);
+        const uint32_t linha = op2::virMaskRows(m)[5];
+        int iguais = 0;
+        for (int px = 0; px < 32; ++px)
+            iguais += op2::lightPixelLit((cx - r - 1) * 32 + px, cy * 32 + 5) == (((linha << px) & 0x80000000u) != 0);
+        casos.push_back({"o pixel da borda segue o molde", iguais, 32});
+    }
+    // Sem a luz acesa, nada.
+    u.flags &= ~op2::UNIT_LIGHTS;
+    op2::lightMapBuild((cx - 10) * 32, (cy - 8) * 32, 640, 480, false);
+    casos.push_back({"farol apagado: nao ilumina", op2::lightTileMask(cx, cy), 0});
+    u.flags |= op2::UNIT_LIGHTS;
+    // Luz em toda parte: inativo, tudo claro.
+    op2::TethysGame::SetDaylightEverywhere(1);
+    op2::lightMapBuild((cx - 10) * 32, (cy - 8) * 32, 640, 480, false);
+    casos.push_back({"luz em toda parte: inativo", op2::lightMapActive() ? 1 : 0, 0});
+    casos.push_back({"... e a mascara e 15", op2::lightTileMask(cx + r + 4, cy), 15});
+    op2::TethysGame::SetDaylightEverywhere(0);
+
+    // A tela: gira a faixa de noite para cima do Scout e desenha.
+    const int IW = op2::g_gameMap.internalWidth();
+    int melhorFase = 0, melhor = -1;
+    for (int fase = 0; fase < 0x10000; fase += 256) {
+        op2::TethysGame::setDaylightPhase(fase, IW);
+        const int d = op2::GameState::tileDarkness(cx);
+        if (d > melhor) { melhor = d; melhorFase = fase; }
+    }
+    op2::TethysGame::setDaylightPhase(melhorFase, IW);
+    const int pos = op2::TethysGame::daylightPos();
+    const int dark1 = op2::g_gameMap.lightDarkness(cx + op2::g_gameMap.internalXOffset() - pos);
+    const int dark2 = op2::g_gameMap.lightDarkness2(cx + op2::g_gameMap.internalXOffset() - pos);
+    std::printf("[Luz] escuridao na coluna do Scout: %d (inimigos), %d (aliados)\n", dark1, dark2);
+    casos.push_back({"a curva dos aliados e mais clara", dark2 < dark1 ? 1 : 0, 1});
+    gs.setCamera((cx - 10) * 32, (cy - 7) * 32);
+    gs.onIdle(renderer, 0.0f);
+    const uint32_t* fb = renderer.getFramebuffer();
+    const int fw = renderer.getWidth();
+    auto brilho = [&](int wx, int wy) {
+        const int sx = wx - gs.camX(), sy = wy - gs.camY();
+        const uint32_t c = fb[sy * fw + sx];
+        return ((c >> 16) & 0xFF) + ((c >> 8) & 0xFF) + (c & 0xFF);
+    };
+    // Media do tile (dentro / fora da luz), longe do sprite.
+    auto mediaTile = [&](int tx, int ty) {
+        long s = 0;
+        for (int y = 0; y < 32; y += 4) for (int x = 0; x < 32; x += 4) s += brilho(tx * 32 + x, ty * 32 + y);
+        return s / 64;
+    };
+    const long dentro = mediaTile(cx - 2, cy + 2), fora = mediaTile(cx + r + 3, cy + 2);
+    std::printf("[Luz] brilho medio do terreno: dentro %ld, fora %ld\n", dentro, fora);
+    casos.push_back({"o terreno na luz e mais claro", dentro > fora * 2 ? 1 : 0, 1});
+    // O sprite: o mesmo Scout desenhado dentro e fora da luz.
+    auto somaSprite = [&]() {
+        long s = 0;
+        const int sx0 = u.pixelX + 16 - gs.camX() - 12, sy0 = u.pixelY + 16 - gs.camY() - 12;   // o centro do tile
+        for (int y = 0; y < 24; ++y) for (int x = 0; x < 24; ++x) {
+            const uint32_t c = fb[(sy0 + y) * fw + sx0 + x];
+            s += ((c >> 16) & 0xFF) + ((c >> 8) & 0xFF) + (c & 0xFF);
+        }
+        return s;
+    };
+    const long comLuz = somaSprite();
+    // Exato: dentro da luz, o Scout e o chao sob ele saem IGUAIS aos de dia
+    // (a paleta base, sub_470810 com os cantos todos claros).
+    auto regiao = [&]() {
+        std::vector<uint32_t> v;
+        const int sx0 = u.pixelX + 16 - gs.camX() - 12, sy0 = u.pixelY + 16 - gs.camY() - 12;
+        for (int y = 0; y < 24; ++y) for (int x = 0; x < 24; ++x) v.push_back(fb[(sy0 + y) * fw + sx0 + x]);
+        return v;
+    };
+    const std::vector<uint32_t> noite = regiao();
+    if (shot) writeBmp32(shot, renderer.getFramebuffer(), fw, renderer.getHeight());
+    op2::TethysGame::SetDaylightEverywhere(1);
+    gs.onIdle(renderer, 0.0f);
+    const std::vector<uint32_t> dia = regiao();
+    op2::TethysGame::SetDaylightEverywhere(0);
+    gs.onIdle(renderer, 0.0f);
+    casos.push_back({"na luz, o Scout sai igual ao de dia", noite == dia ? 1 : 0, 1});
+    u.flags &= ~op2::UNIT_LIGHTS;
+    gs.onIdle(renderer, 0.0f);
+    const long semLuz = somaSprite();
+    std::printf("[Luz] brilho do Scout: com farol %ld, sem farol %ld\n", comLuz, semLuz);
+    casos.push_back({"o Scout no escuro e escurecido", semLuz < comLuz ? 1 : 0, 1});
+    // A curva dos aliados no sprite: o MESMO Scout, de um inimigo, na mesma
+    // coluna e sem farol, sai mais escuro (31 contra 22).
+    u.owner = static_cast<uint8_t>((u.owner & 0xF0) | 1);
+    gs.onIdle(renderer, 0.0f);
+    const long inimigo = somaSprite();
+    u.owner = static_cast<uint8_t>(u.owner & 0xF0);
+    std::printf("[Luz] Scout sem farol: do jogador %ld, de um inimigo %ld\n", semLuz, inimigo);
+    casos.push_back({"o inimigo no escuro sai mais escuro", inimigo < semLuz ? 1 : 0, 1});
+
+    int falhas = 0;
+    for (const Caso& c : casos) {
+        const bool bom = c.obtido == c.esperado;
+        if (!bom) ++falhas;
+        std::printf("[Luz] %-44s %lld (esperado %lld) %s\n", c.nome.c_str(), c.obtido, c.esperado, bom ? "ok" : "FALHOU");
+    }
+    std::printf("[Luz] %d casos, %d falhas\n", static_cast<int>(casos.size()), falhas);
+    std::fflush(stdout);
+    renderer.shutdown(); SDL_Quit();
+    return falhas ? 1 : 0;
+}
+
 // --walltest <map>: parede comum, de lava, de micróbio e um tubo lado a lado;
 // sub_4A23F0 (damageWall) com dano 1000 e depois 20, 6x cada, imprimindo o tile
 // e o tipo da célula — a parede comum passa pelos estágios +0x54/+0x74/+0x94.
@@ -9245,6 +9396,8 @@ int main(int argc, char* argv[]) {
             return runItem21Test(argv[i + 1]);
         if (std::strcmp(argv[i], "--cmddebugtest") == 0 && i + 1 < argc)
             return runCmdDebugTest(argv[i + 1]);
+        if (std::strcmp(argv[i], "--lighttest") == 0 && i + 1 < argc)
+            return runLightTest(argv[i + 1], i + 2 < argc ? argv[i + 2] : nullptr);
         if (std::strcmp(argv[i], "--prodqueuetest") == 0 && i + 1 < argc)
             return runProdQueueTest(argv[i + 1], i + 2 < argc ? argv[i + 2] : nullptr);
         if (std::strcmp(argv[i], "--cheattest") == 0 && i + 1 < argc)

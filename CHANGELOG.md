@@ -13,6 +13,17 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
 
 ### Português
 
+**Corrigido**
+
+- **A noite como no original: a luz das unidades.** No original, à noite,
+  cada veículo com os faróis acesos e cada prédio com energia abre um círculo
+  de luz no escuro, do tamanho do alcance de visão dele, com a borda
+  pontilhada; por onde o veículo passa o escuro se abre, e volta quando ele
+  sai. O porte deixava tudo na mesma escuridão. Agora a luz existe, e os
+  prédios e veículos fora dela escurecem — os do inimigo mais que os seus e
+  os dos aliados —, como lá (antes as unidades nunca escureciam, por causa de
+  uma leitura errada do código original).
+
 **Novo**
 
 - **Fila de produção** (opção **Production Queue**, nas preferências do menu e
@@ -35,10 +46,22 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   A fila é só da interface: a partida em rede funciona como sempre, mas ela não
   é gravada no jogo salvo. Desligada (o padrão), é o jogo original.
 
-**Para quem acompanha o código:** seção 5.40 do PORT_STATUS; o modo de teste
-`--prodqueuetest`; o módulo `src/game/production_queue.cpp`.
+**Para quem acompanha o código:** seções 5.40 e 5.41 do PORT_STATUS; os modos
+de teste `--prodqueuetest` e `--lighttest`; os módulos
+`src/game/production_queue.cpp` e `src/game/light_map.cpp`.
 
 ### English
+
+**Fixed**
+
+- **Night as in the original: the units' light.** In the original, at night,
+  every vehicle with its headlights on and every powered building opens a
+  circle of light in the dark, as large as its sight range, with a dotted
+  edge; where a vehicle goes the dark opens, and it closes again when it
+  leaves. The port left everything equally dark. The light is there now, and
+  buildings and vehicles outside it darken — the enemy's more than yours and
+  your allies' —, as there (units used to never darken, because of a misread
+  of the original code).
 
 **New**
 
@@ -63,8 +86,9 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   The queue lives in the interface only: network games work as always, but it
   is not stored in saved games. Off (the default), it is the original game.
 
-**For those following the code:** section 5.40 of PORT_STATUS; the
-`--prodqueuetest` test mode; the `src/game/production_queue.cpp` module.
+**For those following the code:** sections 5.40 and 5.41 of PORT_STATUS; the
+`--prodqueuetest` and `--lighttest` test modes; the
+`src/game/production_queue.cpp` and `src/game/light_map.cpp` modules.
 
 ---
 

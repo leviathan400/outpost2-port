@@ -11,6 +11,7 @@
 
 #include "tapp.h"
 #include "info_pane.h"
+#include "../game/light_map.h"
 #include "../game/production_queue.h"
 #include "../game/command_debug.h"
 #include "../game/production.h"
@@ -952,6 +953,10 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     }), m_selected.end());
 
     renderer.clear(0xFF000000);
+    // A luz das unidades (5.41): o mapa de tiles iluminados da vista, remontado
+    // a cada quadro como em sub_49EA90, e o mesmo mapa nos sprites (sub_470810).
+    lightMapBuild(m_camX, m_camY, viewportW(), viewportH(), viewWraps());
+    setArtLight(lightMapActive() ? &lightScreenPixelLit : nullptr);
     // Ciclo dia/noite no terreno: cada coluna de tile sai pela paleta da sua
     // escuridao (sub_4A8BD0). Com SetDaylightEverywhere nao se escurece nada,
     // exatamente como o teste de dword_56DEA4 la dentro.
@@ -1006,15 +1011,27 @@ void GameState::onIdle(Renderer& renderer, float dt) {
     // na tela. As pictures são posicionadas por (x,y) menos o HOTSPOT da animação
     // (header[5],header[6] = centro do bbox header[1..4]) — como o original faz
     // (`sub eax, dword_50B368[...]` em sub_403E00). Índice 0 = transparente.
-    // Sprites NAO escurecem com a noite: sub_405160 (o desenho da unidade)
-    // passa -1 como coluna de luz, que e o sentinela de sub_403E00 para usar a
-    // paleta base. Dos 84 pontos que chamam sub_403E00 so dois passam a coluna
-    // de verdade (sub_4056E0 / sub_405840, a animacao fixa 0x2A2): no original
-    // so o TERRENO escurece, e as unidades seguem legiveis no escuro.
-    auto drawSprite = [&](int animIdx, int frameIdx, int cx, int cy, int playerColor) {
+    // A escuridao dos sprites (5.41; antes o porte nao escurecia nenhum, por
+    // uma leitura errada): predios (sub_408DB0), veiculos (sub_44C910),
+    // tanques e torres (sub_484CF0), o chao da garagem (sub_401970) e a
+    // fumarola (sub_405840) passam a COLUNA de luz da unidade a sub_403E00 --
+    // e os do jogador local e dos aliados (dword_56E2E0) somam 0x200, a
+    // segunda curva, 9 niveis mais clara. Os efeitos (sub_405160), o beacon,
+    // o destroco, o brilho do EMP/ESG e a luz de status passam -1 e nao
+    // escurecem. Dentro da luz de uma unidade o sprite sai claro (setArtLight).
+    auto drawSprite = [&](int animIdx, int frameIdx, int cx, int cy, int playerColor, int dark = 0) {
         return blitArtFrame(renderer.getFramebuffer(), m_fbW, m_fbH,
                             animIdx, frameIdx, cx, cy, playerColor,
-                            0, 0, viewportW(), viewportH());
+                            0, 0, viewportW(), viewportH(), dark);
+    };
+    const int meLuz = TethysGame::localPlayer();
+    auto unitDark = [&](const UnitRecord& u) -> int {
+        if (TethysGame::daylightEverywhere() || !g_gameMap.ok()) return 0;   // dword_56DEA4
+        const int col = (u.pixelX >> 5) + g_gameMap.internalXOffset() - TethysGame::daylightPos();
+        const int ow = u.owner & 0x0F;
+        const bool aliado = ow < kMaxPlayers && meLuz >= 0 && meLuz < kMaxPlayers &&
+                            (g_playerData[meLuz].allyMask & (1u << ow));
+        return aliado ? g_gameMap.lightDarkness2(col) : g_gameMap.lightDarkness(col);
     };
 
     // Colchete de seleção (sub_43E950): guardo o frame do corpo de cada unidade
@@ -1103,7 +1120,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
         if (!raw || !g_art.ok() || raw - 0x65 >= g_art.numAnimations()) continue;
         const int ow = r.owner & 0x0F;
         const int pc = (ow < kMaxPlayers) ? g_playerData[ow].colorNumber : 0;
-        drawSprite(raw - 0x65, 0, screenXOf(unitOX(r)), unitOY(r) - m_camY, pc);
+        drawSprite(raw - 0x65, 0, screenXOf(unitOX(r)), unitOY(r) - m_camY, pc, unitDark(r));
     }
 
     // A ordem do original. sub_49EA90 separa as unidades visiveis em duas
@@ -1191,14 +1208,14 @@ void GameState::onIdle(Renderer& renderer, float dt) {
                 if (r.type == mapCargoTruck) frame = truckFrame(r, (int)i);   // vt[8] sub_44C7B0
                 else if (r.type == mapConVec && anim >= 0) frame = convecFrame(r, (int)i, anim + 0x65);   // vt[0x20] sub_410E50
                 int pc = (ow >= 0 && ow < kMaxPlayers) ? g_playerData[ow].colorNumber : 0;
-                drew = drawSprite(anim, frame, ucx, ucy, pc);
+                drew = drawSprite(anim, frame, ucx, ucy, pc, unitDark(r));
                 if (drew) recDeco((int)i, ucx, ucy, anim, frame);
                 // Torre (sub_484CF0): anim da arma p/ a direção da torre [+0x2D],
                 // frame 0, no ponto de encaixe do frame atual do chassi.
                 int tAnim, tx, ty;
                 if (drew && tankTurret(r, anim, frame, tAnim, tx, ty) && tAnim >= 0 &&
                     tAnim < g_art.numAnimations())
-                    drawSprite(tAnim, 0, ucx + tx, ucy + ty, pc);
+                    drawSprite(tAnim, 0, ucx + tx, ucy + ty, pc, unitDark(r));
                 // Overlays (sub_44C910 / fim de sub_484CF0), fora da doca: espuma
                 // 0x2FE (contador [+0x54] < nF-1) / 0x2FD (endurecida, pelo tempo
                 // desde [+0x60]), ESG 0x619 e EMP 0x2FF ((id + tick) % nF).
@@ -1210,11 +1227,11 @@ void GameState::onIdle(Renderer& renderer, float dt) {
                     const int tick = (int)TethysGame::tick();
                     if (r.flags & 0x40000u) {
                         const int n = lastF(0x2FE);
-                        if (r.foamTicks < n) drawSprite(0x2FE - 0x65, n - r.foamTicks, ucx, ucy, -1);
+                        if (r.foamTicks < n) drawSprite(0x2FE - 0x65, n - r.foamTicks, ucx, ucy, -1, unitDark(r));
                         else {
                             const int cap = lastF(0x2FD) - 1;
                             const int f = static_cast<int>((static_cast<unsigned>(tick - r.foamStart) & 0xFFFEu) >> 1);
-                            drawSprite(0x2FD - 0x65, f < cap ? f : cap, ucx, ucy, -1);
+                            drawSprite(0x2FD - 0x65, f < cap ? f : cap, ucx, ucy, -1, unitDark(r));
                         }
                     }
                     if (r.flags & 0x100000u) drawSprite(0x619 - 0x65, (int)((unsigned)((int)i + tick) % (unsigned)(lastF(0x619) + 1)), ucx, ucy, -1);
@@ -1235,7 +1252,7 @@ void GameState::onIdle(Renderer& renderer, float dt) {
             if (anim >= 0 && g_art.ok() && anim < g_art.numAnimations()) {
                 int pc = (ow >= 0 && ow < kMaxPlayers) ? g_playerData[ow].colorNumber : 0;
                 const int bldFrame = guardPost ? 0 : structureFrame(r);
-                drew = drawSprite(anim, bldFrame, ucx, ucy, pc);
+                drew = drawSprite(anim, bldFrame, ucx, ucy, pc, unitDark(r));
                 if (drew) recDeco((int)i, ucx, ucy, anim, bldFrame);
                 // EMP / ESG (0x180000) no prédio (sub_408DB0): grade de 16 px no
                 // footprint; cada ponto aparece se rnd(100) > 80 (40 com lado 1),
@@ -1318,7 +1335,9 @@ void GameState::onIdle(Renderer& renderer, float dt) {
             const int anim = 0x9F - 0x65;
             if (g_art.ok() && anim < g_art.numAnimations()) {
                 const int last = static_cast<int>(g_art.animation(anim).frames.size()) - 1;
-                drawSprite(anim, last > 0 ? TethysGame::tick() % last : 0, ucx, ucy, -1);
+                // sub_405840: a coluna de luz do tile, sem a curva dos aliados.
+                drawSprite(anim, last > 0 ? TethysGame::tick() % last : 0, ucx, ucy, -1,
+                           TethysGame::daylightEverywhere() ? 0 : tileDarkness(tx));
             }
             if (TethysGame::tick() % 100 == 0 && onScreen(ucx, ucy)) drawSound(static_cast<int>(i), unitOX(r), unitOY(r), 0x3C);
             continue;
@@ -1939,36 +1958,8 @@ void GameState::debugRightClickTile(Renderer& r, int tileX, int tileY) {
 // instalacao daqui nao o tem, entao, sem ele, o porte usa um molde de reserva:
 // cada quarto do tile acompanha o canto dele (acrescimo do porte -- as bordas
 // ficam mais quadradas que as do original; o miolo, mascara 0xF, nao usa molde).
-namespace {
-uint32_t s_virMask[16][32];
-bool s_virTried = false, s_virFromFile = false;
-void loadVirMask() {
-    if (s_virTried) return;
-    s_virTried = true;
-    auto st = g_ResManager.openStream("VIRMASK.RAW");
-    if (st && st->size() >= 0x800) {
-        const uint8_t* d = st->data();
-        for (int i = 0; i < 512; ++i) {
-            const uint32_t be = (uint32_t(d[i * 4]) << 24) | (uint32_t(d[i * 4 + 1]) << 16) |
-                                (uint32_t(d[i * 4 + 2]) << 8) | uint32_t(d[i * 4 + 3]);
-            s_virMask[i / 32][i % 32] = ~be;
-        }
-        s_virFromFile = true;
-        return;
-    }
-    for (int m = 0; m < 16; ++m)
-        for (int r = 0; r < 32; ++r) {
-            uint32_t row = 0;
-            for (int i = 0; i < 32; ++i) {
-                const int canto = r < 16 ? (i < 16 ? 1 : 2) : (i < 16 ? 4 : 8);
-                if (m & canto) row |= 0x80000000u >> i;
-            }
-            s_virMask[m][r] = row;
-        }
-}
-}  // namespace
 
-bool blightMaskFromFile() { loadVirMask(); return s_virFromFile; }
+bool blightMaskFromFile() { return virMaskFromFile(); }
 
 // sub_490C00 / a tabela [+0x1060] do minimapa (ver o desenho).
 uint16_t minimapPlayerColor555(int player) {
@@ -2001,7 +1992,6 @@ bool minimapEffectMark(const UnitRecord& r, int me) {
 // da escuridao.
 void GameState::drawBlight(uint32_t* fb) const {
     if (!g_gameMap.ok()) return;
-    loadVirMask();
     const int W = g_gameMap.width(), H = g_gameMap.height();
     const uint32_t kRoxo = 0xFF6300C6u;                       // 0x3018: r 12, g 0, b 24 (5 bits)
     const bool volta = viewWraps();
@@ -2021,7 +2011,7 @@ void GameState::drawBlight(uint32_t* fb) const {
             for (int r = 0; r < 32; ++r) {
                 const int py = sy + r;
                 if (py < 0 || py >= m_fbH) continue;
-                const uint32_t linha = m == 0xF ? 0xFFFFFFFFu : s_virMask[m][r];
+                const uint32_t linha = m == 0xF ? 0xFFFFFFFFu : virMaskRows(m)[r];
                 for (int i = 0; i < 32; ++i) {
                     const int px = sx + i;
                     if (px < 0 || px >= m_fbW) continue;
