@@ -407,7 +407,10 @@ static int specialNeighbor(const UnitRecord& u) {
 }
 bool specialTargetCheck(int unitId) {                                // sub_44D5B0
     UnitRecord& u = g_units[unitId];
-    if (u.flags & 0x40u) return false;
+    // sub_44D5B0: o caminhao de carga (1) e o transporte de evacuacao (0x0D)
+    // CARREGADOS ([+0x24] != 0) nao entram. (O porte testava a flag 0x40, que
+    // e o teste de quem chama -- o caso 2 de jpt_43B312 -- e nao este.)
+    if ((u.type == mapCargoTruck || u.type == mapEvacuationTransport) && u.cargo != 0) return false;
     if (!specialNeighbor(u)) return false;
     u.action = 0x10; u.field20 = 1; u.field3C = 0;
     return true;
@@ -423,7 +426,11 @@ void specialTargetArrive(int unitId) {                               // sub_44D7
         for (int id : s_special) {
             Trigger* t = trig(id);
             if (!t || t->f30 != o || t->f38 != u.type) continue;
-            t->f34 = unitId; t->f3C = 1;
+            t->f34 = unitId; t->f3C = 1;                             // sub_495170
+            // ... e, gatilho de UMA VEZ ([+0x1C] == 1), o alvo deixa de ser
+            // especial (and [alvo+0x44], 0xFDFFFFFF): outra unidade encostada
+            // nele depois nao transmite de novo.
+            if (t->oneShot == 1) g_units[o].flags &= ~0x2000000u;
             return;
         }
     }
@@ -1009,7 +1016,7 @@ std::vector<TriggerInfo> debugTriggers() {
 std::vector<SpecialInfo> debugSpecialTriggers() {
     std::vector<SpecialInfo> v;
     for (int id : s_special)
-        if (Trigger* t = trig(id)) v.push_back({id, t->enabled, t->f30, t->f38, t->f34, t->f3C});
+        if (Trigger* t = trig(id)) v.push_back({id, t->enabled, t->f30, t->f38, t->f34, t->f3C, t->oneShot});
     return v;
 }
 

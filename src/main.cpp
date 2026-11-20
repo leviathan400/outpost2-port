@@ -4937,6 +4937,11 @@ static int runE04Test(const std::string& dll) {
     std::printf("[E04] fim de jogo: %d\n", op2::gameEndCode());
     int cumpridos = 0;
     for (const std::string& o : op2::missionObjectives()) if (o.rfind("<C0>", 0) == 0) ++cumpridos;
+    // sub_495170: gatilho de uma vez -> o alvo perde a flag 0x2000000.
+    int deUmaVez = 0, aindaEspeciais = 0;
+    for (const op2::SpecialInfo& s : op2::debugSpecialTriggers())
+        if (s.oneShot == 1) { ++deUmaVez; if (op2::g_units[s.target].flags & 0x2000000u) ++aindaEspeciais; }
+    std::printf("[E04] gatilhos de uma vez: %d; alvos ainda especiais: %d\n", deUmaVez, aindaEspeciais);
     struct Caso { const char* nome; int obtido, esperado; };
     const Caso casos[] = {
         {"a fonte chega na celula encostada", chegou >= 0, 1},
@@ -4945,6 +4950,7 @@ static int runE04Test(const std::string& dll) {
         {"clique em cima do 2o lab: transmite", d2 >= 0, 1},
         {"clique em cima do 3o lab: transmite", d3 >= 0, 1},
         {"os tres objetivos cumpridos", cumpridos, 3},
+        {"o alvo de gatilho de uma vez deixa de ser especial", aindaEspeciais, 0},
     };
     int ruins = 0;
     for (const Caso& c : casos) {

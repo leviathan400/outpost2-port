@@ -115,7 +115,7 @@ std::vector<std::string> missionObjectives();
 struct TriggerInfo { int stub, kind, enabled, f30, f34; uint32_t playerMask; };
 std::vector<TriggerInfo> debugTriggers();
 // Os SpecialTarget (para o --e04test): alvo, tipo da fonte, fonte, disparado.
-struct SpecialInfo { int stub, enabled, target, sourceType, source, fired; };
+struct SpecialInfo { int stub, enabled, target, sourceType, source, fired, oneShot; };
 std::vector<SpecialInfo> debugSpecialTriggers();
 enum { kTrigResearch = 1, kTrigVictory = 2 };
 

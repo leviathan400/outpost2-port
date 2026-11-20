@@ -3479,6 +3479,28 @@ enquanto os Scouts andam, por causa dos reforços. Depois:
 Sem a correção, o Scout do clique em cima fica parado ao lado do laboratório
 sem transmitir.
 
+### A rotina do original, comparada com a do porte
+
+| Peça | Original | Porte |
+|---|---|---|
+| Objetivo do modo 0 | `sub_438390`: a casa do objetivo tem custo negativo, mas a casa com unidade que não é veículo (`test al, 2`) vale `0x7FFFFFFF` antes disso — a casa de um prédio **nunca** é alcançada | `pfMoveCost`: igual |
+| Ponto final do MOVE | `sub_451280` → pacote 2 com o ponto clicado, sem troca, num prédio fora da doca; `sub_451420` com folga de chegada **0** no alvo (só os intermediários têm folga) | igual |
+| Sem rota para o último ponto | `sub_44C0B0`, `loc_44C16D` → `loc_44C20A`: com o bit 0 de `[ordem+0x34]`, espera `[st+0x70]` tiques e sorteia a próxima (até `0x53`), com o sub-estado 1 | igual até a 5.47; agora, encostada no prédio do alvo, é a chegada |
+| Quem apaga o bit 0 | só o caso 8 (Earthworker, `loc_43AED7`) e o 40 (patrulha, `loc_43D6FB`) — o mover nunca | igual |
+| Chegada | `jpt_43B312` casos 2-4, só com `[+0x22] == 0`: flag `0x40` → `sub_44D5B0` → `sub_406C20` (caminhão vazio) → `sub_484460` (tipo 8) | `unitArrived`: igual |
+| `sub_44D5B0` | recusa o caminhão (1) e o transporte de evacuação (`0x0D`) **carregados**; 4 vizinhas (x−1, x+1, y−1, y+1) com a flag `0x2000000` → ação `0x10` | testava a flag `0x40` no lugar da carga — **corrigido** |
+| Ação `0x10` | início (`jpt_43AD56` caso 16): sub-estado 6, `[+0x3C] = 0x3C`; fim (`jpt_43B312` caso 16): `sub_44D7D0`, ação 0 | igual |
+| `sub_44D7D0` | nas 4 vizinhas, o 1º gatilho da lista `dword_4EA084` com aquele alvo e o tipo da fonte → `sub_495170` | igual |
+| `sub_495170` | grava a fonte (`[+0x34]`) e `[+0x3C] = 1`; gatilho de **uma vez** (`[+0x1C] == 1`): o alvo perde a flag `0x2000000` | não tirava a flag — **corrigido** |
+
+Conclusão: o porte reproduzia o original fielmente, inclusive o defeito, que
+também existe lá — no original o Scout mandado para cima do laboratório
+também fica tentando chegar para sempre. A missão só se completa clicando no
+chão encostado. A correção da 5.47 é um desvio consciente (regra do projeto:
+defeito do original se corrige). As outras duas diferenças achadas na
+comparação eram do porte e foram alinhadas ao original. O `--e04test` ganhou o
+caso "o alvo de gatilho de uma vez deixa de ser especial" (7 casos).
+
 ## 6. Build e execução
 
 **Toolchain:** CMake >= 3.15 + MSVC, C++17, SDL2 2.30.9 (em `third_party/`).

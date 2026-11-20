@@ -59,7 +59,10 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   dele e ficava tentando chegar à casa ocupada para sempre. Como nunca
   "chegava", a transmissão não começava e o objetivo não podia ser cumprido.
   Agora, encostado no prédio do destino, a unidade chega, e o Scout transmite.
-  Vale para qualquer veículo mandado para cima de um prédio.
+  Vale para qualquer veículo mandado para cima de um prédio. (A comparação com
+  o código original mostrou que lá o defeito é o mesmo; aqui ele foi
+  corrigido, e duas pequenas diferenças da transmissão foram alinhadas ao
+  original.)
 
 - **A noite como no original: a luz das unidades.** No original, à noite,
   cada veículo com os faróis acesos e cada prédio com energia abre um círculo
@@ -148,7 +151,10 @@ ampliado); os módulos
   and kept trying to reach the occupied cell forever. Since it never
   "arrived", the transmission never started and the objective could not be
   met. Now, touching the destination building, the unit arrives, and the Scout
-  transmits. This applies to any vehicle sent on top of a building.
+  transmits. This applies to any vehicle sent on top of a building. (The
+  comparison with the original code showed the defect is the same there; here
+  it was fixed, and two small differences in the transmission were aligned
+  with the original.)
 - **Night as in the original: the units' light.** In the original, at night,
   every vehicle with its headlights on and every powered building opens a
   circle of light in the dark, as large as its sight range, with a dotted
