@@ -138,7 +138,16 @@
 > `GetWindowRect` + `GetCursorPos` in screen coordinates, a cursor beyond the
 > edge now scrolls too. And, with the `ListScrollBars` key — now labelled
 > *Wheel & Scroll Bars* — the mouse wheel scrolls the map, 2 tiles per notch;
-> new `--missionscrolltest`).
+> new `--missionscrolltest`) and **5.52** (Eden mission 5's 22 objectives:
+> "Have 3 or more empty Cargo Trucks" never completed — since 5.14 a truck
+> COUNT with a cargo filter counts by quantity, and an empty truck's quantity
+> is always 0; empty now counts trucks, as the original `sub_493AF0` does;
+> new `--e05test` and `--objdump`) and **5.53** (an audit of what every
+> research unlocks: the recycling chain — Metals Reclamation → GORF kit, an
+> operating GORF → the empty truck's SALVAGE, Recycler Postprocessing → 60%
+> instead of 50% — and the whole tree, unlock before/after and every
+> `UNIT_PROP`, over E01/P01, E05/P05 and E12/P12 with no failure; new
+> `--techunlocktest`).
 > The recent
 > changes are summarised in
 > [README.EN.md](README.EN.md).
@@ -191,7 +200,7 @@ coverage by comparing the DLLs' import tables against the registry in
 
 ```
 src/
-  main.cpp        entry point + the 129 test/capture modes
+  main.cpp        entry point + the 132 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -782,7 +791,7 @@ mission DLLs and the original resources from the working directory).
 
 ### Command-line tests
 
-There are 129 modes. The ones that cover real regressions:
+There are 132 modes. The ones that cover real regressions:
 
 | Mode | What it proves |
 |---|---|

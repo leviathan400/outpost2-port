@@ -48,7 +48,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 129 modos de teste/captura
+  main.cpp        entrada + os 132 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -3698,6 +3698,95 @@ Desligada, a roda não faz nada no mapa, como no original.
   mapa não o rola. Ligada, desce 2 tiles e sobe de volta, e sobre a lista rola
   a lista e não o mapa.
 
+## 5.52. Os objetivos da E05 e o "caminhão de carga vazio" (2026-11-20)
+
+Pedido do usuário: *testar a missão 05 do Eden e ver se todos os objetivos são
+concluídos normalmente.*
+
+A E05 tem **22 objetivos** (o novo `--objdump <DLL>` lista cada um com o
+gatilho por trás):
+
+- RESOURCE ≥ para 40 crianças, 30 trabalhadores e 20 cientistas. A colônia
+  começa com 28/22/15, dentro dos transportes, então são metas de
+  **crescimento**;
+- RESEARCH: Robot-Assist Mechanic (5102) e Geothermal Power (5115);
+- EVAC: transportes para toda a população;
+- COUNT: 3 caminhões **vazios**, 5 ConVecs, Earthworker, Robo-Surveyor, 2
+  Scouts, 4 Lynx, 2 Panthers com Rail Gun (`0x3F`), o satélite (tipo 88 =
+  EDWARD, pela contagem espacial) e as cargas nos caminhões (5000 de metal
+  comum, 2000 de raro, 3000 de comida);
+- KIT: Agridome, Command Center, Smelter, Structure Factory e Tokamak
+  guardados.
+
+**Defeito achado (do porte):** "Have 3 or more empty Cargo Trucks" **nunca se
+cumpria**. Desde a 5.14 (a carga parcial), o COUNT de caminhões com filtro de
+carga conta pela quantidade: a soma das cargas daquele tipo dividida pela
+capacidade. A carga **0** é o caminhão **vazio**, cuja quantidade é sempre 0,
+então a conta dava 0 caminhões. **Corrigido** em `countForPlayer` e
+`countAccumulate`: a conta pela quantidade vale só para carga de verdade (tipo
+> 0); vazio conta caminhões, como o `sub_493AF0` original.
+
+**Teste:** `--e05test [DLL]` (novo) cumpre cada objetivo pelo estado legítimo
+do jogo:
+
+- a população nas metas, simulando o crescimento, com transportes para todos;
+- as pesquisas pelo caminho do laboratório (`researchMarkComplete`);
+- os veículos e os caminhões com as cargas;
+- os kits nas baias de uma Structure Factory;
+- o satélite **lançado** de verdade: espaçoporto com SULV + EDWARD,
+  `spaceportLaunch`, em órbita em 30 tiques.
+
+Com tudo isso, os 22 objetivos se cumprem e a missão termina em MISSION
+ACCOMPLISHED. Mutação: sem a correção, o objetivo dos caminhões vazios fica
+pendente e a missão não termina.
+
+## 5.53. Auditoria: o que cada pesquisa libera (2026-11-20)
+
+Pergunta do usuário: *todas as pesquisas dos laboratórios estão abrindo as
+novas funções — por exemplo a reciclagem: primeiro a pesquisa do laboratório,
+depois as funções dos veículos sobre ela?*
+
+**O mecanismo.** Cada prédio e veículo traz na planilha a pesquisa que o libera
+(`desc+0x1E4`, convertida em índice da árvore ao carregar). Essa pesquisa é
+consultada (`researchHas`, o `sub_472C50`):
+
+- na produção das fábricas (`factoryCanProduce`, `sub_4567B0`);
+- nos comandos dos veículos (muros, minas raras);
+- na lista de veículos, no espaçoporto, no relatório de recursos e nos
+  desastres.
+
+Ao concluir, cada pesquisa aplica os seus `UNIT_PROP` no bloco do jogador
+(`sub_473860`).
+
+**A reciclagem** é uma cadeia:
+
+1. **Metals Reclamation (03302)** libera o kit do **GORF** na Structure
+   Factory;
+2. com um GORF **operando**, o caminhão de carga vazio ganha o comando
+   **SALVAGE** (`sub_453A20`), e a desmontagem de prédios (ConVec) e a
+   reciclagem de kits devolvem metal;
+3. **Recycler Postprocessing (05306)** liga o `Improved` do GORF: o retorno
+   passa de **50%** para **60%** do custo (`sub_46E5C0`).
+
+**Teste:** `--techunlocktest [DLL]` (novo), em duas partes.
+
+- **A, a reciclagem de ponta a ponta, numa colônia montada no teste:**
+  - o kit do GORF não sai antes da pesquisa e sai depois;
+  - o caminhão vazio não tem o SALVAGE sem GORF e ganha com ele;
+  - a reciclagem de um Tokamak devolve 550 (50%), e 660 (60%) depois do
+    Recycler Postprocessing.
+- **B, a árvore inteira**, pesquisa por pesquisa:
+  - nenhum tipo da colônia exige uma pesquisa que não existe na árvore;
+  - nada é liberado **antes** da pesquisa;
+  - tudo é liberado **depois**;
+  - todos os `UNIT_PROP` estão aplicados.
+
+Rodado em E01/P01 (118 e 120 pesquisas, quase a árvore inteira), E05/P05 e
+E12/P12: **nenhuma falha**. A única "exceção" é regra do original, conferida
+no asm: o `sub_472C50` devolve 0 para o Basic Lab (0x21) quando o Standard Lab
+(0x31) já foi pesquisado, porque o laboratório básico fica obsoleto. O teste
+confere essa regra num caso próprio.
+
 ## 6. Build e execução
 
 **Toolchain:** CMake >= 3.15 + MSVC, C++17, SDL2 2.30.9 (em `third_party/`).
@@ -3760,6 +3849,9 @@ São 109 modos. Os que cobrem regressão de verdade:
 | `--listscrolltest` | A barra de rolagem e a roda das listas do shell: tutoriais, manual (lista e texto), capítulos (5.50) |
 | `--panescrolltest [DLL] [tela.bmp]` | A barra e a roda nas listas da partida, com a opção `ListScrollBars` desligada e ligada (5.50) |
 | `--missionscrolltest [DLL]` | A rolagem da vista numa missão, quadro a quadro, para os quatro lados (5.51) |
+| `--e05test [DLL]` | Os 22 objetivos da E05 cumpridos pelo estado de jogo (inclusive o satélite lançado) e o MISSION ACCOMPLISHED (5.52) |
+| `--objdump <DLL> [tiques]` | Lista os objetivos da missão com o gatilho por trás de cada um (tipo e campos) e a população (5.52) |
+| `--techunlocktest [DLL]` | O que cada pesquisa libera: a cadeia da reciclagem (GORF, SALVAGE, 50%/60%) e a árvore inteira (liberação antes/depois, `UNIT_PROP`) (5.53) |
 | `--tubetest <mapa> [prefixo]` | o Earthworker ligando prédios com tubo: retas inteiras, a doca que não liga, a animação de trabalho |
 | `--waypointtest <mapa> [bmp]` | pontos de passagem com Ctrl + clique: limites por comando, o pacote com os pontos antes do alvo, a unidade passando por eles, patrulha e obra, e o desenho |
 | `--selecttest <mapa>` | a área de clique das unidades, e a seleção com Shift e com o botão do meio (soma, tira, caixa que soma, as exceções) |

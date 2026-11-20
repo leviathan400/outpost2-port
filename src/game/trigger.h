@@ -117,6 +117,9 @@ std::vector<TriggerInfo> debugTriggers();
 // Os SpecialTarget (para o --e04test): alvo, tipo da fonte, fonte, disparado.
 struct SpecialInfo { int stub, enabled, target, sourceType, source, fired, oneShot; };
 std::vector<SpecialInfo> debugSpecialTriggers();
+// Os objetivos (VictoryCondition) com o gatilho por tras: tipo e campos.
+struct ObjectiveInfo { std::string text; bool done; int stub, kind, enabled, f30, f34, f38, f3C, f40, f44; };
+std::vector<ObjectiveInfo> debugObjectives();
 enum { kTrigResearch = 1, kTrigVictory = 2 };
 
 // Fim de jogo (sub_48A650 / TethysGame +0x9C,+0x98): 0 = em andamento;

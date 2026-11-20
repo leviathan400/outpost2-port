@@ -4820,6 +4820,298 @@ static int runTubeTest(const std::string& mapName, const std::string& prefix) {
     return ruins ? 1 : 0;
 }
 
+// --techunlocktest [DLL]: o que cada PESQUISA libera (5.53).
+//  A) a cadeia da RECICLAGEM de ponta a ponta: o kit do GORF so na Structure
+//     Factory depois de Metals Reclamation (3302); o SALVAGE do caminhao vazio
+//     so com um GORF operando; a reciclagem devolve 50% do custo e 60% depois
+//     de Recycler Postprocessing (5306), que liga o "Improved" do GORF.
+//  B) TODA a arvore: cada pesquisa libera, so depois de concluida, os predios
+//     e veiculos da colonia que dependem dela (desc+0x1E4) e aplica todos os
+//     seus UNIT_PROP no bloco do jogador; e nenhum tipo da colonia exige uma
+//     pesquisa que nao existe na arvore (viraria "sempre liberado").
+static int runTechUnlockTest(const std::string& dll) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 techunlocktest", 640, 480, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    auto roda = [&](int n) { for (int t = 0; t < n && !op2::gameEndCode(); ++t) gs.onIdle(renderer, 0.2501f / 4.0f); };
+    roda(8);
+    const int me = op2::TethysGame::localPlayer();
+    op2::PlayerData& pd = op2::g_playerData[me];
+    const bool eden = pd.isEden != 0;
+    const uint32_t meuBit = eden ? 0x1000u : 0x800u;
+    struct Caso { std::string nome; int obtido, esperado; };
+    std::vector<Caso> casos;
+    std::printf("[Tech] %s: arvore com %d tecnologias, colonia %s\n", dll.c_str(), op2::techCount() - 1, eden ? "Eden" : "Plymouth");
+
+    // ---------------- A) a reciclagem ----------------
+    int sx = 0, sy = 0, nu = 0;
+    for (int i = 1; i < (int)op2::g_units.size(); ++i) {
+        const op2::UnitRecord& r = op2::g_units[i];
+        if (r.id == -1 || (r.flags & op2::UNIT_DEAD) || (r.owner & 0x0F) != me) continue;
+        sx += r.pixelX >> 5; sy += r.pixelY >> 5; ++nu;
+    }
+    if (nu) { sx /= nu; sy /= nu; }
+    auto poe = [&](int tipo) {
+        for (int raio = 4; raio < 48; raio += 2)
+            for (int k = 0; k < 16; ++k) {
+                const int id = op2::placeBuilding(tipo, sx + (k % 4 - 2) * raio / 2, sy + (k / 4 - 2) * raio / 2, me);
+                if (id) return id;
+            }
+        return 0;
+    };
+    pd.workers = std::max(pd.workers, 120); pd.scientists = std::max(pd.scientists, 60);
+    pd.foodStored = std::max(pd.foodStored, 50000);
+    poe(op2::mapCommandCenter); poe(op2::mapTokamak); poe(op2::mapTokamak);
+    const int sf = poe(op2::mapStructureFactory);
+    op2::colonyMarkDirty(me);
+    roda(120);
+    const int reclam = op2::techIndex(3302), postproc = op2::techIndex(5306);
+    const bool sfOk = sf && op2::structureOperational(op2::g_units[sf]);
+    casos.push_back({"a Structure Factory opera (premissa)", sfOk ? 1 : 0, 1});
+    if (reclam > 0 && !op2::researchHas(me, reclam)) {
+        casos.push_back({"sem Metals Reclamation: o kit do GORF nao sai", op2::factoryCanProduce(sf, 0x39) ? 1 : 0, 0});
+        op2::researchMarkComplete(me, reclam);
+    }
+    casos.push_back({"com Metals Reclamation: o kit do GORF sai", op2::factoryCanProduce(sf, 0x39) ? 1 : 0, 1});
+    op2::Unit cam;
+    op2::TethysGame::CreateUnit(cam, op2::mapCargoTruck, op2::LOCATION{sx, sy}, me, 0);
+    casos.push_back({"sem GORF: o caminhao vazio nao tem SALVAGE",
+                     op2::uiCommandAvailable(op2::UC_SALVAGE, {cam.id()}) ? 1 : 0, 0});
+    const int gorf = poe(0x39);
+    op2::colonyMarkDirty(me);
+    roda(120);
+    casos.push_back({"o GORF opera (premissa)", gorf && op2::structureOperational(op2::g_units[gorf]) ? 1 : 0, 1});
+    casos.push_back({"com o GORF: o caminhao vazio ganha o SALVAGE",
+                     op2::uiCommandAvailable(op2::UC_SALVAGE, {cam.id()}) ? 1 : 0, 1});
+    // A reciclagem de um kit (o Tokamak): 50%, e 60% com Recycler Postprocessing.
+    int cTok = 0, rTok = 0;
+    if (const uint8_t* b = op2::unitStatBlock(op2::mapTokamak, me)) { std::memcpy(&cTok, b + 0x0C, 4); std::memcpy(&rTok, b + 0x10, 4); }
+    auto recicla = [&]() { const int o0 = pd.ore; if (gorf) op2::gorfRecycle(gorf, op2::mapTokamak); return pd.ore - o0; };
+    bool postJa = postproc > 0 && op2::researchHas(me, postproc);
+    if (!postJa) casos.push_back({"sem Recycler Postprocessing: devolve 50%", recicla(), cTok * 50 / 100});
+    if (postproc > 0) op2::researchMarkComplete(me, postproc);
+    casos.push_back({"com Recycler Postprocessing: devolve 60%", recicla(), cTok * 60 / 100});
+    std::printf("[Tech] reciclagem: custo do Tokamak %d comum / %d raro\n", cTok, rTok);
+
+    // ---------------- B) a arvore inteira ----------------
+    int orfaos = 0;
+    for (int type = 1; type <= 0x72; ++type) {
+        if (!(op2::unitOwnerFlags(type) & meuBit)) continue;
+        const int id = op2::unitResearchTopic(type);
+        if (id && op2::techIndex(id) < 0) {
+            ++orfaos;
+            std::printf("[Tech]   tipo 0x%02X exige a pesquisa %d, que nao existe na arvore\n", type, id);
+        }
+    }
+    int liberaAntes = 0, naoLiberou = 0, propErrada = 0, comTipos = 0, comProps = 0, feitas = 0;
+    for (int i = 1; i < op2::techCount(); ++i) {
+        const op2::Tech* t = op2::techAt(i);
+        if (!t || op2::researchHas(me, i)) continue;
+        if ((eden ? t->edenCost : t->plymouthCost) == -1) continue;      // nao e desta colonia
+        std::vector<int> tipos;
+        for (int type = 1; type <= 0x72; ++type)
+            if ((op2::unitOwnerFlags(type) & meuBit) && op2::researchTopicIndex(type) == i) tipos.push_back(type);
+        for (int type : tipos) if (op2::researchHas(me, op2::researchTopicIndex(type))) ++liberaAntes;
+        op2::researchMarkComplete(me, i);
+        ++feitas;
+        if (!tipos.empty()) ++comTipos;
+        for (int type : tipos)
+            // sub_472C50: o Basic Lab (0x21) sai com o Standard Lab (0x31)
+            // pesquisado -- regra do original, conferida no fim.
+            if (!(type == 0x21 && op2::researchHas(me, op2::researchTopicIndex(0x31))) &&
+                !op2::researchHas(me, op2::researchTopicIndex(type))) {
+                ++naoLiberou;
+                std::printf("[Tech]   %d '%s' NAO liberou o tipo 0x%02X\n", t->id, t->name.c_str(), type);
+            }
+        bool temProp = false;
+        for (const op2::TechUpgrade& u : t->upgrades) {
+            if (u.kind != 0) continue;
+            temProp = true;
+            const uint8_t* b = op2::unitStatBlock(u.unitType, me);
+            int32_t v = 0;
+            if (b) std::memcpy(&v, b + u.offset, 4);
+            if (!b || v != u.value) {
+                ++propErrada;
+                std::printf("[Tech]   %d '%s': UNIT_PROP do tipo 0x%02X +0x%X = %d, esperado %d\n",
+                            t->id, t->name.c_str(), u.unitType, u.offset, (int)v, u.value);
+            }
+        }
+        if (temProp) ++comProps;
+    }
+    std::printf("[Tech] arvore: %d pesquisas concluidas aqui; %d liberam predios/veiculos, %d mudam estatisticas\n",
+                feitas, comTipos, comProps);
+    casos.push_back({"nenhum tipo exige pesquisa inexistente", orfaos, 0});
+    casos.push_back({"nada liberado ANTES da pesquisa", liberaAntes, 0});
+    casos.push_back({"tudo liberado DEPOIS da pesquisa", naoLiberou, 0});
+    casos.push_back({"todos os UNIT_PROP aplicados", propErrada, 0});
+    casos.push_back({"a arvore foi percorrida (premissa)", feitas > 0 ? 1 : 0, 1});
+    casos.push_back({"o Basic Lab sai com o Standard Lab pesquisado (sub_472C50)",
+                     op2::researchHas(me, op2::researchTopicIndex(0x31)) &&
+                     !op2::researchHas(me, op2::researchTopicIndex(0x21)) ? 1 : 0, 1});
+    int ruins = 0;
+    for (const Caso& c : casos) {
+        const bool ok = c.obtido == c.esperado;
+        if (!ok) ++ruins;
+        std::printf("[Tech] %-48s %d (esperado %d) %s\n", c.nome.c_str(), c.obtido, c.esperado, ok ? "ok" : "FALHOU");
+    }
+    std::printf("[Tech] %d casos, %d falhas\n", (int)casos.size(), ruins);
+    std::fflush(stdout);
+    renderer.shutdown(); SDL_Quit();
+    return ruins ? 1 : 0;
+}
+
+// --e05test [DLL]: os 22 objetivos da E05. Cumpre cada um pelo estado de jogo
+// legitimo -- a populacao nas metas (simulando o crescimento) com transportes
+// para todos, as duas pesquisas pelo laboratorio, os veiculos e as cargas nos
+// caminhoes, os kits nas baias de uma Structure Factory e o satelite LANCADO
+// de verdade (espacoporto com SULV + EDWARD, spaceportLaunch) -- e confere
+// objetivo por objetivo e o fim MISSION ACCOMPLISHED.
+static int runE05Test(const std::string& dll) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 e05test", 640, 480, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    auto roda = [&](int n) { for (int t = 0; t < n && !op2::gameEndCode(); ++t) gs.onIdle(renderer, 0.2501f / 4.0f); };
+    roda(8);
+    const int me = op2::TethysGame::localPlayer();
+    auto mostra = [&](const char* quando) {
+        int ok = 0, total = 0;
+        for (const op2::ObjectiveInfo& o : op2::debugObjectives()) { ++total; if (o.done) ++ok; }
+        std::printf("[E05] %s: %d de %d objetivos cumpridos\n", quando, ok, total);
+    };
+    mostra("inicio");
+
+    // Uma area livre perto das unidades do jogador.
+    int sx = 0, sy = 0, nu = 0;
+    for (int i = 1; i < (int)op2::g_units.size(); ++i) {
+        const op2::UnitRecord& r = op2::g_units[i];
+        if (r.id == -1 || (r.flags & op2::UNIT_DEAD) || (r.owner & 0x0F) != me) continue;
+        sx += r.pixelX >> 5; sy += r.pixelY >> 5; ++nu;
+    }
+    if (nu) { sx /= nu; sy /= nu; }
+    auto poe = [&](int tipo) {
+        for (int raio = 4; raio < 40; raio += 2)
+            for (int k = 0; k < 16; ++k) {
+                const int x = sx + (k % 4 - 2) * raio / 2, y = sy + (k / 4 - 2) * raio / 2;
+                const int id = op2::placeBuilding(tipo, x, y, me);
+                if (id) return id;
+            }
+        return 0;
+    };
+    auto veiculo = [&](op2::map_id tipo, int carga) {
+        op2::Unit u;
+        op2::TethysGame::CreateUnit(u, tipo, op2::LOCATION{sx, sy}, me, carga);
+        return u.id();
+    };
+
+    // 1) a populacao nas metas (o crescimento da colonia nao e o assunto aqui)
+    op2::PlayerData& d = op2::g_playerData[me];
+    d.kids = std::max(d.kids, 40); d.workers = std::max(d.workers, 30); d.scientists = std::max(d.scientists, 20);
+    for (int k = 0; k < 4; ++k) veiculo(op2::mapEvacuationTransport, 0);   // e lugar para todos
+    // 2) as pesquisas
+    for (const op2::ObjectiveInfo& o : op2::debugObjectives())
+        if (o.kind == 1) { const int idx = op2::techIndex(o.f30); if (idx >= 0) op2::researchMarkComplete(me, idx); }
+    // 3) os veiculos
+    for (int k = 0; k < 3; ++k) veiculo(op2::mapCargoTruck, 0);              // vazios
+    for (int k = 0; k < 2; ++k) veiculo(op2::mapScout, 0);
+    for (int k = 0; k < 4; ++k) veiculo(op2::mapLynx, 0x3D);                 // laser
+    for (int k = 0; k < 2; ++k) veiculo(op2::mapPanther, 0x3F);              // Rail Gun
+    // 4) as cargas: caminhoes cheios (capacidade da planilha) de metal comum, raro e comida
+    auto cheios = [&](int tipoCarga, int caminhoes) {
+        for (int k = 0; k < caminhoes; ++k) {
+            const int id = veiculo(op2::mapCargoTruck, 0);
+            op2::g_units[id].cargo = static_cast<uint16_t>((1000 << 4) | tipoCarga);
+        }
+    };
+    cheios(4, 5); cheios(5, 2); cheios(1, 3);
+    // 5) os kits nas baias de uma Structure Factory
+    const int fab = poe(op2::mapStructureFactory);
+    if (fab) {
+        int b = 0;
+        for (int kit : {54, 47, 58}) {
+            while (b < 6 && op2::g_units[fab].bayType[b]) ++b;
+            if (b < 6) op2::g_units[fab].bayType[b++] = static_cast<uint8_t>(kit);
+        }
+    }
+    std::printf("[E05] fabrica de estruturas %d\n", fab);
+    op2::colonyMarkDirty(me);
+    roda(40);
+    mostra("antes do satelite");
+    // 6) o satelite: espacoporto com o SULV e o EDWARD, lancado
+    const int sp = poe(0x37);
+    int lancou = 0;
+    if (sp) {
+        roda(20);
+        op2::g_units[sp].padCargo = 0x69;              // SULV
+        op2::g_units[sp].padPayload = 0x58;            // EDWARD
+        lancou = op2::spaceportLaunch(sp, sx, sy) ? 1 : 0;
+    }
+    std::printf("[E05] espacoporto %d, lancou %d\n", sp, lancou);
+    int espera = 0;
+    while (espera < 4000 && !op2::gameEndCode()) { roda(10); espera += 10; if (op2::playerSpaceCount(me, 0x58)) break; }
+    std::printf("[E05] satelites em orbita: %d (depois de %d tiques)\n", op2::playerSpaceCount(me, 0x58), espera);
+    roda(600);
+    mostra("fim");
+    int pendentes = 0;
+    for (const op2::ObjectiveInfo& o : op2::debugObjectives())
+        if (!o.done) { ++pendentes; std::printf("[E05]   PENDENTE: %s\n", o.text.c_str()); }
+    std::printf("[E05] fim de jogo: %d\n", op2::gameEndCode());
+    struct Caso { const char* nome; int obtido, esperado; };
+    const Caso casos[] = {
+        {"a fabrica de estruturas foi posta (premissa)", fab ? 1 : 0, 1},
+        {"o satelite foi lancado", lancou, 1},
+        {"... e chegou a orbita", op2::playerSpaceCount(me, 0x58) > 0 ? 1 : 0, 1},
+        {"todos os objetivos cumpridos", pendentes, 0},
+        {"MISSION ACCOMPLISHED", op2::gameEndCode(), 3},
+    };
+    int ruins = 0;
+    for (const Caso& c : casos) {
+        const bool ok = c.obtido == c.esperado;
+        if (!ok) ++ruins;
+        std::printf("[E05] %-44s %d (esperado %d) %s\n", c.nome, c.obtido, c.esperado, ok ? "ok" : "FALHOU");
+    }
+    std::printf("[E05] %d casos, %d falhas\n", (int)(sizeof(casos) / sizeof(casos[0])), ruins);
+    std::fflush(stdout);
+    renderer.shutdown(); SDL_Quit();
+    return ruins ? 1 : 0;
+}
+
+// --objdump <DLL> [tiques]: os objetivos da missao com o gatilho por tras de
+// cada um (tipo TK_* e os campos), depois de N tiques.
+static int runObjDump(const std::string& dll, int ticks) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 objdump", 640, 480, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    for (int t = 0; t < ticks; ++t) gs.onIdle(renderer, 0.2501f / 4.0f);
+    static const char* kNomes[] = {"TIME", "RESEARCH", "VICTORY", "FAILURE", "COUNT", "KIT", "BUILDING_COUNT",
+        "VEHICLE_COUNT", "ESCAPE", "SET", "RESOURCE", "EVAC", "OPERATIONAL", "RECT", "SPECIAL", "DAMAGED",
+        "POINT", "ONE_LEFT", "MIDAS", "ATTACKED"};
+    for (const op2::ObjectiveInfo& o : op2::debugObjectives())
+        std::printf("[Obj] %s %-10s lig=%d f30=%d f34=%d f38=%d f3C=%d f40=%d f44=%d | %s\n", o.done ? "OK " : "-- ",
+                    o.kind >= 0 && o.kind < 20 ? kNomes[o.kind] : "?", o.enabled, o.f30, o.f34, o.f38, o.f3C, o.f40, o.f44,
+                    o.text.c_str());
+    const op2::PlayerData& d = op2::g_playerData[op2::TethysGame::localPlayer()];
+    std::printf("[Obj] populacao: criancas %d, trabalhadores %d, cientistas %d; comida %d, minerio %d, raro %d\n",
+                d.kids, d.workers, d.scientists, d.foodStored, d.ore, d.rareOre);
+    std::fflush(stdout);
+    renderer.shutdown(); SDL_Quit();
+    return 0;
+}
+
 // --missionscrolltest [DLL]: a rolagem da vista NUMA MISSAO, quadro a quadro
 // pelo onIdle (a 640x480): quanto a camera anda para cada lado, com o pedido
 // de rolagem dado em cada quadro.
@@ -10140,6 +10432,12 @@ int main(int argc, char* argv[]) {
             return runBriefTest();
         if (std::strcmp(argv[i], "--listscrolltest") == 0)
             return runListScrollTest();
+        if (std::strcmp(argv[i], "--techunlocktest") == 0)
+            return runTechUnlockTest(i + 1 < argc && argv[i + 1][0] != '-' ? argv[i + 1] : "E05.DLL");
+        if (std::strcmp(argv[i], "--e05test") == 0)
+            return runE05Test(i + 1 < argc && argv[i + 1][0] != '-' ? argv[i + 1] : "E05.DLL");
+        if (std::strcmp(argv[i], "--objdump") == 0 && i + 1 < argc)
+            return runObjDump(argv[i + 1], i + 2 < argc ? atoi(argv[i + 2]) : 8);
         if (std::strcmp(argv[i], "--missionscrolltest") == 0)
             return runMissionScrollTest(i + 1 < argc && argv[i + 1][0] != '-' ? argv[i + 1] : "E04.DLL");
         if (std::strcmp(argv[i], "--panescrolltest") == 0)

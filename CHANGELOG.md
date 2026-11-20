@@ -38,6 +38,25 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   mapa (para os lados era normal): o cursor passava para a barra de título ou
   para a barra de tarefas, saía da janela e a rolagem parava. Como no original,
   o cursor além da borda agora continua rolando.
+- **Missão 05 do Eden: "Have 3 or more empty Cargo Trucks".** Esse objetivo
+  nunca se cumpria, nem com os caminhões vazios na colônia: a contagem de
+  caminhões com um tipo de carga passou a ser pela quantidade carregada (para
+  a carga parcial), e um caminhão vazio tem quantidade zero. Agora "vazio"
+  volta a contar caminhões. Os 22 objetivos da missão foram conferidos um a um
+  — inclusive o lançamento do satélite — até o MISSION ACCOMPLISHED.
+
+**Conferido**
+
+- **O que cada pesquisa libera.** Uma auditoria percorreu a árvore de
+  pesquisas inteira, do Eden e do Plymouth. Cada pesquisa libera os seus
+  prédios e veículos só depois de concluída, e aplica todas as melhorias que
+  promete. A cadeia da reciclagem foi testada de ponta a ponta:
+  - Metals Reclamation libera o kit do GORF;
+  - com o GORF funcionando, o caminhão vazio ganha o comando de recolher
+    destroços (SALVAGE);
+  - Recycler Postprocessing aumenta o metal recuperado de 50% para 60%.
+
+  Nenhum problema encontrado.
 
 **Novo**
 
@@ -52,9 +71,9 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   lados). Na tela de preferências ela se chama **Wheel & Scroll Bars**.
   Desligada (o padrão), é o jogo original.
 
-**Para quem acompanha o código:** seções 5.48 a 5.51 do PORT_STATUS; os modos
-de teste `--brieftest`, `--listscrolltest`, `--panescrolltest` e
-`--missionscrolltest`.
+**Para quem acompanha o código:** seções 5.48 a 5.52 do PORT_STATUS; os modos
+de teste `--brieftest`, `--listscrolltest`, `--panescrolltest`,
+`--missionscrolltest`, `--e05test`, `--objdump` e `--techunlocktest`.
 
 ### English
 
@@ -82,6 +101,25 @@ de teste `--brieftest`, `--listscrolltest`, `--panescrolltest` e
   (sideways was fine): the cursor slipped onto the title bar or the taskbar,
   left the window, and scrolling stopped. As in the original, a cursor beyond
   the edge now keeps scrolling.
+- **Eden mission 05: "Have 3 or more empty Cargo Trucks".** This objective
+  never completed, even with empty trucks in the colony: counting trucks by
+  cargo type had become a count of the amount carried (for partial loads),
+  and an empty truck carries zero. "Empty" counts trucks again. All 22
+  objectives of the mission were checked one by one — including the satellite
+  launch — up to MISSION ACCOMPLISHED.
+
+**Checked**
+
+- **What every research unlocks.** An audit walked the whole research tree,
+  Eden and Plymouth. Every research unlocks its buildings and vehicles only
+  once completed, and applies every improvement it promises. The recycling
+  chain was tested end to end:
+  - Metals Reclamation unlocks the GORF kit;
+  - with the GORF running, the empty truck gets the wreckage-collecting
+    command (SALVAGE);
+  - Recycler Postprocessing raises the metal recovered from 50% to 60%.
+
+  No problem found.
 
 **New**
 
@@ -96,9 +134,9 @@ de teste `--brieftest`, `--listscrolltest`, `--panescrolltest` e
   preferences screen it is called **Wheel & Scroll Bars**. Off (the default),
   it is the original game.
 
-**For those following the code:** sections 5.48 to 5.51 of PORT_STATUS; the
-`--brieftest`, `--listscrolltest`, `--panescrolltest` and
-`--missionscrolltest` test modes.
+**For those following the code:** sections 5.48 to 5.52 of PORT_STATUS; the
+`--brieftest`, `--listscrolltest`, `--panescrolltest`, `--missionscrolltest`,
+`--e05test`, `--objdump` and `--techunlocktest` test modes.
 
 ---
 

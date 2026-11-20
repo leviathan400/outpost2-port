@@ -584,7 +584,11 @@ static int countForPlayer(int p, int type, int cargo) {
         }
         return playerSpaceHas(p, type);
     }
-    if (type == mapCargoTruck && cargo != -1) {      // ver truckCargoSum
+    // CORRECAO (5.52): a conta pela QUANTIDADE (5.14) e so para carga de
+    // verdade (tipo > 0). Carga 0 e o caminhao VAZIO ("Have 3 or more empty
+    // Cargo Trucks", E05): a soma das quantidades dele e sempre 0, e o objetivo
+    // nunca se cumpria. Vazio conta CAMINHOES, como o sub_493AF0 original.
+    if (type == mapCargoTruck && cargo > 0) {        // ver truckCargoSum
         int soma = 0;
         for (int v : colonyVehicles(p)) soma += truckCargoSum(g_units[v], cargo);
         for (int b : colonyStructures(p)) {
@@ -620,7 +624,7 @@ static int countAccumulate(int p, int type, int cargo, int acc) {
         if (type == 0x69 || type == 0x6B) return acc;
         return playerSpaceHas(p, type);
     }
-    if (type == mapCargoTruck && cargo != -1) {      // idem, somando a carga
+    if (type == mapCargoTruck && cargo > 0) {        // idem, somando a carga (vazio conta caminhoes, 5.52)
         int soma = 0;
         for (int v : colonyVehicles(p)) soma += truckCargoSum(g_units[v], cargo);
         return acc + soma / truckCapacityOf(p);
@@ -1009,6 +1013,20 @@ std::vector<TriggerInfo> debugTriggers() {
         Trigger* t = trig(i);
         if (!t) continue;
         v.push_back({i, static_cast<int>(t->kind), t->enabled, t->f30, t->f34, t->playerMask});
+    }
+    return v;
+}
+
+std::vector<ObjectiveInfo> debugObjectives() {
+    std::vector<ObjectiveInfo> v;
+    for (int id : s_victory) {
+        Trigger* t = trig(id);
+        if (!t) continue;
+        const bool done = (t->playerMask & (1u << TethysGame::localPlayer())) != 0;
+        Trigger* c = trig(t->f34);
+        if (c) v.push_back({t->text ? t->text : "", done, t->f34, (int)c->kind, c->enabled,
+                            c->f30, c->f34, c->f38, c->f3C, c->f40, c->f44});
+        else   v.push_back({t->text ? t->text : "", done, t->f34, -1, 0, 0, 0, 0, 0, 0, 0});
     }
     return v;
 }
