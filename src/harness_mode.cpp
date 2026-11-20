@@ -4,7 +4,7 @@
 //
 //   outpost2_modern.exe --harness --script S --out DIR --map cm01.map --ticks N
 //                       [--seed N] [--techtree multitek.txt] [--trace-every N]
-//                       [--shot-every N] [--size WxH] [--show]
+//                       [--shot-every N] [--telemetry-every N] [--eco] [--size WxH] [--show]
 //
 // The script is the harness's: one `<tick> <verb> <args...>` per line, '#' starts a
 // comment; lines at tick T run after the cycle of tick T, as the harness runs them
@@ -15,6 +15,9 @@
 // Outputs in DIR:
 //   trace.jsonl   per traced tick: each spawn still alive, with the harness's field
 //                 names (px/py/fix/dir/hp/weapon/tur/reload/tgt/lights...) and the RNG
+//   telemetry.jsonl  with --telemetry-every N: each player's colony and every building and
+//                 vehicle at tick 1 and every N ticks, plus the end, as the harness writes it;
+//                 --eco adds the colony internals and the mining beacons
 //   harness.log   what ran, spawns, unsupported verbs, the end of the run
 //   shot_<tick>.bmp  the game view every --shot-every ticks
 //
@@ -63,8 +66,8 @@ namespace {
 
 struct Options {
     std::string script, out = ".", map = "cm01.map", techtree = "multitek.txt";
-    int ticks = 3000, seed = 1, traceEvery = 1, shotEvery = 0, width = 1024, height = 768;
-    bool show = false;
+    int ticks = 3000, seed = 1, traceEvery = 1, shotEvery = 0, telemEvery = 0, width = 1024, height = 768;
+    bool show = false, eco = false;
 };
 
 struct Line {
@@ -122,12 +125,19 @@ bool loadScript(const std::string& path, std::vector<Line>& out) {
         l.number = n;
         out.push_back(l);
     }
+    // In tick order, lines of one tick in file order, as the harness sorts its script: a
+    // scenario's translation can list a tick-1 line after lines for later ticks.
+    std::stable_sort(out.begin(), out.end(), [](const Line& a, const Line& b) { return a.tick < b.tick; });
     return true;
 }
 
 std::vector<int> g_spawned;   // spawn index -> unit id (0 = failed)
 std::vector<int> g_spawnType;
 std::vector<bool> g_spawnGone;
+
+FILE* g_telem = nullptr;   // telemetry.jsonl (--telemetry-every)
+bool g_eco = false;        // --eco: the colony and unit internals too
+void writeTelemetry(int tick);
 
 // Port tile x from a script x.
 int tileX(const Line& l, int x) {
@@ -560,7 +570,8 @@ void runLine(GameState& gs, const Line& l, int tick) {
         requestCenterView(tileX(l, num(0)) << 5, num(1) << 5);
         return;
     }
-    if (l.verb == "shot" || l.verb == "trace" || l.verb == "telemetry") return;   // captures run on their own
+    if (l.verb == "telemetry") { writeTelemetry(tick); return; }
+    if (l.verb == "shot" || l.verb == "trace") return;   // captures run on their own
     if (l.verb == "group") { runGroup(l); return; }
     if (runEco(l, tick)) return;
 
@@ -677,6 +688,124 @@ void writeTrace(FILE* f, int tick) {
     std::fflush(f);
 }
 
+// ---- Telemetry -------------------------------------------------------------------------
+// telemetry.jsonl, as the harness's WriteTelemetry writes it: one line per sample with
+// each player's colony and every building and vehicle of each player. x/y are the
+// original's internal tiles (the port's tile + the x offset). With --eco, the colony's
+// allocation, food, population and morale fields as the harness names them, the unit
+// internals and the mining beacons. Fields the port doesn't model are left out (never
+// written as 0): eco's maxFood, morale08, morale24 and rcc, the raw `pi` dwords and the
+// units' `raw` bytes and `hive`.
+
+const char* commandName(int c) {
+    static const char* const names[] = {
+        "Nop", "Doze", "Move", "Dock", "DockEG", "Stop", "Build", "BuildWall", "RemoveWall", "Produce", "TransferCargo",
+        "LoadCargo", "UnloadCargo", "Recycle", "DumpCargo", "Scavenge", "SpecialWait", "Survey", "Idle", "Unidle",
+        "SelfDestruct", "Scatter", "Research", "TrainScientists", "Transfer", "Launch", "FlyInSpace", "Repair", "RepairObj",
+        "Reprogram", "Dismantle", "Salvage", "Create", "Develop", "UnDevelop", "LightToggle", "Attack", "Guard",
+        "StandGround", "CargoRoute", "Patrol", "MapChange", "Poof", "GameOpt", "GodWeapon", "ChatText", "ChatSFX", "Death",
+        "Chat", "Quit", "Ally", "GoAI", "MachineSettings", "InvalidCommand" };
+    return c >= 0 && c < static_cast<int>(sizeof(names) / sizeof(names[0])) ? names[c] : "?";
+}
+
+const char* actionName(int a) {
+    static const char* const names[] = {
+        "Done", "Move", "Build", "BuildMine", "Repair", "Develop", "ObjWait", "OperationalWait", "EMPWait", "Landing",
+        "ObjFroze", "DelSelf", "DoResearch", "ObjDocking", "Scavenge", "WeaponMove", "WeatherMove", "EMPRecover",
+        "WeaponAimCoarse", "WeaponAimFine", "SantaWalking", "Invalid" };
+    return a >= 0 && a < static_cast<int>(sizeof(names) / sizeof(names[0])) ? names[a] : "?";
+}
+
+int xOffset() { return std::max(0, g_gameMap.internalXOffset()); }
+
+void writeTelemUnit(FILE* f, bool& first, int id) {
+    if (!alive(id)) return;
+    const UnitRecord& r = g_units[id];
+    const int hp = maxHP(r);
+    std::fprintf(f, "%s{\"id\":%d,\"type\":\"%s\",\"owner\":%d,\"x\":%d,\"y\":%d,\"hp\":%d,\"maxHp\":%d,\"cmd\":\"%s\"",
+                 first ? "" : ",", id, codeName(r.type), r.owner & 0x0F, (unitOX(r) >> 5) + xOffset(), unitOY(r) >> 5,
+                 hp - r.damage, hp, commandName(r.action));
+    // Unit::GetWeapon is the +0x24 word of any vehicle: the weapon, a ConVec's kit, a truck's packed cargo.
+    if ((r.flags & UNIT_VEHICLE) && r.cargo > 0) std::fprintf(f, ",\"cargo\":\"%s\"", codeName(r.cargo));
+    if (g_eco) {
+        std::fprintf(f, ",\"flags\":%u,\"act\":\"%s\",\"timer\":%d,\"busy\":%d,\"w24\":%u", r.flags, actionName(r.field22),
+                     r.field3C, r.field20, static_cast<unsigned>(r.cargo));
+        if (r.type == mapCargoTruck) std::fprintf(f, ",\"truck\":[%d,%d]", r.cargo & 0xF, (r.cargo >> 4) & 0xFFF);
+        int dx, dy;
+        if ((r.flags & UNIT_BUILDING) && dockCell(id, dx, dy)) std::fprintf(f, ",\"dock\":[%d,%d]", dx + xOffset(), dy);
+    }
+    std::fputc('}', f);
+    first = false;
+}
+
+void writePlayerEco(FILE* f, int p) {
+    const ColonyState& c = g_colony[p];
+    std::fprintf(f, ",\"eco\":{\"maxCommon\":%d,\"maxRare\":%d,\"availWorkers\":%d,\"availScientists\":%d,"
+                    "\"workersReq\":%d,\"scientistsReq\":%d,\"sciAsWorkers\":%d,\"sciResearching\":%d,\"powerAvail\":%d,"
+                    "\"powerInactive\":%d,\"foodProd\":%d,\"foodCons\":%d,\"foodLacking\":%d,\"active\":%d,\"unpowered\":%d,"
+                    "\"recalc\":%d,\"starveCase\":%d,\"growth\":[%d,%d,0],\"death\":[%d,%d,%d],\"caps\":[%d,%d,%d,%d],"
+                    "\"activeCC\":%d,\"nurseries\":%d,\"universities\":%d,\"moraleEvent\":%d,\"morale10\":%d,"
+                    "\"resDemand\":%d,\"foodSupply\":%d,\"disabledRatio\":%d,\"recForumDemand\":%d,"
+                    "\"medDemand\":%d,\"unoccupied\":%d,\"sciAsWorkersPct\":%d}",
+                 c.oreCapacity, c.rareCapacity, c.workersLeft, c.scientistsLeft, c.workersRequired, c.scientistsRequired,
+                 c.scientistsAsWorkers, c.researchAssigned, c.powerLeft, c.powerIdle, c.foodProduced, c.foodEaten,
+                 c.foodDeficit, c.activeCount, c.unpoweredCount, c.dirty, c.starveRotor,
+                 c.accBirth, c.accGrowUp,                                   // kids +0x84, workers +0x80 (scientists +0x7C: none)
+                 c.accKidDeath, c.accWorkerDeath, c.accSciDeath,            // +0x88, +0x90, +0x8C
+                 c.stat(ST_RES_CAP), c.stat(ST_MED_CAP), c.stat(ST_REC_CAP), c.stat(ST_FORUM_CAP),
+                 c.stat(ST_CC_OP), c.stat(ST_NURSERY), c.stat(ST_UNIVERSITY), c.moraleEvents, c.moraleTrend, c.crowding,
+                 c.foodState, c.disabledPct, c.recreationLoad, c.medicalLoad, c.idlePct, c.phdPct);
+}
+
+int g_lastTelem = -1;
+
+void writeTelemetry(int tick) {
+    FILE* f = g_telem;
+    if (!f || tick == g_lastTelem) return;
+    g_lastTelem = tick;
+    std::fprintf(f, "{\"tick\":%d,\"mark\":%d,\"end\":%d,\"players\":[", tick, tick / 100, gameEndCode());
+    const int players = TethysGame::noPlayers();
+    for (int i = 0; i < players; ++i) {
+        const PlayerData& d = g_playerData[i];
+        const ColonyState& c = g_colony[i];
+        // SatelliteCounts (+0x08): RLVs in bits 0-3, solar satellites 4-7, the space bits from 8.
+        const unsigned sats = (d.rlvCount & 0xF) | (d.solarSat & 0xF) << 4 | d.spaceBits << 8;
+        std::fprintf(f, "%s{\"id\":%d,\"human\":%d,\"eden\":%d,\"food\":%d,\"commonOre\":%d,\"rareOre\":%d,\"workers\":%d,"
+                        "\"scientists\":%d,\"kids\":%d,\"morale\":%d,\"moraleLevel\":%d,\"event\":%d,\"satellites\":%u,"
+                        "\"powerGen\":%d,\"powerUsed\":%d,\"foodNet\":%d,\"buildings\":%d,\"idleBuildings\":%d,\"techs\":[",
+                     i ? "," : "", i, d.isHuman != 0, d.isEden != 0, d.foodStored, d.ore, d.rareOre, d.workers,
+                     d.scientists, d.kids, c.moraleValue, d.morale, c.moraleEvents, sats, c.powerGenerated,
+                     c.powerRequired, c.foodNet, c.structCount, c.inactiveCount);
+        bool first = true;
+        for (int t = 0; t < techCount(); ++t)
+            if (researchHas(i, t)) { std::fprintf(f, "%s%d", first ? "" : ",", techAt(t)->id); first = false; }
+        std::fputc(']', f);
+        if (g_eco) writePlayerEco(f, i);
+        std::fputc('}', f);
+    }
+    std::fputs("],\"units\":[", f);
+    bool first = true;
+    for (int p = 0; p < players; ++p) {         // each player's buildings, then its vehicles, as the harness lists them
+        for (int id : colonyStructures(p)) writeTelemUnit(f, first, id);
+        for (int id : colonyVehicles(p)) writeTelemUnit(f, first, id);
+    }
+    std::fputc(']', f);
+    if (g_eco) {
+        std::fputs(",\"beacons\":[", f);
+        first = true;
+        for (size_t id = 1; id < g_units.size(); ++id) {
+            const UnitRecord& r = g_units[id];
+            if (r.type != 0x51 || !alive(static_cast<int>(id))) continue;   // BEACON
+            std::fprintf(f, "%s{\"x\":%d,\"y\":%d,\"ore\":%d,\"bar\":%d,\"variant\":%d}", first ? "" : ",",
+                         (unitOX(r) >> 5) + xOffset(), unitOY(r) >> 5, r.beaconRare != 0, r.beaconYield, r.beaconVariant);
+            first = false;
+        }
+        std::fputc(']', f);
+    }
+    std::fputs("}\n", f);
+    std::fflush(f);
+}
+
 // ---- Screenshots -----------------------------------------------------------------------
 
 bool writeBmp(const std::string& path, const uint32_t* px, int w, int h) {
@@ -720,6 +849,8 @@ bool parse(int argc, char** argv, Options& o) {
         else if (a == "--seed") o.seed = std::atoi(next());
         else if (a == "--trace-every") o.traceEvery = std::atoi(next());
         else if (a == "--shot-every") o.shotEvery = std::atoi(next());
+        else if (a == "--telemetry-every") o.telemEvery = std::atoi(next());
+        else if (a == "--eco") o.eco = true;
         else if (a == "--show") o.show = true;
         else if (a == "--size") {
             if (std::sscanf(next(), "%dx%d", &o.width, &o.height) != 2) return false;
@@ -738,8 +869,8 @@ int runHarness(int argc, char** argv) {
     if (!parse(argc, argv, o)) return 2;
     g_log = std::fopen((o.out + "/harness.log").c_str(), "w");
     if (!g_log) { std::fprintf(stderr, "--harness: can't write %s/harness.log\n", o.out.c_str()); return 2; }
-    logf("harness: port, map=%s ticks=%d seed=%d trace=%d shot=%d", o.map.c_str(), o.ticks, o.seed, o.traceEvery,
-         o.shotEvery);
+    logf("harness: port, map=%s ticks=%d seed=%d trace=%d shot=%d telemetry=%d eco=%d", o.map.c_str(), o.ticks, o.seed,
+         o.traceEvery, o.shotEvery, o.telemEvery, o.eco ? 1 : 0);
     std::vector<Line> script;
     if (!o.script.empty() && !loadScript(o.script, script)) { logf("FATAL: can't read script %s", o.script.c_str()); return 2; }
     logf("script: %u commands from %s", static_cast<unsigned>(script.size()), o.script.c_str());
@@ -773,14 +904,18 @@ int runHarness(int argc, char** argv) {
          g_gameMap.internalXOffset(), TethysGame::noPlayers(), TethysGame::rng().s0(), TethysGame::rng().s1());
 
     FILE* trace = o.traceEvery > 0 ? std::fopen((o.out + "/trace.jsonl").c_str(), "w") : nullptr;
+    g_telem = o.telemEvery > 0 ? std::fopen((o.out + "/telemetry.jsonl").c_str(), "w") : nullptr;
+    g_eco = o.eco;
     size_t pos = 0;
-    int tick = 0, nextShot = 5;
+    int tick = 0, nextShot = 5, nextTelem = 0;
     const char* why = "tick limit";
     const Uint32 t0 = SDL_GetTicks();
     for (;;) {
         const bool ended = gs.simTick();
         tick = TethysGame::tick();
         while (pos < script.size() && script[pos].tick <= tick) runLine(gs, script[pos++], tick);
+        // Telemetry at the first tick, then at each multiple of the interval (the harness's g_nextTelem).
+        if (g_telem && tick >= nextTelem) { writeTelemetry(tick); nextTelem = (tick / o.telemEvery + 1) * o.telemEvery; }
         if (trace && tick % o.traceEvery == 0) writeTrace(trace, tick);
         if (o.shotEvery > 0 && tick >= nextShot) {
             takeShot(gs, renderer, o.out, tick);
@@ -791,6 +926,8 @@ int runHarness(int argc, char** argv) {
     }
     const double secs = (SDL_GetTicks() - t0) / 1000.0;
     if (o.shotEvery > 0 && tick % o.shotEvery) takeShot(gs, renderer, o.out, tick);
+    writeTelemetry(tick);                  // and one at the end
+    if (g_telem) std::fclose(g_telem);
     logf("quit at tick %d: %s (%.2fs, %.0f ticks/s)", tick, why, secs, tick / (secs > 0 ? secs : 1));
     if (trace) std::fclose(trace);
     std::fclose(g_log);

@@ -150,6 +150,21 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   janela do jogo. Verbos que o próprio harness não conhece (`salvage`,
   `groupmove`) dão o mesmo "unknown verb" de lá.
 
+- **O `--harness` grava a telemetria (`telemetry.jsonl`)**, como o
+  OP2TestHarness grava no original: com `--telemetry-every N`, uma linha no
+  tick 1, a cada N ticks e no fim, com a colônia de cada jogador (comida,
+  minério, população, moral, energia, prédios, tecnologias) e todos os prédios
+  e veículos (tipo, dono, tile, HP, comando). Com `--eco`, também a alocação
+  da colônia (trabalhadores e cientistas livres e exigidos, energia, comida,
+  capacidades, as entradas da moral), o estado de cada unidade (flags, ação e
+  seu tempo, carga do caminhão, doca) e os beacons de mineração. São os mesmos
+  nomes de campo e as mesmas coordenadas do original, para comparar os dois
+  campo a campo (167 cenários do op2-rs gravam a telemetria `--eco`). Os
+  campos que o porte não modela ficam de fora em vez de saírem como 0. E o
+  roteiro agora roda em ordem de tick, como no harness: uma linha do tick 1
+  listada depois de linhas de ticks maiores esperava por elas (em
+  `chaos_big_colony` a população só chegava no tick 17085).
+
 **Para quem acompanha o código:** seções 5.48 a 5.52 do PORT_STATUS; os modos
 de teste `--brieftest`, `--listscrolltest`, `--panescrolltest`,
 `--missionscrolltest`, `--e05test`, `--objdump`, `--techunlocktest` e
@@ -239,6 +254,20 @@ de teste `--brieftest`, `--listscrolltest`, `--panescrolltest`,
   keyboard verbs (`click`, `drag`) are left: there they are real input to the
   game's window. Verbs the harness itself doesn't know (`salvage`,
   `groupmove`) get the same "unknown verb" as there.
+
+- **`--harness` writes telemetry (`telemetry.jsonl`)**, as OP2TestHarness
+  does in the original: with `--telemetry-every N`, one line at tick 1, every
+  N ticks and at the end, with each player's colony (food, ore, population,
+  morale, power, buildings, techs) and every building and vehicle (type,
+  owner, tile, HP, command). With `--eco`, also the colony's allocation (free
+  and required workers and scientists, power, food, capacities, the morale
+  inputs), each unit's state (flags, action and its timer, a truck's cargo,
+  the dock) and the mining beacons. The field names and coordinates are the
+  original's, so the two can be compared field by field (167 of op2-rs's
+  scenarios record `--eco` telemetry). Fields the port doesn't model are left
+  out rather than written as 0. And the script now runs in tick order, as in
+  the harness: a tick-1 line listed after lines for later ticks waited for
+  them (in `chaos_big_colony` the colonists only arrived at tick 17085).
 
 **For those following the code:** sections 5.48 to 5.52 of PORT_STATUS; the
 `--brieftest`, `--listscrolltest`, `--panescrolltest`, `--missionscrolltest`,
