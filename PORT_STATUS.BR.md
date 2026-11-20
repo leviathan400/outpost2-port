@@ -48,7 +48,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 125 modos de teste/captura
+  main.cpp        entrada + os 126 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -3501,6 +3501,47 @@ defeito do original se corrige). As outras duas diferenças achadas na
 comparação eram do porte e foram alinhadas ao original. O `--e04test` ganhou o
 caso "o alvo de gatilho de uma vez deixa de ser especial" (7 casos).
 
+## 5.48. A tela de briefing da campanha: a imagem da missão ao lado do texto (2026-11-20)
+
+Relato: *no original, a tela de briefing das missões traz o texto numa caixa
+à esquerda e uma imagem à direita; a nossa não faz isso.*
+
+O porte usava, nas três telas de texto da campanha (briefing, objetivos e
+história), o RICHEDIT "StoryText" do template do Dialog 216, com 565 de
+largura. O **briefing** tem procedimento próprio (OP2SHELL `0x13005DF0`):
+
+- **`WM_INITDIALOG`:** cria **outro** RICHEDIT com
+  `CreateWindowExA(WS_EX_CLIENTEDGE, "RICHEDIT", "StoryText", 0x5030C804, 20,
+  25, 230, 295, …, id 0x43F)`, uma caixa de **230** de largura. Depois carrega a
+  imagem da missão com `LoadImageA` do DLL de recursos (OP2SHRES). O id sai de
+  uma tabela de 24 montada na pilha (`0x190`..`0x1A7`); o índice é a missão
+  (0-based, `0x13015B9E`) **+ 12** quando o jogador não é Eden (bit 2 da
+  palavra dele). São 12 imagens do Eden e 12 do Plymouth, de 320×240 (a
+  `0x19A` tem 322×242);
+- **`WM_PAINT`:** `BitBlt(hdc, 260, 50, largura, altura, memDC, 0, 0,
+  SRCCOPY)`, ou seja, a imagem desenhada em (260, 50) da área cliente, à
+  direita da caixa;
+- título `"%s Mission %i: Briefing"` e texto `B_%s%02i.rtf`, como já era.
+
+Objetivos e história continuam com a caixa larga do template, sem imagem.
+
+**No porte:** `openRtf(0)` carrega o bitmap `0x190 + (Eden ? 0 : 12) +
+missão` do OP2SHRES, e o `renderRtfView` o desenha em (kRvX + 260,
+kRvY + 7 + 50) com a caixa de texto de 230 (`rtfTextW`). A quebra das linhas,
+a barra de rolagem e a roda do mouse seguem essa largura.
+
+**Teste:** `--brieftest` (novo) abre o briefing das 24 missões e confere:
+
+- a imagem de cada uma, comparada pixel a pixel com o recurso `0x190 +
+  missão` (Eden) ou `0x19C + missão` (Plymouth), lido por conta própria do
+  DLL;
+- o tamanho de 320×240;
+- a caixa de texto de 230;
+- nos objetivos, a caixa larga e nenhuma imagem.
+
+Mutação: sem o `+ 12` do Plymouth, as 12 missões dele acusam a imagem
+trocada.
+
 ## 6. Build e execução
 
 **Toolchain:** CMake >= 3.15 + MSVC, C++17, SDL2 2.30.9 (em `third_party/`).
@@ -3559,6 +3600,7 @@ São 109 modos. Os que cobrem regressão de verdade:
 | `--truckjamtest <mapa> [n] [tiques] [tela.bmp]` | n caminhões na mesma rota de minério: o ciclo não para, ninguém preso na doca, ninguém sai da rota (5.43) |
 | `--e02test [DLL] [bmp]` | missão 2 do Eden: a praga se espalha e é desenhada com o Overlay, e os objetivos de pesquisa são cumpridos; e a praga no minimapa |
 | `--e04test [DLL]` | A transmissão de dados da E04 (`SpecialTarget`): o Scout encostado e o clique em cima de cada laboratório, os três objetivos e a vitória (5.47) |
+| `--brieftest` | A tela de briefing da campanha: a imagem de cada uma das 24 missões (OP2SHRES `0x190`+missão, +12 no Plymouth) e a caixa de texto de 230 (5.48) |
 | `--tubetest <mapa> [prefixo]` | o Earthworker ligando prédios com tubo: retas inteiras, a doca que não liga, a animação de trabalho |
 | `--waypointtest <mapa> [bmp]` | pontos de passagem com Ctrl + clique: limites por comando, o pacote com os pontos antes do alvo, a unidade passando por eles, patrulha e obra, e o desenho |
 | `--selecttest <mapa>` | a área de clique das unidades, e a seleção com Shift e com o botão do meio (soma, tira, caixa que soma, as exceções) |

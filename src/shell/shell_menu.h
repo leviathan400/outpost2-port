@@ -215,6 +215,16 @@ public:
     // Depuração (--screenshot): campanha na missão n (concluídas), tela 0 menu,
     // 1 briefing, 2 objetivos, 3 capítulos, 4 história (capítulo n+1).
     void debugCampaign(bool eden, int difficulty, int missionNumber, int screen);
+    // --brieftest: a imagem do briefing (5.48) e a largura da caixa de texto.
+    bool debugBriefImage(int& w, int& h) const {
+        w = m_briefBitmap.getWidth(); h = m_briefBitmap.getHeight(); return m_briefBitmapOk;
+    }
+    int debugRtfTextW() const { return rtfTextW(); }
+    uint64_t debugBriefImageHash() const {                   // FNV-1a dos pixels
+        uint64_t h = 1469598103934665603ull;
+        for (uint32_t p : m_briefBitmap.getPixels32()) { h ^= p; h *= 1099511628211ull; }
+        return h;
+    }
 
 private:
     MenuState m_state = MenuState::Splash;
@@ -249,6 +259,13 @@ private:
     // Original art resources from OP2SHRES.DLL
     Bitmap m_bgBitmap;     // Bitmap 190 (640x480 space/planet art)
     Bitmap m_logoBitmap;   // Bitmap 145 (544x122 Outpost 2 logo)
+    // A imagem do BRIEFING (5.48): OP2SHRES 0x190 + missao (Eden) ou
+    // 0x19C + missao (Plymouth), 320x240, que o procedimento do Dialog 216 do
+    // briefing (OP2SHELL 0x13005DF0) carrega no WM_INITDIALOG e desenha no
+    // WM_PAINT em (260, 50) da area cliente.
+    Bitmap m_briefBitmap;
+    bool m_briefBitmapOk = false;
+    std::string m_resDllPath = "OP2SHRES.DLL";
     PeDialogTemplate m_mainMenuDlg; // Dialog 137 template
 
     // Controles da tela atual + foco de teclado
@@ -453,6 +470,7 @@ private:
     void openChapters();
     std::string colonyName() const;
     int rtfVisibleLines() const;
+    int rtfTextW() const;
 };
 
 } // namespace op2

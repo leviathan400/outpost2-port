@@ -181,7 +181,7 @@ clique (`AutoOreRoute`), o diagnóstico de comando recusado (`CommandDebug`), a
 fila de produção (`ProductionQueue`) e o clique direito dando ordens
 (`RightClickOrders`); estão documentadas no `PORT_STATUS.BR.md`.
 
-Há **125 modos de linha de comando** para testes e capturas, entre eles uma
+Há **126 modos de linha de comando** para testes e capturas, entre eles uma
 bateria de regressão (`--savetest` prova o determinismo de salvar/recarregar).
 A lista está no `PORT_STATUS.BR.md`.
 
@@ -215,7 +215,7 @@ e descartado das listas de cheat que circulam por aí.
 
 ```
 src/
-  main.cpp        entrada + os 125 modos de teste/captura
+  main.cpp        entrada + os 126 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -237,6 +237,13 @@ cursores `.ANI`.
 ---
 
 ## Mudanças recentes
+
+### 2026-11-20
+
+- **A tela de briefing como no original.** O texto do briefing de cada
+  missão fica numa caixa estreita à esquerda e, à direita, a imagem da missão
+  (as 12 do Eden e as 12 do Plymouth, que vêm do próprio jogo). Os objetivos
+  e a história continuam com a caixa larga, como lá.
 
 ### 2026-11-19
 

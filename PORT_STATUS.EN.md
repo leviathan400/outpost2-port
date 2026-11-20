@@ -117,7 +117,10 @@
 > no route to the occupied cell, and `loc_44C20A` kept the unit retrying
 > forever, so the arrival check `sub_44D5B0` never ran and the Scout never
 > transmitted. Touching the target's building now counts as arriving. New
-> `--e04test`).
+> `--e04test`) and **5.48** (the campaign briefing screen: its own dialog
+> procedure, OP2SHELL `0x13005DF0`, creates a 230-wide RICHEDIT at (20, 25)
+> and BitBlts the mission picture — OP2SHRES `0x190` + mission, + 12 for
+> Plymouth, 320×240 — at (260, 50) of the client area; new `--brieftest`).
 > The recent
 > changes are summarised in
 > [README.EN.md](README.EN.md).
@@ -170,7 +173,7 @@ coverage by comparing the DLLs' import tables against the registry in
 
 ```
 src/
-  main.cpp        entry point + the 125 test/capture modes
+  main.cpp        entry point + the 126 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -760,7 +763,7 @@ mission DLLs and the original resources from the working directory).
 
 ### Command-line tests
 
-There are 125 modes. The ones that cover real regressions:
+There are 126 modes. The ones that cover real regressions:
 
 | Mode | What it proves |
 |---|---|

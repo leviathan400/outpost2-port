@@ -180,7 +180,7 @@ map's bottom row (`ShowBottomRow`), the one-click ore route
 production queue (`ProductionQueue`) and right-click orders
 (`RightClickOrders`); they are documented in `PORT_STATUS.EN.md`.
 
-There are **125 command-line modes** for tests and captures, among them a
+There are **126 command-line modes** for tests and captures, among them a
 regression battery (`--savetest` proves save/reload determinism). The list is
 in `PORT_STATUS.EN.md`.
 
@@ -214,7 +214,7 @@ and what was checked and discarded from the cheat lists that circulate.
 
 ```
 src/
-  main.cpp        entry point + the 125 test/capture modes
+  main.cpp        entry point + the 126 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -235,6 +235,13 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
 ---
 
 ## Recent changes
+
+### 2026-11-20
+
+- **The briefing screen as in the original.** Each mission's briefing text
+  sits in a narrow box on the left, with the mission's picture on the right
+  (the 12 Eden and 12 Plymouth pictures, which come from the game itself).
+  Objectives and story keep the wide box, as there.
 
 ### 2026-11-19
 

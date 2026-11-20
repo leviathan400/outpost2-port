@@ -16,6 +16,8 @@
 #include "gfx/pbmp.h"
 #include "res/res_manager.h"
 #include "res/winhelp.h"
+#include "res/pe_resource.h"
+#include "gfx/bitmap.h"
 #include "res/ani_cursor.h"
 #include "app/cursors.h"
 #include "game/game_map.h"
@@ -4815,6 +4817,73 @@ static int runTubeTest(const std::string& mapName, const std::string& prefix) {
     std::printf("[Tube] %d casos, %d falhas\n", (int)casos.size(), ruins);
     renderer.shutdown();
     SDL_Quit();
+    return ruins ? 1 : 0;
+}
+
+// --brieftest: a tela de BRIEFING da campanha (5.48). Para as 24 missoes (12
+// Eden, 12 Plymouth) abre o briefing e confere a imagem da missao (OP2SHRES
+// 0x190 + missao, + 12 no Plymouth, 320x240) e a caixa de texto estreita (230,
+// o RICHEDIT do procedimento do briefing); os objetivos seguem largos (565),
+// sem imagem. Imagens repetidas entre missoes tambem contam como falha.
+static int runBriefTest() {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 brieftest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::ShellMenu menu;
+    menu.init("OP2SHRES.DLL");
+    int semImagem = 0, tamanhoErrado = 0, caixaErrada = 0, imagemTrocada = 0;
+    std::vector<std::pair<int, int>> tamanhos;
+    // O esperado de cada missao, lido do DLL por conta propria: 0x190 + missao
+    // no Eden, 0x19C + missao no Plymouth (a tabela de OP2SHELL 0x13005DF0).
+    op2::PeResourceReader res;
+    res.load("OP2SHRES.DLL");
+    auto hashDe = [&](uint32_t id) -> uint64_t {
+        const std::vector<uint8_t> dib = res.getBitmapDIB(id);
+        op2::Bitmap b;
+        if (dib.empty() || !b.loadFromDIB(dib.data(), dib.size())) return 0;
+        uint64_t h = 1469598103934665603ull;
+        for (uint32_t p : b.getPixels32()) { h ^= p; h *= 1099511628211ull; }
+        return h;
+    };
+    for (int col = 0; col < 2; ++col)
+        for (int m = 0; m < 12; ++m) {
+            menu.debugCampaign(col == 0, 1, m, 1);
+            int w = 0, h = 0;
+            const bool ok = menu.debugBriefImage(w, h);
+            if (!ok) { ++semImagem; std::printf("[Brief] %s %d: sem imagem\n", col ? "Plymouth" : "Eden", m + 1); }
+            else if (w < 320 || h < 240 || w > 330 || h > 250) ++tamanhoErrado;
+            if (menu.debugRtfTextW() != 230) ++caixaErrada;
+            if (ok && menu.debugBriefImageHash() != hashDe(static_cast<uint32_t>(0x190 + col * 12 + m))) {
+                ++imagemTrocada;
+                std::printf("[Brief] %s %d: imagem de outra missao\n", col ? "Plymouth" : "Eden", m + 1);
+            }
+            tamanhos.push_back({w, h});
+        }
+    menu.debugCampaign(true, 1, 4, 2);                        // objetivos
+    int wo = 0, ho = 0;
+    const bool imgObj = menu.debugBriefImage(wo, ho);
+    const int caixaObj = menu.debugRtfTextW();
+    std::printf("[Brief] 24 briefings: sem imagem %d, tamanho fora %d, caixa errada %d; objetivos: caixa %d, imagem %d\n",
+                semImagem, tamanhoErrado, caixaErrada, caixaObj, (int)imgObj);
+    struct Caso { const char* nome; int obtido, esperado; };
+    const Caso casos[] = {
+        {"as 24 missoes tem imagem", semImagem, 0},
+        {"... de 320x240", tamanhoErrado, 0},
+        {"... e caixa de texto de 230", caixaErrada, 0},
+        {"... cada uma a da sua missao/colonia", imagemTrocada, 0},
+        {"objetivos: caixa larga (565)", caixaObj, 565},
+        {"... sem imagem", imgObj ? 1 : 0, 0},
+    };
+    int ruins = 0;
+    for (const Caso& c : casos) {
+        const bool ok = c.obtido == c.esperado;
+        if (!ok) ++ruins;
+        std::printf("[Brief] %-36s %d (esperado %d) %s\n", c.nome, c.obtido, c.esperado, ok ? "ok" : "FALHOU");
+    }
+    std::printf("[Brief] %d casos, %d falhas\n", (int)(sizeof(casos) / sizeof(casos[0])), ruins);
+    std::fflush(stdout);
+    renderer.shutdown(); SDL_Quit();
     return ruins ? 1 : 0;
 }
 
@@ -9770,6 +9839,8 @@ int main(int argc, char* argv[]) {
             return runWaypointTest(argv[i + 1], i + 2 < argc && argv[i + 2][0] != '-' ? argv[i + 2] : "");
         if (std::strcmp(argv[i], "--tubetest") == 0 && i + 1 < argc)
             return runTubeTest(argv[i + 1], i + 2 < argc && argv[i + 2][0] != '-' ? argv[i + 2] : "");
+        if (std::strcmp(argv[i], "--brieftest") == 0)
+            return runBriefTest();
         if (std::strcmp(argv[i], "--e04test") == 0)
             return runE04Test(i + 1 < argc && argv[i + 1][0] != '-' ? argv[i + 1] : "E04.DLL");
         if (std::strcmp(argv[i], "--e02test") == 0)

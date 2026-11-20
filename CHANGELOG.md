@@ -9,6 +9,39 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
 
 ---
 
+## 2026-11-20
+
+### Português
+
+**Corrigido**
+
+- **A tela de briefing como no original.** No original, o briefing de cada
+  missão da campanha mostra o texto numa caixa estreita à esquerda e uma
+  imagem da missão à direita (projetos, mapas, a projeção da praga…). O porte
+  mostrava só o texto, numa caixa da largura da tela. Agora a imagem aparece
+  no lugar certo, cada missão com a sua (12 do Eden e 12 do Plymouth). As telas
+  de objetivos e de história continuam com a caixa larga, como no original.
+
+**Para quem acompanha o código:** seção 5.48 do PORT_STATUS; o modo de teste
+`--brieftest`.
+
+### English
+
+**Fixed**
+
+- **The briefing screen as in the original.** In the original, each campaign
+  mission's briefing shows the text in a narrow box on the left and a picture
+  of the mission on the right (designs, maps, the blight projection…). The
+  port showed only the text, in a box as wide as the screen. The picture now
+  appears in the right place, each mission with its own (12 Eden, 12
+  Plymouth). The objectives and story screens keep the wide box, as in the
+  original.
+
+**For those following the code:** section 5.48 of PORT_STATUS; the
+`--brieftest` test mode.
+
+---
+
 ## 2026-11-19
 
 ### Português

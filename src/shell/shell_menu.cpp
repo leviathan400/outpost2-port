@@ -113,6 +113,13 @@ namespace {
     constexpr int kRvX = 17, kRvY = 40, kRvW = 606, kRvH = 384;
     constexpr int kRvTextX = kRvX + 20, kRvTextY = kRvY + 32, kRvTextW = 565, kRvTextH = 295;
     constexpr int kRvBtnY = kRvTextY + kRvTextH + 20;
+    // O BRIEFING nao usa o "StoryText" do template (565 de largura): o
+    // procedimento dele (OP2SHELL 0x13005DF0) cria o RICHEDIT no
+    // WM_INITDIALOG com CreateWindowExA(WS_EX_CLIENTEDGE, ..., 20, 25, 230,
+    // 295) e pinta a imagem da missao com BitBlt em (260, 50) da area
+    // cliente -- a origem da area cliente aqui e (kRvX, kRvY + 7).
+    constexpr int kRvBriefTextW = 230;
+    constexpr int kRvBriefImgX = kRvX + 260, kRvBriefImgY = kRvY + 7 + 50;
     constexpr int kChX = 95, kChY = 120, kChW = 450, kChH = 235;
     constexpr int kChListX = kChX + 10, kChListY = kChY + 30, kChListW = 429, kChListH = 158;
     int kChRowH = 18;                     // fork: 14 com a pele OP2 (applyMenuStyle)
@@ -171,6 +178,7 @@ ShellMenu::ShellMenu() = default;
 ShellMenu::~ShellMenu() = default;
 
 bool ShellMenu::init(const std::string& resDllPath) {
+    m_resDllPath = resDllPath;
     PeResourceReader reader;
     if (!reader.load(resDllPath)) {
         std::cerr << "[ShellMenu] Failed to load " << resDllPath << std::endl;
@@ -2207,6 +2215,9 @@ void ShellMenu::debugCampaign(bool eden, int difficulty, int missionNumber, int 
 }
 
 int ShellMenu::rtfVisibleLines() const { return kRvTextH / (SkinText::height() + 2); }
+// A largura da caixa: 230 no briefing (o RICHEDIT que o procedimento dele
+// cria), 565 nos objetivos e na historia (o "StoryText" do Dialog 216).
+int ShellMenu::rtfTextW() const { return m_rtfKind == 0 ? kRvBriefTextW : kRvTextW; }
 
 // Mensagem 0x73a da janela do shell (motivo − 1 → tabela 0x130090b4). Os filmes
 // (opção Game/ShowMovies, mensagem 0x72b) não existem aqui: vai direto ao passo
@@ -2357,9 +2368,21 @@ void ShellMenu::openRtf(int kind) {
     m_rtfTitle = title;
     m_rtfLines.clear();
     m_rtfScroll = 0;
+    // A imagem do briefing: o indice da tabela de 24 ids e a missao (0-based,
+    // 0x13015B9E), mais 12 se o jogador NAO for Eden (bit 2 da palavra dele).
+    m_briefBitmapOk = false;
+    if (kind == 0) {
+        PeResourceReader reader;
+        const int idx = (m_gsi.eden() ? 0 : 12) + m_gsi.missionNumber;
+        if (idx >= 0 && idx < 24 && reader.load(m_resDllPath)) {
+            const std::vector<uint8_t> dib = reader.getBitmapDIB(static_cast<uint32_t>(0x190 + idx));
+            m_briefBitmapOk = !dib.empty() && m_briefBitmap.loadFromDIB(dib.data(), dib.size());
+        }
+        if (!m_briefBitmapOk) std::cerr << "[Campaign] sem a imagem do briefing " << (0x190 + idx) << std::endl;
+    }
     if (auto s = g_ResManager.openStream(file)) {
         const std::vector<uint8_t>& b = s->bytes();
-        m_rtfLines = rtfLayout(rtfParse(std::string(b.begin(), b.end())), kRvTextW - 8);
+        m_rtfLines = rtfLayout(rtfParse(std::string(b.begin(), b.end())), rtfTextW() - 8);
     } else {
         std::cerr << "[Campaign] nao achou " << file << std::endl;
     }
@@ -2402,11 +2425,14 @@ void ShellMenu::renderMissionMenu(Renderer& renderer) {
 void ShellMenu::renderRtfView(Renderer& renderer) {
     renderer.dimRect(0, 0, 640, 480, 0x88);
     renderer.drawDialogFrame(kRvX, kRvY, kRvW, kRvH, m_rtfTitle);
+    const int textW = rtfTextW();
+    // A imagem da missao, ao lado da caixa (so no briefing).
+    if (m_rtfKind == 0 && m_briefBitmapOk) renderer.blitBitmap(m_briefBitmap, kRvBriefImgX, kRvBriefImgY);
     if (DialogSkin::ok())   // Fork: borda clara de 2 px, como a lista do original
-        renderer.drawSkinBox(kRvTextX - 2, kRvTextY - 2, kRvTextW + 4, kRvTextH + 4);
-    renderer.fillRect(kRvTextX, kRvTextY, kRvTextW, kRvTextH, 0xFF000000);   // EM_SETBKGNDCOLOR(0)
+        renderer.drawSkinBox(kRvTextX - 2, kRvTextY - 2, textW + 4, kRvTextH + 4);
+    renderer.fillRect(kRvTextX, kRvTextY, textW, kRvTextH, 0xFF000000);   // EM_SETBKGNDCOLOR(0)
     if (!DialogSkin::ok())
-        renderer.drawBevelRect(kRvTextX - 1, kRvTextY - 1, kRvTextW + 2, kRvTextH + 2, 0xFF05080E, 0xFF35445B);
+        renderer.drawBevelRect(kRvTextX - 1, kRvTextY - 1, textW + 2, kRvTextH + 2, 0xFF05080E, 0xFF35445B);
     uint32_t* fb = renderer.getFramebuffer();
     const int lh = SkinText::height() + 2, vis = rtfVisibleLines();
     for (int i = 0; i < vis; ++i) {
@@ -2418,9 +2444,9 @@ void ShellMenu::renderRtfView(Renderer& renderer) {
     // Barra de rolagem (só a posição).
     const int total = static_cast<int>(m_rtfLines.size());
     if (total > vis && DialogSkin::ok()) {
-        renderer.drawSkinScrollBar(kRvTextX + kRvTextW - 17, kRvTextY, 17, kRvTextH, m_rtfScroll, vis, total);
+        renderer.drawSkinScrollBar(kRvTextX + textW - 17, kRvTextY, 17, kRvTextH, m_rtfScroll, vis, total);
     } else if (total > vis) {
-        const int trackX = kRvTextX + kRvTextW - 10, trackH = kRvTextH - 4;
+        const int trackX = kRvTextX + textW - 10, trackH = kRvTextH - 4;
         const int thumbH = std::max(16, trackH * vis / total);
         const int maxScroll = total - vis;
         const int thumbY = kRvTextY + 2 + (trackH - thumbH) * m_rtfScroll / maxScroll;
