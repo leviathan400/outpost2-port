@@ -54,6 +54,12 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   como no original, o cursor é o de **atracar** sobre a doca que vale naquela
   etapa (a da mina, depois a da fundição, depois a da mina de novo) e o de "não
   atracar" no resto.
+- **Missão 04 do Eden: o Scout transmite os dados do laboratório.** Mandado ao
+  Advanced Laboratory com um clique em cima do prédio, o Scout parava ao lado
+  dele e ficava tentando chegar à casa ocupada para sempre. Como nunca
+  "chegava", a transmissão não começava e o objetivo não podia ser cumprido.
+  Agora, encostado no prédio do destino, a unidade chega, e o Scout transmite.
+  Vale para qualquer veículo mandado para cima de um prédio.
 
 - **A noite como no original: a luz das unidades.** No original, à noite,
   cada veículo com os faróis acesos e cada prédio com energia abre um círculo
@@ -90,8 +96,8 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   A fila é só da interface: a partida em rede funciona como sempre, mas ela não
   é gravada no jogo salvo. Desligada (o padrão), é o jogo original.
 
-**Para quem acompanha o código:** seções 5.40 a 5.46 do PORT_STATUS; os modos
-de teste `--prodqueuetest`, `--lighttest` e `--truckjamtest` (e o `--cursortest`
+**Para quem acompanha o código:** seções 5.40 a 5.47 do PORT_STATUS; os modos
+de teste `--prodqueuetest`, `--lighttest`, `--truckjamtest` e `--e04test` (e o `--cursortest`
 ampliado); os módulos
 `src/game/production_queue.cpp` e `src/game/light_map.cpp`.
 
@@ -137,6 +143,12 @@ ampliado); os módulos
   no visual hint. Now, as in the original, the cursor is the **dock** cursor
   over the dock that counts at that step (the mine's, then the smelter's, then
   the mine's again) and the "no dock" cursor elsewhere.
+- **Eden mission 04: the Scout transmits the lab's data.** Sent to the Advanced
+  Laboratory by clicking on top of the building, the Scout stopped next to it
+  and kept trying to reach the occupied cell forever. Since it never
+  "arrived", the transmission never started and the objective could not be
+  met. Now, touching the destination building, the unit arrives, and the Scout
+  transmits. This applies to any vehicle sent on top of a building.
 - **Night as in the original: the units' light.** In the original, at night,
   every vehicle with its headlights on and every powered building opens a
   circle of light in the dark, as large as its sight range, with a dotted
@@ -173,8 +185,8 @@ ampliado); os módulos
   The queue lives in the interface only: network games work as always, but it
   is not stored in saved games. Off (the default), it is the original game.
 
-**For those following the code:** sections 5.40 to 5.46 of PORT_STATUS; the
-`--prodqueuetest`, `--lighttest` and `--truckjamtest` test modes (and the
+**For those following the code:** sections 5.40 to 5.47 of PORT_STATUS; the
+`--prodqueuetest`, `--lighttest`, `--truckjamtest` and `--e04test` test modes (and the
 extended `--cursortest`); the
 `src/game/production_queue.cpp` and `src/game/light_map.cpp` modules.
 

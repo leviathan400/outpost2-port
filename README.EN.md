@@ -180,7 +180,7 @@ map's bottom row (`ShowBottomRow`), the one-click ore route
 production queue (`ProductionQueue`) and right-click orders
 (`RightClickOrders`); they are documented in `PORT_STATUS.EN.md`.
 
-There are **124 command-line modes** for tests and captures, among them a
+There are **125 command-line modes** for tests and captures, among them a
 regression battery (`--savetest` proves save/reload determinism). The list is
 in `PORT_STATUS.EN.md`.
 
@@ -214,7 +214,7 @@ and what was checked and discarded from the cheat lists that circulate.
 
 ```
 src/
-  main.cpp        entry point + the 124 test/capture modes
+  main.cpp        entry point + the 125 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -265,6 +265,10 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
   the dock that counts at that step — the mine's, then the smelter's, then the
   mine's again — and the "no dock" cursor elsewhere, as in the original. It
   used to stay the arrow, and the button seemed not to work.
+- **Eden mission 04: the data transmission works.** A Scout sent to a lab by
+  clicking on top of it stopped next to it and kept trying to arrive forever,
+  never transmitting. Now, touching the building, it arrives and transmits,
+  and the mission can be completed.
 - **Night as in the original: the units' light.** At night, every vehicle with
   its headlights on and every powered building opens a circle of light in the
   dark, as large as its sight range, with a dotted edge — the light moves with

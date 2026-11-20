@@ -4818,6 +4818,146 @@ static int runTubeTest(const std::string& mapName, const std::string& prefix) {
     return ruins ? 1 : 0;
 }
 
+// --e04test [DLL]: o SpecialTarget da E04 (a transmissao de dados do Scout no
+// laboratorio). Lista os gatilhos, poe um Scout do jogador encostado no alvo
+// pelo clique da ordem e acompanha a acao 0x10 e o disparo.
+static int runE04Test(const std::string& dll) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 e04test", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { std::printf("[E04] missao nao carregou\n"); renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    for (int t = 0; t < 4; ++t) gs.onIdle(renderer, 0.2501f / 4.0f);
+    const int me = op2::TethysGame::localPlayer();
+    std::printf("[E04] jogador local %d\n", me);
+    for (const std::string& o : op2::missionObjectives()) std::printf("[E04]   objetivo: %s\n", o.c_str());
+    const auto esp = op2::debugSpecialTriggers();
+    if (esp.empty()) { std::printf("[E04] nenhum SpecialTarget\n"); renderer.shutdown(); SDL_Quit(); return 3; }
+    for (const op2::SpecialInfo& s : esp) {
+        const op2::UnitRecord& a = op2::g_units[s.target];
+        std::printf("[E04]   special %d ligado %d alvo %d (tipo 0x%X dono %d em %d,%d flags 0x%X) fonte tipo 0x%X\n",
+                    s.stub, s.enabled, s.target, a.type, a.owner & 0x0F, a.pixelX >> 5, a.pixelY >> 5, a.flags, s.sourceType);
+    }
+    const op2::SpecialInfo s0 = esp[0];
+    const op2::UnitRecord& alvo = op2::g_units[s0.target];
+    // Um Scout do jogador (o da missao, senao um novo).
+    int scout = 0;
+    for (int i = 1; i < (int)op2::g_units.size() && !scout; ++i) {
+        const op2::UnitRecord& r = op2::g_units[i];
+        if (r.id != -1 && !(r.flags & op2::UNIT_DEAD) && (r.owner & 0x0F) == me && r.type == s0.sourceType) scout = i;
+    }
+    std::printf("[E04] fonte da missao: %d\n", scout);
+    // Como o jogador faz (os Lynx primeiro): as unidades ARMADAS dos outros
+    // jogadores saem, para o Scout chegar vivo ao laboratorio.
+    // A missao manda reforcos: a limpeza se repete enquanto o Scout anda.
+    int mortos = 0;
+    const auto limpa = [&]() {
+        for (int i = 1; i < (int)op2::g_units.size(); ++i) {
+            const op2::UnitRecord& q = op2::g_units[i];
+            if (q.id == -1 || (q.flags & op2::UNIT_DEAD) || (q.owner & 0x0F) == me) continue;
+            if (q.flags & (op2::UNIT_ARMED | 0x80u)) { op2::killUnit(i, 1); ++mortos; }   // e as torres (0x80)
+        }
+    };
+    limpa();
+    for (int t = 0; t < 200; ++t) gs.onIdle(renderer, 0.2501f / 4.0f);
+    std::printf("[E04] unidades armadas inimigas eliminadas: %d\n", mortos);
+    // A celula livre encostada (4 direcoes) na pegada do alvo, mais perto da fonte.
+    int w = 1, h = 1;
+    op2::buildingFootprint((op2::map_id)alvo.type, w, h);
+    const int tlx = (alvo.pixelX >> 5) - (w >> 1), tly = (alvo.pixelY >> 5) - (h >> 1);
+    int bx = -1, by = -1, bd = 1 << 30;
+    const int sx = scout ? op2::g_units[scout].pixelX >> 5 : tlx, sy = scout ? op2::g_units[scout].pixelY >> 5 : tly;
+    for (int y = tly - 1; y <= tly + h; ++y)
+        for (int x = tlx - 1; x <= tlx + w; ++x) {
+            const bool canto = (x < tlx || x >= tlx + w) && (y < tly || y >= tly + h);
+            const bool dentro = x >= tlx && x < tlx + w && y >= tly && y < tly + h;
+            if (canto || dentro) continue;
+            if (!op2::g_gameMap.isPassable(op2::LOCATION{x, y}) || op2::g_gameMap.cellOccupant(x, y) > 0) continue;
+            const int d = (x - sx) * (x - sx) + (y - sy) * (y - sy);
+            if (d < bd) { bd = d; bx = x; by = y; }
+        }
+    std::printf("[E04] alvo: pegada %dx%d em (%d,%d); celula encostada (%d,%d)\n", w, h, tlx, tly, bx, by);
+    if (!scout) {
+        op2::Unit u;
+        op2::TethysGame::CreateUnit(u, (op2::map_id)s0.sourceType, op2::LOCATION{bx, by + 4}, me);
+        scout = u.id();
+        std::printf("[E04] criei a fonte %d\n", scout);
+    }
+    gs.setSelection({scout});
+    gs.debugRightClickTile(renderer, bx, by);
+    int viu10 = -1, disparou = -1, chegou = -1;
+    for (int t = 0; t < 6000 && disparou < 0; ++t) { if (t % 50 == 0) limpa();
+        gs.onIdle(renderer, 0.2501f / 4.0f);
+        const op2::UnitRecord& r = op2::g_units[scout];
+        if (chegou < 0 && (r.pixelX >> 5) == bx && (r.pixelY >> 5) == by && !r.velX && !r.velY) chegou = t;
+        if (viu10 < 0 && r.action == 0x10) viu10 = t;
+        for (const op2::SpecialInfo& s : op2::debugSpecialTriggers())
+            if (s.stub == s0.stub && s.source == scout) disparou = t;
+    }
+    const op2::UnitRecord& r = op2::g_units[scout];
+    std::printf("[E04] fonte em (%d,%d) acao 0x%X f20 %d f22 %d; chegou t=%d, acao 0x10 t=%d, disparou t=%d\n",
+                r.pixelX >> 5, r.pixelY >> 5, r.action, r.field20, r.field22, chegou, viu10, disparou);
+    for (int t = 0; t < 40; ++t) gs.onIdle(renderer, 0.2501f / 4.0f);
+    for (const std::string& o : op2::missionObjectives()) std::printf("[E04]   objetivo: %s\n", o.c_str());
+
+    // Os outros dois: o jogador clica EM CIMA do laboratorio (o centro do
+    // predio), como e natural. A rota termina numa casa encostada nele.
+    auto emCima = [&](const op2::SpecialInfo& sp, int& fonte, int& disp, int& px, int& py) {
+        const op2::UnitRecord& lab = op2::g_units[sp.target];
+        fonte = 0; disp = -1; px = py = -1;
+        for (int i = 1; i < (int)op2::g_units.size() && !fonte; ++i) {
+            const op2::UnitRecord& q = op2::g_units[i];
+            if (q.id != -1 && !(q.flags & op2::UNIT_DEAD) && (q.owner & 0x0F) == me && q.type == sp.sourceType &&
+                q.action == 0 && !q.hasOrder && i != scout)
+                fonte = i;
+        }
+        if (!fonte) return;
+        gs.setSelection({fonte});
+        gs.debugRightClickTile(renderer, lab.pixelX >> 5, lab.pixelY >> 5);
+        for (int t = 0; t < 6000 && disp < 0; ++t) {
+            if (t % 50 == 0) limpa();
+            gs.onIdle(renderer, 0.2501f / 4.0f);
+            if (op2::g_units[fonte].flags & op2::UNIT_DEAD) break;
+            for (const op2::SpecialInfo& s : op2::debugSpecialTriggers())
+                if (s.stub == sp.stub && s.source == fonte) disp = t;
+        }
+        px = op2::g_units[fonte].pixelX >> 5; py = op2::g_units[fonte].pixelY >> 5;
+        std::printf("[E04] scout %d: clique em cima do lab %d (%d,%d) -> parou em (%d,%d), disparou t=%d\n",
+                    fonte, sp.target, lab.pixelX >> 5, lab.pixelY >> 5, px, py, disp);
+    };
+    int f2, d2, x2, y2, f3, d3, x3, y3;
+    emCima(esp.size() > 1 ? esp[1] : esp[0], f2, d2, x2, y2);
+    for (int t = 0; t < 40; ++t) gs.onIdle(renderer, 0.2501f / 4.0f);
+    emCima(esp.size() > 2 ? esp[2] : esp[0], f3, d3, x3, y3);
+    for (int t = 0; t < 400 && !op2::gameEndCode(); ++t) gs.onIdle(renderer, 0.2501f / 4.0f);
+    for (const std::string& o : op2::missionObjectives()) std::printf("[E04]   objetivo: %s\n", o.c_str());
+    std::printf("[E04] fim de jogo: %d\n", op2::gameEndCode());
+    int cumpridos = 0;
+    for (const std::string& o : op2::missionObjectives()) if (o.rfind("<C0>", 0) == 0) ++cumpridos;
+    struct Caso { const char* nome; int obtido, esperado; };
+    const Caso casos[] = {
+        {"a fonte chega na celula encostada", chegou >= 0, 1},
+        {"... entra na acao 0x10 (transmitindo)", viu10 >= 0, 1},
+        {"... e o SpecialTarget dispara", disparou >= 0, 1},
+        {"clique em cima do 2o lab: transmite", d2 >= 0, 1},
+        {"clique em cima do 3o lab: transmite", d3 >= 0, 1},
+        {"os tres objetivos cumpridos", cumpridos, 3},
+    };
+    int ruins = 0;
+    for (const Caso& c : casos) {
+        const bool ok = c.obtido == c.esperado;
+        if (!ok) ++ruins;
+        std::printf("[E04] %-44s %d (esperado %d) %s\n", c.nome, c.obtido, c.esperado, ok ? "ok" : "FALHOU");
+    }
+    std::printf("[E04] %d casos, %d falhas\n", (int)(sizeof(casos) / sizeof(casos[0])), ruins);
+    std::fflush(stdout);
+    renderer.shutdown(); SDL_Quit();
+    return ruins ? 1 : 0;
+}
+
 // --e02test [DLL]: a praga (Blight) e os objetivos de pesquisa da E02. Conta as
 // celulas com virus (bit 0x40000000) e os tiles infectados (0x20000000) ao
 // longo do tempo; lista os gatilhos de pesquisa e de vitoria; conclui cada
@@ -9624,6 +9764,8 @@ int main(int argc, char* argv[]) {
             return runWaypointTest(argv[i + 1], i + 2 < argc && argv[i + 2][0] != '-' ? argv[i + 2] : "");
         if (std::strcmp(argv[i], "--tubetest") == 0 && i + 1 < argc)
             return runTubeTest(argv[i + 1], i + 2 < argc && argv[i + 2][0] != '-' ? argv[i + 2] : "");
+        if (std::strcmp(argv[i], "--e04test") == 0)
+            return runE04Test(i + 1 < argc && argv[i + 1][0] != '-' ? argv[i + 1] : "E04.DLL");
         if (std::strcmp(argv[i], "--e02test") == 0)
             return runE02Test(i + 1 < argc && argv[i + 1][0] != '-' ? argv[i + 1] : "E02.DLL",
                               i + 2 < argc && argv[i + 2][0] != '-' ? argv[i + 2] : "");

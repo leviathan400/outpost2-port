@@ -48,7 +48,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 124 modos de teste/captura
+  main.cpp        entrada + os 125 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -3437,6 +3437,48 @@ nodock na outra doca e no chão. Depois faz os três cliques e confere a rota
 montada (ação `0x27`, fundição clicada) e a mira desarmada. Mutação: sem o
 caso do cursor, 6 falhas.
 
+## 5.47. A transmissão de dados da E04: a unidade mandada para cima de um prédio nunca chegava (2026-11-19)
+
+Relato: *na missão 04 do Eden, o Scout chega perto do Advanced Laboratory e não
+faz a transmissão de dados — algum gatilho não funciona.*
+
+**O gatilho estava certo.** A E04 cria três `SpecialTarget` (um por
+laboratório do jogador 1, alvo com a flag `0x2000000`, fonte do tipo `0x0B`,
+o Scout). No original, a chegada de um veículo ao fim da ordem chama o
+`sub_44D5B0`, que olha as 4 casas vizinhas: com um alvo especial, a unidade
+entra na ação `0x10`, transmite 60 tiques e o `sub_44D7D0` → `sub_495170`
+marca o disparo. Com o Scout parado numa casa encostada no laboratório, o
+porte fazia exatamente isso.
+
+**O defeito estava no movimento.** O natural é clicar **em cima** do
+laboratório. A ordem leva então à casa do prédio, que é ocupada: a rota
+termina na casa mais perto, encostada nele, e dali o planejador não acha rota
+para a casa ocupada. O `sub_44C0B0` cai em `loc_44C20A`: com a ordem ativa
+(bit 0 de `[ordem+0x34]`) a unidade **não desiste**. Ela espera
+`[st+0x70]` tiques e tenta de novo, com a espera crescendo até `0x53`. Isso
+foi feito para quem está no caminho por um instante, mas um prédio não sai: o
+Scout ficava "andando" (ação 2, sub-estado 1, velocidade zero) para sempre.
+Como ele nunca chegava, o `sub_44D5B0` nunca rodava, e o objetivo ficava
+impossível.
+
+**Corrigido:** no último ponto da ordem, sem rota e com a unidade **encostada
+(8 vizinhas) no prédio** que ocupa a casa do alvo, é a chegada
+(`touchesTargetBuilding`, `src/game/movement.cpp`). Vale para qualquer ordem de
+mover que mire um prédio. A transmissão continua exigindo um dos 4 lados, como
+no original. Nos testes, a rota terminou sempre no meio de um lado.
+
+**Teste:** `--e04test [DLL]` (novo) carrega a E04 de verdade. Ele faz o papel
+dos Lynx: elimina as unidades armadas do inimigo e as torres, e repete isso
+enquanto os Scouts andam, por causa dos reforços. Depois:
+
+- manda um Scout para a casa encostada no laboratório 3;
+- manda os outros dois clicando **em cima** dos laboratórios 2 e 1;
+- confere a chegada, a ação `0x10`, o disparo de cada `SpecialTarget`, os três
+  objetivos cumpridos e o fim `MISSION ACCOMPLISHED`.
+
+Sem a correção, o Scout do clique em cima fica parado ao lado do laboratório
+sem transmitir.
+
 ## 6. Build e execução
 
 **Toolchain:** CMake >= 3.15 + MSVC, C++17, SDL2 2.30.9 (em `third_party/`).
@@ -3494,6 +3536,7 @@ São 109 modos. Os que cobrem regressão de verdade:
 | `--lighttest <DLL> [tela.bmp]` | a luz das unidades na noite: o círculo de `sub_43A200`, os cantos e o molde, o terreno e os sprites (5.41) |
 | `--truckjamtest <mapa> [n] [tiques] [tela.bmp]` | n caminhões na mesma rota de minério: o ciclo não para, ninguém preso na doca, ninguém sai da rota (5.43) |
 | `--e02test [DLL] [bmp]` | missão 2 do Eden: a praga se espalha e é desenhada com o Overlay, e os objetivos de pesquisa são cumpridos; e a praga no minimapa |
+| `--e04test [DLL]` | A transmissão de dados da E04 (`SpecialTarget`): o Scout encostado e o clique em cima de cada laboratório, os três objetivos e a vitória (5.47) |
 | `--tubetest <mapa> [prefixo]` | o Earthworker ligando prédios com tubo: retas inteiras, a doca que não liga, a animação de trabalho |
 | `--waypointtest <mapa> [bmp]` | pontos de passagem com Ctrl + clique: limites por comando, o pacote com os pontos antes do alvo, a unidade passando por eles, patrulha e obra, e o desenho |
 | `--selecttest <mapa>` | a área de clique das unidades, e a seleção com Shift e com o botão do meio (soma, tira, caixa que soma, as exceções) |

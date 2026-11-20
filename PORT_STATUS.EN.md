@@ -112,7 +112,12 @@
 > to default to 1, now default to 0) and **5.46** (the three-click ore route
 > command showed the arrow: the original's `vt[4]`, `sub_454290`, also writes
 > the cursor — dock, index 13, on the dock the current step accepts (mine,
-> smelter, mine), nodock, index 14, elsewhere).
+> smelter, mine), nodock, index 14, elsewhere) and **5.47** (E04's data
+> transmission: a move order aimed at a building's cell ended next to it with
+> no route to the occupied cell, and `loc_44C20A` kept the unit retrying
+> forever, so the arrival check `sub_44D5B0` never ran and the Scout never
+> transmitted. Touching the target's building now counts as arriving. New
+> `--e04test`).
 > The recent
 > changes are summarised in
 > [README.EN.md](README.EN.md).
@@ -165,7 +170,7 @@ coverage by comparing the DLLs' import tables against the registry in
 
 ```
 src/
-  main.cpp        entry point + the 124 test/capture modes
+  main.cpp        entry point + the 125 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -755,7 +760,7 @@ mission DLLs and the original resources from the working directory).
 
 ### Command-line tests
 
-There are 124 modes. The ones that cover real regressions:
+There are 125 modes. The ones that cover real regressions:
 
 | Mode | What it proves |
 |---|---|

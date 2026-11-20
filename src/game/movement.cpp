@@ -377,6 +377,22 @@ static bool waypointAdvance(UnitRecord& u) {
     return advanced;
 }
 
+// (5.47) A casa (x, y) encosta -- nas 8 vizinhas -- no PREDIO que ocupa a
+// casa do alvo (tx, ty)? Doca nao conta (ela nao tem a ocupacao do predio).
+static bool touchesTargetBuilding(int x, int y, int tx, int ty) {
+    const int mask = g_gameMap.width() - 1;
+    if (ty < 0 || ty >= g_gameMap.height()) return false;
+    const int b = g_gameMap.cellOccupant(tx & mask, ty);
+    if (b <= 0 || b >= static_cast<int>(g_units.size()) || !(g_units[b].flags & UNIT_BUILDING)) return false;
+    for (int dy = -1; dy <= 1; ++dy)
+        for (int dx = -1; dx <= 1; ++dx) {
+            const int ny = y + dy;
+            if ((!dx && !dy) || ny < 0 || ny >= g_gameMap.height()) continue;
+            if (g_gameMap.cellOccupant((x + dx) & mask, ny) == b) return true;
+        }
+    return false;
+}
+
 static void stepUnit(int id) {
     UnitRecord& u = g_units[id];
     if (u.id == -1 || (u.flags & UNIT_DEAD)) return;
@@ -524,7 +540,16 @@ static void stepUnit(int id) {
                 }
                 // No destino da busca do último ponto (modo 3: a casa ao lado,
                 // que pode ser um tubo e não contar como objetivo): chegou.
-                if (ob.curWaypoint == ob.countMinus1 && curX == destX && curY == destY) {
+                // CORRECAO (5.47): o alvo EM CIMA DE UM PREDIO (o Scout mandado
+                // ao laboratorio da E04 clicando nele) -- a rota termina na casa
+                // mais perto, encostada no predio, e dali nao ha rota para a
+                // casa ocupada. O original caia na espera de loc_44C20A, feita
+                // para quem esta no caminho por um instante: predio nao sai, e a
+                // unidade ficava "andando" para sempre, sem nunca chegar -- sem
+                // o sub_44D5B0, nao havia transmissao. Encostada (8 vizinhas)
+                // no predio do alvo, e a chegada.
+                if (ob.curWaypoint == ob.countMinus1 &&
+                    ((curX == destX && curY == destY) || touchesTargetBuilding(curX, curY, destX, destY))) {
                     u.field20 = 0; u.field22 = 0; u.field23 = 1;
                     u.clearRoute();
                     if (u.action == 0x28 || u.action == 0x27) return;

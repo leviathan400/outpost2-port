@@ -1006,6 +1006,13 @@ std::vector<TriggerInfo> debugTriggers() {
     return v;
 }
 
+std::vector<SpecialInfo> debugSpecialTriggers() {
+    std::vector<SpecialInfo> v;
+    for (int id : s_special)
+        if (Trigger* t = trig(id)) v.push_back({id, t->enabled, t->f30, t->f38, t->f34, t->f3C});
+    return v;
+}
+
 std::vector<std::string> missionObjectives() {
     std::vector<std::string> v;
     for (int id : s_victory) {

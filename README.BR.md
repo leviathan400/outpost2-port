@@ -181,7 +181,7 @@ clique (`AutoOreRoute`), o diagnóstico de comando recusado (`CommandDebug`), a
 fila de produção (`ProductionQueue`) e o clique direito dando ordens
 (`RightClickOrders`); estão documentadas no `PORT_STATUS.BR.md`.
 
-Há **124 modos de linha de comando** para testes e capturas, entre eles uma
+Há **125 modos de linha de comando** para testes e capturas, entre eles uma
 bateria de regressão (`--savetest` prova o determinismo de salvar/recarregar).
 A lista está no `PORT_STATUS.BR.md`.
 
@@ -215,7 +215,7 @@ e descartado das listas de cheat que circulam por aí.
 
 ```
 src/
-  main.cpp        entrada + os 124 modos de teste/captura
+  main.cpp        entrada + os 125 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -265,6 +265,10 @@ cursores `.ANI`.
   doca que vale naquela etapa — a da mina, depois a da fundição, depois a da
   mina de novo — e o de "não atracar" no resto, como no original. Antes ficava
   a seta, e o botão parecia não funcionar.
+- **Missão 04 do Eden: a transmissão de dados funciona.** O Scout mandado ao
+  laboratório clicando em cima dele parava ao lado e ficava tentando chegar
+  para sempre, sem nunca transmitir. Agora, encostado no prédio, ele chega e
+  transmite, e a missão pode ser completada.
 - **A noite como no original: a luz das unidades.** À noite, cada veículo com
   os faróis acesos e cada prédio com energia abre um círculo de luz no escuro,
   do tamanho do alcance de visão dele, com a borda pontilhada — a luz anda com

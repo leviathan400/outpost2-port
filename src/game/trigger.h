@@ -114,6 +114,9 @@ std::vector<std::string> missionObjectives();
 // Testes: um retrato de cada gatilho vivo (stub, tipo, ligado, campos, mascara).
 struct TriggerInfo { int stub, kind, enabled, f30, f34; uint32_t playerMask; };
 std::vector<TriggerInfo> debugTriggers();
+// Os SpecialTarget (para o --e04test): alvo, tipo da fonte, fonte, disparado.
+struct SpecialInfo { int stub, enabled, target, sourceType, source, fired; };
+std::vector<SpecialInfo> debugSpecialTriggers();
 enum { kTrigResearch = 1, kTrigVictory = 2 };
 
 // Fim de jogo (sub_48A650 / TethysGame +0x9C,+0x98): 0 = em andamento;
