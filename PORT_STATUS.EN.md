@@ -120,7 +120,11 @@
 > `--e04test`) and **5.48** (the campaign briefing screen: its own dialog
 > procedure, OP2SHELL `0x13005DF0`, creates a 230-wide RICHEDIT at (20, 25)
 > and BitBlts the mission picture — OP2SHRES `0x190` + mission, + 12 for
-> Plymouth, 320×240 — at (260, 50) of the client area; new `--brieftest`).
+> Plymouth, 320×240 — at (260, 50) of the client area; new `--brieftest`)
+> and **5.49** (mouse scrolling of that text box: the wheel now accumulates
+> SDL's fractional `preciseY` — high-resolution wheels and touchpads send
+> `y = 0` — and the scroll bar works: arrows, track paging with repeat, thumb
+> dragging; text wraps before the bar).
 > The recent
 > changes are summarised in
 > [README.EN.md](README.EN.md).

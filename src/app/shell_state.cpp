@@ -145,7 +145,8 @@ void ShellState::handleEvent(Renderer& renderer, const SDL_Event& e) {
         break;
     }
     case SDL_MOUSEWHEEL:
-        m_menu.handleMouseWheel(e.wheel.y);
+        m_menu.handleMouseWheelPrecise(e.wheel.preciseY, e.wheel.y,
+                                       e.wheel.direction == SDL_MOUSEWHEEL_FLIPPED);
         break;
     case SDL_KEYDOWN:
         m_menu.handleKeyDown(e.key.keysym.sym);

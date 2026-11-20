@@ -127,6 +127,11 @@ public:
     void handleKeyDown(int keyCode);
     void handleTextInput(const char* text);   // Edit 1093 do "ENTER YOUR NAME"
     void handleMouseWheel(int delta);
+    // A roda pelo valor FRACIONARIO do SDL (preciseY): rodas de alta
+    // resolucao e touchpads mandam y = 0 em cada evento e o movimento so no
+    // preciseY -- lendo so o y, a roda nao fazia nada (5.49). Acumula e
+    // entrega degraus inteiros ao handleMouseWheel; flipped = direcao invertida.
+    void handleMouseWheelPrecise(float preciseY, int y, bool flipped);
 
     void update(float dt);
     void render(Renderer& renderer);
@@ -220,6 +225,11 @@ public:
         w = m_briefBitmap.getWidth(); h = m_briefBitmap.getHeight(); return m_briefBitmapOk;
     }
     int debugRtfTextW() const { return rtfTextW(); }
+    int debugRtfScroll() const { return m_rtfScroll; }
+    int debugRtfLines() const { return static_cast<int>(m_rtfLines.size()); }
+    int debugRtfVisible() const { return rtfVisibleLines(); }
+    bool debugRtfScrollBar(int& x, int& y, int& w, int& h) const { return rtfScrollBarRect(x, y, w, h); }
+    void debugRtfThumb(int& ty, int& th, int& y, int& h) const { rtfThumb(ty, th, y, h); }
     uint64_t debugBriefImageHash() const {                   // FNV-1a dos pixels
         uint64_t h = 1469598103934665603ull;
         for (uint32_t p : m_briefBitmap.getPixels32()) { h ^= p; h *= 1099511628211ull; }
@@ -471,6 +481,16 @@ private:
     std::string colonyName() const;
     int rtfVisibleLines() const;
     int rtfTextW() const;
+    // A barra de rolagem da caixa de texto (5.49): retangulo, polegar e rolar.
+    bool rtfScrollBarRect(int& x, int& y, int& w, int& h) const;
+    void rtfThumb(int& trackY, int& trackH, int& thumbY, int& thumbH) const;
+    void rtfScrollTo(int first);
+    void rtfScrollStep(int kind);          // 2/3 seta, 4/5 trilha (pagina)
+    int m_rtfDrag = 0;                     // 0 nada, 1 polegar, 2/3 setas, 4/5 trilha
+    int m_rtfDragOff = 0;                  // cursor - topo do polegar, no arrasto
+    int m_rtfMouseY = 0;
+    uint32_t m_rtfRepeatAt = 0;            // repeticao com o botao seguro
+    float m_wheelAcc = 0.0f;
 };
 
 } // namespace op2

@@ -3542,6 +3542,38 @@ a barra de rolagem e a roda do mouse seguem essa largura.
 Mutação: sem o `+ 12` do Plymouth, as 12 missões dele acusam a imagem
 trocada.
 
+## 5.49. A rolagem da caixa de texto pelo mouse: a roda e a barra (2026-11-20)
+
+Relato: *a barra de rolagem da área de texto do briefing não funciona pelo
+mouse; rolar com a roda e com a barra.*
+
+- **A roda:** o código já rolava 3 linhas por degrau, mas lia só o
+  `wheel.y` do SDL. Rodas de alta resolução e touchpads mandam `y = 0` em cada
+  evento e o movimento só no fracionário `preciseY`, e aí a roda não fazia
+  nada. `handleMouseWheelPrecise` acumula o `preciseY` (com o sentido
+  invertido de `SDL_MOUSEWHEEL_FLIPPED`) e entrega degraus inteiros. Vale para
+  todo o shell (`ShellState` e o laço do `main`).
+- **A barra:** era só desenho. O estilo `0x5030C804` do RICHEDIT tem
+  `WS_VSCROLL`, então agora a barra funciona como a do Windows:
+  - as setas rolam 1 linha;
+  - a trilha rola 1 página e para quando o polegar chega ao cursor;
+  - seta e trilha repetem com o botão seguro (400 ms, depois a cada 50 ms);
+  - o polegar se arrasta, também além das pontas.
+
+  A barra com setas é a mesma nas duas peles (a do porte tinha uma trilha fina
+  sem setas), e o texto quebra **antes** dela (8 de margem + 17 da barra). Vale
+  no briefing, nos objetivos e na história.
+
+**Teste:** o `--brieftest` ganhou 9 casos (15 no total), no briefing do
+Eden 5:
+
+- a caixa tem barra;
+- meio degrau de roda ainda não rola, e o degrau inteiro rola 3 linhas;
+- a roda invertida rola ao contrário;
+- a seta de baixo desce 1 linha e a de cima sobe 1;
+- a trilha desce uma página;
+- arrastar o polegar além do fim vai ao fim, e além do topo volta ao início.
+
 ## 6. Build e execução
 
 **Toolchain:** CMake >= 3.15 + MSVC, C++17, SDL2 2.30.9 (em `third_party/`).

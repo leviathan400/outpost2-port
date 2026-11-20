@@ -4860,6 +4860,35 @@ static int runBriefTest() {
             }
             tamanhos.push_back({w, h});
         }
+    // A ROLAGEM pelo mouse (5.49), no briefing do Eden 5.
+    menu.debugCampaign(true, 1, 4, 1);
+    const int maxR = std::max(0, menu.debugRtfLines() - menu.debugRtfVisible());
+    menu.handleMouseWheelPrecise(-0.5f, 0, false);            // roda de alta resolucao: meio degrau
+    const int meio = menu.debugRtfScroll();
+    menu.handleMouseWheelPrecise(-0.5f, 0, false);            // ... e o outro meio
+    const int umDegrau = menu.debugRtfScroll();
+    menu.handleMouseWheelPrecise(1.0f, 1, true);              // direcao invertida: desce mais
+    const int invertida = menu.debugRtfScroll();
+    menu.debugCampaign(true, 1, 4, 1);                        // volta ao topo
+    int sbx = 0, sby = 0, sbw = 0, sbh = 0;
+    const bool temBarra = menu.debugRtfScrollBar(sbx, sby, sbw, sbh);
+    auto clicaBarra = [&](int y) { menu.handleMouseDown(sbx + sbw / 2, y, SDL_BUTTON_LEFT); menu.handleMouseUp(sbx + sbw / 2, y, SDL_BUTTON_LEFT); };
+    clicaBarra(sby + sbh - 4);                                // seta de baixo
+    const int setaBaixo = menu.debugRtfScroll();
+    clicaBarra(sby + 4);                                      // seta de cima
+    const int setaCima = menu.debugRtfScroll();
+    clicaBarra(sby + sbh - 24);                               // trilha abaixo do polegar
+    const int pagina = menu.debugRtfScroll();
+    int ty = 0, th = 0, thy = 0, thh = 0;
+    menu.debugRtfThumb(ty, th, thy, thh);
+    menu.handleMouseDown(sbx + sbw / 2, thy + thh / 2, SDL_BUTTON_LEFT);   // pega o polegar
+    menu.handleMouseMove(sbx + sbw / 2, sby + sbh + 50);                  // arrasta alem do fim
+    const int arrastoFim = menu.debugRtfScroll();
+    menu.handleMouseMove(sbx + sbw / 2, sby - 50);                        // e alem do topo
+    const int arrastoTopo = menu.debugRtfScroll();
+    menu.handleMouseUp(sbx + sbw / 2, sby - 50, SDL_BUTTON_LEFT);
+    std::printf("[Brief] rolagem: max %d; roda meio %d, um degrau %d, invertida %d; setas %d/%d; pagina %d; arrasto %d/%d\n",
+                maxR, meio, umDegrau, invertida, setaBaixo, setaCima, pagina, arrastoFim, arrastoTopo);
     menu.debugCampaign(true, 1, 4, 2);                        // objetivos
     int wo = 0, ho = 0;
     const bool imgObj = menu.debugBriefImage(wo, ho);
@@ -4872,6 +4901,15 @@ static int runBriefTest() {
         {"... de 320x240", tamanhoErrado, 0},
         {"... e caixa de texto de 230", caixaErrada, 0},
         {"... cada uma a da sua missao/colonia", imagemTrocada, 0},
+        {"rolagem: a caixa do briefing tem barra", temBarra ? 1 : 0, 1},
+        {"... meio degrau da roda ainda nao rola", meio, 0},
+        {"... o degrau inteiro rola 3 linhas", umDegrau, 3},
+        {"... a roda invertida rola ao contrario", invertida, 6},
+        {"... a seta de baixo desce 1 linha", setaBaixo, 1},
+        {"... a de cima sobe 1", setaCima, 0},
+        {"... a trilha desce uma pagina", pagina, menu.debugRtfVisible() - 1},
+        {"... arrastar o polegar ao fim vai ao fim", arrastoFim, maxR},
+        {"... e ao topo volta ao inicio", arrastoTopo, 0},
         {"objetivos: caixa larga (565)", caixaObj, 565},
         {"... sem imagem", imgObj ? 1 : 0, 0},
     };
@@ -10108,7 +10146,8 @@ int main_old(int argc, char* argv[]) {
                 }
 
                 case SDL_MOUSEWHEEL:
-                    shellMenu.handleMouseWheel(event.wheel.y);
+                    shellMenu.handleMouseWheelPrecise(event.wheel.preciseY, event.wheel.y,
+                                                      event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED);
                     break;
 
                 case SDL_KEYDOWN:

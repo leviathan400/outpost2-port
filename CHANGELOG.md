@@ -21,9 +21,15 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   mostrava só o texto, numa caixa da largura da tela. Agora a imagem aparece
   no lugar certo, cada missão com a sua (12 do Eden e 12 do Plymouth). As telas
   de objetivos e de história continuam com a caixa larga, como no original.
+- **O texto do briefing rola pelo mouse.** A barra de rolagem da caixa de
+  texto era só desenho: agora as setas rolam uma linha, o clique na trilha
+  rola uma página, e o polegar se arrasta (setas e trilha repetem com o botão
+  seguro). A roda do mouse passou a funcionar também nos mouses de roda fina e
+  nos touchpads, que antes não rolavam nada. Vale no briefing, nos objetivos e
+  na história.
 
-**Para quem acompanha o código:** seção 5.48 do PORT_STATUS; o modo de teste
-`--brieftest`.
+**Para quem acompanha o código:** seções 5.48 e 5.49 do PORT_STATUS; o modo
+de teste `--brieftest`.
 
 ### English
 
@@ -36,8 +42,13 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   appears in the right place, each mission with its own (12 Eden, 12
   Plymouth). The objectives and story screens keep the wide box, as in the
   original.
+- **The briefing text scrolls with the mouse.** The text box's scroll bar
+  was only drawn: now the arrows scroll one line, a track click scrolls a
+  page, and the thumb can be dragged (arrows and track repeat while held).
+  The mouse wheel now also works on fine-step wheels and touchpads, which
+  used to scroll nothing. Briefing, objectives and story.
 
-**For those following the code:** section 5.48 of PORT_STATUS; the
+**For those following the code:** sections 5.48 and 5.49 of PORT_STATUS; the
 `--brieftest` test mode.
 
 ---

@@ -242,6 +242,9 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
   sits in a narrow box on the left, with the mission's picture on the right
   (the 12 Eden and 12 Plymouth pictures, which come from the game itself).
   Objectives and story keep the wide box, as there.
+- **The briefing text scrolls with the mouse.** The wheel works, also on
+  fine-step wheels and touchpads, and the text box's scroll bar works: arrows,
+  track clicks and thumb dragging. Objectives and story too.
 
 ### 2026-11-19
 

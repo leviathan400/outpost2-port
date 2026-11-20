@@ -1081,6 +1081,18 @@ bool ShellMenu::helpTest(std::string& report) {
 }
 
 void ShellMenu::handleMouseMove(int x, int y) {
+    // Arrastando o polegar da barra do texto (5.49): ele segue o cursor.
+    if (m_rtfDrag) {
+        m_rtfMouseY = y;
+        if (m_rtfDrag == 1) {
+            int trackY, trackH, thumbY, thumbH;
+            rtfThumb(trackY, trackH, thumbY, thumbH);
+            const int maxFirst = std::max(0, static_cast<int>(m_rtfLines.size()) - rtfVisibleLines());
+            const int span = trackH - thumbH;
+            if (span > 0) rtfScrollTo(((y - m_rtfDragOff - trackY) * maxFirst + span / 2) / span);
+        }
+        return;
+    }
     // Arrastando uma barra, o cursor é dela até soltar o botão — inclusive
     // fora do controle, como o trackbar do Windows.
     if (m_dragSlider >= 0 && m_dragSlider < (int)m_controls.size()) {
@@ -1121,6 +1133,27 @@ void ShellMenu::handleMouseDown(int x, int y, uint8_t button) {
             if (y < kHpListY + kHpSbW) m_helpListScroll = std::max(0, m_helpListScroll - 1);
             else if (y >= kHpListY + kHpListH - kHpSbW)
                 m_helpListScroll = std::min(maxScroll, m_helpListScroll + 1);
+            return;
+        }
+    }
+
+    // A barra de rolagem da caixa de texto do briefing/objetivos/historia
+    // (5.49): setas = 1 linha, trilha = 1 pagina, o polegar se arrasta; seta e
+    // trilha repetem com o botao seguro (update), como a barra do Windows.
+    if (m_state == MenuState::RtfView) {
+        int bx, by, bw, bh;
+        if (rtfScrollBarRect(bx, by, bw, bh) && x >= bx && x < bx + bw && y >= by && y < by + bh) {
+            const int ab = std::min(bw, bh / 2);
+            int trackY, trackH, thumbY, thumbH;
+            rtfThumb(trackY, trackH, thumbY, thumbH);
+            m_rtfMouseY = y;
+            if (y < by + ab) m_rtfDrag = 2;
+            else if (y >= by + bh - ab) m_rtfDrag = 3;
+            else if (y < thumbY) m_rtfDrag = 4;
+            else if (y >= thumbY + thumbH) m_rtfDrag = 5;
+            else { m_rtfDrag = 1; m_rtfDragOff = y - thumbY; }
+            if (m_rtfDrag != 1) rtfScrollStep(m_rtfDrag);
+            m_rtfRepeatAt = SDL_GetTicks() + 400;
             return;
         }
     }
@@ -1172,6 +1205,7 @@ void ShellMenu::handleMouseDown(int x, int y, uint8_t button) {
 
 void ShellMenu::handleMouseUp(int x, int y, uint8_t button) {
     if (button != SDL_BUTTON_LEFT) return;
+    if (m_rtfDrag) { m_rtfDrag = 0; return; }
     if (m_dragSlider >= 0) {
         // Soltar a barra toca o clique da interface (som 0x57), que é o que se
         // ouve no volume recém-escolhido.
@@ -1191,6 +1225,16 @@ void ShellMenu::handleMouseUp(int x, int y, uint8_t button) {
         }
     }
     if (toActivate >= 0) activateControl(toActivate);   // pode reconstruir m_controls
+}
+
+void ShellMenu::handleMouseWheelPrecise(float preciseY, int y, bool flipped) {
+    float v = preciseY != 0.0f ? preciseY : static_cast<float>(y);
+    if (flipped) v = -v;
+    m_wheelAcc += v;
+    const int n = static_cast<int>(m_wheelAcc);            // trunca para zero
+    if (!n) return;
+    m_wheelAcc -= static_cast<float>(n);
+    handleMouseWheel(n);
 }
 
 void ShellMenu::handleMouseWheel(int delta) {
@@ -1478,6 +1522,12 @@ void ShellMenu::handleKeyDown(int keyCode) {
 }
 
 void ShellMenu::update(float dt) {
+    // Seta/trilha da barra do texto seguras: repete a cada 50 ms depois de
+    // 400 ms (5.49).
+    if (m_state == MenuState::RtfView && m_rtfDrag >= 2 && SDL_GetTicks() >= m_rtfRepeatAt) {
+        rtfScrollStep(m_rtfDrag);
+        m_rtfRepeatAt = SDL_GetTicks() + 50;
+    }
     // Um minuto parado no menu principal chama o demo de atracao (0xEA60 ms no
     // OP2SHELL.DLL). So no menu principal: com um dialogo aberto o original
     // nem chega a essa conta.
@@ -2219,6 +2269,42 @@ int ShellMenu::rtfVisibleLines() const { return kRvTextH / (SkinText::height() +
 // cria), 565 nos objetivos e na historia (o "StoryText" do Dialog 216).
 int ShellMenu::rtfTextW() const { return m_rtfKind == 0 ? kRvBriefTextW : kRvTextW; }
 
+// A barra vertical do RICHEDIT (o estilo 0x5030C804 tem WS_VSCROLL): 17 px na
+// borda direita da caixa, so quando o texto nao cabe.
+bool ShellMenu::rtfScrollBarRect(int& x, int& y, int& w, int& h) const {
+    w = 17; h = kRvTextH; x = kRvTextX + rtfTextW() - w; y = kRvTextY;
+    return static_cast<int>(m_rtfLines.size()) > rtfVisibleLines();
+}
+// A mesma geometria do drawSkinScrollBar (setas quadradas, polegar >= 12).
+void ShellMenu::rtfThumb(int& trackY, int& trackH, int& thumbY, int& thumbH) const {
+    int x, y, w, h;
+    rtfScrollBarRect(x, y, w, h);
+    const int ab = std::min(w, h / 2);
+    trackY = y + ab; trackH = h - 2 * ab;
+    const int total = static_cast<int>(m_rtfLines.size()), vis = rtfVisibleLines();
+    if (total <= vis || trackH <= 0) { thumbY = trackY; thumbH = trackH; return; }
+    thumbH = std::min(trackH, std::max(12, trackH * vis / total));
+    const int maxFirst = total - vis;
+    const int f = std::max(0, std::min(m_rtfScroll, maxFirst));
+    thumbY = trackY + (trackH - thumbH) * f / maxFirst;
+}
+void ShellMenu::rtfScrollTo(int first) {
+    const int maxFirst = std::max(0, static_cast<int>(m_rtfLines.size()) - rtfVisibleLines());
+    m_rtfScroll = std::max(0, std::min(maxFirst, first));
+}
+void ShellMenu::rtfScrollStep(int kind) {
+    const int page = std::max(1, rtfVisibleLines() - 1);
+    if (kind == 2) rtfScrollTo(m_rtfScroll - 1);
+    else if (kind == 3) rtfScrollTo(m_rtfScroll + 1);
+    else if (kind == 4 || kind == 5) {
+        // A trilha para quando o polegar chega ao cursor (Windows).
+        int trackY, trackH, thumbY, thumbH;
+        rtfThumb(trackY, trackH, thumbY, thumbH);
+        if (kind == 4 && m_rtfMouseY < thumbY) rtfScrollTo(m_rtfScroll - page);
+        if (kind == 5 && m_rtfMouseY >= thumbY + thumbH) rtfScrollTo(m_rtfScroll + page);
+    }
+}
+
 // Mensagem 0x73a da janela do shell (motivo − 1 → tabela 0x130090b4). Os filmes
 // (opção Game/ShowMovies, mensagem 0x72b) não existem aqui: vai direto ao passo
 // seguinte ([+0x540]).
@@ -2368,6 +2454,7 @@ void ShellMenu::openRtf(int kind) {
     m_rtfTitle = title;
     m_rtfLines.clear();
     m_rtfScroll = 0;
+    m_rtfDrag = 0;
     // A imagem do briefing: o indice da tabela de 24 ids e a missao (0-based,
     // 0x13015B9E), mais 12 se o jogador NAO for Eden (bit 2 da palavra dele).
     m_briefBitmapOk = false;
@@ -2382,7 +2469,8 @@ void ShellMenu::openRtf(int kind) {
     }
     if (auto s = g_ResManager.openStream(file)) {
         const std::vector<uint8_t>& b = s->bytes();
-        m_rtfLines = rtfLayout(rtfParse(std::string(b.begin(), b.end())), rtfTextW() - 8);
+        // 8 de margem + os 17 da barra vertical (o texto quebra antes dela).
+        m_rtfLines = rtfLayout(rtfParse(std::string(b.begin(), b.end())), rtfTextW() - 8 - 17);
     } else {
         std::cerr << "[Campaign] nao achou " << file << std::endl;
     }
@@ -2442,17 +2530,11 @@ void ShellMenu::renderRtfView(Renderer& renderer) {
             SkinText::draw(fb, 640, 480, pc.text, kRvTextX + 4 + pc.x, kRvTextY + 4 + i * lh, pc.color);
     }
     // Barra de rolagem (só a posição).
+    // A barra com setas, a mesma que o mouse usa (5.49), nas duas peles.
     const int total = static_cast<int>(m_rtfLines.size());
-    if (total > vis && DialogSkin::ok()) {
-        renderer.drawSkinScrollBar(kRvTextX + textW - 17, kRvTextY, 17, kRvTextH, m_rtfScroll, vis, total);
-    } else if (total > vis) {
-        const int trackX = kRvTextX + textW - 10, trackH = kRvTextH - 4;
-        const int thumbH = std::max(16, trackH * vis / total);
-        const int maxScroll = total - vis;
-        const int thumbY = kRvTextY + 2 + (trackH - thumbH) * m_rtfScroll / maxScroll;
-        renderer.fillRect(trackX, kRvTextY + 2, 8, trackH, 0xFF11161F);
-        renderer.fillRect(trackX + 1, thumbY, 6, thumbH, 0xFF3A557E);
-    }
+    int sbX, sbY, sbW, sbH;
+    if (rtfScrollBarRect(sbX, sbY, sbW, sbH))
+        renderer.drawSkinScrollBar(sbX, sbY, sbW, sbH, m_rtfScroll, vis, total);
 }
 
 void ShellMenu::renderChapters(Renderer& renderer) {

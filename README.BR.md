@@ -244,6 +244,10 @@ cursores `.ANI`.
   missão fica numa caixa estreita à esquerda e, à direita, a imagem da missão
   (as 12 do Eden e as 12 do Plymouth, que vêm do próprio jogo). Os objetivos
   e a história continuam com a caixa larga, como lá.
+- **O texto do briefing rola pelo mouse.** A roda funciona também nos mouses
+  de roda fina e nos touchpads, e a barra de rolagem da caixa de texto
+  funciona: setas, clique na trilha e arrasto do polegar. Vale também nos
+  objetivos e na história.
 
 ### 2026-11-19
 
