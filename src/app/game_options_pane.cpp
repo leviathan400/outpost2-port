@@ -170,8 +170,9 @@ std::vector<std::string> GameOptionsPane::items() const {
     add("Production Queue<R>%s", onOff(g_opt.productionQueue));
     // Extra deste porte (5.44): o direito da a ordem, o esquerdo so seleciona.
     add("Right-Click Orders<R>%s", onOff(g_opt.rightClickOrders));
-    // Extra deste porte (5.50): barra de rolagem e roda nas listas.
-    add("List Scroll Bars<R>%s", onOff(g_opt.listScrollBars));
+    // Extra deste porte (5.50/5.51): barra de rolagem e roda nas listas, e a
+    // roda rolando o mapa.
+    add("Wheel & Scroll Bars<R>%s", onOff(g_opt.listScrollBars));
     return out;
 }
 

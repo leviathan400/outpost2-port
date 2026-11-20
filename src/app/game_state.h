@@ -173,6 +173,12 @@ private:
     bool m_autoOreRoute = false;   // "AutoOreRoute" (so deste porte; padrao 0 = original, 5.45)
     bool m_rightClickOrders = false; // "RightClickOrders" (idem, 5.44; 0 = mouse do original)
     float m_wheelAcc = 0.0f;       // a roda fracionaria (preciseY), para as listas (5.50)
+    float m_wheelAccX = 0.0f;      // ... e a lateral (preciseX), para o mapa (5.51)
+    static constexpr int kWheelMapStep = 64;   // a roda no mapa: 2 tiles por degrau (5.51)
+    bool mouseInView() const {
+        const int vx = m_mouseNX - kViewX, vy = m_mouseNY - kViewY;
+        return vx >= 0 && vy >= 0 && vx < viewportW() && vy < viewportH();
+    }
     bool defaultCommandClick(int vx, int vy);
     uint32_t m_endWaitStart = 0;
     void beginGameEnd();
@@ -368,6 +374,8 @@ public:
     // --panescrolltest (5.50): o mouse no ponto NATIVO -- 0 move, 1 desce, 2 sobe -- e a roda.
     void debugMouseNative(Renderer& r, int nx, int ny, int what);
     void debugWheelNative(Renderer& r, int nx, int ny, float preciseY);
+    int debugViewX() const { return kViewX; }
+    int debugViewY() const { return kViewY; }
     // --optmenutest: o ESC pela mesma porta da tecla, o texto da pergunta que
     // ele levanta, a aba em que o jogo ficou e a mira em curso.
     std::string debugConfirmText() const { return m_confirm.message(); }
@@ -406,6 +414,7 @@ public:
     // --bannertest: a vista em coordenadas de TELA, para o teste saber onde o
     // letreiro deveria estar centrado.
     void debugCamera(int& x, int& y) const { x = m_camX; y = m_camY; }
+    void debugCameraMax(int& x, int& y) const { x = m_maxX; y = m_maxY; }
     void debugViewRect(int& x, int& y, int& w, int& h) const {
         x = kViewX; y = kViewY; w = viewportW(); h = viewportH();
     }

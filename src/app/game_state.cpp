@@ -233,12 +233,21 @@ void GameState::scrollView(Renderer& renderer) {
     if (demoGame() && m_demoCam) return;
     int w = 0, h = 0;
     SDL_GetWindowSize(renderer.getWindow(), &w, &h);
-    int mx = 0, my = 0;
-    SDL_GetMouseState(&mx, &my);
-    // Ponteiro DENTRO da janela e a janela em primeiro plano: janela atras de
-    // outra nao rola (o original usa GetCursorPos e rolaria mesmo assim).
+    // sub_407A10: GetWindowRect + GetCursorPos, os dois em coordenadas de TELA
+    // -- o cursor ALEM da borda (fora da janela) tambem rola. CORRECAO (5.51):
+    // o porte exigia o cursor DENTRO da janela (SDL_WINDOW_MOUSE_FOCUS); numa
+    // janela maximizada, em cima fica a barra de titulo do Windows e embaixo a
+    // barra de tarefas, entao o cursor saia da janela e a rolagem vertical
+    // parava (so os 3 px da borda rolavam); a horizontal, com as bordas da tela
+    // coladas na janela, seguia normal. Agora: a posicao GLOBAL do cursor
+    // relativa a area cliente, e so a janela em primeiro plano (acrescimo do
+    // porte, que o original nao tinha: janela atras de outra nao rola).
+    int gx = 0, gy = 0, wx = 0, wy = 0;
+    SDL_GetGlobalMouseState(&gx, &gy);
+    SDL_GetWindowPosition(renderer.getWindow(), &wx, &wy);
+    const int mx = gx - wx, my = gy - wy;
     const uint32_t jf = SDL_GetWindowFlags(renderer.getWindow());
-    const bool naJanela = (jf & SDL_WINDOW_MOUSE_FOCUS) && (jf & SDL_WINDOW_INPUT_FOCUS);
+    const bool naJanela = (jf & SDL_WINDOW_INPUT_FOCUS) != 0;
     const Uint8* ks = SDL_GetKeyboardState(nullptr);
 
     bool esq = false, dir = false, cima = false, baixo = false;
@@ -2290,7 +2299,23 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
         if (e.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) v = -v;
         m_wheelAcc += v;
         const int n = static_cast<int>(m_wheelAcc);
-        if (n) { m_wheelAcc -= static_cast<float>(n); listScrollWheel(m_mouseNX, m_mouseNY, n); }
+        if (n) {
+            m_wheelAcc -= static_cast<float>(n);
+            // Sobre uma lista, ela rola; sobre a VISTA, o mapa (5.51): 2 tiles
+            // por degrau, para cima/baixo -- e o arrasto lateral do touchpad
+            // (preciseX) para os lados.
+            if (!listScrollWheel(m_mouseNX, m_mouseNY, n) && listScrollBarsOn() && mouseInView()) {
+                m_camY -= n * kWheelMapStep;
+                clampCamera();
+            }
+        }
+        if (listScrollBarsOn() && mouseInView()) {
+            float hx = e.wheel.preciseX != 0.0f ? e.wheel.preciseX : static_cast<float>(e.wheel.x);
+            if (e.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) hx = -hx;
+            m_wheelAccX += hx;
+            const int nx = static_cast<int>(m_wheelAccX);
+            if (nx) { m_wheelAccX -= static_cast<float>(nx); m_camX += nx * kWheelMapStep; clampCamera(); }
+        }
         return;
     }
     if (e.type == SDL_MOUSEMOTION) {

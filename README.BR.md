@@ -182,7 +182,7 @@ fila de produção (`ProductionQueue`), o clique direito dando ordens
 (`RightClickOrders`) e a barra de rolagem nas listas da partida
 (`ListScrollBars`); estão documentadas no `PORT_STATUS.BR.md`.
 
-Há **128 modos de linha de comando** para testes e capturas, entre eles uma
+Há **129 modos de linha de comando** para testes e capturas, entre eles uma
 bateria de regressão (`--savetest` prova o determinismo de salvar/recarregar).
 A lista está no `PORT_STATUS.BR.md`.
 
@@ -216,7 +216,7 @@ e descartado das listas de cheat que circulam por aí.
 
 ```
 src/
-  main.cpp        entrada + os 128 modos de teste/captura
+  main.cpp        entrada + os 129 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -255,6 +255,10 @@ cursores `.ANI`.
   preferências e na aba Options; desligada por padrão): as listas dos
   relatórios, opções, objetivos, pesquisa, produção e veículos ganham uma barra
   arrastável no lugar das setas de página, e a roda rola a lista sob o cursor.
+- **A rolagem do mapa para cima e para baixo pela borda voltou a funcionar**
+  em janela maximizada (o cursor saía da janela pela barra de título ou pela
+  barra de tarefas e a rolagem parava). E, com a opção **Wheel & Scroll Bars**
+  (o novo nome da List Scroll Bars), a roda do mouse rola o mapa.
 
 ### 2026-11-19
 

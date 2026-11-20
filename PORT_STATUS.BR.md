@@ -48,7 +48,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 128 modos de teste/captura
+  main.cpp        entrada + os 129 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -140,7 +140,7 @@ preferências; o original ignora chaves que não conhece.
 | `CommandDebug` | 0/1 | 0 | Diagnóstico (acréscimo deste porte): cada comando de prédio recusado — produzir, pesquisar, treinar, o repetido que o anel descarta — vira uma linha no registro de mensagens com o motivo (`not enough workers`, `needs 400 common ore`…). 0 = mudo, como no original. Também se troca pelo jogo: a caixa **Command Debug** no `GAME PREFERENCES` do menu e a linha de mesmo nome no `Game Preferences` da aba Options (ver 5.39). |
 | `ProductionQueue` | 0/1 | 0 | Fila de produção (acréscimo deste porte): cada clique num item da lista da fábrica soma +1 ao pedido (o número aparece na frente do item; clique direito tira 1), o `BUILD IT` manda o pedido para a fila e a fábrica produz um item atrás do outro; o clique que o minério não cobre não soma. 0 = um item por ordem, como no original. Também se troca pelo jogo: a caixa **Production Queue** no `GAME PREFERENCES` do menu e a linha de mesmo nome no `Game Preferences` da aba Options (ver 5.40). |
 | `RightClickOrders` | 0/1 | 0 | O esquema de mouse dos RTS modernos (veio do fork): o esquerdo só seleciona e o **direito** dá a ordem (o comando padrão da 5.42). 0 = como o original: o **esquerdo** faz tudo — com seleção, executa o comando padrão quando ele aceita o alvo, senão seleciona — e o direito cancela a mira e desseleciona. Também se troca pelo jogo: a caixa **Right-Click Orders** no `GAME PREFERENCES` do menu e a linha de mesmo nome na aba Options (ver 5.44). |
-| `ListScrollBars` | 0/1 | 0 | As listas da partida (relatórios, opções, objetivos, pesquisa, produção, veículos) ganham uma barra de rolagem arrastável no lugar das setas de página, e a roda do mouse rola a lista sob o cursor (acréscimo deste porte). 0 = só as setas de página, como no original. Também se troca pelo jogo: a caixa **List Scroll Bars** no `GAME PREFERENCES` e a linha de mesmo nome na aba Options (ver 5.50). |
+| `ListScrollBars` | 0/1 | 0 | As listas da partida (relatórios, opções, objetivos, pesquisa, produção, veículos) ganham uma barra de rolagem arrastável no lugar das setas de página, e a roda do mouse rola a lista sob o cursor (acréscimo deste porte). 0 = só as setas de página, como no original. Também se troca pelo jogo: a caixa **Wheel & Scroll Bars** no `GAME PREFERENCES` e a linha de mesmo nome na aba Options (ver 5.50). |
 
 Todas, menos `AILevel` dentro da partida, também se trocam pelas telas de
 preferências — ver 5.29.
@@ -2412,7 +2412,7 @@ estavam em tela nenhuma.
 | `CommandDebug` | **novo (5.39):** caixa *Command Debug* (1210) | **novo (5.39):** *Command Debug* `On`/`Off` |
 | `ProductionQueue` | **novo (5.40):** caixa *Production Queue* (1211) | **novo (5.40):** *Production Queue* `On`/`Off` |
 | `RightClickOrders` | **novo (5.44):** caixa *Right-Click Orders* (1212) | **novo (5.44):** *Right-Click Orders* `On`/`Off` |
-| `ListScrollBars` | **novo (5.50):** caixa *List Scroll Bars* (1213) | **novo (5.50):** *List Scroll Bars* `On`/`Off` |
+| `ListScrollBars` | **novo (5.50):** caixa *Wheel & Scroll Bars* (1213) | **novo (5.50):** *Wheel & Scroll Bars* `On`/`Off` |
 
 **No menu principal**, o diálogo ficou **160 px mais largo** (360 → 520;
 `kPrX` 140 → 60) e ganhou uma **coluna à direita**, *"Port extras:"*, que
@@ -3648,6 +3648,56 @@ Bars* na aba Options.
     seta da barra rola 1, a trilha uma página, o polegar vai às duas pontas, e
     a seta de página oculta não age.
 
+## 5.51. A rolagem vertical do mapa pela borda e a roda no mapa (2026-11-20)
+
+Relato: *a rolagem para baixo e para cima no mapa está ruim — muito lenta ou
+não anda; para a esquerda e para a direita está normal.* E o pedido: *a roda do
+mouse rolando o mapa para cima e para baixo, com a opção de rolagem do mouse.*
+
+**O defeito.** A lógica da rolagem é simétrica e funcionava (o novo
+`--missionscrolltest` anda 80 px em 20 quadros para os quatro lados numa
+missão). O problema era a **entrada**. O porte só rolava com o cursor **dentro**
+da janela (`SDL_WINDOW_MOUSE_FOCUS`), lido em coordenadas da janela:
+
+- numa janela maximizada, as bordas esquerda e direita são as da tela, o cursor
+  para ali e continua dentro, então a rolagem horizontal funcionava;
+- em cima fica a barra de título do Windows e embaixo a barra de tarefas. Ao
+  empurrar o cursor, ele **saía** da janela, o jogo perdia o foco do mouse e a
+  rolagem parava. Só uma faixa de 3 px rolava, e a rolagem vertical parecia
+  muito lenta ou parada.
+
+**O original** (`sub_407A10`) faz `GetWindowRect` + `GetCursorPos`, os dois
+em coordenadas de **tela**, com o retângulo encolhido 2 px de cada lado: rola
+para a esquerda com `cursor.x <= left`, para a direita com `cursor.x >=
+right − 1`, e o mesmo em y. O cursor **além** da borda, fora da janela,
+continua rolando.
+
+**Corrigido:** `scrollView` lê a posição **global** do cursor
+(`SDL_GetGlobalMouseState`) relativa à área cliente (`SDL_GetWindowPosition`),
+e as comparações de `scrollWanted` já aceitam posições além da borda. Fica só a
+exigência da janela em primeiro plano (`SDL_WINDOW_INPUT_FOCUS`), acréscimo do
+porte: janela atrás de outra não rola.
+
+**A roda no mapa** (pedido; mesma chave `ListScrollBars`, cujo rótulo virou
+*Wheel & Scroll Bars* no `GAME PREFERENCES` e na aba Options):
+
+- sobre a **vista**, a roda rola o mapa **2 tiles (64 px) por degrau**, para
+  cima e para baixo;
+- o arrasto lateral do touchpad (`preciseX`) rola para os lados;
+- sobre uma lista, a roda continua rolando a lista.
+
+Desligada, a roda não faz nada no mapa, como no original.
+
+**Testes:**
+
+- `--scrolltest`: ganhou o cursor acima, abaixo e à esquerda da janela (rola),
+  e a janela sem foco (não rola);
+- `--missionscrolltest [DLL]` (novo): a rolagem quadro a quadro numa missão
+  real, para os quatro lados;
+- `--panescrolltest`: ganhou 4 casos (17 no total). Desligada, a roda sobre o
+  mapa não o rola. Ligada, desce 2 tiles e sobe de volta, e sobre a lista rola
+  a lista e não o mapa.
+
 ## 6. Build e execução
 
 **Toolchain:** CMake >= 3.15 + MSVC, C++17, SDL2 2.30.9 (em `third_party/`).
@@ -3709,6 +3759,7 @@ São 109 modos. Os que cobrem regressão de verdade:
 | `--brieftest` | A tela de briefing da campanha: a imagem de cada uma das 24 missões (OP2SHRES `0x190`+missão, +12 no Plymouth) e a caixa de texto de 230 (5.48) |
 | `--listscrolltest` | A barra de rolagem e a roda das listas do shell: tutoriais, manual (lista e texto), capítulos (5.50) |
 | `--panescrolltest [DLL] [tela.bmp]` | A barra e a roda nas listas da partida, com a opção `ListScrollBars` desligada e ligada (5.50) |
+| `--missionscrolltest [DLL]` | A rolagem da vista numa missão, quadro a quadro, para os quatro lados (5.51) |
 | `--tubetest <mapa> [prefixo]` | o Earthworker ligando prédios com tubo: retas inteiras, a doca que não liga, a animação de trabalho |
 | `--waypointtest <mapa> [bmp]` | pontos de passagem com Ctrl + clique: limites por comando, o pacote com os pontos antes do alvo, a unidade passando por eles, patrulha e obra, e o desenho |
 | `--selecttest <mapa>` | a área de clique das unidades, e a seleção com Shift e com o botão do meio (soma, tira, caixa que soma, as exceções) |

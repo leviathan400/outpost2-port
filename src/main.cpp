@@ -4820,6 +4820,52 @@ static int runTubeTest(const std::string& mapName, const std::string& prefix) {
     return ruins ? 1 : 0;
 }
 
+// --missionscrolltest [DLL]: a rolagem da vista NUMA MISSAO, quadro a quadro
+// pelo onIdle (a 640x480): quanto a camera anda para cada lado, com o pedido
+// de rolagem dado em cada quadro.
+static int runMissionScrollTest(const std::string& dll) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 missionscrolltest", 640, 480, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    for (int t = 0; t < 4; ++t) gs.onIdle(renderer, 0.2501f / 4.0f);
+    int mx, my; gs.debugCameraMax(mx, my);
+    std::printf("[MS] limites: x 0..%d, y 0..%d; passo %d\n", mx, my, gs.debugScrollStep());
+    auto anda = [&](bool e, bool d, bool c, bool b, int quadros) {
+        int x0, y0; gs.debugCamera(x0, y0);
+        for (int t = 0; t < quadros; ++t) { gs.debugScrollFrame(e, d, c, b); gs.onIdle(renderer, 0.2501f / 4.0f); }
+        int x1, y1; gs.debugCamera(x1, y1);
+        for (int t = 0; t < 10; ++t) { gs.debugScrollFrame(false, false, false, false); gs.onIdle(renderer, 0.2501f / 4.0f); }
+        return std::make_pair(x1 - x0, y1 - y0);
+    };
+    // Primeiro para o meio do mapa, longe das bordas.
+    const auto b1 = anda(false, false, false, true, 20);
+    const auto c1 = anda(false, false, true, false, 20);
+    const auto d1 = anda(false, true, false, false, 20);
+    const auto e1 = anda(true, false, false, false, 20);
+    std::printf("[MS] 20 quadros: baixo dy=%d, cima dy=%d, direita dx=%d, esquerda dx=%d\n",
+                b1.second, c1.second, d1.first, e1.first);
+    struct Caso { const char* nome; int obtido, esperado; };
+    const Caso casos[] = {
+        {"baixo anda tanto quanto a direita", std::abs(b1.second) >= std::abs(d1.first) * 9 / 10 || my == 0 ? 1 : 0, 1},
+        {"cima anda tanto quanto a esquerda", std::abs(c1.second) >= std::abs(e1.first) * 9 / 10 || my == 0 ? 1 : 0, 1},
+    };
+    int ruins = 0;
+    for (const Caso& c : casos) {
+        const bool ok = c.obtido == c.esperado;
+        if (!ok) ++ruins;
+        std::printf("[MS] %-40s %d (esperado %d) %s\n", c.nome, c.obtido, c.esperado, ok ? "ok" : "FALHOU");
+    }
+    std::printf("[MS] 2 casos, %d falhas\n", ruins);
+    std::fflush(stdout);
+    renderer.shutdown(); SDL_Quit();
+    return ruins ? 1 : 0;
+}
+
 // --panescrolltest [DLL]: a barra de rolagem e a roda nas listas da PARTIDA
 // (5.50, opcao [Game] ListScrollBars). Na lista do Game Preferences (a mais
 // longa): desligada, nada muda (as setas de pagina do original); ligada, a
@@ -4854,6 +4900,12 @@ static int runPaneScrollTest(const std::string& dll, const std::string& shot) {
     const int cx = (L.list.l + L.list.r) / 2, cy = (L.list.t + L.list.b) / 2;
     gs.debugWheelNative(renderer, cx, cy, -1.0f);
     casos.push_back({"desligada: a roda nao rola", lista().top, 0});
+    // A roda sobre a VISTA (5.51): desligada, o mapa nao mexe.
+    const int vcx = gs.debugViewX() + 150, vcy = gs.debugViewY() + 150;
+    int cam0x, cam0y; gs.debugCamera(cam0x, cam0y);
+    gs.debugWheelNative(renderer, vcx, vcy, -1.0f);
+    int cam1x, cam1y; gs.debugCamera(cam1x, cam1y);
+    casos.push_back({"desligada: a roda sobre o mapa nao o rola", cam1y - cam0y, 0});
     const int bx = (L.bar.l + L.bar.r) / 2;
     gs.debugMouseNative(renderer, bx, L.bar.b - 3, 1); gs.debugMouseNative(renderer, bx, L.bar.b - 3, 2);
     casos.push_back({"desligada: a margem nao e barra", lista().top, 0});
@@ -4897,6 +4949,22 @@ static int runPaneScrollTest(const std::string& dll, const std::string& shot) {
     gs.debugMouseNative(renderer, (L.down.l + L.down.r) / 2, (L.down.t + L.down.b) / 2, 1);
     gs.debugMouseNative(renderer, (L.down.l + L.down.r) / 2, (L.down.t + L.down.b) / 2, 2);
     casos.push_back({"... a seta de pagina (oculta) nao age", lista().top, 0});
+    // A roda sobre a VISTA rola o mapa (5.51): 64 px (2 tiles) por degrau.
+    {
+        int mxx, mxy; gs.debugCameraMax(mxx, mxy);
+        int ax, ay; gs.debugCamera(ax, ay);
+        gs.debugWheelNative(renderer, vcx, vcy, -1.0f);       // para baixo
+        int bx2, by2; gs.debugCamera(bx2, by2);
+        gs.debugWheelNative(renderer, vcx, vcy, 1.0f);        // e de volta
+        int cx2, cy2; gs.debugCamera(cx2, cy2);
+        casos.push_back({"... a roda sobre o mapa desce 2 tiles", by2 - ay, std::min(64, mxy - ay)});
+        casos.push_back({"... e sobe de volta", cy2 - ay, 0});
+        const int topoAntes = lista().top;
+        int dx0, dy0; gs.debugCamera(dx0, dy0);
+        gs.debugWheelNative(renderer, cx, cy, -1.0f);         // sobre a lista
+        int dx1, dy1; gs.debugCamera(dx1, dy1);
+        casos.push_back({"... sobre a lista, rola a lista e nao o mapa", (lista().top != topoAntes && dy1 == dy0) ? 1 : 0, 1});
+    }
     if (!shot.empty()) {                                      // a captura do painel com a barra
         gs.debugWheelNative(renderer, cx, cy, -2.0f);
         quadro();
@@ -8768,7 +8836,12 @@ static int runScrollTest(const std::string& mapName) {
             { "y=0: cima",                       640,   0, true,  0,0,0,0,  0,0,1,0 },
             { "y=H-1: baixo",               640, H - 1, true,  0,0,0,0,  0,0,0,1 },
             { "canto: esquerda e cima",            0,   0, true,  0,0,0,0,  1,0,1,0 },
-            { "ponteiro fora da janela: nada",     0,   0, false, 0,0,0,0,  0,0,0,0 },
+            // sub_407A10 (5.51): o cursor ALEM da borda -- a barra de titulo
+            // em cima, a de tarefas embaixo -- tambem rola.
+            { "y=-40 (acima da janela): cima",   640, -40, true,  0,0,0,0,  0,0,1,0 },
+            { "y=H+40 (abaixo da janela): baixo", 640, H + 40, true, 0,0,0,0, 0,0,0,1 },
+            { "x=-40 (a esquerda da janela)",    -40, 480, true,  0,0,0,0,  1,0,0,0 },
+            { "janela sem foco: nada",             0,   0, false, 0,0,0,0,  0,0,0,0 },
             { "seta esquerda, ponteiro no meio", 640, 480, true,  1,0,0,0,  1,0,0,0 },
             { "seta direita",                    640, 480, true,  0,1,0,0,  0,1,0,0 },
             { "setas cima e baixo juntas",       640, 480, true,  0,0,1,1,  0,0,1,0 },
@@ -10067,6 +10140,8 @@ int main(int argc, char* argv[]) {
             return runBriefTest();
         if (std::strcmp(argv[i], "--listscrolltest") == 0)
             return runListScrollTest();
+        if (std::strcmp(argv[i], "--missionscrolltest") == 0)
+            return runMissionScrollTest(i + 1 < argc && argv[i + 1][0] != '-' ? argv[i + 1] : "E04.DLL");
         if (std::strcmp(argv[i], "--panescrolltest") == 0)
             return runPaneScrollTest(i + 1 < argc && argv[i + 1][0] != '-' ? argv[i + 1] : "E03.DLL",
                                      i + 2 < argc && argv[i + 2][0] != '-' ? argv[i + 2] : "");

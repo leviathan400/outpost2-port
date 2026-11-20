@@ -33,6 +33,11 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   pela barra (setas, trilha e arrasto), como as listas do Windows do original.
   Na lista de capítulos, os últimos ficavam cortados a partir da missão 12, sem
   como rolar.
+- **A rolagem do mapa para cima e para baixo pela borda.** Em janela
+  maximizada, levar o cursor à borda de cima ou de baixo quase não rolava o
+  mapa (para os lados era normal): o cursor passava para a barra de título ou
+  para a barra de tarefas, saía da janela e a rolagem parava. Como no original,
+  o cursor além da borda agora continua rolando.
 
 **Novo**
 
@@ -42,11 +47,14 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   Com a opção ligada, cada uma ganha uma barra arrastável no lugar das setas,
   e a roda do mouse rola a lista sob o cursor: relatórios (fábricas,
   laboratórios, recursos, comunicações, espaçoporto), opções, objetivos,
-  pesquisa, produção e lista de veículos. Desligada (o padrão), é o jogo
-  original.
+  pesquisa, produção e lista de veículos. Com ela, a roda do mouse também
+  **rola o mapa** (2 tiles por degrau; o arrasto lateral do touchpad, para os
+  lados). Na tela de preferências ela se chama **Wheel & Scroll Bars**.
+  Desligada (o padrão), é o jogo original.
 
-**Para quem acompanha o código:** seções 5.48 a 5.50 do PORT_STATUS; os modos
-de teste `--brieftest`, `--listscrolltest` e `--panescrolltest`.
+**Para quem acompanha o código:** seções 5.48 a 5.51 do PORT_STATUS; os modos
+de teste `--brieftest`, `--listscrolltest`, `--panescrolltest` e
+`--missionscrolltest`.
 
 ### English
 
@@ -69,6 +77,11 @@ de teste `--brieftest`, `--listscrolltest` e `--panescrolltest`.
   scroll with the wheel (the list under the cursor) and the bar (arrows, track
   and dragging), like the original's Windows lists. The chapter list cut off
   the last chapters from mission 12 on, with no way to scroll.
+- **Scrolling the map up and down from the screen edge.** In a maximized
+  window, moving the cursor to the top or bottom edge barely scrolled the map
+  (sideways was fine): the cursor slipped onto the title bar or the taskbar,
+  left the window, and scrolling stopped. As in the original, a cursor beyond
+  the edge now keeps scrolling.
 
 **New**
 
@@ -78,10 +91,14 @@ de teste `--brieftest`, `--listscrolltest` e `--panescrolltest`.
   With the option on, each gets a draggable bar instead of the arrows, and the
   mouse wheel scrolls the list under the cursor: reports (factories, labs,
   resources, communications, spaceport), options, objectives, research,
-  production and the vehicle list. Off (the default), it is the original game.
+  production and the vehicle list. With it, the mouse wheel also **scrolls the
+  map** (2 tiles per notch; a touchpad's sideways swipe, sideways). In the
+  preferences screen it is called **Wheel & Scroll Bars**. Off (the default),
+  it is the original game.
 
-**For those following the code:** sections 5.48 to 5.50 of PORT_STATUS; the
-`--brieftest`, `--listscrolltest` and `--panescrolltest` test modes.
+**For those following the code:** sections 5.48 to 5.51 of PORT_STATUS; the
+`--brieftest`, `--listscrolltest`, `--panescrolltest` and
+`--missionscrolltest` test modes.
 
 ---
 

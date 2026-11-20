@@ -479,7 +479,7 @@ void ShellMenu::rebuildControls() {
         addCheck("Command Debug",      kPrY + 142, &m_prefCmdDebug,     kPrExtraX, kPrExtraW, 1210);
         addCheck("Production Queue",   kPrY + 158, &m_prefProdQueue,    kPrExtraX, kPrExtraW, 1211);
         addCheck("Right-Click Orders", kPrY + 174, &m_prefRightClick,   kPrExtraX, kPrExtraW, 1212);
-        addCheck("List Scroll Bars",   kPrY + 190, &m_prefListScroll,   kPrExtraX, kPrExtraW, 1213);
+        addCheck("Wheel & Scroll Bars", kPrY + 190, &m_prefListScroll,  kPrExtraX, kPrExtraW, 1213);
         // NightDarkness: quanto da noite do original se aplica (0..100%).
         addSlider(1209, &m_prefNightDarkness, 0, 100, kPrExtraX, kPrY + 228, kPrExtraW, 16);
         // Velocidades: os botoes LESS/MORE do Dialog 142, com os ids do

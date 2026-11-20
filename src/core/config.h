@@ -137,7 +137,9 @@ struct GameSettings {
     // "ListScrollBars": acrescimo DESTE porte (5.50). 1 = as listas da partida
     // (relatorios, opcoes, objetivos, pesquisa, producao, veiculos) ganham uma
     // barra de rolagem arrastavel no lugar das setas de pagina, e a roda do
-    // mouse rola a lista sob o cursor. 0 = so as setas de pagina, como no original.
+    // mouse rola a lista sob o cursor; sobre a vista, a roda rola o MAPA (2
+    // tiles por degrau; a lateral do touchpad, para os lados -- 5.51).
+    // 0 = so as setas de pagina e nada de roda, como no original.
     int listScrollBars = 0;
     // Fork: "MapWrap". 0 = like the original: the map view stops at the map's
     // left/right edges; only "around the world" maps (512 tiles wide) wrap.

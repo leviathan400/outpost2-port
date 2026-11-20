@@ -180,7 +180,7 @@ map's bottom row (`ShowBottomRow`), the one-click ore route
 production queue (`ProductionQueue`), right-click orders
 (`RightClickOrders`) and in-game list scroll bars (`ListScrollBars`); they are documented in `PORT_STATUS.EN.md`.
 
-There are **128 command-line modes** for tests and captures, among them a
+There are **129 command-line modes** for tests and captures, among them a
 regression battery (`--savetest` proves save/reload determinism). The list is
 in `PORT_STATUS.EN.md`.
 
@@ -214,7 +214,7 @@ and what was checked and discarded from the cheat lists that circulate.
 
 ```
 src/
-  main.cpp        entry point + the 128 test/capture modes
+  main.cpp        entry point + the 129 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -251,6 +251,10 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
   and the Options tab; off by default): the report, options, objectives,
   research, production and vehicle lists get a draggable bar instead of the
   page arrows, and the wheel scrolls the list under the cursor.
+- **Scrolling the map up and down from the screen edge works again** in a
+  maximized window (the cursor left the window over the title bar or the
+  taskbar and scrolling stopped). And, with the **Wheel & Scroll Bars** option
+  (the new name of List Scroll Bars), the mouse wheel scrolls the map.
 
 ### 2026-11-19
 
