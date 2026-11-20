@@ -98,6 +98,7 @@ void GameState::loadSettings() {
     m_mapWrapAll = gs.mapWrap != 0;                    // "MapWrap" (fork)
     m_autoOreRoute = gs.autoOreRoute != 0;             // "AutoOreRoute" (so deste porte)
     m_rightClickOrders = gs.rightClickOrders != 0;     // "RightClickOrders" (idem, 5.44)
+    setListScrollBars(gs.listScrollBars != 0);         // "ListScrollBars" (idem, 5.50)
     setCommandDebug(gs.commandDebug != 0);             // "CommandDebug" (idem, 5.39)
     setProductionQueue(gs.productionQueue != 0);       // "ProductionQueue" (idem, 5.40)
     m_showBottomRow = gs.showBottomRow != 0;           // "ShowBottomRow" (fork)
@@ -893,6 +894,7 @@ bool GameState::simTick() {
 }
 
 void GameState::onIdle(Renderer& renderer, float dt) {
+    listScrollUpdate();                      // seta/trilha seguras repetem (5.50)
     applyScreenMode(renderer);               // extra do porte: o radio "Screen Mode"
     // Fork: o quadro do jogo tem o tamanho da janela (1:1), nao 640x480 esticado.
     // Vem DEPOIS do applyScreenMode: se o &APPLY acabou de trocar o modo, o
@@ -1942,6 +1944,24 @@ void GameState::debugPrintCommandButtons() const {
         std::printf("[DumpM]     botao cmd %d em (%d,%d)-(%d,%d) '%s'\n", b.cmd, b.l, b.t, b.r, b.b, b.tip.c_str());
 }
 
+void GameState::debugMouseNative(Renderer& r, int nx, int ny, int what) {
+    int sx = 0, sy = 0;
+    r.nativeToScreen(nx, ny, sx, sy);
+    SDL_Event mv{}; mv.type = SDL_MOUSEMOTION; mv.motion.x = sx; mv.motion.y = sy; handleEvent(r, mv);
+    if (what == 0) return;
+    SDL_Event d{}; d.type = what == 1 ? SDL_MOUSEBUTTONDOWN : SDL_MOUSEBUTTONUP;
+    d.button.button = SDL_BUTTON_LEFT; d.button.clicks = 1; d.button.x = sx; d.button.y = sy;
+    handleEvent(r, d);
+}
+
+void GameState::debugWheelNative(Renderer& r, int nx, int ny, float preciseY) {
+    debugMouseNative(r, nx, ny, 0);
+    SDL_Event w{}; w.type = SDL_MOUSEWHEEL;
+    w.wheel.preciseY = preciseY; w.wheel.y = static_cast<Sint32>(preciseY);
+    w.wheel.direction = SDL_MOUSEWHEEL_NORMAL;
+    handleEvent(r, w);
+}
+
 void GameState::debugClickNative(Renderer& r, int nx, int ny) {
     int sx = 0, sy = 0;
     r.nativeToScreen(nx, ny, sx, sy);
@@ -2262,6 +2282,26 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
         }
         return;
     }
+    // As listas da partida com barra de rolagem (opcao ListScrollBars, 5.50):
+    // a roda, a barra e o arrasto vem antes dos paineis. Desligada, nada disso
+    // age (listScroll* devolvem false) e a roda segue sem uso, como no original.
+    if (e.type == SDL_MOUSEWHEEL) {
+        float v = e.wheel.preciseY != 0.0f ? e.wheel.preciseY : static_cast<float>(e.wheel.y);
+        if (e.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) v = -v;
+        m_wheelAcc += v;
+        const int n = static_cast<int>(m_wheelAcc);
+        if (n) { m_wheelAcc -= static_cast<float>(n); listScrollWheel(m_mouseNX, m_mouseNY, n); }
+        return;
+    }
+    if (e.type == SDL_MOUSEMOTION) {
+        int nx, ny; renderer.screenToNative(e.motion.x, e.motion.y, nx, ny);
+        if (listScrollMouseMove(nx, ny)) { m_mouseNX = nx; m_mouseNY = ny; return; }
+    }
+    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+        int nx, ny; renderer.screenToNative(e.button.x, e.button.y, nx, ny);
+        if (listScrollMouseDown(nx, ny)) return;
+    }
+    if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT && listScrollMouseUp()) return;
     // A linha de conversa vem ANTES de tudo: aberta, ela e quem fica com as
     // teclas (e o que o filtro do original faz, por estar no topo da cadeia).
     if (chatKey(e)) return;
@@ -3381,6 +3421,7 @@ static int vehSerial(const UnitRecord& r, size_t idx) {
 // Lista de objetivos do painel (modo dword_565C8C = 1, sub_4663A0): uma linha
 // por VictoryCondition, "<C0>%s" se cumprida (verde) e "<C2>%s" se não (vermelho).
 void GameState::renderPanel(Renderer& renderer) {
+    listScrollBeginFrame();                  // as listas se registram ao se desenhar (5.50)
     const int VW = m_fbW, VH = m_fbH;
     const int px0 = kColX;                       // coluna direita (x)
     uint32_t* fb = renderer.getFramebuffer();

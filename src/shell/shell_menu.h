@@ -230,6 +230,18 @@ public:
     int debugRtfVisible() const { return rtfVisibleLines(); }
     bool debugRtfScrollBar(int& x, int& y, int& w, int& h) const { return rtfScrollBarRect(x, y, w, h); }
     void debugRtfThumb(int& ty, int& th, int& y, int& h) const { rtfThumb(ty, th, y, h); }
+    // --listscrolltest (5.50): os alvos de rolagem da tela atual.
+    struct DebugScroll { int bx, by, bw, bh, ax, ay, aw, ah, first, total, vis, thumbY, thumbH; };
+    std::vector<DebugScroll> debugScrollTargets() {
+        std::vector<DebugScroll> v;
+        for (const ScrollTarget& t : scrollTargets()) {
+            int ty, th, y, h;
+            scrollThumb(t, ty, th, y, h);
+            v.push_back({t.bx, t.by, t.bw, t.bh, t.ax, t.ay, t.aw, t.ah, *t.first, t.total, t.vis, y, h});
+        }
+        return v;
+    }
+    int debugSelChapter() const { return m_selChapter; }
     uint64_t debugBriefImageHash() const {                   // FNV-1a dos pixels
         uint64_t h = 1469598103934665603ull;
         for (uint32_t p : m_briefBitmap.getPixels32()) { h ^= p; h *= 1099511628211ull; }
@@ -340,6 +352,7 @@ private:
     bool m_prefCmdDebug = false;      // "CommandDebug" (5.39), caixa 1210
     bool m_prefProdQueue = false;     // "ProductionQueue" (5.40), caixa 1211
     bool m_prefRightClick = false;    // "RightClickOrders" (5.44), caixa 1212
+    bool m_prefListScroll = false;    // "ListScrollBars" (5.50), caixa 1213
     int  m_prefNightDarkness = 100;
     void applyMenuSkin(bool on);
     bool m_prefApplyScreen = false;   // aplicar o escolhido (ACCEPT)
@@ -481,15 +494,28 @@ private:
     std::string colonyName() const;
     int rtfVisibleLines() const;
     int rtfTextW() const;
-    // A barra de rolagem da caixa de texto (5.49): retangulo, polegar e rolar.
+    // A barra de rolagem da caixa de texto (5.49): retangulo e polegar.
     bool rtfScrollBarRect(int& x, int& y, int& w, int& h) const;
     void rtfThumb(int& trackY, int& trackH, int& thumbY, int& thumbH) const;
-    void rtfScrollTo(int first);
-    void rtfScrollStep(int kind);          // 2/3 seta, 4/5 trilha (pagina)
-    int m_rtfDrag = 0;                     // 0 nada, 1 polegar, 2/3 setas, 4/5 trilha
-    int m_rtfDragOff = 0;                  // cursor - topo do polegar, no arrasto
-    int m_rtfMouseY = 0;
-    uint32_t m_rtfRepeatAt = 0;            // repeticao com o botao seguro
+    // As BARRAS DE ROLAGEM de todas as listas com texto do shell (5.50): no
+    // original sao controles do Windows (LISTBOX, RICHEDIT), com a barra que
+    // se arrasta e a roda nativas. Cada tela diz os seus alvos: a barra, a
+    // area da lista (para a roda sob o cursor), a variavel de rolagem, o total
+    // e as linhas visiveis.
+    struct ScrollTarget { int bx, by, bw, bh; int ax, ay, aw, ah; int* first; int total; int vis; };
+    std::vector<ScrollTarget> scrollTargets();
+    static void scrollThumb(const ScrollTarget& t, int& trackY, int& trackH, int& thumbY, int& thumbH);
+    static void scrollTo(ScrollTarget& t, int first);
+    void scrollStep(ScrollTarget& t, int kind);   // 2/3 seta, 4/5 trilha (pagina)
+    void drawScrollTargets(Renderer& renderer);
+    int chapterVisibleLines() const;
+    int m_sbTarget = -1;                   // alvo da barra sendo usada
+    int m_sbKind = 0;                      // 0 nada, 1 polegar, 2/3 setas, 4/5 trilha
+    int m_sbDragOff = 0;                   // cursor - topo do polegar, no arrasto
+    int m_sbMouseY = 0;
+    uint32_t m_sbRepeatAt = 0;             // repeticao com o botao seguro
+    int m_mouseX = -1, m_mouseY = -1;      // o cursor, para a roda achar a lista
+    int m_chapterScroll = 0;               // a lista de capitulos tambem rola (13 > 8)
     float m_wheelAcc = 0.0f;
 };
 

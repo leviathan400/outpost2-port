@@ -99,7 +99,7 @@ void ResearchPane::draw(uint32_t* fb, int fbW, int fbH, int winL, int winT, cons
             while (!name.empty() && UiFont::width(name) > L.list.r - L.list.l - 8) name.pop_back();
             UiFont::draw(fb, fbW, fbH, name, L.list.l + 4, y + 1, 0xFF00FF00u, false);
         }
-        drawListBoxArrows(fb, fbW, fbH, L, pane, m_top > 0, m_top + L.rows < static_cast<int>(m_topics.size()), mx, my);
+        drawListBoxScroll(fb, fbW, fbH, L, pane, const_cast<int&>(m_top), static_cast<int>(m_topics.size()), mx, my);   // (5.50)
         return;
     }
     // Modo 1.
@@ -127,7 +127,7 @@ void ResearchPane::draw(uint32_t* fb, int fbW, int fbH, int winL, int winT, cons
     for (int i = 0; i < L.rows && m_top + i < static_cast<int>(lines.size()); ++i)
         UiFont::draw(fb, fbW, fbH, lines[m_top + i], L.list.l + 4, L.list.t + 3 + i * L.lineH, 0xFF00FF00u, false,
                      L.list.l + 1, L.list.t + 1, L.list.r - 1, L.list.b - 1);   // recortado pela lista
-    drawListBoxArrows(fb, fbW, fbH, L, pane, m_top > 0, m_top + L.rows < static_cast<int>(lines.size()), mx, my);
+    drawListBoxScroll(fb, fbW, fbH, L, pane, const_cast<int&>(m_top), static_cast<int>(lines.size()), mx, my);   // (5.50)
 }
 
 void ResearchPane::less() {                              // sub_46C990 (−1)

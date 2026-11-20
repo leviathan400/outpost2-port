@@ -67,7 +67,8 @@ void ObjectivesPane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, 
     for (int i = 0; i < L.rows && top + i < static_cast<int>(lines.size()); ++i)
         drawMarkupText(fb, fbW, fbH, PaneRect{L.list.l + 4, L.list.t + 2 + i * L.lineH, L.list.r - 4, L.list.b},
                        lines[top + i], 0xFF00FF00u);
-    drawListBoxArrows(fb, fbW, fbH, L, pane, top > 0, top + L.rows < static_cast<int>(lines.size()), mx, my);
+    (void)top;
+    drawListBoxScroll(fb, fbW, fbH, L, pane, const_cast<int&>(m_top), static_cast<int>(lines.size()), mx, my);   // (5.50)
 }
 
 bool ObjectivesPane::click(const PaneRect& pane, int x, int y) {

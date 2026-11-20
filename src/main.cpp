@@ -4820,6 +4820,192 @@ static int runTubeTest(const std::string& mapName, const std::string& prefix) {
     return ruins ? 1 : 0;
 }
 
+// --panescrolltest [DLL]: a barra de rolagem e a roda nas listas da PARTIDA
+// (5.50, opcao [Game] ListScrollBars). Na lista do Game Preferences (a mais
+// longa): desligada, nada muda (as setas de pagina do original); ligada, a
+// roda (tambem fracionaria) rola 3 linhas, a seta da barra 1, a trilha uma
+// pagina, o polegar arrastado vai as pontas, e as setas de pagina nao agem.
+static int runPaneScrollTest(const std::string& dll, const std::string& shot) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 panescrolltest", 640, 480, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    gs.debugTab(5);
+    gs.debugOptionsScreen(1);                                 // PREFERENCES
+    struct Caso { std::string nome; int obtido, esperado; };
+    std::vector<Caso> casos;
+    auto quadro = [&]() { gs.onIdle(renderer, 0.0f); };
+    auto lista = [&]() -> op2::ListScrollInfo {
+        quadro();
+        const std::vector<op2::ListScrollInfo> v = op2::listScrollDebug();
+        op2::ListScrollInfo best{};
+        for (const op2::ListScrollInfo& i : v) if (i.total > best.total) best = i;
+        return best;
+    };
+    // ---- desligada: o original
+    op2::setListScrollBars(false);
+    op2::ListScrollInfo L = lista();
+    std::printf("[PS] lista: %d itens, %d linhas, top %d\n", L.total, L.rows, L.top);
+    casos.push_back({"a lista das preferencias rola (premissa)", L.total > L.rows ? 1 : 0, 1});
+    const int cx = (L.list.l + L.list.r) / 2, cy = (L.list.t + L.list.b) / 2;
+    gs.debugWheelNative(renderer, cx, cy, -1.0f);
+    casos.push_back({"desligada: a roda nao rola", lista().top, 0});
+    const int bx = (L.bar.l + L.bar.r) / 2;
+    gs.debugMouseNative(renderer, bx, L.bar.b - 3, 1); gs.debugMouseNative(renderer, bx, L.bar.b - 3, 2);
+    casos.push_back({"desligada: a margem nao e barra", lista().top, 0});
+    gs.debugMouseNative(renderer, (L.down.l + L.down.r) / 2, (L.down.t + L.down.b) / 2, 1);
+    gs.debugMouseNative(renderer, (L.down.l + L.down.r) / 2, (L.down.t + L.down.b) / 2, 2);
+    casos.push_back({"desligada: a seta de pagina desce uma pagina", lista().top, L.rows});
+    gs.debugMouseNative(renderer, (L.up.l + L.up.r) / 2, (L.up.t + L.up.b) / 2, 1);
+    gs.debugMouseNative(renderer, (L.up.l + L.up.r) / 2, (L.up.t + L.up.b) / 2, 2);
+
+    // ---- ligada
+    op2::setListScrollBars(true);
+    L = lista();
+    const int maxTop = std::max(0, L.total - L.rows);
+    gs.debugWheelNative(renderer, cx, cy, -0.5f);
+    const int meio = lista().top;
+    gs.debugWheelNative(renderer, cx, cy, -0.5f);
+    casos.push_back({"ligada: meio degrau ainda nao rola", meio, 0});
+    casos.push_back({"... o degrau inteiro rola 3 linhas", lista().top, std::min(3, maxTop)});
+    gs.debugWheelNative(renderer, cx, cy, 1.0f);
+    casos.push_back({"... e de volta", lista().top, 0});
+    gs.debugMouseNative(renderer, bx, L.bar.b - 3, 1); gs.debugMouseNative(renderer, bx, L.bar.b - 3, 2);
+    casos.push_back({"... a seta de baixo da barra desce 1", lista().top, std::min(1, maxTop)});
+    gs.debugMouseNative(renderer, bx, L.bar.t + 3, 1); gs.debugMouseNative(renderer, bx, L.bar.t + 3, 2);
+    casos.push_back({"... a de cima sobe 1", lista().top, 0});
+    gs.debugMouseNative(renderer, bx, L.bar.b - 14, 1); gs.debugMouseNative(renderer, bx, L.bar.b - 14, 2);
+    casos.push_back({"... a trilha desce uma pagina", lista().top, std::min(L.rows, maxTop)});
+    // o polegar (a mesma conta da barra): pega e arrasta alem das pontas
+    L = lista();
+    const int h = L.bar.b - L.bar.t, w = L.bar.r - L.bar.l, ab = std::min(w, h / 2);
+    const int trackY = L.bar.t + ab, trackH = h - 2 * ab;
+    const int thumbH = std::min(trackH, std::max(8, trackH * L.rows / std::max(1, L.total)));
+    const int thumbY = trackY + (maxTop > 0 ? (trackH - thumbH) * std::min(L.top, maxTop) / maxTop : 0);
+    gs.debugMouseNative(renderer, bx, thumbY + thumbH / 2, 1);
+    gs.debugMouseNative(renderer, bx, L.bar.b + 60, 0);
+    const int fim = lista().top;
+    gs.debugMouseNative(renderer, bx, L.bar.t - 60, 0);
+    const int topo = lista().top;
+    gs.debugMouseNative(renderer, bx, L.bar.t - 60, 2);
+    casos.push_back({"... o polegar arrastado vai ao fim", fim, maxTop});
+    casos.push_back({"... e volta ao topo", topo, 0});
+    gs.debugMouseNative(renderer, (L.down.l + L.down.r) / 2, (L.down.t + L.down.b) / 2, 1);
+    gs.debugMouseNative(renderer, (L.down.l + L.down.r) / 2, (L.down.t + L.down.b) / 2, 2);
+    casos.push_back({"... a seta de pagina (oculta) nao age", lista().top, 0});
+    if (!shot.empty()) {                                      // a captura do painel com a barra
+        gs.debugWheelNative(renderer, cx, cy, -2.0f);
+        quadro();
+        writeBmp32(shot, renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
+    }
+    op2::setListScrollBars(false);
+    int ruins = 0;
+    for (const Caso& c : casos) {
+        const bool ok = c.obtido == c.esperado;
+        if (!ok) ++ruins;
+        std::printf("[PS] %-48s %d (esperado %d) %s\n", c.nome.c_str(), c.obtido, c.esperado, ok ? "ok" : "FALHOU");
+    }
+    std::printf("[PS] %d casos, %d falhas\n", (int)casos.size(), ruins);
+    std::fflush(stdout);
+    renderer.shutdown(); SDL_Quit();
+    return ruins ? 1 : 0;
+}
+
+// --listscrolltest: as barras de rolagem e a roda das listas com texto do
+// shell (5.50) -- tutoriais, manual (lista e texto) e capitulos. Para cada
+// alvo que rola: a roda SOB O CURSOR rola so ele (3 linhas), a seta de baixo
+// desce 1, o polegar arrastado vai ao fim e volta ao topo. Nos capitulos
+// (13 > 8 linhas, antes cortados), o clique num item conta a rolagem.
+static int runListScrollTest() {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 listscrolltest", 1280, 960, false)) { SDL_Quit(); return 1; }
+    op2::ShellMenu menu;
+    menu.init("OP2SHRES.DLL");
+    struct Caso { std::string nome; int obtido, esperado; };
+    std::vector<Caso> casos;
+    // Exercita o alvo k da tela atual; devolve se ele rolava.
+    auto exercita = [&](const char* nome, int k) {
+        auto alvo = [&]() { return menu.debugScrollTargets()[k]; };
+        op2::ShellMenu::DebugScroll t = alvo();
+        const int maxF = std::max(0, t.total - t.vis);
+        std::printf("[LS] %s: total %d, visiveis %d\n", nome, t.total, t.vis);
+        if (maxF <= 0) return false;
+        // a roda sobre a area deste alvo
+        menu.handleMouseMove(t.ax + t.aw / 2 - (k == 0 ? 0 : 0), t.ay + t.ah / 2);
+        const std::vector<op2::ShellMenu::DebugScroll> antes = menu.debugScrollTargets();
+        menu.handleMouseWheel(-1);
+        const std::vector<op2::ShellMenu::DebugScroll> depois = menu.debugScrollTargets();
+        int outrosMexeram = 0;
+        for (size_t j = 0; j < antes.size(); ++j) if ((int)j != k && antes[j].first != depois[j].first) ++outrosMexeram;
+        casos.push_back({std::string(nome) + ": a roda sob o cursor rola 3", depois[k].first, std::min(3, maxF)});
+        casos.push_back({std::string(nome) + ": ... e so esta lista", outrosMexeram, 0});
+        const int x = t.bx + t.bw / 2;
+        const int f0 = alvo().first;
+        menu.handleMouseDown(x, t.by + t.bh - 3, SDL_BUTTON_LEFT); menu.handleMouseUp(x, t.by + t.bh - 3, SDL_BUTTON_LEFT);
+        casos.push_back({std::string(nome) + ": a seta de baixo desce 1", alvo().first, std::min(f0 + 1, maxF)});
+        t = alvo();
+        menu.handleMouseDown(x, t.thumbY + t.thumbH / 2, SDL_BUTTON_LEFT);
+        menu.handleMouseMove(x, t.by + t.bh + 80);
+        const int fim = alvo().first;
+        menu.handleMouseMove(x, t.by - 80);
+        const int topo = alvo().first;
+        menu.handleMouseUp(x, t.by - 80, SDL_BUTTON_LEFT);
+        casos.push_back({std::string(nome) + ": o polegar arrastado vai ao fim", fim, maxF});
+        casos.push_back({std::string(nome) + ": ... e volta ao topo", topo, 0});
+        return true;
+    };
+
+    menu.showTutorials();
+    const bool tutRola = exercita("tutoriais", 0);
+    menu.showHelp();
+    const bool hpRola = exercita("manual, topicos", 0);
+    // O texto do manual: escolhe topicos ate um que nao caiba.
+    bool txtRola = false;
+    {   // um clique no 1o topico visivel da o foco a lista (a seta anda nela)
+        const op2::ShellMenu::DebugScroll t = menu.debugScrollTargets()[0];
+        menu.handleMouseDown(t.ax + 20, t.ay + 6, SDL_BUTTON_LEFT);
+        menu.handleMouseUp(t.ax + 20, t.ay + 6, SDL_BUTTON_LEFT);
+    }
+    for (int k = 0; k < 40 && !txtRola; ++k) {
+        menu.render(renderer);                                // o texto do topico e montado no desenho
+        const std::vector<op2::ShellMenu::DebugScroll> ts = menu.debugScrollTargets();
+        if (ts.size() > 1 && ts[1].total > ts[1].vis) { txtRola = exercita("manual, texto", 1); break; }
+        menu.handleKeyDown(SDLK_DOWN);
+    }
+    menu.debugCampaign(true, 1, 11, 3);                       // capitulos na missao 12
+    const bool chRola = exercita("capitulos", 0);
+    // clique no 1o item visivel com a lista rolada: seleciona o certo
+    {
+        op2::ShellMenu::DebugScroll t = menu.debugScrollTargets()[0];
+        menu.handleMouseMove(t.ax + 20, t.ay + t.ah / 2);
+        menu.handleMouseWheel(-1);
+        t = menu.debugScrollTargets()[0];
+        menu.handleMouseDown(t.ax + 40, t.ay + 8 + 4, SDL_BUTTON_LEFT);
+        menu.handleMouseUp(t.ax + 40, t.ay + 8 + 4, SDL_BUTTON_LEFT);
+        casos.push_back({"capitulos: o clique no item visivel conta a rolagem", menu.debugSelChapter(), t.first});
+    }
+    casos.push_back({"os tutoriais rolam (premissa)", tutRola ? 1 : 0, 1});
+    casos.push_back({"os topicos do manual rolam (premissa)", hpRola ? 1 : 0, 1});
+    casos.push_back({"o texto do manual rola (premissa)", txtRola ? 1 : 0, 1});
+    casos.push_back({"os capitulos da missao 12 rolam (antes cortados)", chRola ? 1 : 0, 1});
+    int ruins = 0;
+    for (const Caso& c : casos) {
+        const bool ok = c.obtido == c.esperado;
+        if (!ok) ++ruins;
+        std::printf("[LS] %-52s %d (esperado %d) %s\n", c.nome.c_str(), c.obtido, c.esperado, ok ? "ok" : "FALHOU");
+    }
+    std::printf("[LS] %d casos, %d falhas\n", (int)casos.size(), ruins);
+    std::fflush(stdout);
+    renderer.shutdown(); SDL_Quit();
+    return ruins ? 1 : 0;
+}
+
 // --brieftest: a tela de BRIEFING da campanha (5.48). Para as 24 missoes (12
 // Eden, 12 Plymouth) abre o briefing e confere a imagem da missao (OP2SHRES
 // 0x190 + missao, + 12 no Plymouth, 320x240) e a caixa de texto estreita (230,
@@ -9879,6 +10065,11 @@ int main(int argc, char* argv[]) {
             return runTubeTest(argv[i + 1], i + 2 < argc && argv[i + 2][0] != '-' ? argv[i + 2] : "");
         if (std::strcmp(argv[i], "--brieftest") == 0)
             return runBriefTest();
+        if (std::strcmp(argv[i], "--listscrolltest") == 0)
+            return runListScrollTest();
+        if (std::strcmp(argv[i], "--panescrolltest") == 0)
+            return runPaneScrollTest(i + 1 < argc && argv[i + 1][0] != '-' ? argv[i + 1] : "E03.DLL",
+                                     i + 2 < argc && argv[i + 2][0] != '-' ? argv[i + 2] : "");
         if (std::strcmp(argv[i], "--e04test") == 0)
             return runE04Test(i + 1 < argc && argv[i + 1][0] != '-' ? argv[i + 1] : "E04.DLL");
         if (std::strcmp(argv[i], "--e02test") == 0)

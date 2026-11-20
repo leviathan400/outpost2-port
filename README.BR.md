@@ -173,15 +173,16 @@ outpost2_modern.exe                      # menu principal
 outpost2_modern.exe --game eden01.map    # abre um mapa direto
 ```
 
-O arquivo `OUTPOST2.INI` do jogo é respeitado. O porte acrescenta doze chaves
+O arquivo `OUTPOST2.INI` do jogo é respeitado. O porte acrescenta treze chaves
 que o original não tem — nível da IA, escuridão da noite, volume, câmera do
 demo, tela cheia, a pele dos menus (`MenuSkin`), a volta horizontal do mapa
 (`MapWrap`), a última linha do mapa (`ShowBottomRow`), a rota de minério num
 clique (`AutoOreRoute`), o diagnóstico de comando recusado (`CommandDebug`), a
-fila de produção (`ProductionQueue`) e o clique direito dando ordens
-(`RightClickOrders`); estão documentadas no `PORT_STATUS.BR.md`.
+fila de produção (`ProductionQueue`), o clique direito dando ordens
+(`RightClickOrders`) e a barra de rolagem nas listas da partida
+(`ListScrollBars`); estão documentadas no `PORT_STATUS.BR.md`.
 
-Há **126 modos de linha de comando** para testes e capturas, entre eles uma
+Há **128 modos de linha de comando** para testes e capturas, entre eles uma
 bateria de regressão (`--savetest` prova o determinismo de salvar/recarregar).
 A lista está no `PORT_STATUS.BR.md`.
 
@@ -215,7 +216,7 @@ e descartado das listas de cheat que circulam por aí.
 
 ```
 src/
-  main.cpp        entrada + os 126 modos de teste/captura
+  main.cpp        entrada + os 128 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -248,6 +249,12 @@ cursores `.ANI`.
   de roda fina e nos touchpads, e a barra de rolagem da caixa de texto
   funciona: setas, clique na trilha e arrasto do polegar. Vale também nos
   objetivos e na história.
+- **Barra de rolagem e roda em todas as listas.** Nos menus: tutoriais, o
+  manual (lista e texto), o placar e os capítulos — que na missão 12 ficavam
+  com os últimos cortados. Na partida, como opção (**List Scroll Bars**, nas
+  preferências e na aba Options; desligada por padrão): as listas dos
+  relatórios, opções, objetivos, pesquisa, produção e veículos ganham uma barra
+  arrastável no lugar das setas de página, e a roda rola a lista sob o cursor.
 
 ### 2026-11-19
 

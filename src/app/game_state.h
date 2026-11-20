@@ -172,6 +172,7 @@ private:
     int m_pauseCount = 0;          // TFrame+0x1E0: as pausas empilhadas
     bool m_autoOreRoute = false;   // "AutoOreRoute" (so deste porte; padrao 0 = original, 5.45)
     bool m_rightClickOrders = false; // "RightClickOrders" (idem, 5.44; 0 = mouse do original)
+    float m_wheelAcc = 0.0f;       // a roda fracionaria (preciseY), para as listas (5.50)
     bool defaultCommandClick(int vx, int vy);
     uint32_t m_endWaitStart = 0;
     void beginGameEnd();
@@ -364,6 +365,9 @@ public:
     }
     // Um clique esquerdo de mouse de verdade no ponto NATIVO (nx, ny).
     void debugClickNative(Renderer& r, int nx, int ny);
+    // --panescrolltest (5.50): o mouse no ponto NATIVO -- 0 move, 1 desce, 2 sobe -- e a roda.
+    void debugMouseNative(Renderer& r, int nx, int ny, int what);
+    void debugWheelNative(Renderer& r, int nx, int ny, float preciseY);
     // --optmenutest: o ESC pela mesma porta da tecla, o texto da pergunta que
     // ele levanta, a aba em que o jogo ficou e a mira em curso.
     std::string debugConfirmText() const { return m_confirm.message(); }

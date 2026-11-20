@@ -132,7 +132,7 @@ namespace {
     // acrescimo do porte (como ja eram o combo da IA e a barra do volume).
     // +160 de largura: a coluna da direita, com as chaves que sao extras do
     // porte (AutoOreRoute, MapWrap, ShowBottomRow, DemoCamera, MenuSkin,
-    // CommandDebug, ProductionQueue, RightClickOrders e a barra do NightDarkness). A altura nao tinha mais para onde crescer em
+    // CommandDebug, ProductionQueue, RightClickOrders, ListScrollBars e a barra do NightDarkness). A altura nao tinha mais para onde crescer em
     // 480. A coluna comeca depois dos botoes LESS/MORE (que vao ate x+306).
     constexpr int kPrX = 60, kPrY = 59, kPrW = 520, kPrH = 390;
     constexpr int kPrExtraX = kPrX + 320;   // a coluna dos extras
@@ -469,16 +469,17 @@ void ShellMenu::rebuildControls() {
         // saem no render). Em todas, DESMARCADA e o comportamento do original
         // -- e todas nascem desmarcadas (desde a 5.45, tambem AutoOreRoute e
         // DemoCamera, que nasciam ligadas).
-        // Oito caixas a 18 px (62..188): a ultima termina em +202, antes do
+        // Nove caixas a 16 px (62..190): a ultima termina em +204, antes do
         // rotulo da noite (+210). Nao cabe mais nenhuma sem mexer nele.
         addCheck("Auto Ore Route",     kPrY + 62,  &m_prefAutoOreRoute, kPrExtraX, kPrExtraW, 1204);
-        addCheck("Wrap All Maps",      kPrY + 80,  &m_prefMapWrap,      kPrExtraX, kPrExtraW, 1205);
-        addCheck("Show Bottom Row",    kPrY + 98,  &m_prefBottomRow,    kPrExtraX, kPrExtraW, 1206);
-        addCheck("Demo Camera",        kPrY + 116, &m_prefDemoCamera,   kPrExtraX, kPrExtraW, 1207);
-        addCheck("Original Menu Skin", kPrY + 134, &m_prefMenuSkin,     kPrExtraX, kPrExtraW, 1208);
-        addCheck("Command Debug",      kPrY + 152, &m_prefCmdDebug,     kPrExtraX, kPrExtraW, 1210);
-        addCheck("Production Queue",   kPrY + 170, &m_prefProdQueue,    kPrExtraX, kPrExtraW, 1211);
-        addCheck("Right-Click Orders", kPrY + 188, &m_prefRightClick,   kPrExtraX, kPrExtraW, 1212);
+        addCheck("Wrap All Maps",      kPrY + 78,  &m_prefMapWrap,      kPrExtraX, kPrExtraW, 1205);
+        addCheck("Show Bottom Row",    kPrY + 94,  &m_prefBottomRow,    kPrExtraX, kPrExtraW, 1206);
+        addCheck("Demo Camera",        kPrY + 110, &m_prefDemoCamera,   kPrExtraX, kPrExtraW, 1207);
+        addCheck("Original Menu Skin", kPrY + 126, &m_prefMenuSkin,     kPrExtraX, kPrExtraW, 1208);
+        addCheck("Command Debug",      kPrY + 142, &m_prefCmdDebug,     kPrExtraX, kPrExtraW, 1210);
+        addCheck("Production Queue",   kPrY + 158, &m_prefProdQueue,    kPrExtraX, kPrExtraW, 1211);
+        addCheck("Right-Click Orders", kPrY + 174, &m_prefRightClick,   kPrExtraX, kPrExtraW, 1212);
+        addCheck("List Scroll Bars",   kPrY + 190, &m_prefListScroll,   kPrExtraX, kPrExtraW, 1213);
         // NightDarkness: quanto da noite do original se aplica (0..100%).
         addSlider(1209, &m_prefNightDarkness, 0, 100, kPrExtraX, kPrY + 228, kPrExtraW, 16);
         // Velocidades: os botoes LESS/MORE do Dialog 142, com os ids do
@@ -1081,15 +1082,19 @@ bool ShellMenu::helpTest(std::string& report) {
 }
 
 void ShellMenu::handleMouseMove(int x, int y) {
-    // Arrastando o polegar da barra do texto (5.49): ele segue o cursor.
-    if (m_rtfDrag) {
-        m_rtfMouseY = y;
-        if (m_rtfDrag == 1) {
+    m_mouseX = x; m_mouseY = y;
+    // Arrastando o polegar de uma barra (5.49/5.50): ele segue o cursor,
+    // tambem fora da barra, ate soltar o botao.
+    if (m_sbKind) {
+        m_sbMouseY = y;
+        std::vector<ScrollTarget> ts = scrollTargets();
+        if (m_sbKind == 1 && m_sbTarget >= 0 && m_sbTarget < (int)ts.size()) {
+            ScrollTarget& t = ts[m_sbTarget];
             int trackY, trackH, thumbY, thumbH;
-            rtfThumb(trackY, trackH, thumbY, thumbH);
-            const int maxFirst = std::max(0, static_cast<int>(m_rtfLines.size()) - rtfVisibleLines());
+            scrollThumb(t, trackY, trackH, thumbY, thumbH);
+            const int maxFirst = std::max(0, t.total - t.vis);
             const int span = trackH - thumbH;
-            if (span > 0) rtfScrollTo(((y - m_rtfDragOff - trackY) * maxFirst + span / 2) / span);
+            if (span > 0) scrollTo(t, ((y - m_sbDragOff - trackY) * maxFirst + span / 2) / span);
         }
         return;
     }
@@ -1124,51 +1129,27 @@ void ShellMenu::handleMouseDown(int x, int y, uint8_t button) {
         return;
     }
 
-    // Setas da barra de rolagem da lista do manual.
-    if (m_state == MenuState::Help && m_help.ok()) {
-        const int sbX = kHpListX + kHpListW - kHpSbW;
-        if (x >= sbX && x < sbX + kHpSbW && y >= kHpListY && y < kHpListY + kHpListH) {
-            const int total = (int)m_help.topics().size();
-            const int maxScroll = (total > kHpVisible) ? (total - kHpVisible) : 0;
-            if (y < kHpListY + kHpSbW) m_helpListScroll = std::max(0, m_helpListScroll - 1);
-            else if (y >= kHpListY + kHpListH - kHpSbW)
-                m_helpListScroll = std::min(maxScroll, m_helpListScroll + 1);
-            return;
-        }
-    }
-
-    // A barra de rolagem da caixa de texto do briefing/objetivos/historia
-    // (5.49): setas = 1 linha, trilha = 1 pagina, o polegar se arrasta; seta e
-    // trilha repetem com o botao seguro (update), como a barra do Windows.
-    if (m_state == MenuState::RtfView) {
-        int bx, by, bw, bh;
-        if (rtfScrollBarRect(bx, by, bw, bh) && x >= bx && x < bx + bw && y >= by && y < by + bh) {
-            const int ab = std::min(bw, bh / 2);
+    // As barras de rolagem das listas com texto (5.49/5.50): setas = 1 linha,
+    // trilha = 1 pagina, o polegar se arrasta; seta e trilha repetem com o
+    // botao seguro (update), como a barra do Windows.
+    {
+        std::vector<ScrollTarget> ts = scrollTargets();
+        for (int i = 0; i < (int)ts.size(); ++i) {
+            ScrollTarget& t = ts[i];
+            if (t.total <= t.vis) continue;
+            if (x < t.bx || x >= t.bx + t.bw || y < t.by || y >= t.by + t.bh) continue;
+            const int ab = std::min(t.bw, t.bh / 2);
             int trackY, trackH, thumbY, thumbH;
-            rtfThumb(trackY, trackH, thumbY, thumbH);
-            m_rtfMouseY = y;
-            if (y < by + ab) m_rtfDrag = 2;
-            else if (y >= by + bh - ab) m_rtfDrag = 3;
-            else if (y < thumbY) m_rtfDrag = 4;
-            else if (y >= thumbY + thumbH) m_rtfDrag = 5;
-            else { m_rtfDrag = 1; m_rtfDragOff = y - thumbY; }
-            if (m_rtfDrag != 1) rtfScrollStep(m_rtfDrag);
-            m_rtfRepeatAt = SDL_GetTicks() + 400;
-            return;
-        }
-    }
-
-    // Setas da scrollbar dos tutoriais (não são controles focáveis).
-    if (m_state == MenuState::Tutorials) {
-        int lx = kTutListX, ly = kTutListY, lw = kTutListW - kTutSbW, lh = kTutListH;
-        int sbX = lx + lw;
-        if (x >= sbX && x < sbX + kTutSbW) {
-            int total = (int)m_tutorialList.size();
-            int maxScroll = (total > kTutVisible) ? (total - kTutVisible) : 0;
-            if (y >= ly && y < ly + kTutSbW)
-                m_tutorialScroll = std::max(0, m_tutorialScroll - 1);
-            else if (y >= ly + lh - kTutSbW && y < ly + lh)
-                m_tutorialScroll = std::min(maxScroll, m_tutorialScroll + 1);
+            scrollThumb(t, trackY, trackH, thumbY, thumbH);
+            m_sbTarget = i;
+            m_sbMouseY = y;
+            if (y < t.by + ab) m_sbKind = 2;
+            else if (y >= t.by + t.bh - ab) m_sbKind = 3;
+            else if (y < thumbY) m_sbKind = 4;
+            else if (y >= thumbY + thumbH) m_sbKind = 5;
+            else { m_sbKind = 1; m_sbDragOff = y - thumbY; }
+            if (m_sbKind != 1) scrollStep(t, m_sbKind);
+            m_sbRepeatAt = SDL_GetTicks() + 400;
             return;
         }
     }
@@ -1193,7 +1174,8 @@ void ShellMenu::handleMouseDown(int x, int y, uint8_t button) {
                      : m_state == MenuState::Help ? (c.y + 1)
                      : m_state == MenuState::MpPickSession ? (c.y + 22) : (c.y + 8);
             int scroll = (m_state == MenuState::Tutorials) ? m_tutorialScroll
-                       : m_state == MenuState::Help ? m_helpListScroll : 0;
+                       : m_state == MenuState::Help ? m_helpListScroll
+                       : m_state == MenuState::Chapters ? m_chapterScroll : 0;
             int row = (y - top) / rowH;
             int sel = scroll + row;
             if (row >= 0 && sel >= 0 && sel < c.listCount) *c.listSel = sel;
@@ -1205,7 +1187,7 @@ void ShellMenu::handleMouseDown(int x, int y, uint8_t button) {
 
 void ShellMenu::handleMouseUp(int x, int y, uint8_t button) {
     if (button != SDL_BUTTON_LEFT) return;
-    if (m_rtfDrag) { m_rtfDrag = 0; return; }
+    if (m_sbKind) { m_sbKind = 0; m_sbTarget = -1; return; }
     if (m_dragSlider >= 0) {
         // Soltar a barra toca o clique da interface (som 0x57), que é o que se
         // ouve no volume recém-escolhido.
@@ -1260,7 +1242,17 @@ void ShellMenu::handleMouseWheel(int delta) {
         sliderSet(c, *c.sliderTarget + delta * kSliderStep);
         return;
     }
-    // No manual, a roda rola o TEXTO (é o que se está lendo).
+    // A lista SOB O CURSOR rola (5.50), 3 linhas por degrau, como no Windows.
+    {
+        std::vector<ScrollTarget> ts = scrollTargets();
+        for (ScrollTarget& t : ts) {
+            const bool sob = m_mouseX >= t.ax && m_mouseX < t.ax + t.aw && m_mouseY >= t.ay && m_mouseY < t.ay + t.ah;
+            if (!sob) continue;
+            scrollTo(t, *t.first - delta * 3);
+            return;
+        }
+    }
+    // Fora de qualquer lista: no manual, a roda rola o TEXTO (é o que se está lendo).
     if (m_state == MenuState::Help) {
         const int maxTxt = std::max(0, (int)m_helpLines.size() - helpVisibleLines());
         m_helpTextScroll = std::max(0, std::min(maxTxt, m_helpTextScroll - delta * 3));
@@ -1275,6 +1267,16 @@ void ShellMenu::handleMouseWheel(int delta) {
         int total = (int)m_tutorialList.size();
         int maxScroll = (total > kTutVisible) ? (total - kTutVisible) : 0;
         m_tutorialScroll = std::max(0, std::min(maxScroll, m_tutorialScroll - delta));
+        return;
+    }
+    if (m_state == MenuState::Scores) {
+        const int maxScroll = std::max(0, (int)m_scores.size() - scoreVisibleLines());
+        m_scoreScroll = std::max(0, std::min(maxScroll, m_scoreScroll - delta * 3));
+        return;
+    }
+    if (m_state == MenuState::Chapters) {
+        const int maxScroll = std::max(0, (int)m_chapters.size() - chapterVisibleLines());
+        m_chapterScroll = std::max(0, std::min(maxScroll, m_chapterScroll - delta));
     }
 }
 
@@ -1448,6 +1450,10 @@ void ShellMenu::handleKeyDown(int keyCode) {
             } else if (m_state == MenuState::Help) {
                 if (s < m_helpListScroll) m_helpListScroll = s;
                 else if (s >= m_helpListScroll + kHpVisible) m_helpListScroll = s - kHpVisible + 1;
+            } else if (m_state == MenuState::Chapters) {
+                const int v = chapterVisibleLines();
+                if (s < m_chapterScroll) m_chapterScroll = s;
+                else if (s >= m_chapterScroll + v) m_chapterScroll = s - v + 1;
             }
         } else if (c.kind == CtrlKind::Combo && c.comboSel && c.comboItems &&
                    !c.comboItems->empty() && !c.disabled) {
@@ -1522,11 +1528,11 @@ void ShellMenu::handleKeyDown(int keyCode) {
 }
 
 void ShellMenu::update(float dt) {
-    // Seta/trilha da barra do texto seguras: repete a cada 50 ms depois de
-    // 400 ms (5.49).
-    if (m_state == MenuState::RtfView && m_rtfDrag >= 2 && SDL_GetTicks() >= m_rtfRepeatAt) {
-        rtfScrollStep(m_rtfDrag);
-        m_rtfRepeatAt = SDL_GetTicks() + 50;
+    // Seta/trilha de uma barra seguras: repete a cada 50 ms depois de 400 ms.
+    if (m_sbKind >= 2 && SDL_GetTicks() >= m_sbRepeatAt) {
+        std::vector<ScrollTarget> ts = scrollTargets();
+        if (m_sbTarget >= 0 && m_sbTarget < (int)ts.size()) scrollStep(ts[m_sbTarget], m_sbKind);
+        m_sbRepeatAt = SDL_GetTicks() + 50;
     }
     // Um minuto parado no menu principal chama o demo de atracao (0xEA60 ms no
     // OP2SHELL.DLL). So no menu principal: com um dialogo aberto o original
@@ -1612,6 +1618,10 @@ void ShellMenu::render(Renderer& renderer) {
     case MenuState::MpGameSettings: renderMpGameSettings(renderer); break;
     default: break;
     }
+
+    // As barras de rolagem das listas com texto (5.50): uma so geometria para
+    // o desenho e para o mouse, nas duas peles.
+    drawScrollTargets(renderer);
 
     // Controles (botões/radios/checks) + destaque de hover e foco, por cima.
     drawControls(renderer);
@@ -1906,6 +1916,7 @@ void ShellMenu::loadPrefs() {
     m_prefCmdDebug     = gs.commandDebug != 0;
     m_prefProdQueue    = gs.productionQueue != 0;
     m_prefRightClick   = gs.rightClickOrders != 0;
+    m_prefListScroll   = gs.listScrollBars != 0;
     m_prefNightDarkness = gs.nightDarkness < 0 ? 0 : (gs.nightDarkness > 100 ? 100 : gs.nightDarkness);
 }
 
@@ -1931,6 +1942,7 @@ void ShellMenu::savePrefs() {
     gs.commandDebug      = m_prefCmdDebug ? 1 : 0;
     gs.productionQueue   = m_prefProdQueue ? 1 : 0;
     gs.rightClickOrders  = m_prefRightClick ? 1 : 0;
+    gs.listScrollBars    = m_prefListScroll ? 1 : 0;
     gs.nightDarkness     = m_prefNightDarkness;
     applyMenuSkin(gs.menuSkin != 0);             // a pele troca ja no ACCEPT
     m_prefApplyScreen    = true;                 // o render troca a janela
@@ -2074,7 +2086,7 @@ void ShellMenu::helpBuildLines() {
             linha(t, primeiro ? 0xFFFFD24A : 0xFFD8E4F8, true);
         }
     }
-    m_helpLines = rtfLayout(runs, kHpTextW);
+    m_helpLines = rtfLayout(runs, kHpTextW - 17 - 4);   // a barra do texto (5.50)
 }
 
 void ShellMenu::renderHelp(Renderer& renderer) {
@@ -2116,8 +2128,6 @@ void ShellMenu::renderHelp(Renderer& renderer) {
             SkinText::drawRaw(fb, 640, 480, t, kHpListX + 4, y + 1,
                               sel ? DialogSkin::kSelText : DialogSkin::kText);
         }
-        renderer.drawSkinScrollBar(kHpListX + kHpListW - 2 - kHpSbW, kHpListY + 2, kHpSbW,
-                                   kHpListH - 4, m_helpListScroll, kHpVisible, total);
     } else {
     renderer.drawRect(kHpListX, kHpListY, kHpListW, kHpListH, 0xFF405068);
     for (int k = 0; k < kHpVisible; ++k) {
@@ -2132,19 +2142,7 @@ void ShellMenu::renderHelp(Renderer& renderer) {
         SkinText::draw(fb, 640, 480, t, kHpListX + 6, y, sel ? 0xFFFFFF99 : 0xFFC8D4E8, true);
     }
     }
-    // barra de rolagem da lista: as duas setas e o cursor
-    const int sbX = kHpListX + kHpListW - kHpSbW;
-    if (!DialogSkin::ok()) {
-    renderer.drawRect(sbX, kHpListY, kHpSbW, kHpListH, 0xFF405068);
-    SkinText::drawCentered(fb, 640, 480, "^", sbX + kHpSbW / 2, kHpListY + 2, 0xFF8090A8, true);
-    SkinText::drawCentered(fb, 640, 480, "v", sbX + kHpSbW / 2, kHpListY + kHpListH - 14,
-                           0xFF8090A8, true);
-    if (maxScroll > 0) {
-        const int faixa = kHpListH - 2 * kHpSbW - 8;
-        const int cy = kHpListY + kHpSbW + 4 + faixa * m_helpListScroll / maxScroll;
-        renderer.fillRect(sbX + 3, cy, kHpSbW - 6, 10, 0xFF6C8CC0);
-    }
-    }
+    // As barras (da lista e do texto): drawScrollTargets (5.50), com o mouse.
 
     // ---- texto do tópico ----
     const int lineH = SkinText::height() + 2;
@@ -2210,9 +2208,7 @@ void ShellMenu::renderTutorialsDialog(Renderer& renderer) {
             SkinText::drawRaw(fb, 640, 480, txt, lx + 4, itemY + 1,
                               sel ? DialogSkin::kSelText : DialogSkin::kText);
         }
-        renderer.drawSkinScrollBar(lx + lw - 2, ly + 2, kTutSbW, lh - 4,
-                                   m_tutorialScroll, kTutVisible, total);
-        return;
+        return;                     // a barra: drawScrollTargets (5.50)
     }
 
     renderer.fillRect(lx, ly, lw, lh, 0xFF0D121B);
@@ -2230,19 +2226,7 @@ void ShellMenu::renderTutorialsDialog(Renderer& renderer) {
                        sel ? 0xFFFFFF99 : 0xFFCCD6E8);
     }
 
-    // Scrollbar vertical.
-    int sbX = lx + lw, sbY = ly, sbH = lh;
-    renderer.fillRect(sbX, sbY, kTutSbW, sbH, 0xFF11161F);
-    renderer.drawBevelRect(sbX, sbY, kTutSbW, sbH, 0xFF05080E, 0xFF35445B);
-    renderer.drawButton(sbX, sbY, kTutSbW, kTutSbW, "^", false, false);
-    renderer.drawButton(sbX, sbY + sbH - kTutSbW, kTutSbW, kTutSbW, "v", false, false);
-    int trackY = sbY + kTutSbW, trackH = sbH - 2 * kTutSbW;
-    int maxScroll = (total > kTutVisible) ? (total - kTutVisible) : 0;
-    int thumbH = (total > kTutVisible) ? std::max(16, trackH * kTutVisible / total) : trackH;
-    thumbH = std::min(thumbH, trackH);
-    int thumbY = trackY + (maxScroll > 0 ? (trackH - thumbH) * m_tutorialScroll / maxScroll : 0);
-    renderer.fillRect(sbX + 2, thumbY, kTutSbW - 4, thumbH, 0xFF3A557E);
-    renderer.drawBevelRect(sbX + 2, thumbY, kTutSbW - 4, thumbH, 0xFF5A7AA8, 0xFF223144);
+    // A barra de rolagem: drawScrollTargets (5.50), com o mouse.
     // Botões START / BACK desenhados por drawControls().
 }
 
@@ -2269,6 +2253,84 @@ int ShellMenu::rtfVisibleLines() const { return kRvTextH / (SkinText::height() +
 // cria), 565 nos objetivos e na historia (o "StoryText" do Dialog 216).
 int ShellMenu::rtfTextW() const { return m_rtfKind == 0 ? kRvBriefTextW : kRvTextW; }
 
+int ShellMenu::chapterVisibleLines() const { return (kChListH - 22) / kChRowH + 1; }
+
+// Os alvos de rolagem de cada tela (5.50). A barra so aparece quando o texto
+// nao cabe (total > visiveis), como a do Windows.
+std::vector<ShellMenu::ScrollTarget> ShellMenu::scrollTargets() {
+    std::vector<ScrollTarget> v;
+    auto add = [&](int bx, int by, int bw, int bh, int ax, int ay, int aw, int ah, int* first, int total, int vis) {
+        v.push_back({bx, by, bw, bh, ax, ay, aw, ah, first, total, std::max(1, vis)});
+    };
+    const bool pele = DialogSkin::ok();
+    switch (m_state) {
+    case MenuState::RtfView: {
+        int x, y, w, h;
+        rtfScrollBarRect(x, y, w, h);
+        add(x, y, w, h, kRvTextX, kRvTextY, rtfTextW(), kRvTextH, &m_rtfScroll, (int)m_rtfLines.size(), rtfVisibleLines());
+        break;
+    }
+    case MenuState::Tutorials: {
+        const int lw = kTutListW - kTutSbW;
+        if (pele) add(kTutListX + lw - 2, kTutListY + 2, kTutSbW, kTutListH - 4, kTutListX, kTutListY, kTutListW, kTutListH,
+                      &m_tutorialScroll, (int)m_tutorialList.size(), kTutVisible);
+        else      add(kTutListX + lw, kTutListY, kTutSbW, kTutListH, kTutListX, kTutListY, kTutListW, kTutListH,
+                      &m_tutorialScroll, (int)m_tutorialList.size(), kTutVisible);
+        break;
+    }
+    case MenuState::Help:
+        if (m_help.ok()) {
+            if (pele) add(kHpListX + kHpListW - 2 - kHpSbW, kHpListY + 2, kHpSbW, kHpListH - 4,
+                          kHpListX, kHpListY, kHpListW, kHpListH, &m_helpListScroll, (int)m_help.topics().size(), kHpVisible);
+            else      add(kHpListX + kHpListW - kHpSbW, kHpListY, kHpSbW, kHpListH,
+                          kHpListX, kHpListY, kHpListW, kHpListH, &m_helpListScroll, (int)m_help.topics().size(), kHpVisible);
+        }
+        add(kHpTextX + kHpTextW - 17, kHpTextY, 17, kHpTextH, kHpTextX, kHpTextY, kHpTextW, kHpTextH,
+            &m_helpTextScroll, (int)m_helpLines.size(), helpVisibleLines());
+        break;
+    case MenuState::Scores:
+        if (!m_clearConfirm)
+            add(kScListX + kScListW - 2 - 17, kScListY + 2, 17, kScListH - 4, kScListX, kScListY, kScListW, kScListH,
+                &m_scoreScroll, (int)m_scores.size(), scoreVisibleLines());
+        break;
+    case MenuState::Chapters:
+        add(kChListX + kChListW - 2 - 17, kChListY + 2, 17, kChListH - 4, kChListX, kChListY, kChListW, kChListH,
+            &m_chapterScroll, (int)m_chapters.size(), chapterVisibleLines());
+        break;
+    default: break;
+    }
+    return v;
+}
+// A mesma geometria do drawSkinScrollBar (setas quadradas, polegar >= 12).
+void ShellMenu::scrollThumb(const ScrollTarget& t, int& trackY, int& trackH, int& thumbY, int& thumbH) {
+    const int ab = std::min(t.bw, t.bh / 2);
+    trackY = t.by + ab; trackH = t.bh - 2 * ab;
+    if (t.total <= t.vis || trackH <= 0) { thumbY = trackY; thumbH = trackH; return; }
+    thumbH = std::min(trackH, std::max(12, trackH * t.vis / t.total));
+    const int maxFirst = t.total - t.vis;
+    const int f = std::max(0, std::min(*t.first, maxFirst));
+    thumbY = trackY + (trackH - thumbH) * f / maxFirst;
+}
+void ShellMenu::scrollTo(ScrollTarget& t, int first) {
+    *t.first = std::max(0, std::min(std::max(0, t.total - t.vis), first));
+}
+void ShellMenu::scrollStep(ScrollTarget& t, int kind) {
+    const int page = std::max(1, t.vis - 1);
+    if (kind == 2) scrollTo(t, *t.first - 1);
+    else if (kind == 3) scrollTo(t, *t.first + 1);
+    else if (kind == 4 || kind == 5) {
+        // A trilha para quando o polegar chega ao cursor (Windows).
+        int trackY, trackH, thumbY, thumbH;
+        scrollThumb(t, trackY, trackH, thumbY, thumbH);
+        if (kind == 4 && m_sbMouseY < thumbY) scrollTo(t, *t.first - page);
+        if (kind == 5 && m_sbMouseY >= thumbY + thumbH) scrollTo(t, *t.first + page);
+    }
+}
+void ShellMenu::drawScrollTargets(Renderer& renderer) {
+    for (const ScrollTarget& t : scrollTargets())
+        if (t.total > t.vis) renderer.drawSkinScrollBar(t.bx, t.by, t.bw, t.bh, *t.first, t.vis, t.total);
+}
+
 // A barra vertical do RICHEDIT (o estilo 0x5030C804 tem WS_VSCROLL): 17 px na
 // borda direita da caixa, so quando o texto nao cabe.
 bool ShellMenu::rtfScrollBarRect(int& x, int& y, int& w, int& h) const {
@@ -2277,32 +2339,12 @@ bool ShellMenu::rtfScrollBarRect(int& x, int& y, int& w, int& h) const {
 }
 // A mesma geometria do drawSkinScrollBar (setas quadradas, polegar >= 12).
 void ShellMenu::rtfThumb(int& trackY, int& trackH, int& thumbY, int& thumbH) const {
-    int x, y, w, h;
-    rtfScrollBarRect(x, y, w, h);
-    const int ab = std::min(w, h / 2);
-    trackY = y + ab; trackH = h - 2 * ab;
-    const int total = static_cast<int>(m_rtfLines.size()), vis = rtfVisibleLines();
-    if (total <= vis || trackH <= 0) { thumbY = trackY; thumbH = trackH; return; }
-    thumbH = std::min(trackH, std::max(12, trackH * vis / total));
-    const int maxFirst = total - vis;
-    const int f = std::max(0, std::min(m_rtfScroll, maxFirst));
-    thumbY = trackY + (trackH - thumbH) * f / maxFirst;
-}
-void ShellMenu::rtfScrollTo(int first) {
-    const int maxFirst = std::max(0, static_cast<int>(m_rtfLines.size()) - rtfVisibleLines());
-    m_rtfScroll = std::max(0, std::min(maxFirst, first));
-}
-void ShellMenu::rtfScrollStep(int kind) {
-    const int page = std::max(1, rtfVisibleLines() - 1);
-    if (kind == 2) rtfScrollTo(m_rtfScroll - 1);
-    else if (kind == 3) rtfScrollTo(m_rtfScroll + 1);
-    else if (kind == 4 || kind == 5) {
-        // A trilha para quando o polegar chega ao cursor (Windows).
-        int trackY, trackH, thumbY, thumbH;
-        rtfThumb(trackY, trackH, thumbY, thumbH);
-        if (kind == 4 && m_rtfMouseY < thumbY) rtfScrollTo(m_rtfScroll - page);
-        if (kind == 5 && m_rtfMouseY >= thumbY + thumbH) rtfScrollTo(m_rtfScroll + page);
-    }
+    ScrollTarget t{};
+    rtfScrollBarRect(t.bx, t.by, t.bw, t.bh);
+    t.first = const_cast<int*>(&m_rtfScroll);
+    t.total = static_cast<int>(m_rtfLines.size());
+    t.vis = std::max(1, rtfVisibleLines());
+    scrollThumb(t, trackY, trackH, thumbY, thumbH);
 }
 
 // Mensagem 0x73a da janela do shell (motivo − 1 → tabela 0x130090b4). Os filmes
@@ -2419,7 +2461,7 @@ void ShellMenu::renderScores(Renderer& renderer) {
         const int i = m_scoreScroll + k;
         if (i < 0 || i >= (int)m_scores.size()) break;
         std::string line = scoreLine(m_scores[i]);
-        while (!line.empty() && SkinText::width(line) > kScListW - 16) line.pop_back();
+        while (!line.empty() && SkinText::width(line) > kScListW - 16 - 19) line.pop_back();   // barra (5.50)
         SkinText::draw(fb, 640, 480, line, kScListX + 8, kScListY + 6 + k * kScRowH, 0xFFCCD6E8);
     }
     if (m_scores.empty())
@@ -2454,7 +2496,7 @@ void ShellMenu::openRtf(int kind) {
     m_rtfTitle = title;
     m_rtfLines.clear();
     m_rtfScroll = 0;
-    m_rtfDrag = 0;
+    m_sbKind = 0;
     // A imagem do briefing: o indice da tabela de 24 ids e a missao (0-based,
     // 0x13015B9E), mais 12 se o jogador NAO for Eden (bit 2 da palavra dele).
     m_briefBitmapOk = false;
@@ -2501,6 +2543,7 @@ void ShellMenu::openChapters() {
         std::cerr << "[Campaign] Could not open story file." << std::endl;
     }
     m_selChapter = 0;
+    m_chapterScroll = 0;
     setState(MenuState::Chapters);
 }
 
@@ -2530,19 +2573,17 @@ void ShellMenu::renderRtfView(Renderer& renderer) {
             SkinText::draw(fb, 640, 480, pc.text, kRvTextX + 4 + pc.x, kRvTextY + 4 + i * lh, pc.color);
     }
     // Barra de rolagem (só a posição).
-    // A barra com setas, a mesma que o mouse usa (5.49), nas duas peles.
-    const int total = static_cast<int>(m_rtfLines.size());
-    int sbX, sbY, sbW, sbH;
-    if (rtfScrollBarRect(sbX, sbY, sbW, sbH))
-        renderer.drawSkinScrollBar(sbX, sbY, sbW, sbH, m_rtfScroll, vis, total);
+    // A barra com setas sai do drawScrollTargets (5.50), nas duas peles.
 }
 
 void ShellMenu::renderChapters(Renderer& renderer) {
     renderer.dimRect(0, 0, 640, 480, 0x88);
     renderer.drawDialogFrame(kChX, kChY, kChW, kChH, "CHAPTERS");
     renderer.drawSkinBox(kChListX, kChListY, kChListW, kChListH);
-    for (size_t i = 0; i < m_chapters.size(); ++i) {
-        const int y = kChListY + 8 + static_cast<int>(i) * kChRowH;
+    const int maxCh = std::max(0, (int)m_chapters.size() - chapterVisibleLines());
+    if (m_chapterScroll > maxCh) m_chapterScroll = maxCh;
+    for (size_t i = static_cast<size_t>(m_chapterScroll); i < m_chapters.size(); ++i) {
+        const int y = kChListY + 8 + (static_cast<int>(i) - m_chapterScroll) * kChRowH;
         if (y + 14 > kChListY + kChListH) break;
         const bool sel = static_cast<int>(i) == m_selChapter;
         if (DialogSkin::ok()) {     // Fork: seleção azul, texto branco / verde

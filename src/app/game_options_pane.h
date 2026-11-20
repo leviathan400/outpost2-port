@@ -70,6 +70,8 @@ public:
         OPT_PROD_QUEUE,
         // O clique direito dando ordens ([Game] RightClickOrders, 5.44).
         OPT_RIGHT_CLICK,
+        // A barra de rolagem e a roda nas listas da partida ([Game] ListScrollBars, 5.50).
+        OPT_LIST_SCROLL,
         OPT_COUNT
     };
 

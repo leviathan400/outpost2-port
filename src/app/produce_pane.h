@@ -17,6 +17,28 @@ void drawListBoxFrame(uint32_t* fb, int fbW, int fbH, const ListBoxLayout& L);
 void drawListBoxArrows(uint32_t* fb, int fbW, int fbH, const ListBoxLayout& L, const PaneRect& clip,
                        bool canUp, bool canDown, int mx, int my);
 
+// ---- A BARRA DE ROLAGEM das listas da partida (5.50) -----------------------
+// Extra do porte, chave [Game] ListScrollBars (padrao 0). O original so tem as
+// duas setas de PAGINA (sub_459940); com a chave, a lista ganha uma barra na
+// margem de 14 px a direita dela (o texto nao muda), as setas saem, e a roda do
+// mouse rola a lista sob o cursor (3 linhas por degrau).
+// Cada lista se REGISTRA ao se desenhar (drawListBoxScroll, no lugar do
+// drawListBoxArrows): a GameState trata clique, arrasto e roda pelo registro
+// do ultimo quadro, sem mexer no clique de cada painel.
+void setListScrollBars(bool on);
+bool listScrollBarsOn();
+PaneRect listScrollBarRect(const ListBoxLayout& L);
+void drawListBoxScroll(uint32_t* fb, int fbW, int fbH, const ListBoxLayout& L, const PaneRect& clip,
+                       int& top, int total, int mx, int my);
+void listScrollBeginFrame();                  // o registro recomeca a cada quadro
+bool listScrollMouseDown(int mx, int my);     // true = consumiu (barra ou setas ocultas)
+bool listScrollMouseMove(int mx, int my);     // true = arrastando o polegar
+bool listScrollMouseUp();                     // true = soltou um arrasto/repeticao
+bool listScrollWheel(int mx, int my, int delta);
+void listScrollUpdate();                      // repeticao de seta/trilha seguras
+struct ListScrollInfo { PaneRect list, bar, up, down; int top, total, rows; };
+std::vector<ListScrollInfo> listScrollDebug();
+
 // Painel de produção da fábrica — porta dword_5674E8 (vtable off_4D5808,
 // base de lista off_4D5588). Aberto pelo botão BUILD (sub_456250 →
 // sub_45D020: o gerenciador do painel direito troca o painel atual).

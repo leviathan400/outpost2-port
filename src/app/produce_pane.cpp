@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <string>
 
+#include <SDL.h>
+
 #include "../gfx/art_blit.h"
 #include "../gfx/artfile.h"
 #include "../gfx/font.h"
@@ -77,6 +79,145 @@ void drawListBoxArrows(uint32_t* fb, int fbW, int fbH, const ListBoxLayout& L, c
     };
     arrow(kArrowUp, L.up, canUp);
     arrow(kArrowDown, L.down, canDown);
+}
+
+// ---- A barra de rolagem das listas (5.50) ----------------------------------
+namespace {
+bool s_lsOn = false;
+struct LsEntry { ListBoxLayout L; int* top; int total; };
+std::vector<LsEntry> s_ls;                    // as listas do ultimo quadro
+// O controle em uso: o top e a geometria guardados no clique (o registro e
+// refeito a cada quadro, o ponteiro para o top do painel fica valido).
+int* s_lsTop = nullptr;
+ListBoxLayout s_lsL{};
+int s_lsTotal = 0, s_lsKind = 0, s_lsOff = 0, s_lsMouseY = 0;
+uint32_t s_lsRepeatAt = 0;
+
+int lsMaxTop(const ListBoxLayout& L, int total) { return std::max(0, total - L.rows); }
+void lsClamp(const ListBoxLayout& L, int& top, int total) { top = std::max(0, std::min(lsMaxTop(L, total), top)); }
+// Setas quadradas nas pontas (ab), trilha no meio, polegar >= 8.
+void lsThumb(const ListBoxLayout& L, int top, int total, int& ab, int& trackY, int& trackH, int& thumbY, int& thumbH) {
+    const PaneRect b = listScrollBarRect(L);
+    const int w = b.r - b.l, h = b.b - b.t;
+    ab = std::min(w, h / 2);
+    trackY = b.t + ab; trackH = h - 2 * ab;
+    const int maxTop = lsMaxTop(L, total);
+    if (maxTop <= 0 || trackH <= 0) { thumbY = trackY; thumbH = trackH; return; }
+    thumbH = std::min(trackH, std::max(8, trackH * L.rows / std::max(1, total)));
+    thumbY = trackY + (trackH - thumbH) * std::max(0, std::min(top, maxTop)) / maxTop;
+}
+bool lsIn(const PaneRect& r, int x, int y) { return x >= r.l && x < r.r && y >= r.t && y < r.b; }
+void lsStep(int kind) {
+    if (!s_lsTop) return;
+    int& top = *s_lsTop;
+    if (kind == 2) top -= 1;
+    else if (kind == 3) top += 1;
+    else if (kind == 4 || kind == 5) {       // a trilha para quando o polegar chega ao cursor
+        int ab, ty, th, py, ph;
+        lsThumb(s_lsL, top, s_lsTotal, ab, ty, th, py, ph);
+        if (kind == 4 && s_lsMouseY < py) top -= s_lsL.rows;
+        if (kind == 5 && s_lsMouseY >= py + ph) top += s_lsL.rows;
+    }
+    lsClamp(s_lsL, top, s_lsTotal);
+}
+} // namespace
+
+void setListScrollBars(bool on) { s_lsOn = on; if (!on) { s_lsTop = nullptr; s_lsKind = 0; } }
+bool listScrollBarsOn() { return s_lsOn; }
+// Na margem direita que o listBoxLayout deixa (pane.r - 0xE): 11 px de largura.
+PaneRect listScrollBarRect(const ListBoxLayout& L) { return PaneRect{L.list.r + 1, L.list.t, L.list.r + 12, L.list.b}; }
+void listScrollBeginFrame() { s_ls.clear(); }
+
+void drawListBoxScroll(uint32_t* fb, int fbW, int fbH, const ListBoxLayout& L, const PaneRect& clip,
+                       int& top, int total, int mx, int my) {
+    s_ls.push_back(LsEntry{L, &top, total});
+    if (!s_lsOn) { drawListBoxArrows(fb, fbW, fbH, L, clip, top > 0, top + L.rows < total, mx, my); return; }
+    const PaneRect b = listScrollBarRect(L);
+    auto put = [&](int x, int y, uint32_t c) {
+        if (x >= std::max(0, clip.l) && x < std::min(fbW, clip.r) && y >= std::max(0, clip.t) && y < std::min(fbH, clip.b))
+            fb[y * fbW + x] = c;
+    };
+    auto box = [&](int x0, int y0, int x1, int y1, uint32_t edge, uint32_t fill) {
+        for (int y = y0; y < y1; ++y)
+            for (int x = x0; x < x1; ++x)
+                put(x, y, (y == y0 || y == y1 - 1 || x == x0 || x == x1 - 1) ? edge : fill);
+    };
+    const uint32_t verde = rgb555(0x4E0), fundo = rgb555(0x40), aceso = rgb555(0x7FE0), apagado = rgb555(0x1CE7);
+    box(b.l, b.t, b.r, b.b, verde, fundo);
+    int ab, trackY, trackH, thumbY, thumbH;
+    lsThumb(L, top, total, ab, trackY, trackH, thumbY, thumbH);
+    const bool podeCima = top > 0, podeBaixo = top < lsMaxTop(L, total);
+    // As setas: caixa e triangulo (aceso com o mouse em cima, apagado sem para onde ir).
+    auto seta = [&](int y0, bool cima, bool pode) {
+        box(b.l, y0, b.r, y0 + ab, verde, fundo);
+        const bool sobre = pode && lsIn(PaneRect{b.l, y0, b.r, y0 + ab}, mx, my);
+        const uint32_t c = !pode ? apagado : sobre ? aceso : verde;
+        const int cx = (b.l + b.r) / 2, n = std::max(2, (ab - 4) / 2);
+        for (int k = 0; k < n; ++k) {
+            const int yy = cima ? y0 + (ab - n) / 2 + k : y0 + (ab + n) / 2 - 1 - k;
+            for (int x = cx - k; x <= cx + k; ++x) put(x, yy, c);
+        }
+    };
+    seta(b.t, true, podeCima);
+    seta(b.b - ab, false, podeBaixo);
+    if (lsMaxTop(L, total) > 0) box(b.l + 1, thumbY, b.r - 1, thumbY + thumbH, rgb555(0x3DEF), apagado);
+}
+
+bool listScrollMouseDown(int mx, int my) {
+    if (!s_lsOn) return false;
+    for (LsEntry& e : s_ls) {
+        if (lsIn(e.L.up, mx, my) || lsIn(e.L.down, mx, my)) return true;   // as setas de pagina sairam
+        const PaneRect b = listScrollBarRect(e.L);
+        if (!lsIn(b, mx, my)) continue;
+        int ab, trackY, trackH, thumbY, thumbH;
+        lsThumb(e.L, *e.top, e.total, ab, trackY, trackH, thumbY, thumbH);
+        s_lsTop = e.top; s_lsL = e.L; s_lsTotal = e.total; s_lsMouseY = my;
+        if (my < b.t + ab) s_lsKind = 2;
+        else if (my >= b.b - ab) s_lsKind = 3;
+        else if (my < thumbY) s_lsKind = 4;
+        else if (my >= thumbY + thumbH) s_lsKind = 5;
+        else { s_lsKind = 1; s_lsOff = my - thumbY; }
+        if (s_lsKind != 1) lsStep(s_lsKind);
+        s_lsRepeatAt = SDL_GetTicks() + 400;
+        return true;
+    }
+    return false;
+}
+bool listScrollMouseMove(int mx, int my) {
+    (void)mx;
+    if (!s_lsKind || !s_lsTop) return false;
+    s_lsMouseY = my;
+    if (s_lsKind == 1) {
+        int ab, trackY, trackH, thumbY, thumbH;
+        lsThumb(s_lsL, *s_lsTop, s_lsTotal, ab, trackY, trackH, thumbY, thumbH);
+        const int span = trackH - thumbH, maxTop = lsMaxTop(s_lsL, s_lsTotal);
+        if (span > 0) { *s_lsTop = ((my - s_lsOff - trackY) * maxTop + span / 2) / span; lsClamp(s_lsL, *s_lsTop, s_lsTotal); }
+    }
+    return true;
+}
+bool listScrollMouseUp() {
+    const bool tinha = s_lsKind != 0;
+    s_lsKind = 0; s_lsTop = nullptr;
+    return tinha;
+}
+bool listScrollWheel(int mx, int my, int delta) {
+    if (!s_lsOn) return false;
+    for (LsEntry& e : s_ls) {
+        if (!lsIn(e.L.list, mx, my) && !lsIn(listScrollBarRect(e.L), mx, my)) continue;
+        *e.top -= delta * 3;
+        lsClamp(e.L, *e.top, e.total);
+        return true;
+    }
+    return false;
+}
+void listScrollUpdate() {
+    if (s_lsKind >= 2 && s_lsTop && SDL_GetTicks() >= s_lsRepeatAt) { lsStep(s_lsKind); s_lsRepeatAt = SDL_GetTicks() + 50; }
+}
+std::vector<ListScrollInfo> listScrollDebug() {
+    std::vector<ListScrollInfo> v;
+    for (const LsEntry& e : s_ls)
+        v.push_back(ListScrollInfo{e.L.list, listScrollBarRect(e.L), e.L.up, e.L.down, *e.top, e.total, e.L.rows});
+    return v;
 }
 
 void ProducePane::open(int factoryId) {                     // sub_468090
@@ -188,8 +329,8 @@ void ProducePane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, int
         UiFont::draw(fb, fbW, fbH, produceItemName(item), nx, y + 1, 0xFF00FF00u, false);
         if (mx >= L.list.l && mx < L.list.r && my >= y && my < y + L.lineH) hoverItem = &m_items[m_top + i];
     }
-    const bool canUp = m_top > 0, canDown = m_top + L.rows < static_cast<int>(m_items.size());
-    drawListBoxArrows(fb, fbW, fbH, ListBoxLayout{L.list, L.up, L.down, L.lineH, L.rows}, pane, canUp, canDown, mx, my);
+    drawListBoxScroll(fb, fbW, fbH, ListBoxLayout{L.list, L.up, L.down, L.lineH, L.rows}, pane,
+                      const_cast<int&>(m_top), static_cast<int>(m_items.size()), mx, my);   // (5.50)
     // Custo do item sob o cursor (provedor vt6 sub_4686E0): a lista (sub_430550)
     // pede o texto ao provedor e o entrega ao objeto de texto unk_575570 — ele
     // sai na linha de estado, não numa caixa junto ao cursor.

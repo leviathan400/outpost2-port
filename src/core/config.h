@@ -134,6 +134,11 @@ struct GameSettings {
     // ESQUERDO faz tudo -- com selecao, executa o comando padrao se ele aceitar
     // o alvo, senao seleciona -- e o direito cancela a mira e desseleciona.
     int rightClickOrders = 0;
+    // "ListScrollBars": acrescimo DESTE porte (5.50). 1 = as listas da partida
+    // (relatorios, opcoes, objetivos, pesquisa, producao, veiculos) ganham uma
+    // barra de rolagem arrastavel no lugar das setas de pagina, e a roda do
+    // mouse rola a lista sob o cursor. 0 = so as setas de pagina, como no original.
+    int listScrollBars = 0;
     // Fork: "MapWrap". 0 = like the original: the map view stops at the map's
     // left/right edges; only "around the world" maps (512 tiles wide) wrap.
     // 1 = every map wraps horizontally (the port's old behaviour).

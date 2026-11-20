@@ -172,15 +172,15 @@ outpost2_modern.exe                      # main menu
 outpost2_modern.exe --game eden01.map    # opens a map directly
 ```
 
-The game's `OUTPOST2.INI` file is respected. The port adds twelve keys the
+The game's `OUTPOST2.INI` file is respected. The port adds thirteen keys the
 original doesn't have — AI level, night darkness, volume, demo camera,
 fullscreen, the menu skin (`MenuSkin`), horizontal map wrap (`MapWrap`), the
 map's bottom row (`ShowBottomRow`), the one-click ore route
 (`AutoOreRoute`), refused-command diagnostics (`CommandDebug`), the
-production queue (`ProductionQueue`) and right-click orders
-(`RightClickOrders`); they are documented in `PORT_STATUS.EN.md`.
+production queue (`ProductionQueue`), right-click orders
+(`RightClickOrders`) and in-game list scroll bars (`ListScrollBars`); they are documented in `PORT_STATUS.EN.md`.
 
-There are **126 command-line modes** for tests and captures, among them a
+There are **128 command-line modes** for tests and captures, among them a
 regression battery (`--savetest` proves save/reload determinism). The list is
 in `PORT_STATUS.EN.md`.
 
@@ -214,7 +214,7 @@ and what was checked and discarded from the cheat lists that circulate.
 
 ```
 src/
-  main.cpp        entry point + the 126 test/capture modes
+  main.cpp        entry point + the 128 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -245,6 +245,12 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
 - **The briefing text scrolls with the mouse.** The wheel works, also on
   fine-step wheels and touchpads, and the text box's scroll bar works: arrows,
   track clicks and thumb dragging. Objectives and story too.
+- **Scroll bars and the wheel in every list.** In the menus: tutorials, the
+  help (topics and text), scores and chapters — which cut off the last ones by
+  mission 12. In game, as an option (**List Scroll Bars**, in the preferences
+  and the Options tab; off by default): the report, options, objectives,
+  research, production and vehicle lists get a draggable bar instead of the
+  page arrows, and the wheel scrolls the list under the cursor.
 
 ### 2026-11-19
 

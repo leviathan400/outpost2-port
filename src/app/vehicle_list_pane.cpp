@@ -74,8 +74,7 @@ void VehicleListPane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane,
         const std::string row = std::string(unitDisplayName(t)) + "s<R>" + std::to_string(m_count[t]);   // "%ss<R>%i"
         drawMarkupText(fb, fbW, fbH, PaneRect{L.list.l + 4, y + 1, L.list.r - 4, y + L.lineH}, row, 0xFF00FF00u, false, kMarkupLine);
     }
-    const bool canUp = m_top > 0, canDown = m_top + L.rows < static_cast<int>(m_types.size());
-    drawListBoxArrows(fb, fbW, fbH, L, pane, canUp, canDown, mx, my);
+    drawListBoxScroll(fb, fbW, fbH, L, pane, const_cast<int&>(m_top), static_cast<int>(m_types.size()), mx, my);   // (5.50)
 }
 
 bool VehicleListPane::click(const PaneRect& pane, int x, int y) {

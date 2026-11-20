@@ -458,7 +458,7 @@ bool ShellMenu::prefsTest(std::string& report) {
     // clique inverte, sair sem ACCEPT nao grava, e o ACCEPT grava o novo.
     {
         struct Cx { int id; const char* chave; };
-        const Cx caixas[] = { {1205, "MapWrap"}, {1206, "ShowBottomRow"}, {1207, "DemoCamera"}, {1208, "MenuSkin"}, {1210, "CommandDebug"}, {1211, "ProductionQueue"}, {1212, "RightClickOrders"} };
+        const Cx caixas[] = { {1205, "MapWrap"}, {1206, "ShowBottomRow"}, {1207, "DemoCamera"}, {1208, "MenuSkin"}, {1210, "CommandDebug"}, {1211, "ProductionQueue"}, {1212, "RightClickOrders"}, {1213, "ListScrollBars"} };
         auto poeK = [](const char* k, int v) { Config c("OUTPOST2.INI"); c.load(); c.setInt("Game", k, v); c.save(); };
         auto leK = [](const char* k) { Config c("OUTPOST2.INI"); return c.load() ? c.getInt("Game", k, -1) : -1; };
         auto ponto = [&](int id, int& x, int& y) {
@@ -493,7 +493,7 @@ bool ShellMenu::prefsTest(std::string& report) {
                 }
             }
         }
-        step("as caixas MapWrap/ShowBottomRow/DemoCamera/MenuSkin/CommandDebug/ProductionQueue/RightClickOrders gravam no ACCEPT, e a pele troca na hora");
+        step("as caixas MapWrap/ShowBottomRow/DemoCamera/MenuSkin/CommandDebug/ProductionQueue/RightClickOrders/ListScrollBars gravam no ACCEPT, e a pele troca na hora");
 
         // A barra da noite: o INI em 100, o clique no meio leva a ~50, o ACCEPT grava.
         poeK("NightDarkness", 100);

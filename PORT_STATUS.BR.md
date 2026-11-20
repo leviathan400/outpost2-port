@@ -48,7 +48,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 126 modos de teste/captura
+  main.cpp        entrada + os 128 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -140,6 +140,7 @@ preferências; o original ignora chaves que não conhece.
 | `CommandDebug` | 0/1 | 0 | Diagnóstico (acréscimo deste porte): cada comando de prédio recusado — produzir, pesquisar, treinar, o repetido que o anel descarta — vira uma linha no registro de mensagens com o motivo (`not enough workers`, `needs 400 common ore`…). 0 = mudo, como no original. Também se troca pelo jogo: a caixa **Command Debug** no `GAME PREFERENCES` do menu e a linha de mesmo nome no `Game Preferences` da aba Options (ver 5.39). |
 | `ProductionQueue` | 0/1 | 0 | Fila de produção (acréscimo deste porte): cada clique num item da lista da fábrica soma +1 ao pedido (o número aparece na frente do item; clique direito tira 1), o `BUILD IT` manda o pedido para a fila e a fábrica produz um item atrás do outro; o clique que o minério não cobre não soma. 0 = um item por ordem, como no original. Também se troca pelo jogo: a caixa **Production Queue** no `GAME PREFERENCES` do menu e a linha de mesmo nome no `Game Preferences` da aba Options (ver 5.40). |
 | `RightClickOrders` | 0/1 | 0 | O esquema de mouse dos RTS modernos (veio do fork): o esquerdo só seleciona e o **direito** dá a ordem (o comando padrão da 5.42). 0 = como o original: o **esquerdo** faz tudo — com seleção, executa o comando padrão quando ele aceita o alvo, senão seleciona — e o direito cancela a mira e desseleciona. Também se troca pelo jogo: a caixa **Right-Click Orders** no `GAME PREFERENCES` do menu e a linha de mesmo nome na aba Options (ver 5.44). |
+| `ListScrollBars` | 0/1 | 0 | As listas da partida (relatórios, opções, objetivos, pesquisa, produção, veículos) ganham uma barra de rolagem arrastável no lugar das setas de página, e a roda do mouse rola a lista sob o cursor (acréscimo deste porte). 0 = só as setas de página, como no original. Também se troca pelo jogo: a caixa **List Scroll Bars** no `GAME PREFERENCES` e a linha de mesmo nome na aba Options (ver 5.50). |
 
 Todas, menos `AILevel` dentro da partida, também se trocam pelas telas de
 preferências — ver 5.29.
@@ -2411,6 +2412,7 @@ estavam em tela nenhuma.
 | `CommandDebug` | **novo (5.39):** caixa *Command Debug* (1210) | **novo (5.39):** *Command Debug* `On`/`Off` |
 | `ProductionQueue` | **novo (5.40):** caixa *Production Queue* (1211) | **novo (5.40):** *Production Queue* `On`/`Off` |
 | `RightClickOrders` | **novo (5.44):** caixa *Right-Click Orders* (1212) | **novo (5.44):** *Right-Click Orders* `On`/`Off` |
+| `ListScrollBars` | **novo (5.50):** caixa *List Scroll Bars* (1213) | **novo (5.50):** *List Scroll Bars* `On`/`Off` |
 
 **No menu principal**, o diálogo ficou **160 px mais largo** (360 → 520;
 `kPrX` 140 → 60) e ganhou uma **coluna à direita**, *"Port extras:"*, que
@@ -3574,6 +3576,78 @@ Eden 5:
 - a trilha desce uma página;
 - arrastar o polegar além do fim vai ao fim, e além do topo volta ao início.
 
+## 5.50. Barra de rolagem e roda em todas as listas com texto (2026-11-20)
+
+Pedido do usuário: *em todos os campos de texto do tipo lista, as funções da
+barra de rolagem e a rolagem pela roda do mouse.*
+
+**Nos menus (shell), é fidelidade.** No original, essas listas são controles
+do Windows (LISTBOX, RICHEDIT, SysListView32), que já trazem a barra que se
+arrasta e a roda. O porte tinha só desenho, ou setas que andavam 1 linha.
+
+Um mecanismo comum (`ScrollTarget`, `scrollTargets()` em
+`src/shell/shell_menu.cpp`) atende todas: cada tela informa a barra, a área da
+lista, a variável de rolagem, o total e as linhas visíveis. O desenho
+(`drawSkinScrollBar`, nas duas peles) e o mouse usam a mesma geometria. Valem:
+
+- as setas (1 linha) e a trilha (1 página, parando no cursor), as duas
+  repetindo com o botão seguro;
+- o arrasto do polegar;
+- a roda na lista **sob o cursor**, 3 linhas por degrau.
+
+As listas atendidas:
+
+- **tutoriais;**
+- **manual:** a lista de tópicos e também o **texto**, que antes só mostrava a
+  porcentagem e agora quebra antes da barra;
+- **placar;**
+- **capítulos:** são 13 na missão 12 e cabem 8 linhas, então os últimos
+  ficavam **cortados**, sem como rolar. Agora rolam, com o clique e o teclado
+  contando a rolagem;
+- **briefing, objetivos e história** (5.49), agora pelo mecanismo comum.
+
+As listas que sempre cabem (jogos de colônia, sessões de rede) não mostram
+barra, como no Windows.
+
+**Na partida, é extra do porte** (chave `ListScrollBars`, padrão **0**). As
+listas da partida são o controle próprio do original (`sub_459940`), que só
+tem as duas setas de **página**. Com a chave ligada:
+
+- a lista ganha uma barra de 11 px na margem de 14 px que o `listBoxLayout`
+  já deixa à direita dela, então o texto não muda;
+- as setas de página saem;
+- a roda rola a lista sob o cursor.
+
+O mecanismo é um **registro**: cada lista se registra ao se desenhar
+(`drawListBoxScroll`, no lugar do `drawListBoxArrows`), e a GameState trata
+clique, arrasto e roda pelo registro do último quadro, antes dos painéis.
+Assim valem todas as listas sem mexer no clique de cada painel:
+
+- relatórios por ReportList: Factories, Labs, Resources, Comms, Space e
+  Options;
+- objetivos, pesquisa (as duas listas), produção e lista de veículos.
+
+Desligada, `drawListBoxScroll` desenha as setas do original como antes e o
+mouse não muda nada.
+
+A chave tem caixa no `GAME PREFERENCES` (*List Scroll Bars*, 1213; as nove
+caixas da coluna passaram a 16 px, de +62 a +190) e a linha *List Scroll
+Bars* na aba Options.
+
+**Testes:**
+
+- `--listscrolltest` (novo, 25 casos): tutoriais, manual (lista e texto) e
+  capítulos. Em cada um, a roda sob o cursor rola só aquela lista, a seta desce
+  1, e o polegar arrastado vai ao fim e volta ao topo. Nos capítulos, o clique
+  no item visível conta a rolagem;
+- `--panescrolltest [DLL] [tela.bmp]` (novo, 13 casos), na lista do Game
+  Preferences, a 640×480:
+  - desligada: a roda e a margem não agem, e a seta de página desce uma
+    página;
+  - ligada: meio degrau de roda não rola, o degrau inteiro rola 3 linhas, a
+    seta da barra rola 1, a trilha uma página, o polegar vai às duas pontas, e
+    a seta de página oculta não age.
+
 ## 6. Build e execução
 
 **Toolchain:** CMake >= 3.15 + MSVC, C++17, SDL2 2.30.9 (em `third_party/`).
@@ -3633,6 +3707,8 @@ São 109 modos. Os que cobrem regressão de verdade:
 | `--e02test [DLL] [bmp]` | missão 2 do Eden: a praga se espalha e é desenhada com o Overlay, e os objetivos de pesquisa são cumpridos; e a praga no minimapa |
 | `--e04test [DLL]` | A transmissão de dados da E04 (`SpecialTarget`): o Scout encostado e o clique em cima de cada laboratório, os três objetivos e a vitória (5.47) |
 | `--brieftest` | A tela de briefing da campanha: a imagem de cada uma das 24 missões (OP2SHRES `0x190`+missão, +12 no Plymouth) e a caixa de texto de 230 (5.48) |
+| `--listscrolltest` | A barra de rolagem e a roda das listas do shell: tutoriais, manual (lista e texto), capítulos (5.50) |
+| `--panescrolltest [DLL] [tela.bmp]` | A barra e a roda nas listas da partida, com a opção `ListScrollBars` desligada e ligada (5.50) |
 | `--tubetest <mapa> [prefixo]` | o Earthworker ligando prédios com tubo: retas inteiras, a doca que não liga, a animação de trabalho |
 | `--waypointtest <mapa> [bmp]` | pontos de passagem com Ctrl + clique: limites por comando, o pacote com os pontos antes do alvo, a unidade passando por eles, patrulha e obra, e o desenho |
 | `--selecttest <mapa>` | a área de clique das unidades, e a seleção com Shift e com o botão do meio (soma, tira, caixa que soma, as exceções) |

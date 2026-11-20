@@ -27,9 +27,26 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   seguro). A roda do mouse passou a funcionar também nos mouses de roda fina e
   nos touchpads, que antes não rolavam nada. Vale no briefing, nos objetivos e
   na história.
+- **Barra de rolagem e roda em todas as listas com texto dos menus.** Os
+  tutoriais, o manual (a lista de tópicos e o texto, que agora tem barra), o
+  placar e os capítulos passaram a rolar pela roda (a lista sob o cursor) e
+  pela barra (setas, trilha e arrasto), como as listas do Windows do original.
+  Na lista de capítulos, os últimos ficavam cortados a partir da missão 12, sem
+  como rolar.
 
-**Para quem acompanha o código:** seções 5.48 e 5.49 do PORT_STATUS; o modo
-de teste `--brieftest`.
+**Novo**
+
+- **Barra de rolagem nas listas da partida** (opção **List Scroll Bars**, nas
+  preferências e na aba Options; ou `ListScrollBars=1` na seção `[Game]` do
+  `OUTPOST2.INI`). No original as listas da partida só têm as setas de página.
+  Com a opção ligada, cada uma ganha uma barra arrastável no lugar das setas,
+  e a roda do mouse rola a lista sob o cursor: relatórios (fábricas,
+  laboratórios, recursos, comunicações, espaçoporto), opções, objetivos,
+  pesquisa, produção e lista de veículos. Desligada (o padrão), é o jogo
+  original.
+
+**Para quem acompanha o código:** seções 5.48 a 5.50 do PORT_STATUS; os modos
+de teste `--brieftest`, `--listscrolltest` e `--panescrolltest`.
 
 ### English
 
@@ -47,9 +64,24 @@ de teste `--brieftest`.
   page, and the thumb can be dragged (arrows and track repeat while held).
   The mouse wheel now also works on fine-step wheels and touchpads, which
   used to scroll nothing. Briefing, objectives and story.
+- **Scroll bars and the wheel in every text list of the menus.** Tutorials,
+  the help (topics and text, which now has a bar), scores and chapters now
+  scroll with the wheel (the list under the cursor) and the bar (arrows, track
+  and dragging), like the original's Windows lists. The chapter list cut off
+  the last chapters from mission 12 on, with no way to scroll.
 
-**For those following the code:** sections 5.48 and 5.49 of PORT_STATUS; the
-`--brieftest` test mode.
+**New**
+
+- **Scroll bars in the in-game lists** (the **List Scroll Bars** option, in the
+  preferences and the Options tab; or `ListScrollBars=1` in the `[Game]` section
+  of `OUTPOST2.INI`). In the original, in-game lists only have page arrows.
+  With the option on, each gets a draggable bar instead of the arrows, and the
+  mouse wheel scrolls the list under the cursor: reports (factories, labs,
+  resources, communications, spaceport), options, objectives, research,
+  production and the vehicle list. Off (the default), it is the original game.
+
+**For those following the code:** sections 5.48 to 5.50 of PORT_STATUS; the
+`--brieftest`, `--listscrolltest` and `--panescrolltest` test modes.
 
 ---
 

@@ -170,6 +170,8 @@ std::vector<std::string> GameOptionsPane::items() const {
     add("Production Queue<R>%s", onOff(g_opt.productionQueue));
     // Extra deste porte (5.44): o direito da a ordem, o esquerdo so seleciona.
     add("Right-Click Orders<R>%s", onOff(g_opt.rightClickOrders));
+    // Extra deste porte (5.50): barra de rolagem e roda nas listas.
+    add("List Scroll Bars<R>%s", onOff(g_opt.listScrollBars));
     return out;
 }
 
@@ -249,6 +251,7 @@ void GameOptionsPane::bump(int i, int dir) {
     case OPT_CMD_DEBUG:     g_opt.commandDebug = !g_opt.commandDebug; break;
     case OPT_PROD_QUEUE:    g_opt.productionQueue = !g_opt.productionQueue; break;
     case OPT_RIGHT_CLICK:   g_opt.rightClickOrders = !g_opt.rightClickOrders; break;
+    case OPT_LIST_SCROLL:   g_opt.listScrollBars = !g_opt.listScrollBars; break;
     default: return;
     }
     clampAll();

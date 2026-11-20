@@ -103,7 +103,8 @@ void ReportList::draw(uint32_t* fb, int fbW, int fbH, const ListBoxLayout& L, co
         }
         drawMarkupText(fb, fbW, fbH, PaneRect{L.list.l + 4, y + 1, L.list.r - 4, y + L.lineH}, ln.text, 0xFF00FF00u, false, kMarkupLine);
     }
-    drawListBoxArrows(fb, fbW, fbH, L, clip, t > 0, t + L.rows < n, mx, my);
+    (void)t;
+    drawListBoxScroll(fb, fbW, fbH, L, clip, const_cast<int&>(top), n, mx, my);   // (5.50)
 }
 
 bool ReportList::click(const ListBoxLayout& L, const std::vector<std::string>& items, int x, int y, int& item) {

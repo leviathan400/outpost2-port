@@ -190,6 +190,7 @@ void GameSettings::loadFrom(const Config& cfg) {
     commandDebug      = cfg.getInt("Game", "CommandDebug", commandDebug);
     productionQueue   = cfg.getInt("Game", "ProductionQueue", productionQueue);
     rightClickOrders  = cfg.getInt("Game", "RightClickOrders", rightClickOrders);
+    listScrollBars    = cfg.getInt("Game", "ListScrollBars", listScrollBars);
     showBottomRow     = cfg.getInt("Game", "ShowBottomRow", showBottomRow);
     name              = cfg.getString("Game", "Name", name);
 
@@ -224,6 +225,7 @@ void GameSettings::saveTo(Config& cfg) const {
     cfg.setInt("Game", "CommandDebug", commandDebug);
     cfg.setInt("Game", "ProductionQueue", productionQueue);
     cfg.setInt("Game", "RightClickOrders", rightClickOrders);
+    cfg.setInt("Game", "ListScrollBars", listScrollBars);
     cfg.setInt("Game", "ShowBottomRow", showBottomRow);
     cfg.setString("Game", "Name", name);
 
