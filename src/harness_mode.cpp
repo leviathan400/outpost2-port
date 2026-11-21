@@ -13,8 +13,11 @@
 // otherwise. A unit is `@N`, the Nth spawn, or a unit id.
 //
 // Outputs in DIR:
-//   trace.jsonl   per traced tick: each spawn still alive, with the harness's field
-//                 names (px/py/fix/dir/hp/weapon/tur/reload/tgt/lights...) and the RNG
+//   trace.jsonl   at tick 1 and every --trace-every ticks, plus the end: each spawn still
+//                 alive with the harness's fields (position, command and action, path,
+//                 weapon, status effects, tiles), the spawns' weapon fire (fx), every
+//                 other live object (ents), the object allocator (alloc) and the RNG;
+//                 the harness's frame/anim and the alloc ring's [head, tail] aren't modeled
 //   telemetry.jsonl  with --telemetry-every N: each player's colony and every building and
 //                 vehicle at tick 1 and every N ticks, plus the end, as the harness writes it;
 //                 --eco adds the colony internals and the mining beacons
@@ -138,6 +141,7 @@ std::vector<bool> g_spawnGone;
 FILE* g_telem = nullptr;   // telemetry.jsonl (--telemetry-every)
 bool g_eco = false;        // --eco: the colony and unit internals too
 void writeTelemetry(int tick);
+void writeTrace(int tick);
 
 // Port tile x from a script x.
 int tileX(const Line& l, int x) {
@@ -571,7 +575,8 @@ void runLine(GameState& gs, const Line& l, int tick) {
         return;
     }
     if (l.verb == "telemetry") { writeTelemetry(tick); return; }
-    if (l.verb == "shot" || l.verb == "trace") return;   // captures run on their own
+    if (l.verb == "trace") { writeTrace(tick); return; }
+    if (l.verb == "shot") return;   // screenshots run on their own
     if (l.verb == "group") { runGroup(l); return; }
     if (runEco(l, tick)) return;
 
@@ -634,69 +639,6 @@ void runLine(GameState& gs, const Line& l, int tick) {
 
 // ---- Trace -----------------------------------------------------------------------------
 
-int maxHP(const UnitRecord& r) {
-    const int p = (r.owner >> 4) & 0x0F;
-    if (r.flags & UNIT_VEHICLE) { const VehPlayerStats* v = vehicleSheet(r.type, p); return v ? v->hitPoints : 0; }
-    if (r.flags & UNIT_BUILDING) { const StructSheetDesc* d = structSheet(r.type); return d ? d->player[p].hitPoints : 0; }
-    return 0;
-}
-
-const char* codeName(int type) {
-    const char* n = unitCodeName(type);
-    return n ? n : "?";
-}
-
-void writeUnit(FILE* f, bool& first, int id, int spawn) {
-    const UnitRecord& r = g_units[id];
-    const int px = unitOX(r), py = unitOY(r);
-    // 16.16 position: the step's 16-bit fraction is biased so 0x8000 is "on px"; it reads 0 before the first step.
-    // It lives in the order block (+0x38, the original's path context), so it only counts while there is one.
-    long long fx = static_cast<long long>(px) << 16, fy = static_cast<long long>(py) << 16;
-    if ((r.flags & UNIT_VEHICLE) && r.hasOrder && (r.fracX | r.fracY)) {
-        fx += static_cast<int>(r.fracX) - 0x8000;
-        fy += static_cast<int>(r.fracY) - 0x8000;
-    }
-    std::fprintf(f, "%s{\"id\":%d,\"spawn\":%d,\"type\":\"%s\",\"owner\":%d,\"px\":%d,\"py\":%d,\"sx\":%.6f,\"sy\":%.6f,"
-                    "\"fix\":[%lld,%lld],\"dir\":%d,\"hp\":%d,\"actionId\":%d",
-                 first ? "" : ",", id, spawn, codeName(r.type), r.owner & 0x0F, px, py, fx / 65536.0, fy / 65536.0, fx, fy,
-                 r.rotation, maxHP(r) - r.damage, r.action);
-    if (r.flags & UNIT_VEHICLE) std::fprintf(f, ",\"lights\":%d", static_cast<int>(r.flags & UNIT_LIGHTS));
-    // Armed vehicles and Guard Posts: the weapon, turret direction, reload and target
-    // (high word 0x7FFF = none, 0xFFFF = a unit in the low word, else a tile).
-    const int w = r.cargo;
-    if (w >= 0x3B && w <= 0x4B && ((r.flags & UNIT_VEHICLE) || (r.flags & UNIT_TURRET_BLD))) {
-        std::fprintf(f, ",\"weapon\":\"%s\",\"tur\":%d,\"reload\":%d,\"tgt\":", codeName(w), r.turretDir, r.reload);
-        const uint16_t hi = static_cast<uint16_t>(r.field4E), lo = static_cast<uint16_t>(r.target4C);
-        if (hi == 0x7FFF) std::fputs("null", f);
-        else if (hi == 0xFFFF) std::fprintf(f, "%d", static_cast<int>(lo));
-        else std::fprintf(f, "[%d,%d]", static_cast<int>(static_cast<int16_t>(lo)), static_cast<int>(static_cast<int16_t>(hi)));
-    }
-    std::fputc('}', f);
-    first = false;
-}
-
-void writeTrace(FILE* f, int tick) {
-    std::fprintf(f, "{\"tick\":%d,\"units\":[", tick);
-    bool first = true;
-    for (size_t i = 0; i < g_spawned.size(); ++i) {
-        if (g_spawnGone[i]) continue;
-        const int id = g_spawned[i];
-        if (!alive(id) || g_units[id].type != g_spawnType[i]) { g_spawnGone[i] = true; continue; }
-        writeUnit(f, first, id, static_cast<int>(i));
-    }
-    std::fprintf(f, "],\"rng\":[%u,%u]}\n", TethysGame::rng().s0(), TethysGame::rng().s1());
-    std::fflush(f);
-}
-
-// ---- Telemetry -------------------------------------------------------------------------
-// telemetry.jsonl, as the harness's WriteTelemetry writes it: one line per sample with
-// each player's colony and every building and vehicle of each player. x/y are the
-// original's internal tiles (the port's tile + the x offset). With --eco, the colony's
-// allocation, food, population and morale fields as the harness names them, the unit
-// internals and the mining beacons. Fields the port doesn't model are left out (never
-// written as 0): eco's maxFood, morale08, morale24 and rcc, the raw `pi` dwords and the
-// units' `raw` bytes and `hive`.
-
 const char* commandName(int c) {
     static const char* const names[] = {
         "Nop", "Doze", "Move", "Dock", "DockEG", "Stop", "Build", "BuildWall", "RemoveWall", "Produce", "TransferCargo",
@@ -717,6 +659,201 @@ const char* actionName(int a) {
 }
 
 int xOffset() { return std::max(0, g_gameMap.internalXOffset()); }
+
+
+int maxHP(const UnitRecord& r) {
+    const int p = (r.owner >> 4) & 0x0F;
+    if (r.flags & UNIT_VEHICLE) { const VehPlayerStats* v = vehicleSheet(r.type, p); return v ? v->hitPoints : 0; }
+    if (r.flags & UNIT_BUILDING) { const StructSheetDesc* d = structSheet(r.type); return d ? d->player[p].hitPoints : 0; }
+    return 0;
+}
+
+const char* codeName(int type) {
+    const char* n = unitCodeName(type);
+    return n ? n : "?";
+}
+
+// Spawns that died: the object index they held, as the harness's `reused` reads it. 0 still
+// held by the dead object, 1 freed, 2 handed out again (an order naming the spawn now reaches
+// another object), 3 never had one (a spawn that failed).
+std::vector<uint8_t> g_spawnSlot;
+FILE* g_trace = nullptr;
+int g_lastTrace = -1;
+
+bool isWeaponFire(int type) { return type >= 0x3B && type <= 0x4B; }
+
+int spawnOf(int id) {
+    for (size_t k = 0; k < g_spawned.size(); ++k) if (g_spawned[k] == id) return static_cast<int>(k);
+    return -1;
+}
+
+void writeUnit(FILE* f, bool& first, int id, int spawn) {
+    const UnitRecord& r = g_units[id];
+    const int px = unitOX(r), py = unitOY(r);
+    const bool veh = (r.flags & UNIT_VEHICLE) != 0;
+    // 16.16 position: the step's 16-bit fraction is biased so 0x8000 is "on px"; it reads 0 before the first step.
+    // It lives in the order block (+0x38, the original's path context), so it only counts while there is one.
+    long long fx = static_cast<long long>(px) << 16, fy = static_cast<long long>(py) << 16;
+    if (veh && r.hasOrder && (r.fracX | r.fracY)) {
+        fx += static_cast<int>(r.fracX) - 0x8000;
+        fy += static_cast<int>(r.fracY) - 0x8000;
+    }
+    std::fprintf(f, "%s{\"id\":%d,", first ? "" : ",", id);
+    if (spawn >= 0) std::fprintf(f, "\"spawn\":%d,", spawn);
+    // cmd is the command (+0x21), action the action (+0x22), busy +0x20; ipx/ipy the internal pixel.
+    // The harness's frame and anim (set as the unit is drawn) aren't modeled here.
+    std::fprintf(f, "\"type\":\"%s\",\"owner\":%d,\"px\":%d,\"py\":%d,\"sx\":%.6f,\"sy\":%.6f,"
+                    "\"fix\":[%lld,%lld],\"dir\":%d,\"hp\":%d,\"cmd\":\"%s\",\"action\":\"%s\",\"busy\":%d,"
+                    "\"ipx\":%d,\"ipy\":%d",
+                 codeName(r.type), r.owner & 0x0F, px, py, fx / 65536.0, fy / 65536.0, fx, fy,
+                 r.rotation, maxHP(r) - r.damage, commandName(r.action), actionName(r.field22), r.field20,
+                 px + xOffset() * 32, py);
+    if (veh) {
+        std::fprintf(f, ",\"lights\":%d", static_cast<int>(r.flags & UNIT_LIGHTS));
+        if (r.hasOrder) {
+            // The path context: the target tile (the current waypoint; a route without one,
+            // pathGoal), the step's target pixel, its 16-bit fraction (+0x44), the high words of
+            // its velocity (+0x5A/+0x5E), the turn per tick, the waypoint and route cursors and
+            // the route's steps still to take (one direction digit each, 0 = E, clockwise).
+            int dx = r.pathGoalX, dy = r.pathGoalY;
+            if (!r.order.waypoints.empty()) {
+                const int i = std::min(r.order.curWaypoint, static_cast<int>(r.order.waypoints.size()) - 1);
+                const uint32_t wp = i < 0 ? r.order.detourSlot : r.order.waypoints[static_cast<size_t>(i)];
+                dx = unpackLocX(wp);
+                dy = unpackLocY(wp);
+            }
+            const int n = static_cast<int>(r.routeDirs.size());
+            std::fprintf(f, ",\"dest\":[%d,%d],\"path\":{\"start\":[%d,%d],\"moved\":[%d,%d],\"toMove\":[%d,%d],"
+                            "\"rotSpeed\":%d,\"wp\":%d,\"numWp\":%d,\"pt\":%d,\"numPts\":%d,\"steps\":\"",
+                         dx, dy, r.stepDestX + 16, r.stepDestY + 16, r.fracX, r.fracY,
+                         static_cast<int>(static_cast<uint32_t>(r.velX) >> 16),
+                         static_cast<int>(static_cast<uint32_t>(r.velY) >> 16),
+                         static_cast<int>(static_cast<uint8_t>(r.turnStep)), r.order.curWaypoint, r.order.count, r.routeIdx, n);
+            for (int i = r.routeIdx; i >= 0 && i < n && i < 64; ++i)
+                std::fputc('0' + (r.routeDirs[static_cast<size_t>(i)] & 7), f);
+            std::fputs("\"}", f);
+        }
+    }
+    // Armed vehicles and Guard Posts: the weapon, turret direction, reload and target
+    // (high word 0x7FFF = none, 0xFFFF = a unit in the low word, else a tile).
+    const int w = r.cargo;
+    if (isWeaponFire(w) && (veh || (r.flags & UNIT_TURRET_BLD))) {
+        std::fprintf(f, ",\"weapon\":\"%s\",\"tur\":%d,\"reload\":%d,\"tgt\":", codeName(w), r.turretDir, r.reload);
+        const uint16_t hi = static_cast<uint16_t>(r.field4E), lo = static_cast<uint16_t>(r.target4C);
+        if (hi == 0x7FFF) std::fputs("null", f);
+        else if (hi == 0xFFFF) std::fprintf(f, "%d", static_cast<int>(lo));
+        else std::fprintf(f, "[%d,%d]", static_cast<int>(static_cast<int16_t>(lo)), static_cast<int>(static_cast<int16_t>(hi)));
+    }
+    // Weapon effects, only while one is on: [EMP, stickyfoam, ESG] timers; buildings only EMP.
+    const bool emp = (r.flags & UNIT_EMP) != 0, foam = veh && (r.flags & 0x40000u), esg = veh && (r.flags & UNIT_HIT_FLASH);
+    if (emp || foam || esg)
+        std::fprintf(f, ",\"status\":[%d,%d,%d]", emp ? static_cast<int>(static_cast<uint16_t>(r.empTicks)) : 0,
+                     foam ? static_cast<int>(static_cast<uint16_t>(r.foamTicks)) : 0,
+                     esg ? static_cast<int>(static_cast<uint16_t>(r.esgTicks)) : 0);
+    // The tiles within 3 of the unit's that hold its id: a moving vehicle's reserved tile, a building's footprint.
+    std::fputs(",\"tiles\":[", f);
+    bool firstTile = true;
+    const int W = g_gameMap.width(), H = g_gameMap.height();
+    for (int ddy = -3; ddy <= 3; ++ddy)
+        for (int ddx = -3; ddx <= 3; ++ddx) {
+            int x = (px >> 5) + ddx;
+            const int y = (py >> 5) + ddy;
+            if (xOffset() == 0 && W > 0) x = (x + W) % W;   // 512-wide maps wrap
+            if (x < 0 || x >= W || y < 0 || y >= H || g_gameMap.cellOccupant(x, y) != id) continue;
+            std::fprintf(f, "%s[%d,%d]", firstTile ? "" : ",", x, y);
+            firstTile = false;
+        }
+    std::fputs("]}", f);
+    first = false;
+}
+
+// fx: live weapon fire whose shooter is a spawn (an armed ESG, code name SPAM, also its mines); ents: every other live object (explosions,
+// death animations, other fire, units the script didn't spawn), [id, type, action, timer, px, py].
+void writeTraceFx(FILE* f) {
+    std::fputs(",\"fx\":[", f);
+    bool first = true;
+    for (int i = 1; i < static_cast<int>(g_units.size()); ++i) {
+        if (!alive(i) || !isWeaponFire(g_units[i].type)) continue;
+        const UnitRecord& r = g_units[i];
+        const int spawn = spawnOf(r.sourceId);
+        if (spawn < 0) continue;
+        std::fprintf(f, "%s{\"id\":%d,\"type\":\"%s\",\"parent\":%d,\"action\":\"%s\",\"dir\":%d,\"px\":%d,\"py\":%d,\"timer\":%d",
+                     first ? "" : ",", i, codeName(r.type), spawn, actionName(r.field22), r.rotation, unitOX(r), unitOY(r),
+                     r.field3C);
+        if (r.type == unitTypeFromCodeName("SPAM") && (r.flags & 0x8000u))
+            std::fprintf(f, ",\"mines\":%d", static_cast<int>(r.esgMask));
+        std::fputc('}', f);
+        first = false;
+    }
+    std::fputs("],\"ents\":[", f);
+    first = true;
+    for (int i = 1; i < static_cast<int>(g_units.size()); ++i) {
+        if (!alive(i) || spawnOf(i) >= 0) continue;
+        const UnitRecord& r = g_units[i];
+        if (isWeaponFire(r.type) && spawnOf(r.sourceId) >= 0) continue;
+        std::fprintf(f, "%s[%d,\"%s\",\"%s\",%d,%d,%d]", first ? "" : ",", i, codeName(r.type), actionName(r.field22),
+                     r.field3C, unitOX(r), unitOY(r));
+        first = false;
+    }
+    std::fputc(']', f);
+}
+
+void writeTrace(int tick) {
+    FILE* f = g_trace;
+    if (!f || tick == g_lastTrace) return;
+    g_lastTrace = tick;
+    std::fprintf(f, "{\"tick\":%d,\"units\":[", tick);
+    bool first = true;
+    if (g_spawnSlot.size() < g_spawned.size()) g_spawnSlot.resize(g_spawned.size(), 0);
+    for (size_t i = 0; i < g_spawned.size(); ++i) {
+        const int id = g_spawned[i];
+        if (!id) { g_spawnSlot[i] = 3; continue; }   // failed: never had an object
+        if (!g_spawnGone[i] && (!alive(id) || g_units[id].type != g_spawnType[i])) g_spawnGone[i] = true;
+        if (g_spawnGone[i]) {
+            if (g_spawnSlot[i] < 2) {
+                const UnitRecord& r = g_units[id];
+                if (r.id == -1) g_spawnSlot[i] = 1;
+                else if (g_spawnSlot[i] == 1 || r.type != g_spawnType[i]) g_spawnSlot[i] = 2;
+            }
+            continue;
+        }
+        writeUnit(f, first, id, static_cast<int>(i));
+    }
+    if (g_spawned.empty())   // no spawns: every vehicle
+        for (int p = 0; p < TethysGame::noPlayers(); ++p)
+            for (int i = 1; i < static_cast<int>(g_units.size()); ++i)
+                if (alive(i) && (g_units[i].flags & UNIT_VEHICLE) && (g_units[i].owner & 0x0F) == p) writeUnit(f, first, i, -1);
+    std::fputc(']', f);
+    bool anyReused = false;
+    for (size_t i = 0; i < g_spawnSlot.size(); ++i)
+        if (g_spawnSlot[i] == 2) {
+            std::fprintf(f, "%s%u", anyReused ? "," : ",\"reused\":[", static_cast<unsigned>(i));
+            anyReused = true;
+        }
+    if (anyReused) std::fputc(']', f);
+    writeTraceFx(f);
+    // The object allocator: the highest id handed out and the ring of freed slots, oldest first, as
+    // [id, tick freed, references]. The harness adds the ring's [head, tail]; the port's ring has none.
+    std::fprintf(f, ",\"alloc\":[%d,[", static_cast<int>(g_units.size()) - 1);
+    bool firstSlot = true;
+    for (int i : unitFreeRing()) {
+        std::fprintf(f, "%s[%d,%d,%d]", firstSlot ? "" : ",", i, g_units[i].freeTick, g_units[i].refCount);
+        firstSlot = false;
+    }
+    std::fputs("]]", f);
+    std::fprintf(f, ",\"rng\":[%u,%u]}\n", TethysGame::rng().s0(), TethysGame::rng().s1());
+    std::fflush(f);
+}
+
+// ---- Telemetry -------------------------------------------------------------------------
+// telemetry.jsonl, as the harness's WriteTelemetry writes it: one line per sample with
+// each player's colony and every building and vehicle of each player. x/y are the
+// original's internal tiles (the port's tile + the x offset). With --eco, the colony's
+// allocation, food, population and morale fields as the harness names them, the unit
+// internals and the mining beacons. Fields the port doesn't model are left out (never
+// written as 0): eco's maxFood, morale08, morale24 and rcc, the raw `pi` dwords and the
+// units' `raw` bytes and `hive`.
+
 
 void writeTelemUnit(FILE* f, bool& first, int id) {
     if (!alive(id)) return;
@@ -903,11 +1040,11 @@ int runHarness(int argc, char** argv) {
     logf("start: map %dx%d, x offset %d, players %d, rng [%u,%u]", g_gameMap.width(), g_gameMap.height(),
          g_gameMap.internalXOffset(), TethysGame::noPlayers(), TethysGame::rng().s0(), TethysGame::rng().s1());
 
-    FILE* trace = o.traceEvery > 0 ? std::fopen((o.out + "/trace.jsonl").c_str(), "w") : nullptr;
+    g_trace = o.traceEvery > 0 ? std::fopen((o.out + "/trace.jsonl").c_str(), "w") : nullptr;
     g_telem = o.telemEvery > 0 ? std::fopen((o.out + "/telemetry.jsonl").c_str(), "w") : nullptr;
     g_eco = o.eco;
     size_t pos = 0;
-    int tick = 0, nextShot = 5, nextTelem = 0;
+    int tick = 0, nextShot = 5, nextTelem = 0, nextTrace = 0;
     const char* why = "tick limit";
     const Uint32 t0 = SDL_GetTicks();
     for (;;) {
@@ -916,7 +1053,8 @@ int runHarness(int argc, char** argv) {
         while (pos < script.size() && script[pos].tick <= tick) runLine(gs, script[pos++], tick);
         // Telemetry at the first tick, then at each multiple of the interval (the harness's g_nextTelem).
         if (g_telem && tick >= nextTelem) { writeTelemetry(tick); nextTelem = (tick / o.telemEvery + 1) * o.telemEvery; }
-        if (trace && tick % o.traceEvery == 0) writeTrace(trace, tick);
+        // Trace at the first tick, then at each multiple of the interval (the harness's g_nextTrace).
+        if (g_trace && tick >= nextTrace) { writeTrace(tick); nextTrace = (tick / o.traceEvery + 1) * o.traceEvery; }
         if (o.shotEvery > 0 && tick >= nextShot) {
             takeShot(gs, renderer, o.out, tick);
             nextShot = (tick / o.shotEvery + 1) * o.shotEvery;
@@ -927,9 +1065,10 @@ int runHarness(int argc, char** argv) {
     const double secs = (SDL_GetTicks() - t0) / 1000.0;
     if (o.shotEvery > 0 && tick % o.shotEvery) takeShot(gs, renderer, o.out, tick);
     writeTelemetry(tick);                  // and one at the end
+    writeTrace(tick);
     if (g_telem) std::fclose(g_telem);
     logf("quit at tick %d: %s (%.2fs, %.0f ticks/s)", tick, why, secs, tick / (secs > 0 ? secs : 1));
-    if (trace) std::fclose(trace);
+    if (g_trace) std::fclose(g_trace);
     std::fclose(g_log);
     renderer.shutdown();
     SDL_Quit();

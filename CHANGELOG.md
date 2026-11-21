@@ -165,6 +165,19 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   listada depois de linhas de ticks maiores esperava por elas (em
   `chaos_big_colony` a população só chegava no tick 17085).
 
+- **O trace do `--harness` (`trace.jsonl`) tem todos os campos do
+  OP2TestHarness.** Além da posição, direção, HP e arma, cada unidade traz
+  agora o comando e a ação (pelos nomes do original), a rota em curso (o
+  destino, o passo, a fração do pixel, a velocidade, os pontos e as direções
+  que faltam), os efeitos de EMP, espuma e ESG e as casas que ela ocupa. Cada
+  linha traz também os disparos das unidades do cenário, todos os outros
+  objetos vivos (explosões, animações, unidades que o roteiro não criou), o
+  alocador de objetos (o maior índice e o anel de livres) e as unidades mortas
+  cujo índice já é de outra. A primeira linha sai no tick 1, como no harness,
+  e o verbo `trace` grava uma na hora. Os nove cenários de referência seguem
+  iguais; nos duelos, todos os campos novos batem com o original em todo
+  tick.
+
 **Para quem acompanha o código:** seções 5.48 a 5.52 do PORT_STATUS; os modos
 de teste `--brieftest`, `--listscrolltest`, `--panescrolltest`,
 `--missionscrolltest`, `--e05test`, `--objdump`, `--techunlocktest` e
@@ -268,6 +281,19 @@ de teste `--brieftest`, `--listscrolltest`, `--panescrolltest`,
   out rather than written as 0. And the script now runs in tick order, as in
   the harness: a tick-1 line listed after lines for later ticks waited for
   them (in `chaos_big_colony` the colonists only arrived at tick 17085).
+
+- **`--harness`'s trace (`trace.jsonl`) has all of OP2TestHarness's
+  fields.** Besides position, direction, HP and weapon, each unit now has its
+  command and action (by the original's names), the route it's on (the
+  destination, the step, the pixel fraction, the speed, the waypoints and the
+  directions left), its EMP, foam and ESG effects and the tiles it holds. Each
+  line also has the scenario units' weapon fire, every other live object
+  (explosions, animations, units the script didn't create), the object
+  allocator (the highest index and the ring of free slots) and the dead units
+  whose index now belongs to another. The first line is at tick 1, as in the
+  harness, and the `trace` verb writes one on the spot. The nine reference
+  scenarios are unchanged; in the duels every new field matches the original
+  on every tick.
 
 **For those following the code:** sections 5.48 to 5.52 of PORT_STATUS; the
 `--brieftest`, `--listscrolltest`, `--panescrolltest`, `--missionscrolltest`,

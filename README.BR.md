@@ -262,7 +262,7 @@ cursores `.ANI`.
   verbos de economia, colônia, obras, desastres e grupos de IA, para
   comparar os cenários do op2-rs com o original. Falta só a entrada de
   mouse e teclado. Ele grava também a telemetria do harness
-  (`--telemetry-every`, `--eco`).
+  (`--telemetry-every`, `--eco`) e o trace com todos os campos dele.
 - **A tela de briefing como no original.** O texto do briefing de cada
   missão fica numa caixa estreita à esquerda e, à direita, a imagem da missão
   (as 12 do Eden e as 12 do Plymouth, que vêm do próprio jogo). Os objetivos
