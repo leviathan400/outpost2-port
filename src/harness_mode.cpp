@@ -34,6 +34,9 @@
 // The start is the harness's scenario mission (its zScenario.dll), built in: colony
 // type, 2 players (0 Eden human, 1 Plymouth computer), tech level 12, daylight
 // everywhere. The DLL itself can't run here: it calls Outpost2.exe by address.
+// With --mission NAME.dll (and --difficulty N) the start is that mission DLL instead,
+// begun as the harness begins one without --campaign or --players: a single-player game
+// with disasters and day/night on and every player at the difficulty asked for.
 #include "harness_mode.h"
 
 #include <SDL.h>
@@ -81,8 +84,8 @@ namespace op2 {
 namespace {
 
 struct Options {
-    std::string script, out = ".", map = "cm01.map", techtree = "multitek.txt";
-    int ticks = 3000, seed = 1, traceEvery = 1, shotEvery = 0, telemEvery = 0, width = 1024, height = 768;
+    std::string script, out = ".", map = "cm01.map", techtree = "multitek.txt", mission;
+    int ticks = 3000, seed = 1, difficulty = 1, traceEvery = 1, shotEvery = 0, telemEvery = 0, width = 1024, height = 768;
     bool show = false, eco = false, audio = false;
 };
 
@@ -1483,6 +1486,8 @@ bool parse(int argc, char** argv, Options& o) {
         else if (a == "--techtree") o.techtree = next();
         else if (a == "--ticks") o.ticks = std::atoi(next());
         else if (a == "--seed") o.seed = std::atoi(next());
+        else if (a == "--mission") o.mission = next();
+        else if (a == "--difficulty") o.difficulty = std::atoi(next());
         else if (a == "--trace-every") o.traceEvery = std::atoi(next());
         else if (a == "--shot-every") o.shotEvery = std::atoi(next());
         else if (a == "--telemetry-every") o.telemEvery = std::atoi(next());
@@ -1521,15 +1526,34 @@ int runHarness(int argc, char** argv) {
         if (SDL_Window* w = SDL_GetWindowFromID(1)) SDL_HideWindow(w);
 
     auto mission = std::make_unique<MissionScript>();
-    mission->dllName = "harness scenario";
-    mission->mapName = o.map;
-    mission->levelDesc = g_desc.levelDesc;
-    mission->techtreeName = o.techtree;
-    g_desc.mapName = mission->mapName.c_str();
-    g_desc.techtreeName = mission->techtreeName.c_str();
-    mission->desc = &g_desc;
-    mission->initProc = &scenarioInitProc;
-    mission->aiProc = &scenarioAIProc;
+    // --mission: a mission DLL, started as the harness starts one without --campaign or --players: a single-player
+    // game (the tutorial type for names starting with t, colony otherwise) with every player at --difficulty.
+    GameStartInfo gsi;
+    if (!o.mission.empty()) {
+        std::string err;
+        if (!mission->load(o.mission, err)) {
+            logf("FATAL: can't load mission %s: %s", o.mission.c_str(), err.c_str());
+            renderer.shutdown(); SDL_Quit();
+            return 2;
+        }
+        // As the harness's StartMissionHook: disasters and day/night on; each player's difficulty in bits 3-4.
+        gsi.flags = 0x1 | 0x2;
+        gsi.missionNumber = mission->desc->missionType;
+        for (uint32_t& w : gsi.playerWord) w = (static_cast<uint32_t>(o.difficulty) << 3) & 0x18u;
+        logf("mission: %s, '%s', map %s, tech tree %s, type %d, difficulty %d", o.mission.c_str(),
+             mission->levelDesc.c_str(), mission->mapName.c_str(), mission->techtreeName.c_str(),
+             mission->desc->missionType, o.difficulty);
+    } else {
+        mission->dllName = "harness scenario";
+        mission->mapName = o.map;
+        mission->levelDesc = g_desc.levelDesc;
+        mission->techtreeName = o.techtree;
+        g_desc.mapName = mission->mapName.c_str();
+        g_desc.techtreeName = mission->techtreeName.c_str();
+        mission->desc = &g_desc;
+        mission->initProc = &scenarioInitProc;
+        mission->aiProc = &scenarioAIProc;
+    }
     // The voice queue and the message throttle run on the harness's virtual clock, so a run doesn't depend on how
     // fast it plays; with --audio every sound request also goes to audio.jsonl.
     g_audio = o.audio ? std::fopen((o.out + "/audio.jsonl").c_str(), "w") : nullptr;
@@ -1537,8 +1561,8 @@ int runHarness(int argc, char** argv) {
     g_outDir = o.out;
     GameState gs;
     gs.setSeed(static_cast<uint32_t>(o.seed));
-    if (!gs.startMission(std::move(mission))) {
-        logf("FATAL: the scenario didn't start (map %s)", o.map.c_str());
+    if (!gs.startMission(std::move(mission), o.mission.empty() ? nullptr : &gsi)) {
+        logf("FATAL: the %s didn't start", o.mission.empty() ? "scenario" : "mission");
         renderer.shutdown(); SDL_Quit();
         return 2;
     }

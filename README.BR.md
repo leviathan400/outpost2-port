@@ -263,7 +263,8 @@ cursores `.ANI`.
   comparar os cenários do op2-rs com o original, e a entrada de mouse e
   teclado. Ele grava também a telemetria do harness
   (`--telemetry-every`, `--eco`), o trace com todos os campos dele, o
-  `gamedata.json` e o `audio.jsonl` (`--audio`).
+  `gamedata.json` e o `audio.jsonl` (`--audio`), e joga as missões de
+  verdade (`--mission`, `--difficulty`).
 - **A tela de briefing como no original.** O texto do briefing de cada
   missão fica numa caixa estreita à esquerda e, à direita, a imagem da missão
   (as 12 do Eden e as 12 do Plymouth, que vêm do próprio jogo). Os objetivos

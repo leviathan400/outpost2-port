@@ -280,7 +280,7 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
   be compared with the original, and mouse and keyboard input.
   It also writes the harness's telemetry (`--telemetry-every`, `--eco`),
   its trace with all of its fields, `gamedata.json` and `audio.jsonl`
-  (`--audio`).
+  (`--audio`), and plays real missions (`--mission`, `--difficulty`).
 
 ### 2026-11-19
 

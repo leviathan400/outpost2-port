@@ -218,6 +218,21 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   do Savant (177 e 120) e mais uma no tick 1, o original uma (156), e alguns
   sons saem um tick antes.
 
+- **O `--harness` joga as missões de verdade.** Com `--mission NOME.dll` e
+  `--difficulty N`, ele carrega a DLL da missão em vez do cenário e começa a
+  partida como o OP2TestHarness começa uma no original: um jogador, desastres
+  e dia e noite ligados, todos os jogadores na dificuldade pedida. Assim os
+  roteiros de missão do op2-rs (os jogos de colônia, por exemplo) podem ser
+  comparados com o original. Nos 10 roteiros dos cinco jogos de colônia
+  originais (CES1, CEP1, CPS1, CPP1 e CPS2) nenhum bate, e a diferença começa
+  antes do tick 1: até lá o original tira mais números aleatórios que o porte
+  (126 contra 45 no CES1), então as unidades que a IA põe ao acaso e as minas
+  ficam em outro lugar. O original também liga os bits 0x800 e 0x1000 das
+  unidades, começa a moral em 45 e 50, e encerra com MissionFailed três
+  partidas que no porte continuam. À parte: o porte nunca passa os bits de
+  dia e noite e de desastres para o `TethysGame` (`setStartFlags` não é
+  chamado), então `UsesDayNight()` dá sempre 0.
+
 **Para quem acompanha o código:** seções 5.48 a 5.52 do PORT_STATUS; os modos
 de teste `--brieftest`, `--listscrolltest`, `--panescrolltest`,
 `--missionscrolltest`, `--e05test`, `--objdump`, `--techunlocktest` e
@@ -373,6 +388,21 @@ de teste `--brieftest`, `--listscrolltest`, `--panescrolltest`,
   sound lengths and the playlist match; what differs is the game's: at the
   mission's start the port says two Savant lines (177 and 120) and one more at
   tick 1 where the original says one (156), and some sounds come a tick early.
+
+- **`--harness` plays real missions.** With `--mission NAME.dll` and
+  `--difficulty N` it loads the mission DLL instead of the scenario and starts
+  the game as OP2TestHarness starts one in the original: one player,
+  disasters and day/night on, every player at the difficulty asked for. So
+  op2-rs's mission scripts (the colony games, for one) can be compared with
+  the original. On the 10 scripts of the five original colony games (CES1,
+  CEP1, CPS1, CPP1 and CPS2) none match, and the difference starts before
+  tick 1: by then the original has drawn more random numbers than the port
+  (126 vs 45 in CES1), so the units the AI places at random and the mines end
+  up elsewhere. The original also sets units' bits 0x800 and 0x1000, starts
+  morale at 45 and 50, and ends three of the games with MissionFailed where
+  the port plays on. Separately: the port never passes the day/night and
+  disaster bits to `TethysGame` (nothing calls `setStartFlags`), so
+  `UsesDayNight()` is always 0.
 
 **For those following the code:** sections 5.48 to 5.52 of PORT_STATUS; the
 `--brieftest`, `--listscrolltest`, `--panescrolltest`, `--missionscrolltest`,
