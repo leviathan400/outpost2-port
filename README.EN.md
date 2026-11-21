@@ -279,7 +279,8 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
   colony, earthwork, disaster and AI group verbs, so op2-rs's scenarios can
   be compared with the original, and mouse and keyboard input.
   It also writes the harness's telemetry (`--telemetry-every`, `--eco`),
-  its trace with all of its fields and `gamedata.json`.
+  its trace with all of its fields, `gamedata.json` and `audio.jsonl`
+  (`--audio`).
 
 ### 2026-11-19
 

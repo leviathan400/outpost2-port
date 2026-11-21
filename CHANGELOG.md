@@ -205,6 +205,19 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   original. Fora ficam a rolagem pela borda e pelas setas (o porte lê o
   cursor e o teclado de verdade) e a tabela de atalhos (`hotkeys`).
 
+- **O `--harness` grava o `audio.jsonl` e aceita o verbo `shot`.** Com
+  `--audio`, cada som que o jogo pede vai para o log, com o som ligado ou não,
+  como o OP2TestHarness grava no original: os efeitos, as falas do Savant que
+  entram na fila e as que ela toca, as mensagens da barra com o veredito do
+  filtro anti-repetição, as trocas da trilha e a duração de cada som. A fila
+  do Savant e o filtro passam a andar num relógio que segue os ticks (o do
+  harness), então o mesmo roteiro dá sempre o mesmo resultado. O `shot` tira
+  a imagem na hora, para os cenários que só comparam imagens. Comparado com o
+  original nos 8 cenários de áudio do op2-rs, a duração dos sons e a trilha
+  batem; o que difere é do jogo: no início da missão o porte fala duas linhas
+  do Savant (177 e 120) e mais uma no tick 1, o original uma (156), e alguns
+  sons saem um tick antes.
+
 **Para quem acompanha o código:** seções 5.48 a 5.52 do PORT_STATUS; os modos
 de teste `--brieftest`, `--listscrolltest`, `--panescrolltest`,
 `--missionscrolltest`, `--e05test`, `--objdump`, `--techunlocktest` e
@@ -347,6 +360,19 @@ de teste `--brieftest`, `--listscrolltest`, `--panescrolltest`,
   building picks the building in the port and the truck in the original. Not
   modeled: edge and arrow-key scrolling (the port reads the real cursor and
   keyboard there) and the hotkey table (`hotkeys`).
+
+- **`--harness` writes `audio.jsonl` and takes the `shot` verb.** With
+  `--audio`, every sound the game asks for goes to the log, whether or not
+  sound is on, as OP2TestHarness writes it in the original: effects, the
+  Savant lines that join the queue and the ones it plays, the status messages
+  with the anti-repeat throttle's verdict, the playlist changes and each
+  sound's length. The Savant queue and the throttle now run on a clock that
+  follows the ticks (the harness's), so a script always gives the same
+  result. `shot` takes a screenshot on the spot, for the scenarios that only
+  compare pictures. Against the original on op2-rs's 8 audio scenarios, the
+  sound lengths and the playlist match; what differs is the game's: at the
+  mission's start the port says two Savant lines (177 and 120) and one more at
+  tick 1 where the original says one (156), and some sounds come a tick early.
 
 **For those following the code:** sections 5.48 to 5.52 of PORT_STATUS; the
 `--brieftest`, `--listscrolltest`, `--panescrolltest`, `--missionscrolltest`,

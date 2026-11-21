@@ -4,7 +4,7 @@
 //
 //   outpost2_modern.exe --harness --script S --out DIR --map cm01.map --ticks N
 //                       [--seed N] [--techtree multitek.txt] [--trace-every N]
-//                       [--shot-every N] [--telemetry-every N] [--eco] [--size WxH] [--show]
+//                       [--shot-every N] [--telemetry-every N] [--eco] [--audio] [--size WxH] [--show]
 //
 // The script is the harness's: one `<tick> <verb> <args...>` per line, '#' starts a
 // comment; lines at tick T run after the cycle of tick T, as the harness runs them
@@ -27,8 +27,9 @@
 //                 type's stats, the cell type of every tile; --eco adds the morale, mine
 //                 and tech tables (the harness's start_info.json is a network game's, which
 //                 the port doesn't play)
+//   audio.jsonl   with --audio: every sound the game asks for (see "Audio log" below)
 //   harness.log   what ran, spawns, unsupported verbs, the end of the run
-//   shot_<tick>.bmp  the game view every --shot-every ticks
+//   shot_<tick>.bmp  the game view every --shot-every ticks and at each `shot` verb
 //
 // The start is the harness's scenario mission (its zScenario.dll), built in: colony
 // type, 2 players (0 Eden human, 1 Plymouth computer), tech level 12, daylight
@@ -54,6 +55,7 @@
 #include "game/colony.h"
 #include "game/disaster.h"
 #include "game/docking.h"
+#include "game/messages.h"
 #include "game/mining.h"
 #include "game/missile.h"
 #include "game/research.h"
@@ -68,6 +70,8 @@
 #include "game/tethys_game.h"
 #include "game/unit.h"
 #include "game/unit_names.h"
+#include "audio/music.h"
+#include "audio/sound.h"
 #include "gfx/artfile.h"
 #include "gfx/renderer.h"
 #include "mission/mission.h"
@@ -79,7 +83,7 @@ namespace {
 struct Options {
     std::string script, out = ".", map = "cm01.map", techtree = "multitek.txt";
     int ticks = 3000, seed = 1, traceEvery = 1, shotEvery = 0, telemEvery = 0, width = 1024, height = 768;
-    bool show = false, eco = false;
+    bool show = false, eco = false, audio = false;
 };
 
 struct Line {
@@ -544,6 +548,7 @@ bool runEco(const Line& l, int tick) {
 }
 
 bool isInputVerb(const std::string& v);
+void shotNow(int tick);
 void runInput(GameState& gs, const Line& l, int tick);
 
 void runLine(GameState& gs, const Line& l, int tick) {
@@ -588,7 +593,7 @@ void runLine(GameState& gs, const Line& l, int tick) {
     }
     if (l.verb == "telemetry") { writeTelemetry(tick); return; }
     if (l.verb == "trace") { writeTrace(tick); return; }
-    if (l.verb == "shot") return;   // screenshots run on their own
+    if (l.verb == "shot") { shotNow(tick); return; }
     if (l.verb == "group") { runGroup(l); return; }
     if (isInputVerb(l.verb)) { runInput(gs, l, tick); return; }
     if (runEco(l, tick)) return;
@@ -1178,6 +1183,59 @@ void writeInputState(FILE* f, GameState& gs) {
     std::fprintf(f, "],\"view\":[%d,%d]", cx, cy);
 }
 
+// ---- Audio log -------------------------------------------------------------------------
+// audio.jsonl with --audio, as the harness writes it (OP2H_AUDIO): every sound the game
+// asks for, whether or not sound is on. `sfx` an effect (x = -1 without a position),
+// `savant` a voice line for the queue, `play` the line the queue starts, `msg` a status
+// message with the throttle's verdict (`pass` 1 shown, 0 dropped, -1 not a throttled id),
+// `music` the playlist when it changes, and a `tables` line with each sound's length.
+// The queue and the throttle run on the harness's virtual clock (tick * 1000 / 36 ms from a
+// base of 100000000), and the queue takes its turn on the ticks the harness gives it
+// (tick & 3 == 2, after the tick's script). Positions are file pixels. Left out: `at` (the
+// return address in Outpost2.exe of the call) and the tables' Savant priorities (the
+// port's queue has none: first in, first out).
+
+FILE* g_audio = nullptr;
+std::vector<int> g_musicList;
+int g_musicRepeat = -99, g_musicPos = -99;
+
+uint32_t audioClock() { return 100000000u + static_cast<uint32_t>(static_cast<int64_t>(TethysGame::tick()) * 1000 / 36); }
+
+void audioEvent(const char* ev, int id, int x, int y, int pass) {
+    if (!g_audio) return;
+    std::fprintf(g_audio, "{\"tick\":%d,\"ev\":\"%s\",\"id\":%d,\"name\":\"%s\",\"x\":%d,\"y\":%d", TethysGame::tick(), ev, id,
+                 soundName(id), x, y);
+    if (pass != -2) std::fprintf(g_audio, ",\"pass\":%d", pass);
+    std::fputs("}\n", g_audio);
+}
+
+void logMusic(const char* when) {
+    if (!g_audio) return;
+    std::vector<int> list;
+    int repeat = 0, pos = 0;
+    musicDebugState(list, repeat, pos);
+    if (list == g_musicList && repeat == g_musicRepeat && pos == g_musicPos) return;
+    g_musicList = list; g_musicRepeat = repeat; g_musicPos = pos;
+    std::fprintf(g_audio, "{\"tick\":%d,\"ev\":\"music\",\"when\":\"%s\",\"songs\":[", TethysGame::tick(), when);
+    for (size_t i = 0; i < list.size(); ++i) std::fprintf(g_audio, "%s%d", i ? "," : "", list[i]);
+    std::fprintf(g_audio, "],\"repeat\":%d,\"pos\":%d}\n", repeat, pos);
+}
+
+void writeAudioTables() {
+    if (!g_audio) return;
+    std::fprintf(g_audio, "{\"tick\":%d,\"ev\":\"tables\",\"ms\":[", TethysGame::tick());
+    for (int id = 0; id < 0xFA; ++id) std::fprintf(g_audio, "%s%d", id ? "," : "", soundLengthMs(id));
+    std::fputs("]}\n", g_audio);
+}
+
+// After the tick's script: the queue's turn, then the music.
+void audioTick(int tick) {
+    if (!g_audio) return;
+    if ((tick & 3) == 2) soundHarnessPump();
+    logMusic("tick");
+    std::fflush(g_audio);
+}
+
 // ---- Game data -------------------------------------------------------------------------
 // gamedata.json, as the harness's WriteGameData writes it at the first cycle: the map's
 // geometry, the cell types' speed table, every unit type's stats as loaded (the 17 words of
@@ -1408,6 +1466,12 @@ void takeShot(GameState& gs, Renderer& renderer, const std::string& out, int tic
     writeBmp(out + name, renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
 }
 
+// The `shot` verb: a screenshot on the spot, of the frame drawn now.
+std::string g_outDir = ".";
+void shotNow(int tick) {
+    if (g_gs && g_renderer) takeShot(*g_gs, *g_renderer, g_outDir, tick);
+}
+
 bool parse(int argc, char** argv, Options& o) {
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
@@ -1423,6 +1487,7 @@ bool parse(int argc, char** argv, Options& o) {
         else if (a == "--shot-every") o.shotEvery = std::atoi(next());
         else if (a == "--telemetry-every") o.telemEvery = std::atoi(next());
         else if (a == "--eco") o.eco = true;
+        else if (a == "--audio") o.audio = true;
         else if (a == "--show") o.show = true;
         else if (a == "--size") {
             if (std::sscanf(next(), "%dx%d", &o.width, &o.height) != 2) return false;
@@ -1441,8 +1506,8 @@ int runHarness(int argc, char** argv) {
     if (!parse(argc, argv, o)) return 2;
     g_log = std::fopen((o.out + "/harness.log").c_str(), "w");
     if (!g_log) { std::fprintf(stderr, "--harness: can't write %s/harness.log\n", o.out.c_str()); return 2; }
-    logf("harness: port, map=%s ticks=%d seed=%d trace=%d shot=%d telemetry=%d eco=%d", o.map.c_str(), o.ticks, o.seed,
-         o.traceEvery, o.shotEvery, o.telemEvery, o.eco ? 1 : 0);
+    logf("harness: port, map=%s ticks=%d seed=%d trace=%d shot=%d telemetry=%d eco=%d audio=%d", o.map.c_str(), o.ticks,
+         o.seed, o.traceEvery, o.shotEvery, o.telemEvery, o.eco ? 1 : 0, o.audio ? 1 : 0);
     std::vector<Line> script;
     if (!o.script.empty() && !loadScript(o.script, script)) { logf("FATAL: can't read script %s", o.script.c_str()); return 2; }
     logf("script: %u commands from %s", static_cast<unsigned>(script.size()), o.script.c_str());
@@ -1465,6 +1530,11 @@ int runHarness(int argc, char** argv) {
     mission->desc = &g_desc;
     mission->initProc = &scenarioInitProc;
     mission->aiProc = &scenarioAIProc;
+    // The voice queue and the message throttle run on the harness's virtual clock, so a run doesn't depend on how
+    // fast it plays; with --audio every sound request also goes to audio.jsonl.
+    g_audio = o.audio ? std::fopen((o.out + "/audio.jsonl").c_str(), "w") : nullptr;
+    soundSetHarness(&audioClock, g_audio ? &audioEvent : nullptr);
+    g_outDir = o.out;
     GameState gs;
     gs.setSeed(static_cast<uint32_t>(o.seed));
     if (!gs.startMission(std::move(mission))) {
@@ -1474,6 +1544,7 @@ int runHarness(int argc, char** argv) {
     }
     logf("start: map %dx%d, x offset %d, players %d, rng [%u,%u]", g_gameMap.width(), g_gameMap.height(),
          g_gameMap.internalXOffset(), TethysGame::noPlayers(), TethysGame::rng().s0(), TethysGame::rng().s1());
+    logMusic("start");
 
     g_trace = o.traceEvery > 0 ? std::fopen((o.out + "/trace.jsonl").c_str(), "w") : nullptr;
     g_telem = o.telemEvery > 0 ? std::fopen((o.out + "/telemetry.jsonl").c_str(), "w") : nullptr;
@@ -1491,11 +1562,12 @@ int runHarness(int argc, char** argv) {
     for (;;) {
         const bool ended = gs.simTick();
         tick = TethysGame::tick();
-        if (!wroteGameData) { writeGameData(o.out + "/gamedata.json"); wroteGameData = true; }
+        if (!wroteGameData) { writeGameData(o.out + "/gamedata.json"); writeAudioTables(); wroteGameData = true; }
         // With input, a frame before the tick's input (the original draws between its ticks): the layout and the
         // buttons are the ones on screen, and a view the script asked for is applied.
         if (g_inputUsed) { gs.onIdle(renderer, 0.0f); runDeferredInput(gs, tick); }
         while (pos < script.size() && script[pos].tick <= tick) runLine(gs, script[pos++], tick);
+        audioTick(tick);
         if (std::find(g_pendingShots.begin(), g_pendingShots.end(), tick) != g_pendingShots.end())
             takeShot(gs, renderer, o.out, tick);
         // Telemetry at the first tick, then at each multiple of the interval (the harness's g_nextTelem).
@@ -1516,6 +1588,7 @@ int runHarness(int argc, char** argv) {
     if (g_telem) std::fclose(g_telem);
     logf("quit at tick %d: %s (%.2fs, %.0f ticks/s)", tick, why, secs, tick / (secs > 0 ? secs : 1));
     if (g_trace) std::fclose(g_trace);
+    if (g_audio) std::fclose(g_audio);
     std::fclose(g_log);
     renderer.shutdown();
     SDL_Quit();
