@@ -21,6 +21,10 @@
 //   telemetry.jsonl  with --telemetry-every N: each player's colony and every building and
 //                 vehicle at tick 1 and every N ticks, plus the end, as the harness writes it;
 //                 --eco adds the colony internals and the mining beacons
+//   gamedata.json at the first cycle: the map geometry, the cell types' speeds, every unit
+//                 type's stats, the cell type of every tile; --eco adds the morale, mine
+//                 and tech tables (the harness's start_info.json is a network game's, which
+//                 the port doesn't play)
 //   harness.log   what ran, spawns, unsupported verbs, the end of the run
 //   shot_<tick>.bmp  the game view every --shot-every ticks
 //
@@ -48,10 +52,13 @@
 #include "game/colony.h"
 #include "game/disaster.h"
 #include "game/docking.h"
+#include "game/mining.h"
 #include "game/missile.h"
 #include "game/research.h"
 #include "game/trigger.h"
 #include "game/walls.h"
+#include "game/weapon.h"
+#include "game/terrain_cost.h"
 #include "game/command.h"
 #include "game/game_map.h"
 #include "game/player.h"
@@ -845,6 +852,107 @@ void writeTrace(int tick) {
     std::fflush(f);
 }
 
+// ---- Game data -------------------------------------------------------------------------
+// gamedata.json, as the harness's WriteGameData writes it at the first cycle: the map's
+// geometry, the cell types' speed table, every unit type's stats as loaded (the 17 words of
+// player 0's block, plus a building's footprint, dock, rubble and flags and a weapon's
+// radius, shortest shot and range mode), with --eco the morale, mine and tech tables and
+// each type's resource priority and research topic, and the cell type of every tile.
+// Left out where the port doesn't keep them: the cell types' names, `vehicleFlags` of
+// the types that aren't buildings, walls or weapons (the original writes the low word
+// of +0x248 for every type), and the morale `maxima`.
+
+void writeGameData(const std::string& path) {
+    FILE* f = std::fopen(path.c_str(), "w");
+    if (!f) return;
+    const int W = g_gameMap.width(), H = g_gameMap.height(), IW = g_gameMap.internalWidth();
+    const MAP_RECT& clip = g_gameMap.clipRect();
+    std::fprintf(f, "{\"map\":{\"width\":%d,\"height\":%d,\"paddedWidth\":%d,\"paddingTiles\":%d,\"tileXMask\":%u,"
+                    "\"pixelWidth\":%d,\"clipRect\":[%d,%d,%d,%d]},\n",
+                 W, H, IW, xOffset(), static_cast<unsigned>(IW - 1), IW * 32, clip.x1, clip.y1, clip.x2, clip.y2);
+    // The terrain table's columns are the five tracks' speeds, then blocks-line-of-sight and blight speed.
+    std::fputs("\"trackTypes\":[\"Legged\",\"Wheeled\",\"Miner\",\"Tracked\",\"Hover\"],\n\"cellTypes\":[", f);
+    for (int c = 0; c < kNumCellTypes; ++c) {
+        std::fprintf(f, "%s\n {\"id\":%d,\"trackSpeed\":[", c ? "," : "", c);
+        for (int t = 0; t < 5; ++t) std::fprintf(f, "%s%d", t ? "," : "", terrainMoveCost(c, t));
+        std::fprintf(f, "],\"blocksLineOfSight\":%d,\"blightSpeed\":%d}", terrainMoveCost(c, 5), terrainMoveCost(c, 6));
+    }
+    std::fputs("],\n\"unitTypes\":[", f);
+    bool first = true;
+    for (int i = 1; i <= 0x72; ++i) {
+        const char* code = unitCodeName(i);
+        if (!code) continue;
+        int s[17] = {};
+        if (const uint8_t* b = unitStatBlock(i, 0)) std::memcpy(s, b, sizeof(s));
+        const char* name = unitDisplayName(i);
+        std::fprintf(f, "%s\n {\"mapId\":%d,\"code\":\"%s\",\"name\":\"%s\",\"track\":%d,\"hp\":%d,\"armor\":%d,\"sight\":%d,"
+                        "\"moveSpeed\":%d,\"turnRate\":%d,\"reload\":%d",
+                     first ? "" : ",", i, code, name ? name : "", mapIdIsVehicle(i) ? vehicleTrackClass(i) : 0, s[0], s[2], s[6],
+                     s[9], s[10], s[12]);
+        const StructSheetDesc* bd = mapIdIsBuilding(i) ? structSheet(i) : (i >= 0x11 && i <= 0x14) ? wallSheet(i) : nullptr;
+        const WeaponSheetDesc* wd = isWeaponFire(i) ? weaponSheet(i) : nullptr;
+        if (bd) std::fprintf(f, ",\"vehicleFlags\":%d", bd->sizeX & 0xFFFF);
+        else if (wd) std::fprintf(f, ",\"vehicleFlags\":%d", wd->radius & 0xFFFF);
+        std::fputs(",\"stats\":[", f);
+        for (int k = 0; k < 17; ++k) std::fprintf(f, "%s%d", k ? "," : "", s[k]);
+        std::fputc(']', f);
+        if (mapIdIsBuilding(i) && bd)
+            std::fprintf(f, ",\"size\":[%d,%d],\"dock\":[%d,%d],\"rubble\":[%d,%d],\"buildingFlags\":%u", bd->sizeX, bd->sizeY,
+                         bd->dockLocE, bd->dockLocP, bd->commonRubble, bd->rareRubble, bd->flags24C);
+        if (wd) {
+            std::fprintf(f, ",\"pixelsSkipped\":%d,\"radius\":%d", wd->skipped, wd->radius);
+            const int mode = weaponRangeMode(i);
+            if (mode >= 0) std::fprintf(f, ",\"indirect\":%d", mode);
+        }
+        std::fputc('}', f);
+        first = false;
+    }
+    std::fputc(']', f);
+    if (g_eco) {
+        static const char* const kLevels[5] = {"UTOPIA", "GROOVY", "OKAYFINE", "UPSET", "WAYBAD"};
+        std::fputs(",\n\"morale\":{\"levels\":[", f);
+        for (int k = 0; k < 5; ++k) {
+            const MoraleRow& m = moraleRow(k);
+            std::fprintf(f, "%s{\"name\":\"%s\",\"v\":[%d,%d,%d,%d,%d,%d,%d,%d]}", k ? "," : "", kLevels[k], m.points, m.powBonus,
+                         m.rschBonus, m.factBonus, m.foodBonus, m.defectRate, m.fertRate, m.dieRate);
+        }
+        std::fputs("],\"modifiers\":[", f);
+        for (int k = 0; k < moraleEntryCount(); ++k)
+            std::fprintf(f, "%s[\"%s\",%d,%d]", k ? "," : "", moraleEntryName(k), moraleEntryValue(k), moraleEntryPct(k) ? 1 : 0);
+        std::fputs("]},\n\"mines\":[", f);
+        for (int k = 0; k < 9; ++k) {
+            int initial, peakTruck, peak, minTruck, min;
+            mineSheetRow(k / 3, k % 3, initial, peakTruck, peak, minTruck, min);
+            std::fprintf(f, "%s{\"variant\":%d,\"bar\":%d,\"trucks\":[0,%d,%d],\"yield\":[%d,%d,%d]}", k ? "," : "", k / 3, k % 3,
+                         peakTruck, minTruck, initial, peak, min);
+        }
+        // Tech tree as loaded, in techNum order: [techID, plymouthCost, edenCost, maxScientists, lab, category].
+        std::fputs("],\n\"techTree\":[", f);
+        for (int k = 0; k < techCount(); ++k) {
+            const Tech* t = techAt(k);
+            std::fprintf(f, "%s[%d,%d,%d,%d,%d,%d]", k ? "," : "", t ? t->id : 0, t ? t->plymouthCost : 0, t ? t->edenCost : 0,
+                         t ? t->maxScientists : 0, t ? t->lab : 0, t ? t->category : 0);
+        }
+        // Per type: [mapId, resource priority (+0x2A0), research topic (+0x1E4, the tech's index once loaded)].
+        std::fputs("],\n\"typeExtra\":[", f);
+        first = true;
+        for (int i = 1; i <= 0x72; ++i) {
+            if (!unitCodeName(i)) continue;
+            const StructSheetDesc* bd = mapIdIsBuilding(i) ? structSheet(i) : (i >= 0x11 && i <= 0x14) ? wallSheet(i) : nullptr;
+            const int topic = unitResearchTopic(i);
+            std::fprintf(f, "%s[%d,%d,%d]", first ? "" : ",", i, bd ? bd->resourcePriority : 0, topic > 0 ? techIndex(topic) : 0);
+            first = false;
+        }
+        std::fputc(']', f);
+    }
+    // Cell type of every tile in file coordinates (row-major).
+    std::fputs(",\n\"cells\":[", f);
+    for (int y = 0; y < H; ++y)
+        for (int x = 0; x < W; ++x) std::fprintf(f, "%s%d", (x | y) ? "," : "", g_gameMap.getCellType(LOCATION{x, y}));
+    std::fputs("]}\n", f);
+    std::fclose(f);
+}
+
 // ---- Telemetry -------------------------------------------------------------------------
 // telemetry.jsonl, as the harness's WriteTelemetry writes it: one line per sample with
 // each player's colony and every building and vehicle of each player. x/y are the
@@ -1045,11 +1153,13 @@ int runHarness(int argc, char** argv) {
     g_eco = o.eco;
     size_t pos = 0;
     int tick = 0, nextShot = 5, nextTelem = 0, nextTrace = 0;
+    bool wroteGameData = false;
     const char* why = "tick limit";
     const Uint32 t0 = SDL_GetTicks();
     for (;;) {
         const bool ended = gs.simTick();
         tick = TethysGame::tick();
+        if (!wroteGameData) { writeGameData(o.out + "/gamedata.json"); wroteGameData = true; }
         while (pos < script.size() && script[pos].tick <= tick) runLine(gs, script[pos++], tick);
         // Telemetry at the first tick, then at each multiple of the interval (the harness's g_nextTelem).
         if (g_telem && tick >= nextTelem) { writeTelemetry(tick); nextTelem = (tick / o.telemEvery + 1) * o.telemEvery; }

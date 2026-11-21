@@ -178,6 +178,17 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   iguais; nos duelos, todos os campos novos batem com o original em todo
   tick.
 
+- **O `--harness` grava o `gamedata.json`**, os dados do jogo como carregados,
+  como o OP2TestHarness grava no original no primeiro ciclo: a geometria do
+  mapa, a velocidade de cada tipo de terreno por esteira, os atributos de cada
+  tipo de unidade (o bloco do jogador 0, o tamanho, a doca e o entulho dos
+  prédios, o raio e o alcance mínimo das armas), o tipo de cada casa do mapa e,
+  com `--eco`, as tabelas de moral, de minas e de pesquisa. Comparado com o
+  original, quase tudo bate; o que difere é do jogo: SCAT, BFG e os pacotes de
+  3 Spiders e 3 Scorpions sem atributos no porte, os nomes do tubo e dos
+  muros, e 49 casas do `cm01.map` (x 24..33, y 62..67) que no original são
+  intransponíveis.
+
 **Para quem acompanha o código:** seções 5.48 a 5.52 do PORT_STATUS; os modos
 de teste `--brieftest`, `--listscrolltest`, `--panescrolltest`,
 `--missionscrolltest`, `--e05test`, `--objdump`, `--techunlocktest` e
@@ -294,6 +305,16 @@ de teste `--brieftest`, `--listscrolltest`, `--panescrolltest`,
   harness, and the `trace` verb writes one on the spot. The nine reference
   scenarios are unchanged; in the duels every new field matches the original
   on every tick.
+
+- **`--harness` writes `gamedata.json`**, the game's data as loaded, as
+  OP2TestHarness writes it in the original at the first cycle: the map's
+  geometry, each terrain type's speed per track type, each unit type's stats
+  (player 0's block, a building's size, dock and rubble, a weapon's radius and
+  shortest shot), the cell type of every tile and, with `--eco`, the morale,
+  mine and research tables. Compared with the original nearly everything
+  matches; what differs is the game's: SCAT, BFG and the Spider and Scorpion
+  3-packs have no stats in the port, the tube and walls have no names, and 49
+  tiles of `cm01.map` (x 24..33, y 62..67) are impassable in the original.
 
 **For those following the code:** sections 5.48 to 5.52 of PORT_STATUS; the
 `--brieftest`, `--listscrolltest`, `--panescrolltest`, `--missionscrolltest`,

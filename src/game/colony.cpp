@@ -148,6 +148,11 @@ static bool isPctEntry(int i) { return i == ME_EVENT_DEC_RATE || i >= ME_DIFF_EA
 static int s_meBaseMax = 0, s_meMedSum = 0, s_meRecSum = 0, s_meDirtSum = 0;
 static const int kMoraleScale = 100;            // +0x104
 
+int moraleEntryCount() { return ME_COUNT; }
+const char* moraleEntryName(int i) { return i >= 0 && i < ME_COUNT ? kMoraleEntryName[i] : ""; }
+int moraleEntryValue(int i) { return i >= 0 && i < ME_COUNT ? s_me[i] : 0; }
+bool moraleEntryPct(int i) { return isPctEntry(i); }
+
 static void parseMoraleEntries(const std::string& text) {
     size_t p = 0;
     while (p < text.size()) {

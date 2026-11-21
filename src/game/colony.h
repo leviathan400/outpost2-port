@@ -110,6 +110,11 @@ struct MoraleRow {
 };
 bool loadMoraleSheet();
 const MoraleRow& moraleRow(int level);
+// As 67 entradas do MORALE.TXT (tabela @0x4E1F08): nome, valor (o de % já em /256) e se é %.
+int moraleEntryCount();
+const char* moraleEntryName(int i);
+int moraleEntryValue(int i);
+bool moraleEntryPct(int i);
 
 // vt+0xA0 por classe (sub_483750 base; sub_40C1B0 CC; sub_46E6D0 geradores;
 // sub_46E880 Solar; sub_44AD60 minas/Magma Well).

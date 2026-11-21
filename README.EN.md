@@ -278,8 +278,8 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
 - **`--harness` runs nearly all OP2TestHarness scripts**: the economy,
   colony, earthwork, disaster and AI group verbs, so op2-rs's scenarios can
   be compared with the original. Only mouse and keyboard input is left.
-  It also writes the harness's telemetry (`--telemetry-every`, `--eco`)
-  and its trace with all of its fields.
+  It also writes the harness's telemetry (`--telemetry-every`, `--eco`),
+  its trace with all of its fields and `gamedata.json`.
 
 ### 2026-11-19
 
