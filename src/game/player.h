@@ -28,7 +28,8 @@ struct PlayerData {
     int rareOre     = 0;   // +0x24 rare ore
     int foodStored  = 0;   // +0x10
     int foodSupply  = FOOD_STABLE;  // +0x4C
-    int morale      = MORALE_FAIR;  // +0x34 (linha OKAYFINE)
+    int morale      = MORALE_EXCELLENT;  // +0x34; Player.Initialize zera, e o 1º ciclo de
+                                         // moral (ou a IA, que fixa 2) põe o nível de verdade
     int isHuman     = 1;   // +0x28 (1=humano, 0=IA)
     int isEden      = 1;   // +0x2C (1=Eden, 0=Plymouth)
     int colorNumber = 0;   // +0x30

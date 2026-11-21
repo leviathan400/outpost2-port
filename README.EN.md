@@ -245,6 +245,8 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
   Factory, O takes the kit from the first occupied bay and U stores it in the
   first empty one. The garage, Agridome, smelters and tanks work too. Off
   (the default), it is the original game.
+- **Morale starts at 50, as in the original**, not at 0. The colony used to
+  start with "Terrible" morale, and the Agridome made 36 food instead of 40.
 
 ### 2026-11-20
 

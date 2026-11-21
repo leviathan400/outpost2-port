@@ -31,6 +31,11 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
 
 - O nome da opção da roda do mouse aparecia como "Wheel  Scroll Bars" (o "&"
   sumia). Agora é **Wheel/Scroll Bars**.
+- **A moral começa como no original**: em 50 (o 1º ciclo já dá 45, "Fair"),
+  e não em 0 ("Terrible"). Com a moral no fundo desde o início, o Agridome
+  produzia 36 de comida em vez de 40 e as mortes saíam diferentes. Nas cinco
+  colônias do jogo (CEP1, CES1, CPP1, CPS1, CPS2) a moral, a comida e a
+  produção agora batem com o original tick a tick até 20.000.
 
 **Para quem acompanha o código:** seção 5.55 do PORT_STATUS; o modo de teste
 `--dockhotkeytest`.
@@ -56,6 +61,11 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
 
 - The mouse wheel option's name showed as "Wheel  Scroll Bars" (the "&" was
   lost). It is now **Wheel/Scroll Bars**.
+- **Morale starts as in the original**: at 50 (the first cycle makes it 45,
+  "Fair"), not at 0 ("Terrible"). With morale at the bottom from the start,
+  the Agridome made 36 food instead of 40 and deaths came out different. In
+  the game's five colony games (CEP1, CES1, CPP1, CPS1, CPS2) morale, food
+  and production now match the original tick by tick up to 20,000.
 
 **For those following the code:** section 5.55 of PORT_STATUS; the
 `--dockhotkeytest` test mode.
