@@ -10,7 +10,9 @@
 // comment; lines at tick T run after the cycle of tick T, as the harness runs them
 // (the first cycle is tick 1, so tick 0 lines run there). Coordinates are "file"
 // tiles after `coords file` (the port's own tiles) or the original's internal tiles
-// otherwise. A unit is `@N`, the Nth spawn, or a unit id.
+// otherwise. A unit is `@N`, the Nth spawn, or a unit id. The mouse and keyboard verbs
+// (click, drag, key, type, select...) are real input to the game's UI (see "Mouse and
+// keyboard" below); --size 1056x800 gives the original's 1032x766 client for them.
 //
 // Outputs in DIR:
 //   trace.jsonl   at tick 1 and every --trace-every ticks, plus the end: each spawn still
@@ -541,6 +543,9 @@ bool runEco(const Line& l, int tick) {
     return true;
 }
 
+bool isInputVerb(const std::string& v);
+void runInput(GameState& gs, const Line& l, int tick);
+
 void runLine(GameState& gs, const Line& l, int tick) {
     std::string all;
     for (const std::string& a : l.args) all += " " + a;
@@ -585,6 +590,7 @@ void runLine(GameState& gs, const Line& l, int tick) {
     if (l.verb == "trace") { writeTrace(tick); return; }
     if (l.verb == "shot") return;   // screenshots run on their own
     if (l.verb == "group") { runGroup(l); return; }
+    if (isInputVerb(l.verb)) { runInput(gs, l, tick); return; }
     if (runEco(l, tick)) return;
 
     // Orders: the first argument is the unit.
@@ -592,12 +598,10 @@ void runLine(GameState& gs, const Line& l, int tick) {
         "move", "dock", "dockeg", "movewp", "standground", "patrol", "attack", "guard", "attackground", "lights", "stop",
         "selfdestruct" };
     if (std::none_of(std::begin(orders), std::end(orders), [&](const char* n) { return l.verb == n; })) {
-        // Verbs the original harness has that need what this mode doesn't do yet: real mouse and keyboard input to the
-        // game's window, recorded packets, saves. Any other verb is unknown to the original harness too, which logs
+        // Verbs the original harness has that need what this mode doesn't do yet: recorded packets, saves. Any other verb is unknown to the original harness too, which logs
         // it and goes on.
         static const char* const later[] = {
-            "mouse", "click", "rclick", "mclick", "dblclick", "down", "up", "drag", "key", "keydown", "keyup", "type",
-            "select", "uilist", "hotkeys", "packet", "savegame", "loadgame", "gamespeed", "name", "quit" };
+            "packet", "savegame", "loadgame", "gamespeed", "name", "quit" };
         if (std::any_of(std::begin(later), std::end(later), [&](const char* n) { return l.verb == n; }))
             logf("script: tick %d line %d: verb %s is not supported here", tick, l.number, l.verb.c_str());
         else
@@ -852,6 +856,328 @@ void writeTrace(int tick) {
     std::fflush(f);
 }
 
+// ---- Mouse and keyboard ----------------------------------------------------------------
+// The harness's input verbs, as real input to the game: SDL events through GameState's
+// handleEvent, the way the window's own events arrive. A <pos> is `<x> <y>` (the
+// harness's client pixels: they start inside the frame the port draws, at (12,22), and
+// --size 1056x800 gives the original's 1032x766 client at its default 1024x768),
+// `tile <x> <y>` (that tile's centre in the view), `unit <id>` (the unit's centre),
+// `mini <x> <y>` (the minimap pixel showing that tile) or `ui <name>` ("tabN" a report
+// tab, "minimapN" a minimap button, else a case-insensitive part of a button's tooltip
+// or label, '_' for spaces). Mouse verbs take `left|right|middle`, `shift`/`ctrl`/`alt`
+// held while the button goes down and `hold N` (release N ticks later); any verb takes
+// `+shot` (a screenshot one tick later). With input in the script, the game draws a
+// frame every tick, as the original does between its ticks, and the telemetry gets
+// `selected` and `view`. Not modeled: edge scrolling and the arrow keys' scrolling (the
+// port reads the real cursor and keyboard there) and `hotkeys` (the original's table of
+// button hotkeys); `uilist` logs the port's buttons.
+
+Renderer* g_renderer = nullptr;
+GameState* g_gs = nullptr;
+bool g_inputUsed = false;
+int g_inX = 0, g_inY = 0;                // the cursor, in window pixels
+Uint32 g_inButtons = 0;                  // SDL_BUTTON() mask of the buttons held
+SDL_Keymod g_inMods = KMOD_NONE;         // modifiers held by keydown
+struct DeferredUp { int tick, x, y, button; };
+std::vector<DeferredUp> g_deferredUp;    // releases scheduled by `hold N`
+std::vector<int> g_pendingShots;         // ticks of `+shot` screenshots
+
+bool isInputVerb(const std::string& v) {
+    static const char* const verbs[] = { "mouse", "click", "rclick", "mclick", "dblclick", "down", "up", "drag", "key",
+                                         "keydown", "keyup", "type", "select", "uilist", "hotkeys" };
+    return std::any_of(std::begin(verbs), std::end(verbs), [&](const char* n) { return v == n; });
+}
+
+void inSend(GameState& gs, SDL_Event& e) {
+    SDL_SetModState(g_inMods);
+    gs.debugMouseButtons(static_cast<int>(g_inButtons));
+    gs.handleEvent(*g_renderer, e);
+}
+
+void inMove(GameState& gs, int x, int y) {
+    g_inX = x; g_inY = y;
+    int sx = 0, sy = 0;
+    g_renderer->nativeToScreen(x, y, sx, sy);
+    SDL_Event e{};
+    e.type = SDL_MOUSEMOTION;
+    e.motion.x = sx; e.motion.y = sy;
+    e.motion.state = g_inButtons;
+    inSend(gs, e);
+}
+
+void inButton(GameState& gs, int button, bool down) {
+    static const Uint8 sdl[3] = { SDL_BUTTON_LEFT, SDL_BUTTON_RIGHT, SDL_BUTTON_MIDDLE };
+    int sx = 0, sy = 0;
+    g_renderer->nativeToScreen(g_inX, g_inY, sx, sy);
+    if (down) g_inButtons |= SDL_BUTTON(sdl[button]); else g_inButtons &= ~SDL_BUTTON(sdl[button]);
+    SDL_Event e{};
+    e.type = down ? SDL_MOUSEBUTTONDOWN : SDL_MOUSEBUTTONUP;
+    e.button.button = sdl[button];
+    // No CS_DBLCLKS on the original's windows: a double click is two single clicks there too.
+    e.button.clicks = 1;
+    e.button.x = sx; e.button.y = sy;
+    inSend(gs, e);
+}
+
+struct KeySpec { SDL_Keycode sym = SDLK_UNKNOWN; bool shift = false, ctrl = false, alt = false; char ch = 0; };
+
+// "a", "7", "enter", "f5", "ctrl+1", "alt+c", "shift+tab", "vk:0x41" (letters, digits and the keys named here), as the
+// harness's ParseKey reads them on a US layout.
+bool parseKey(std::string s, KeySpec& k) {
+    for (;;) {
+        const size_t plus = s.find('+', 1);
+        if (plus == std::string::npos) break;
+        std::string mod = s.substr(0, plus);
+        for (char& c : mod) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        if (mod == "shift") k.shift = true;
+        else if (mod == "ctrl") k.ctrl = true;
+        else if (mod == "alt") k.alt = true;
+        else return false;
+        s = s.substr(plus + 1);
+    }
+    std::string low = s;
+    for (char& c : low) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    static const std::pair<const char*, SDL_Keycode> names[] = {
+        {"enter", SDLK_RETURN}, {"return", SDLK_RETURN}, {"esc", SDLK_ESCAPE}, {"escape", SDLK_ESCAPE},
+        {"space", SDLK_SPACE}, {"tab", SDLK_TAB}, {"backspace", SDLK_BACKSPACE}, {"delete", SDLK_DELETE},
+        {"insert", SDLK_INSERT}, {"home", SDLK_HOME}, {"end", SDLK_END}, {"pageup", SDLK_PAGEUP},
+        {"pagedown", SDLK_PAGEDOWN}, {"left", SDLK_LEFT}, {"right", SDLK_RIGHT}, {"up", SDLK_UP}, {"down", SDLK_DOWN},
+        {"pause", SDLK_PAUSE}, {"shift", SDLK_LSHIFT}, {"ctrl", SDLK_LCTRL}, {"alt", SDLK_LALT},
+        {"numplus", SDLK_KP_PLUS}, {"numminus", SDLK_KP_MINUS}, {"plus", SDLK_EQUALS}, {"minus", SDLK_MINUS} };
+    for (const auto& [n, sym] : names)
+        if (low == n) { k.sym = sym; if (sym == SDLK_SPACE) k.ch = ' '; return true; }
+    if (low.size() > 1 && low[0] == 'f' && std::isdigit(static_cast<unsigned char>(low[1]))) {
+        const int n = std::atoi(low.c_str() + 1);
+        if (n >= 1 && n <= 12) { k.sym = SDLK_F1 + n - 1; return true; }
+    }
+    if (low.rfind("vk:", 0) == 0) {
+        const int vk = static_cast<int>(std::strtol(low.c_str() + 3, nullptr, 0)) & 0xFF;
+        if (vk >= 'A' && vk <= 'Z') { k.sym = vk - 'A' + 'a'; return true; }
+        if (vk >= '0' && vk <= '9') { k.sym = vk; return true; }
+        return false;
+    }
+    if (s.size() == 1) {
+        const char c = s[0];
+        static const char* const shifted = "~!@#$%^&*()_+{}|:\"<>?";
+        static const char* const plain   = "`1234567890-=[]\\;',./";
+        k.ch = c;
+        if (c >= 'A' && c <= 'Z') { k.sym = c - 'A' + 'a'; k.shift = true; return true; }
+        if (const char* p = std::strchr(shifted, c)) { k.sym = plain[p - shifted]; k.shift = true; return true; }
+        if (static_cast<unsigned char>(c) >= 0x20 && static_cast<unsigned char>(c) < 0x7F) { k.sym = c; return true; }
+    }
+    return false;
+}
+
+SDL_Keymod modOf(SDL_Keycode sym) {
+    return sym == SDLK_LSHIFT ? KMOD_LSHIFT : sym == SDLK_LCTRL ? KMOD_LCTRL : sym == SDLK_LALT ? KMOD_LALT : KMOD_NONE;
+}
+
+void inKey(GameState& gs, SDL_Keycode sym, bool down, char ch) {
+    if (const SDL_Keymod m = modOf(sym)) g_inMods = static_cast<SDL_Keymod>(down ? (g_inMods | m) : (g_inMods & ~m));
+    SDL_Event e{};
+    e.type = down ? SDL_KEYDOWN : SDL_KEYUP;
+    e.key.keysym.sym = sym;
+    e.key.keysym.scancode = SDL_GetScancodeFromKey(sym);
+    e.key.keysym.mod = static_cast<Uint16>(g_inMods);
+    e.key.state = down ? SDL_PRESSED : SDL_RELEASED;
+    inSend(gs, e);
+    // What TranslateMessage posts after a key: the character (the chat line reads it), not with Ctrl or Alt held.
+    if (down && ch && !(g_inMods & (KMOD_CTRL | KMOD_ALT))) {
+        SDL_Event t{};
+        t.type = SDL_TEXTINPUT;
+        t.text.text[0] = ch;
+        inSend(gs, t);
+    }
+}
+
+void inPressKey(GameState& gs, const KeySpec& k) {
+    const SDL_Keycode mods[3] = { SDLK_LCTRL, SDLK_LALT, SDLK_LSHIFT };
+    const bool want[3] = { k.ctrl, k.alt, k.shift };
+    bool pressed[3] = {};
+    for (int i = 0; i < 3; ++i)
+        if (want[i] && !(g_inMods & modOf(mods[i]))) { inKey(gs, mods[i], true, 0); pressed[i] = true; }
+    inKey(gs, k.sym, true, k.ch);
+    inKey(gs, k.sym, false, 0);
+    for (int i = 2; i >= 0; --i) if (pressed[i]) inKey(gs, mods[i], false, 0);
+}
+
+// A map pixel (port coordinates) -> window pixel through the view (it may fall outside it, as in the original).
+void mapToWindow(GameState& gs, int px, int py, int& x, int& y) {
+    int cx = 0, cy = 0;
+    gs.debugCamera(cx, cy);
+    const int W = g_gameMap.width() * 32;
+    int dx = px - cx;
+    if (xOffset() == 0 && W > 0) dx = ((dx % W) + W + W / 2) % W - W / 2;   // world maps wrap: the nearest copy
+    x = gs.debugViewX() + dx;
+    y = gs.debugViewY() + py - cy;
+}
+
+void logInputAt(GameState& gs, int tick, const std::string& verb, int x, int y) {
+    int vx = 0, vy = 0, vw = 0, vh = 0, cx = 0, cy = 0;
+    gs.debugViewRect(vx, vy, vw, vh);
+    gs.debugCamera(cx, cy);
+    const int ux = x - GameState::kClientX, uy = y - GameState::kClientY;   // client pixels, as the harness logs them
+    if (x >= vx && y >= vy && x < vx + vw && y < vy + vh)
+        logf("input: tick %d %s at (%d,%d): detail pane map tile (%d,%d) file", tick, verb.c_str(), ux, uy,
+             (cx + x - vx) >> 5, (cy + y - vy) >> 5);
+    else
+        logf("input: tick %d %s at (%d,%d)", tick, verb.c_str(), ux, uy);
+}
+
+void runInput(GameState& gs, const Line& l, int tick) {
+    std::vector<std::string> a;
+    bool shot = false;
+    for (const std::string& s : l.args) { if (s == "+shot") shot = true; else a.push_back(s); }
+    if (shot) g_pendingShots.push_back(tick + 1);
+    size_t i = 0;
+    auto num = [&](size_t k) { return k < a.size() ? std::atoi(a[k].c_str()) : 0; };
+    auto pos = [&](int& x, int& y) -> bool {
+        if (i >= a.size()) return false;
+        const std::string kind = a[i];
+        if (kind == "tile" || kind == "mini") {
+            const int tx = tileX(l, num(i + 1)), ty = num(i + 2);
+            i += 3;
+            if (kind == "tile") { mapToWindow(gs, tx * 32 + 16, ty * 32 + 16, x, y); return true; }
+            // The minimap pixel whose map point is nearest the tile's centre, as the harness searches it.
+            int vx = 0, vy = 0, vw = 0, vh = 0;
+            gs.debugViewRect(vx, vy, vw, vh);
+            long best = -1;
+            for (int my = 0; my < GameState::kMiniMapH; ++my)
+                for (int mx = 0; mx < GameState::kColW; ++mx) {
+                    int px = 0, py = 0;
+                    if (!gs.harnessMiniToWorld(gs.kColX + mx, GameState::kMiniMapY + my, px, py)) continue;
+                    const long d = std::labs(px + 16 - (tx * 32 + 16)) + std::labs(py + 16 - (ty * 32 + 16));
+                    if (best < 0 || d < best) { best = d; x = gs.kColX + mx; y = GameState::kMiniMapY + my; }
+                }
+            return best >= 0;
+        }
+        if (kind == "unit") {
+            const int id = unitArg(i + 1 < a.size() ? a[i + 1] : "");
+            i += 2;
+            if (!alive(id)) return false;
+            mapToWindow(gs, unitOX(g_units[id]), unitOY(g_units[id]), x, y);
+            return true;
+        }
+        if (kind == "ui") { i += 2; return gs.harnessUiCenter(i - 1 < a.size() ? a[i - 1] : "", x, y); }
+        if (!std::isdigit(static_cast<unsigned char>(kind[0])) && kind[0] != '-') return false;
+        // The harness's window pixels are its client area's, which starts inside the frame the port draws.
+        x = num(i) + GameState::kClientX; y = num(i + 1) + GameState::kClientY;
+        i += 2;
+        return true;
+    };
+    int button = 0, hold = 0;
+    bool mod[3] = {};   // shift, ctrl, alt
+    auto words = [&] {
+        for (size_t k = i; k < a.size(); ++k) {
+            if (a[k] == "hold" && k + 1 < a.size()) hold = std::max(0, std::atoi(a[++k].c_str()));
+            else if (a[k] == "left") button = 0;
+            else if (a[k] == "right") button = 1;
+            else if (a[k] == "middle") button = 2;
+            else if (a[k] == "shift") mod[0] = true;
+            else if (a[k] == "ctrl") mod[1] = true;
+            else if (a[k] == "alt") mod[2] = true;
+        }
+    };
+    const SDL_Keycode modKey[3] = { SDLK_LSHIFT, SDLK_LCTRL, SDLK_LALT };
+    bool pressedMod[3] = {};
+    auto holdMods = [&] {
+        for (int k = 0; k < 3; ++k)
+            if (mod[k] && !(g_inMods & modOf(modKey[k]))) { inKey(gs, modKey[k], true, 0); pressedMod[k] = true; }
+    };
+    auto releaseMods = [&] { for (int k = 2; k >= 0; --k) if (pressedMod[k]) inKey(gs, modKey[k], false, 0); };
+    auto release = [&](int x, int y) {
+        if (hold > 0) { g_deferredUp.push_back({ tick + hold, x, y, button }); return; }
+        inButton(gs, button, false);
+    };
+
+    int x = g_inX, y = g_inY, x2 = 0, y2 = 0;
+    const std::string& v = l.verb;
+    if (v == "mouse" || v == "click" || v == "rclick" || v == "mclick" || v == "dblclick" || v == "down" || v == "up") {
+        if (!pos(x, y)) { logf("input: tick %d %s: bad position", tick, v.c_str()); return; }
+        words();
+        if (v == "rclick") button = 1;
+        if (v == "mclick") button = 2;
+        if (v == "dblclick" || v == "down" || v == "up" || v == "mouse") hold = 0;
+        logInputAt(gs, tick, v, x, y);
+        holdMods();
+        inMove(gs, x, y);
+        const bool press = v == "down" || v == "click" || v == "rclick" || v == "mclick" || v == "dblclick";
+        if (press) inButton(gs, button, true);
+        if (v == "up" || (press && v != "down")) release(x, y);
+        if (v == "dblclick") { inButton(gs, button, true); inButton(gs, button, false); }
+        releaseMods();
+    } else if (v == "drag") {
+        if (!pos(x, y) || !pos(x2, y2)) { logf("input: tick %d drag: bad position", tick); return; }
+        words();
+        logInputAt(gs, tick, v, x, y);
+        logInputAt(gs, tick, v, x2, y2);
+        holdMods();
+        inMove(gs, x, y);
+        inButton(gs, button, true);
+        for (int s = 1; s <= 4; ++s) inMove(gs, x + (x2 - x) * s / 4, y + (y2 - y) * s / 4);
+        release(x2, y2);
+        releaseMods();
+    } else if (v == "select") {
+        // A left click on the unit, centring the view on it first if it is off the view.
+        const int id = unitArg(a.empty() ? "" : a[0]);
+        if (!alive(id)) { logf("input: tick %d select: no unit %s", tick, a.empty() ? "" : a[0].c_str()); return; }
+        mapToWindow(gs, unitOX(g_units[id]), unitOY(g_units[id]), x, y);
+        int vx = 0, vy = 0, vw = 0, vh = 0;
+        gs.debugViewRect(vx, vy, vw, vh);
+        if (x < vx || y < vy || x >= vx + vw || y >= vy + vh) {
+            requestCenterView(unitOX(g_units[id]), unitOY(g_units[id]));
+            gs.onIdle(*g_renderer, 0.0f);   // the view moves when drawn
+            mapToWindow(gs, unitOX(g_units[id]), unitOY(g_units[id]), x, y);
+        }
+        logInputAt(gs, tick, v, x, y);
+        inMove(gs, x, y);
+        inButton(gs, 0, true);
+        inButton(gs, 0, false);
+    } else if (v == "key" || v == "keydown" || v == "keyup") {
+        for (const std::string& s : a) {
+            KeySpec k;
+            if (!parseKey(s, k)) { logf("input: tick %d %s: unknown key %s", tick, v.c_str(), s.c_str()); continue; }
+            logf("input: tick %d %s %s (key 0x%x%s%s%s)", tick, v.c_str(), s.c_str(), static_cast<unsigned>(k.sym),
+                 k.shift ? " shift" : "", k.ctrl ? " ctrl" : "", k.alt ? " alt" : "");
+            if (v == "key") inPressKey(gs, k);
+            else inKey(gs, k.sym, v == "keydown", v == "keydown" ? k.ch : 0);
+        }
+    } else if (v == "type") {
+        std::string text;
+        for (const std::string& s : a) text += (text.empty() ? "" : " ") + s;
+        logf("input: tick %d type \"%s\"", tick, text.c_str());
+        for (char ch : text) {
+            KeySpec k;
+            if (parseKey(std::string(1, ch), k)) inPressKey(gs, k);
+        }
+    } else if (v == "uilist") {
+        for (const std::string& line : gs.harnessUiList()) logf("ui: %s", line.c_str());
+    } else if (v == "hotkeys") {
+        logf("input: tick %d hotkeys: the original's button hotkey table isn't modeled here", tick);
+    }
+}
+
+// Releases due this tick (`hold N`), each at its own point.
+void runDeferredInput(GameState& gs, int tick) {
+    for (size_t k = 0; k < g_deferredUp.size();) {
+        if (g_deferredUp[k].tick > tick) { ++k; continue; }
+        const DeferredUp d = g_deferredUp[k];
+        g_deferredUp.erase(g_deferredUp.begin() + static_cast<long>(k));
+        inMove(gs, d.x, d.y);
+        inButton(gs, d.button, false);
+    }
+}
+
+// Telemetry extension for input runs, as the harness's InputStateJson: the selection and the view's top-left corner.
+void writeInputState(FILE* f, GameState& gs) {
+    std::fputs(",\"selected\":[", f);
+    const std::vector<int>& sel = gs.debugSelection();
+    for (size_t k = 0; k < sel.size() && k < 32; ++k) std::fprintf(f, "%s%d", k ? "," : "", sel[k]);
+    int cx = 0, cy = 0;
+    gs.debugCamera(cx, cy);
+    std::fprintf(f, "],\"view\":[%d,%d]", cx, cy);
+}
+
 // ---- Game data -------------------------------------------------------------------------
 // gamedata.json, as the harness's WriteGameData writes it at the first cycle: the map's
 // geometry, the cell types' speed table, every unit type's stats as loaded (the 17 words of
@@ -1047,6 +1373,7 @@ void writeTelemetry(int tick) {
         }
         std::fputc(']', f);
     }
+    if (g_inputUsed && g_gs) writeInputState(f, *g_gs);
     std::fputs("}\n", f);
     std::fflush(f);
 }
@@ -1154,13 +1481,23 @@ int runHarness(int argc, char** argv) {
     size_t pos = 0;
     int tick = 0, nextShot = 5, nextTelem = 0, nextTrace = 0;
     bool wroteGameData = false;
+    g_renderer = &renderer;
+    g_gs = &gs;
+    g_inputUsed = std::any_of(script.begin(), script.end(), [](const Line& l) { return isInputVerb(l.verb); });
+    // The cursor starts where the harness parks it: over the side column, clear of the view and the edges.
+    if (g_inputUsed) inMove(gs, renderer.getWidth() - 90, renderer.getHeight() / 2);
     const char* why = "tick limit";
     const Uint32 t0 = SDL_GetTicks();
     for (;;) {
         const bool ended = gs.simTick();
         tick = TethysGame::tick();
         if (!wroteGameData) { writeGameData(o.out + "/gamedata.json"); wroteGameData = true; }
+        // With input, a frame before the tick's input (the original draws between its ticks): the layout and the
+        // buttons are the ones on screen, and a view the script asked for is applied.
+        if (g_inputUsed) { gs.onIdle(renderer, 0.0f); runDeferredInput(gs, tick); }
         while (pos < script.size() && script[pos].tick <= tick) runLine(gs, script[pos++], tick);
+        if (std::find(g_pendingShots.begin(), g_pendingShots.end(), tick) != g_pendingShots.end())
+            takeShot(gs, renderer, o.out, tick);
         // Telemetry at the first tick, then at each multiple of the interval (the harness's g_nextTelem).
         if (g_telem && tick >= nextTelem) { writeTelemetry(tick); nextTelem = (tick / o.telemEvery + 1) * o.telemEvery; }
         // Trace at the first tick, then at each multiple of the interval (the harness's g_nextTrace).

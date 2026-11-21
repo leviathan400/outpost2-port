@@ -189,6 +189,22 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   muros, e 49 casas do `cm01.map` (x 24..33, y 62..67) que no original são
   intransponíveis.
 
+- **O `--harness` aceita a entrada de mouse e teclado do OP2TestHarness**
+  (`mouse`, `click`, `rclick`, `mclick`, `dblclick`, `down`, `up`, `drag`,
+  `select`, `key`, `keydown`, `keyup`, `type`, `uilist`): cada uma vira um
+  evento de verdade na interface do jogo, como o harness manda as mensagens à
+  janela do original. As posições são as do harness: pixels da área cliente
+  (com `--size 1056x800` o porte tem a mesma área de 1032x766 do original),
+  um tile, uma unidade, um ponto do minimapa ou um botão pela dica, com os
+  botões do mouse, Shift/Ctrl/Alt, `hold N` e `+shot`. Com entrada no
+  roteiro, o jogo desenha um quadro a cada tick e a telemetria ganha a seleção
+  e a vista. Nos 40 cenários de entrada do op2-rs as posições caem nos mesmos
+  tiles do original; o que difere é do jogo: a ordem dada pela interface sai
+  no mesmo tick no porte e 12 ticks depois no original, e um clique num
+  caminhão em cima de um prédio escolhe o prédio no porte e o caminhão no
+  original. Fora ficam a rolagem pela borda e pelas setas (o porte lê o
+  cursor e o teclado de verdade) e a tabela de atalhos (`hotkeys`).
+
 **Para quem acompanha o código:** seções 5.48 a 5.52 do PORT_STATUS; os modos
 de teste `--brieftest`, `--listscrolltest`, `--panescrolltest`,
 `--missionscrolltest`, `--e05test`, `--objdump`, `--techunlocktest` e
@@ -315,6 +331,22 @@ de teste `--brieftest`, `--listscrolltest`, `--panescrolltest`,
   matches; what differs is the game's: SCAT, BFG and the Spider and Scorpion
   3-packs have no stats in the port, the tube and walls have no names, and 49
   tiles of `cm01.map` (x 24..33, y 62..67) are impassable in the original.
+
+- **`--harness` takes OP2TestHarness's mouse and keyboard input** (`mouse`,
+  `click`, `rclick`, `mclick`, `dblclick`, `down`, `up`, `drag`, `select`,
+  `key`, `keydown`, `keyup`, `type`, `uilist`): each becomes a real event to
+  the game's UI, as the harness sends messages to the original's window.
+  Positions are the harness's: client pixels (with `--size 1056x800` the port
+  has the original's 1032x766 client), a tile, a unit, a minimap point or a
+  button by its tooltip, with the mouse buttons, Shift/Ctrl/Alt, `hold N` and
+  `+shot`. With input in the script the game draws a frame every tick and the
+  telemetry gets the selection and the view. On op2-rs's 40 input scenarios
+  the positions land on the same tiles as in the original; what differs is
+  the game's: an order given through the UI runs on the same tick in the port
+  and 12 ticks later in the original, and a click on a truck standing on a
+  building picks the building in the port and the truck in the original. Not
+  modeled: edge and arrow-key scrolling (the port reads the real cursor and
+  keyboard there) and the hotkey table (`hotkeys`).
 
 **For those following the code:** sections 5.48 to 5.52 of PORT_STATUS; the
 `--brieftest`, `--listscrolltest`, `--panescrolltest`, `--missionscrolltest`,

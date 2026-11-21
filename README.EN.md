@@ -277,7 +277,7 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
   Fixed; all 22 objectives of the mission were checked one by one.
 - **`--harness` runs nearly all OP2TestHarness scripts**: the economy,
   colony, earthwork, disaster and AI group verbs, so op2-rs's scenarios can
-  be compared with the original. Only mouse and keyboard input is left.
+  be compared with the original, and mouse and keyboard input.
   It also writes the harness's telemetry (`--telemetry-every`, `--eco`),
   its trace with all of its fields and `gamedata.json`.
 

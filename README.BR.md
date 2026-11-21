@@ -260,8 +260,8 @@ cursores `.ANI`.
 
 - **O `--harness` roda quase todos os roteiros do OP2TestHarness**: os
   verbos de economia, colônia, obras, desastres e grupos de IA, para
-  comparar os cenários do op2-rs com o original. Falta só a entrada de
-  mouse e teclado. Ele grava também a telemetria do harness
+  comparar os cenários do op2-rs com o original, e a entrada de mouse e
+  teclado. Ele grava também a telemetria do harness
   (`--telemetry-every`, `--eco`), o trace com todos os campos dele e o
   `gamedata.json`.
 - **A tela de briefing como no original.** O texto do briefing de cada
