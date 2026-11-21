@@ -15,6 +15,14 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
 
 **Corrigido**
 
+- **A lista de objetivos que sumia no meio da missão.** Na missão 05 do Eden
+  os objetivos mudam o tempo todo: os novos entram no topo e os cumpridos
+  saem. Com a lista rolada para baixo, ela encolhia e a janela ficava com uma
+  linha só ou vazia, e os objetivos restantes sumiam da vista. Agora, como no
+  original, a lista acompanha o objetivo que estava no topo, e a janela nunca
+  fica vazia enquanto houver objetivos para mostrar. A tela "Communications
+  Satellite: Not Operational" é a do Space Program, o quinto botão das abas;
+  os objetivos são o sexto, o mais à direita.
 - **A tela de briefing como no original.** No original, o briefing de cada
   missão da campanha mostra o texto numa caixa estreita à esquerda e uma
   imagem da missão à direita (projetos, mapas, a projeção da praga…). O porte
@@ -73,12 +81,21 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
 
 **Para quem acompanha o código:** seções 5.48 a 5.52 do PORT_STATUS; os modos
 de teste `--brieftest`, `--listscrolltest`, `--panescrolltest`,
-`--missionscrolltest`, `--e05test`, `--objdump` e `--techunlocktest`.
+`--missionscrolltest`, `--e05test`, `--objdump`, `--techunlocktest` e
+`--e05objtest`; seções até a 5.54.
 
 ### English
 
 **Fixed**
 
+- **The objectives list that vanished mid-mission.** In Eden mission 05
+  objectives change all the time: new ones enter at the top and completed
+  ones leave. With the list scrolled down, it shrank and the window showed a
+  single line or nothing, and the remaining objectives went out of view. Now,
+  as in the original, the list follows the objective that was at the top, and
+  the window is never empty while there are objectives to show. The
+  "Communications Satellite: Not Operational" screen is the Space Program,
+  the fifth tab button; objectives are the sixth, the rightmost.
 - **The briefing screen as in the original.** In the original, each campaign
   mission's briefing shows the text in a narrow box on the left and a picture
   of the mission on the right (designs, maps, the blight projection…). The
@@ -136,7 +153,8 @@ de teste `--brieftest`, `--listscrolltest`, `--panescrolltest`,
 
 **For those following the code:** sections 5.48 to 5.52 of PORT_STATUS; the
 `--brieftest`, `--listscrolltest`, `--panescrolltest`, `--missionscrolltest`,
-`--e05test`, `--objdump` and `--techunlocktest` test modes.
+`--e05test`, `--objdump`, `--techunlocktest` and `--e05objtest` test modes;
+sections up to 5.54.
 
 ---
 

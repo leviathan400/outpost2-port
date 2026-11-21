@@ -19,8 +19,10 @@ static ListBoxLayout objLayout(const PaneRect& pane) { return listBoxLayout(pane
 
 // Linhas da lista: cada objetivo pendente quebrado por palavras na largura da
 // lista (sub_416650), com a tag de cor repetida em cada linha.
-static std::vector<std::string> objectiveLines(int width) {
+static std::vector<std::string> objectiveLines(int width, std::vector<std::string>* owners = nullptr) {
     std::vector<std::string> out;
+    // owners: o objetivo de cada linha (a linha em branco entre dois e do de cima).
+    auto dono = [&](const std::string& d) { if (owners) while (owners->size() < out.size()) owners->push_back(d); };
     for (const std::string& line : missionObjectives()) {
         const std::string tag = line.substr(0, 4), text = line.substr(4);
         if (tag == "<C0>" && !objectivesShowCompleted()) continue;   // cumprido: fora se dword_57563C == 0
@@ -52,18 +54,67 @@ static std::vector<std::string> objectiveLines(int width) {
             ini = fim + 1;
         }
         out.push_back("");                               // espaço entre objetivos
+        dono(line);
     }
     if (!out.empty()) out.pop_back();
+    if (owners) owners->resize(out.size());
     return out;
 }
+
+void ObjectivesPane::reanchor(const std::vector<std::string>& lines, const std::vector<std::string>& owners, int rows) const {
+    int& top = const_cast<int&>(m_top);
+    const int n = static_cast<int>(lines.size());
+    if (lines != m_lastLines) {
+        if (!m_lastLines.empty()) {                      // a lista mudou: re-ancora
+            int novo = 0;                                // o item sumiu: o comeco
+            for (int i = 0; i < n; ++i)
+                if (!m_anchor.empty() && owners[i] == m_anchor) {
+                    int fim = i;
+                    while (fim + 1 < n && owners[fim + 1] == m_anchor) ++fim;
+                    novo = std::min(i + m_anchorOff, fim);
+                    break;
+                }
+            top = novo;
+        }
+        m_lastLines = lines;
+    }
+    // CORRECAO (5.54): a janela nunca fica com o fim vazio enquanto houver
+    // objetivos acima -- o topo para em (total - linhas da janela). So com a
+    // re-ancoragem, o objetivo do topo podia ser o ultimo da lista e a janela
+    // mostrava uma linha so, com os restantes fora da vista.
+    top = std::max(0, std::min(top, std::max(0, n - std::max(1, rows))));
+    // A ancora de agora: o objetivo da linha do topo e a linha dentro dele.
+    if (top < n) {
+        m_anchor = owners[top];
+        int ini = top;
+        while (ini > 0 && owners[ini - 1] == m_anchor) --ini;
+        m_anchorOff = top - ini;
+    } else {
+        m_anchor.clear();
+        m_anchorOff = 0;
+    }
+}
+
+int ObjectivesPane::debugRows(const PaneRect& pane) const { return objLayout(pane).rows; }
+int ObjectivesPane::debugVisible(const PaneRect& pane) const {
+    const ListBoxLayout L = objLayout(pane);
+    const std::vector<std::string> lines = objectiveLines(L.list.r - L.list.l - 8);
+    int v = 0;
+    for (int i = 0; i < L.rows && m_top + i < static_cast<int>(lines.size()); ++i) if (!lines[m_top + i].empty()) ++v;
+    return v;
+}
+
+std::vector<std::string> objectivesDebugLines(int width) { return objectiveLines(width); }
 
 void ObjectivesPane::draw(uint32_t* fb, int fbW, int fbH, const PaneRect& pane, int mx, int my) const {
     const ListBoxLayout L = objLayout(pane);
     drawMarkupText(fb, fbW, fbH, PaneRect{pane.l + 0xD, pane.t + 2, pane.r - 0xE, L.list.t},
                    "Mission Objectives (Alt+O)", 0xFF00FF00u, true, kMarkupLine);           // sub_459B60 (verde)
     drawListBoxFrame(fb, fbW, fbH, L);
-    const std::vector<std::string> lines = objectiveLines(L.list.r - L.list.l - 8);
-    const int top = std::min(m_top, std::max(0, static_cast<int>(lines.size()) - 1));
+    std::vector<std::string> owners;
+    const std::vector<std::string> lines = objectiveLines(L.list.r - L.list.l - 8, &owners);
+    reanchor(lines, owners, L.rows);                     // sub_430CE0 (5.54)
+    const int top = m_top;
     for (int i = 0; i < L.rows && top + i < static_cast<int>(lines.size()); ++i)
         drawMarkupText(fb, fbW, fbH, PaneRect{L.list.l + 4, L.list.t + 2 + i * L.lineH, L.list.r - 4, L.list.b},
                        lines[top + i], 0xFF00FF00u);

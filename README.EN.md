@@ -180,7 +180,7 @@ map's bottom row (`ShowBottomRow`), the one-click ore route
 production queue (`ProductionQueue`), right-click orders
 (`RightClickOrders`) and in-game list scroll bars (`ListScrollBars`); they are documented in `PORT_STATUS.EN.md`.
 
-There are **132 command-line modes** for tests and captures, among them a
+There are **133 command-line modes** for tests and captures, among them a
 regression battery (`--savetest` proves save/reload determinism). The list is
 in `PORT_STATUS.EN.md`.
 
@@ -214,7 +214,7 @@ and what was checked and discarded from the cheat lists that circulate.
 
 ```
 src/
-  main.cpp        entry point + the 132 test/capture modes
+  main.cpp        entry point + the 133 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -237,6 +237,14 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
 ## Recent changes
 
 ### 2026-11-20
+
+- **The objectives list no longer vanishes.** In Eden mission 05, with the
+  list scrolled down, when an objective was completed (and left the list) or
+  a new one came in, the window showed a single line or nothing, and the
+  remaining objectives went out of view. The list now follows the changes and
+  always shows the objectives left. (The "Communications Satellite: Not
+  Operational" screen is the Space Program, the fifth tab button; objectives
+  are the sixth, the rightmost.)
 
 - **The briefing screen as in the original.** Each mission's briefing text
   sits in a narrow box on the left, with the mission's picture on the right

@@ -48,7 +48,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 132 modos de teste/captura
+  main.cpp        entrada + os 133 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -3787,6 +3787,56 @@ no asm: o `sub_472C50` devolve 0 para o Basic Lab (0x21) quando o Standard Lab
 (0x31) já foi pesquisado, porque o laboratório básico fica obsoleto. O teste
 confere essa regra num caso próprio.
 
+## 5.54. A lista de objetivos que "sumia" no meio da missão (2026-11-20)
+
+Relato: *na missão 05 do Eden, no decorrer da missão os objetivos somem, e
+quando entra um objetivo novo não aparecem mais os restantes nem os não
+concluídos.*
+
+**Como a lista muda.** A E05 acrescenta objetivos pelo progresso. Os callbacks
+da DLL (`PantherObj`, `NextRes`, `HasSpacePort`, `SpaceDone`, `ROP`, `ResMet`,
+`ResSuper`) fazem `CreateVictoryCondition` + `AddMessage("New Objective")`, e
+o objetivo novo entra no **topo** (inserção na cabeça). E os cumpridos **saem**
+da lista: com `dword_57563C = 0`, o padrão do original, que só a opção
+"Display Completed Objectives" muda, o `sub_4652C0` pula os cumpridos. A lista
+muda de tamanho a toda hora.
+
+**O defeito.** O porte guardava só o **número da linha** do topo. Com a lista
+rolada para baixo (22 objetivos não cabem numa janela de 14 linhas), ela
+encolhia e o topo passava do fim: a janela mostrava uma linha só, ou nada, e
+os objetivos restantes ficavam **acima**, fora da vista.
+
+**O original** (`sub_430CE0`, o `vt[0x28]` do controle de lista `off_4D00E0`,
+chamado no fim do `sub_4652C0`) procura o **item** que estava no topo
+(`[+0x2C]`). Se ele ainda existe, a lista continua dele; se sumiu, volta ao
+começo.
+
+**Corrigido** (`ObjectivesPane::reanchor`):
+
+- quando as linhas mudam, a lista re-ancora no objetivo que estava no topo,
+  na mesma linha dentro dele, e volta ao começo se ele saiu;
+- **correção** além do original: o topo para em (total − linhas da janela),
+  então a janela nunca fica com o fim vazio enquanto houver objetivos acima.
+  Só com a re-ancoragem, o objetivo do topo podia ser o último, e a janela
+  mostrava uma linha.
+
+**A tela "Communications Satellite: Not Operational"** do relato é o painel
+**Space Program: Satellites**: o quinto botão das abas. Os objetivos são o
+**sexto**, o mais à direita, como no original. Conferido no asm: o
+`sub_45C960` monta os seis botões com a arte `dword_4D5390`, e os painéis em
+`[botão+0xA4]` são, do quinto ao sexto, `dword_56A0A8` (espaço) e `unk_565AC8`
+(objetivos). O painel do espaço está sempre disponível (`vt[3]` =
+`sub_459E00`, devolve 1). No porte, o clique em cada botão abre a aba certa
+(medido).
+
+**Teste:** `--e05objtest [DLL] [prefixo]` (novo):
+
+- dispara o `PantherObj` da DLL por um gatilho de tempo, como o jogo, e
+  confere que o objetivo novo entra e a lista continua com os pendentes;
+- clica nos seis botões de aba e confere a aba aberta;
+- rola a lista até o fim, cumpre vários objetivos (40 → 24 linhas) e confere
+  que a janela vai até o fim da lista cheia de objetivos. Antes ficava 1 linha.
+
 ## 6. Build e execução
 
 **Toolchain:** CMake >= 3.15 + MSVC, C++17, SDL2 2.30.9 (em `third_party/`).
@@ -3852,6 +3902,7 @@ São 109 modos. Os que cobrem regressão de verdade:
 | `--e05test [DLL]` | Os 22 objetivos da E05 cumpridos pelo estado de jogo (inclusive o satélite lançado) e o MISSION ACCOMPLISHED (5.52) |
 | `--objdump <DLL> [tiques]` | Lista os objetivos da missão com o gatilho por trás de cada um (tipo e campos) e a população (5.52) |
 | `--techunlocktest [DLL]` | O que cada pesquisa libera: a cadeia da reciclagem (GORF, SALVAGE, 50%/60%) e a árvore inteira (liberação antes/depois, `UNIT_PROP`) (5.53) |
+| `--e05objtest [DLL] [prefixo]` | O objetivo novo no meio da E05, os botões de aba e a lista de objetivos rolada que encolhe (5.54) |
 | `--tubetest <mapa> [prefixo]` | o Earthworker ligando prédios com tubo: retas inteiras, a doca que não liga, a animação de trabalho |
 | `--waypointtest <mapa> [bmp]` | pontos de passagem com Ctrl + clique: limites por comando, o pacote com os pontos antes do alvo, a unidade passando por eles, patrulha e obra, e o desenho |
 | `--selecttest <mapa>` | a área de clique das unidades, e a seleção com Shift e com o botão do meio (soma, tira, caixa que soma, as exceções) |

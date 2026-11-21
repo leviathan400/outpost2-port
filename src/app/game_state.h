@@ -415,6 +415,9 @@ public:
     // letreiro deveria estar centrado.
     void debugCamera(int& x, int& y) const { x = m_camX; y = m_camY; }
     void debugCameraMax(int& x, int& y) const { x = m_maxX; y = m_maxY; }
+    ObjectivesPane& debugObjectivesPane() { return m_objectives; }
+    bool debugTabRect(int k, PaneRect& r) const { return tabRect(k, r); }
+    PaneRect debugInfoPane() const { return infoPaneRect(); }
     void debugViewRect(int& x, int& y, int& w, int& h) const {
         x = kViewX; y = kViewY; w = viewportW(); h = viewportH();
     }

@@ -182,7 +182,7 @@ fila de produção (`ProductionQueue`), o clique direito dando ordens
 (`RightClickOrders`) e a barra de rolagem nas listas da partida
 (`ListScrollBars`); estão documentadas no `PORT_STATUS.BR.md`.
 
-Há **132 modos de linha de comando** para testes e capturas, entre eles uma
+Há **133 modos de linha de comando** para testes e capturas, entre eles uma
 bateria de regressão (`--savetest` prova o determinismo de salvar/recarregar).
 A lista está no `PORT_STATUS.BR.md`.
 
@@ -216,7 +216,7 @@ e descartado das listas de cheat que circulam por aí.
 
 ```
 src/
-  main.cpp        entrada + os 132 modos de teste/captura
+  main.cpp        entrada + os 133 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -240,6 +240,14 @@ cursores `.ANI`.
 ## Mudanças recentes
 
 ### 2026-11-20
+
+- **A lista de objetivos não some mais.** Na missão 05 do Eden, com a lista
+  rolada para baixo, quando um objetivo era cumprido (e saía da lista) ou um
+  novo entrava, a janela ficava com uma linha só ou vazia, e os objetivos
+  restantes sumiam da vista. Agora a lista acompanha as mudanças e mostra
+  sempre os objetivos que faltam. (A tela "Communications Satellite: Not
+  Operational" é a do Space Program, o quinto botão; os objetivos são o
+  sexto, o mais à direita.)
 
 - **A tela de briefing como no original.** O texto do briefing de cada
   missão fica numa caixa estreita à esquerda e, à direita, a imagem da missão

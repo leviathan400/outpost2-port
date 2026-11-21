@@ -4820,6 +4820,95 @@ static int runTubeTest(const std::string& mapName, const std::string& prefix) {
     return ruins ? 1 : 0;
 }
 
+// --e05objtest [DLL] [prefixo.bmp]: o objetivo NOVO no meio da missao. A E05
+// acrescenta objetivos pelos callbacks (PantherObj, NextRes, HasSpacePort...),
+// cada um com CreateVictoryCondition + AddMessage("New Objective"). Dispara o
+// PantherObj por um gatilho de tempo, como o jogo, e confere a aba dos
+// objetivos antes e depois.
+static int runE05ObjTest(const std::string& dll, const std::string& prefixo) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 e05objtest", 640, 480, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    auto roda = [&](int n) { for (int t = 0; t < n && !op2::gameEndCode(); ++t) gs.onIdle(renderer, 0.2501f / 4.0f); };
+    roda(8);
+    gs.debugTab(5);
+    roda(2);
+    auto conta = [&](const char* quando) {
+        const std::vector<std::string> all = op2::missionObjectives();
+        int pend = 0; for (const std::string& o : all) if (o.rfind("<C0>", 0) != 0) ++pend;
+        const std::vector<std::string> ls = op2::objectivesDebugLines(160);
+        int cheias = 0; for (const std::string& l : ls) if (!l.empty()) ++cheias;
+        std::printf("[E05obj] %s: %d objetivos (%d pendentes); a lista tem %d linhas com texto; aba %d\n",
+                    quando, (int)all.size(), pend, cheias, gs.debugTabNow());
+        return cheias;
+    };
+    const int antes = conta("antes");
+    for (int k = 0; k < 6; ++k) {                         // cada botao de aba, pelo mouse
+        op2::PaneRect r;
+        if (!gs.debugTabRect(k, r)) continue;
+        gs.debugClickNative(renderer, (r.l + r.r) / 2, (r.t + r.b) / 2);
+        roda(1);
+        std::printf("[E05obj] clique no botao %d (%d..%d) -> aba %d%c", k, r.l, r.r, gs.debugTabNow(), 10);
+    }
+    gs.debugTab(5); roda(2);
+    if (!prefixo.empty()) writeBmp32(prefixo + "_antes.bmp", renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
+    op2::createTimeTrigger(1, 1, 4, "PantherObj");
+    roda(40);
+    const int depois = conta("depois do PantherObj");
+    if (!prefixo.empty()) writeBmp32(prefixo + "_depois.bmp", renderer.getFramebuffer(), renderer.getWidth(), renderer.getHeight());
+    roda(400);
+    const int bem_depois = conta("400 tiques depois");
+    // O caso do relato: a lista ROLADA ate a ultima pagina, e objetivos que se
+    // cumprem (saem da lista) -- ela encolhe. Antes da 5.54 a linha do topo
+    // passava do fim e os restantes sumiam da vista.
+    op2::ObjectivesPane& op = gs.debugObjectivesPane();
+    const op2::PaneRect pane = gs.debugInfoPane();
+    const int rows = op.debugRows(pane);
+    const int n0 = (int)op2::objectivesDebugLines(160).size();
+    op.debugSetTop(std::max(0, n0 - 2));                 // as duas ultimas linhas no topo
+    roda(2);
+    const int topoAntes = op.debugTop();
+    {   // cumpre varios: as pesquisas, Scouts, Lynx, Panthers, caminhoes vazios
+        const int me = op2::TethysGame::localPlayer();
+        for (const op2::ObjectiveInfo& o : op2::debugObjectives())
+            if (o.kind == 1) { const int idx = op2::techIndex(o.f30); if (idx >= 0) op2::researchMarkComplete(me, idx); }
+        int sx = 0, sy = 0;
+        for (int i = 1; i < (int)op2::g_units.size(); ++i)
+            if (op2::g_units[i].id != -1 && (op2::g_units[i].owner & 0x0F) == me) { sx = op2::g_units[i].pixelX >> 5; sy = op2::g_units[i].pixelY >> 5; break; }
+        auto cria = [&](op2::map_id t, int c, int k) { for (int j = 0; j < k; ++j) { op2::Unit u; op2::TethysGame::CreateUnit(u, t, op2::LOCATION{sx, sy}, me, c); } };
+        cria(op2::mapScout, 0, 2); cria(op2::mapLynx, 0x3D, 4); cria(op2::mapPanther, 0x3F, 2); cria(op2::mapCargoTruck, 0, 3);
+    }
+    roda(60);
+    const int n1 = (int)op2::objectivesDebugLines(160).size();
+    const int vis = op.debugVisible(pane);
+    std::printf("[E05obj] rolada: %d linhas, topo %d -> encolheu para %d linhas, topo %d, %d linhas visiveis (janela %d)\n",
+                n0, topoAntes, n1, op.debugTop(), vis, rows);
+    struct Caso { const char* nome; int obtido, esperado; };
+    const Caso casos[] = {
+        {"a aba dos objetivos continua aberta", gs.debugTabNow(), 5},
+        {"a lista continua com os pendentes", depois >= antes ? 1 : 0, 1},
+        {"... e depois de 400 tiques", bem_depois >= antes ? 1 : 0, 1},
+        {"rolada e encolhida: a lista encolheu (premissa)", n1 < n0 ? 1 : 0, 1},
+        {"... a janela vai ate o fim da lista, cheia", op.debugTop(), std::max(0, n1 - rows)},
+        {"... e mostra objetivos (nao uma linha so)", vis * 2 >= std::min(rows, n1) ? 1 : 0, 1},
+    };
+    int ruins = 0;
+    for (const Caso& c : casos) {
+        const bool ok = c.obtido == c.esperado;
+        if (!ok) ++ruins;
+        std::printf("[E05obj] %-40s %d (esperado %d) %s\n", c.nome, c.obtido, c.esperado, ok ? "ok" : "FALHOU");
+    }
+    std::printf("[E05obj] %d casos, %d falhas\n", (int)(sizeof(casos) / sizeof(casos[0])), ruins);
+    std::fflush(stdout);
+    renderer.shutdown(); SDL_Quit();
+    return ruins ? 1 : 0;
+}
+
 // --techunlocktest [DLL]: o que cada PESQUISA libera (5.53).
 //  A) a cadeia da RECICLAGEM de ponta a ponta: o kit do GORF so na Structure
 //     Factory depois de Metals Reclamation (3302); o SALVAGE do caminhao vazio
@@ -10432,6 +10521,9 @@ int main(int argc, char* argv[]) {
             return runBriefTest();
         if (std::strcmp(argv[i], "--listscrolltest") == 0)
             return runListScrollTest();
+        if (std::strcmp(argv[i], "--e05objtest") == 0)
+            return runE05ObjTest(i + 1 < argc && argv[i + 1][0] != '-' ? argv[i + 1] : "E05.DLL",
+                                 i + 2 < argc && argv[i + 2][0] != '-' ? argv[i + 2] : "");
         if (std::strcmp(argv[i], "--techunlocktest") == 0)
             return runTechUnlockTest(i + 1 < argc && argv[i + 1][0] != '-' ? argv[i + 1] : "E05.DLL");
         if (std::strcmp(argv[i], "--e05test") == 0)

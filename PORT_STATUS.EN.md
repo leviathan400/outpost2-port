@@ -147,7 +147,12 @@
 > operating GORF → the empty truck's SALVAGE, Recycler Postprocessing → 60%
 > instead of 50% — and the whole tree, unlock before/after and every
 > `UNIT_PROP`, over E01/P01, E05/P05 and E12/P12 with no failure; new
-> `--techunlocktest`).
+> `--techunlocktest`) and **5.54** (the objectives list that "vanished"
+> mid-mission: objectives come and go — new ones enter at the top, completed
+> ones leave — and the port kept only the top line number, so a scrolled list
+> that shrank showed one line or none; like `sub_430CE0`, the list now
+> re-anchors on the item at the top, and the window never ends empty while
+> objectives remain above; new `--e05objtest`).
 > The recent
 > changes are summarised in
 > [README.EN.md](README.EN.md).
@@ -200,7 +205,7 @@ coverage by comparing the DLLs' import tables against the registry in
 
 ```
 src/
-  main.cpp        entry point + the 132 test/capture modes
+  main.cpp        entry point + the 133 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -791,7 +796,7 @@ mission DLLs and the original resources from the working directory).
 
 ### Command-line tests
 
-There are 132 modes. The ones that cover real regressions:
+There are 133 modes. The ones that cover real regressions:
 
 | Mode | What it proves |
 |---|---|
