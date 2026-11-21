@@ -137,7 +137,7 @@
 > window and vertical scrolling stopped; like `sub_407A10`, which uses
 > `GetWindowRect` + `GetCursorPos` in screen coordinates, a cursor beyond the
 > edge now scrolls too. And, with the `ListScrollBars` key — now labelled
-> *Wheel & Scroll Bars* — the mouse wheel scrolls the map, 2 tiles per notch;
+> *Wheel/Scroll Bars* — the mouse wheel scrolls the map, 2 tiles per notch;
 > new `--missionscrolltest`) and **5.52** (Eden mission 5's 22 objectives:
 > "Have 3 or more empty Cargo Trucks" never completed — since 5.14 a truck
 > COUNT with a cargo filter counts by quantity, and an empty truck's quantity
@@ -152,7 +152,12 @@
 > ones leave — and the port kept only the top line number, so a scrolled list
 > that shrank showed one line or none; like `sub_430CE0`, the list now
 > re-anchors on the item at the top, and the window never ends empty while
-> objectives remain above; new `--e05objtest`).
+> objectives remain above; new `--e05objtest`) and **5.55** (the port's
+> `[Game] DockHotkeys` key: with one structure selected and a vehicle on its
+> dock, O loads and U unloads without opening the pane — the Structure
+> Factory and Garage pick the bay, O the first occupied one, U the first
+> empty one; resource structures run the truck's L&OAD/&UNLOAD; new
+> `--dockhotkeytest`).
 > The recent
 > changes are summarised in
 > [README.EN.md](README.EN.md).
@@ -205,7 +210,7 @@ coverage by comparing the DLLs' import tables against the registry in
 
 ```
 src/
-  main.cpp        entry point + the 133 test/capture modes
+  main.cpp        entry point + the 134 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -296,7 +301,8 @@ preferences screen; the original ignores keys it doesn't know.
 | `CommandDebug` | 0/1 | 0 | Diagnostics (an addition of this port): every refused building command — produce, research, train, the repeat the anti-duplicate ring drops — becomes a line in the message log with the reason (`not enough workers`, `needs 400 common ore`…). 0 = silent, as in the original. It can also be changed in game: the **Command Debug** check box in the main menu's `GAME PREFERENCES`, and the line of the same name in the Options tab's `Game Preferences` (see 5.39 in the BR status). |
 | `ProductionQueue` | 0/1 | 0 | Production queue (an addition of this port): each click on an item in a factory's list adds +1 to the order (the count shows in front of the item; right-click removes 1), `BUILD IT` sends the order to the queue, and the factory produces one item after another; a click the ore cannot cover does not add. 0 = one item per order, as in the original. It can also be changed in game: the **Production Queue** check box in the main menu's `GAME PREFERENCES`, and the line of the same name in the Options tab's `Game Preferences` (see 5.40 in the BR status). |
 | `RightClickOrders` | 0/1 | 0 | The modern RTS mouse scheme (from the fork): the left button only selects and the **right** button gives the order (the default command, 5.42). 0 = as in the original: the **left** button does it all — with a selection it runs the default command when it accepts the target, otherwise it selects — and the right button cancels the armed command and clears the selection. It can also be changed in game: the **Right-Click Orders** check box in the main menu's `GAME PREFERENCES`, and the line of the same name in the Options tab (see 5.44 in the BR status). |
-| `ListScrollBars` | 0/1 | 0 | In-game lists (reports, options, objectives, research, production, vehicles) get a draggable scroll bar instead of the page arrows, and the mouse wheel scrolls the list under the cursor (an addition of this port). 0 = page arrows only, as in the original. It can also be changed in game: the **Wheel & Scroll Bars** check box in `GAME PREFERENCES` and the line of the same name in the Options tab (see 5.50 in the BR status). |
+| `ListScrollBars` | 0/1 | 0 | In-game lists (reports, options, objectives, research, production, vehicles) get a draggable scroll bar instead of the page arrows, and the mouse wheel scrolls the list under the cursor (an addition of this port). 0 = page arrows only, as in the original. It can also be changed in game: the **Wheel/Scroll Bars** check box in `GAME PREFERENCES` and the line of the same name in the Options tab (see 5.50 in the BR status). |
+| `DockHotkeys` | 0/1 | 0 | With one of your structures selected and a vehicle on its dock: **O** loads and **U** unloads without opening the pane (Structure Factory and Garage pick the bay themselves; Agridome, smelters and tanks run the truck's L&OAD/&UNLOAD). 0 = through the pane only, as in the original. It can also be changed in game: the **Dock Hotkeys (O/U)** check box in `GAME PREFERENCES` and the line of the same name in the Options tab (see 5.55 in the BR status). |
 
 All of them can also be changed on the preferences screens — see 5.29 in the
 BR status.
@@ -796,7 +802,7 @@ mission DLLs and the original resources from the working directory).
 
 ### Command-line tests
 
-There are 133 modes. The ones that cover real regressions:
+There are 134 modes. The ones that cover real regressions:
 
 | Mode | What it proves |
 |---|---|

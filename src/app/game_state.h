@@ -173,6 +173,8 @@ private:
     bool m_autoOreRoute = false;   // "AutoOreRoute" (so deste porte; padrao 0 = original, 5.45)
     bool m_rightClickOrders = false; // "RightClickOrders" (idem, 5.44; 0 = mouse do original)
     float m_wheelAcc = 0.0f;       // a roda fracionaria (preciseY), para as listas (5.50)
+    bool m_dockHotkeys = false;    // "DockHotkeys" (so deste porte, 5.55)
+    bool dockHotkey(bool load);    // O/U: true = agiu
     float m_wheelAccX = 0.0f;      // ... e a lateral (preciseX), para o mapa (5.51)
     static constexpr int kWheelMapStep = 64;   // a roda no mapa: 2 tiles por degrau (5.51)
     bool mouseInView() const {
@@ -417,6 +419,8 @@ public:
     void debugCameraMax(int& x, int& y) const { x = m_maxX; y = m_maxY; }
     ObjectivesPane& debugObjectivesPane() { return m_objectives; }
     bool debugTabRect(int k, PaneRect& r) const { return tabRect(k, r); }
+    void debugDockHotkeys(bool on) { m_dockHotkeys = on; }
+    void debugKey(Renderer& r, SDL_Keycode k);           // uma tecla pelo handleEvent
     PaneRect debugInfoPane() const { return infoPaneRect(); }
     void debugViewRect(int& x, int& y, int& w, int& h) const {
         x = kViewX; y = kViewY; w = viewportW(); h = viewportH();

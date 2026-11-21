@@ -72,6 +72,8 @@ public:
         OPT_RIGHT_CLICK,
         // A barra de rolagem e a roda nas listas da partida ([Game] ListScrollBars, 5.50).
         OPT_LIST_SCROLL,
+        // O/U na estrutura com veiculo na doca ([Game] DockHotkeys, 5.55).
+        OPT_DOCK_KEYS,
         OPT_COUNT
     };
 

@@ -56,6 +56,7 @@
 #include "../gfx/art_blit.h"
 #include "cursors.h"
 #include "../game/docking.h"
+#include "../game/garage.h"
 
 namespace op2 {
 
@@ -99,6 +100,7 @@ void GameState::loadSettings() {
     m_autoOreRoute = gs.autoOreRoute != 0;             // "AutoOreRoute" (so deste porte)
     m_rightClickOrders = gs.rightClickOrders != 0;     // "RightClickOrders" (idem, 5.44)
     setListScrollBars(gs.listScrollBars != 0);         // "ListScrollBars" (idem, 5.50)
+    m_dockHotkeys = gs.dockHotkeys != 0;               // "DockHotkeys" (idem, 5.55)
     setCommandDebug(gs.commandDebug != 0);             // "CommandDebug" (idem, 5.39)
     setProductionQueue(gs.productionQueue != 0);       // "ProductionQueue" (idem, 5.40)
     m_showBottomRow = gs.showBottomRow != 0;           // "ShowBottomRow" (fork)
@@ -2402,8 +2404,14 @@ void GameState::handleEvent(Renderer& renderer, const SDL_Event& e) {
         if ((SDL_GetModState() & KMOD_ALT) && k == SDLK_o && m_mission) openReport(5, 0);
         if ((SDL_GetModState() & KMOD_ALT) && k >= SDLK_1 && k <= SDLK_6 && m_storage.isOpen())
             m_storage.pressBay(static_cast<int>(k - SDLK_1));
+        // (5.55) Os atalhos da doca: O = Load, U = Unload -- as letras do
+        // L&OAD / &UNLOAD do original --, com a estrutura selecionada e um
+        // veiculo na doca, sem abrir o painel. So agem se ha o que fazer;
+        // senao a tecla segue para os botoes, como antes.
+        const bool docaAgiu = !ctrl && !(SDL_GetModState() & KMOD_ALT) &&
+                              (k == SDLK_o || k == SDLK_u) && dockHotkey(k == SDLK_o);
         // Atalhos dos botões de comando (letra após o '&' da dica).
-        if (!ctrl && k >= SDLK_a && k <= SDLK_z) {
+        if (!docaAgiu && !ctrl && k >= SDLK_a && k <= SDLK_z) {
             const char key = static_cast<char>('A' + (k - SDLK_a));
             bool done = false;
             for (const CmdButton& b : commandButtons())
@@ -3121,6 +3129,58 @@ bool GameState::tabRect(int k, PaneRect& r) const {
 // (sub_45D020, aba acesa). PROVISÓRIO: só as abas já portadas respondem.
 bool GameState::reportsDisabled() const {
     return m_mission && m_mission->desc && m_mission->desc->boolUnitMission;
+}
+
+// (5.55) O = Load / U = Unload pela estrutura selecionada, com o veiculo na
+// doca. As baias: O pega a 1a baia COM item (o veiculo vazio), U guarda na 1a
+// baia VAZIA (o veiculo com carga) -- a mesma troca do clique na baia
+// (sendBayTransfer / sub_456BC0). Recursos: o L&OAD / &UNLOAD do caminhao
+// (pacotes 0x0B / 0x0C), com as mesmas condicoes do painel (sub_463170).
+bool GameState::dockHotkey(bool load) {
+    if (!m_dockHotkeys || m_selected.size() != 1) return false;
+    const int b = m_selected[0];
+    if (b <= 0 || b >= static_cast<int>(g_units.size())) return false;
+    const UnitRecord& s = g_units[b];
+    if (s.id == -1 || (s.flags & UNIT_DEAD) || !(s.flags & UNIT_BUILDING)) return false;
+    if ((s.owner & 0x0F) != TethysGame::localPlayer()) return false;
+    const int t = s.type;
+    auto feito = [&]() { soundPlay(0x57); return true; };
+    if (t == 0x19 || t == 0x1A || t == 0x27 || t == 0x36 || t == 0x38) {   // recursos
+        const int v = dockedVehicle(b);
+        if (!v) return false;
+        if (load) {
+            if (storageStock(b) != 0 && g_units[v].cargo == 0 && storageLoadAvailable(b)) { storageLoad(b); return feito(); }
+        } else if (g_units[v].cargo != 0 && storageUnloadAvailable(b)) {
+            storageUnload(b); return feito();
+        }
+        return false;
+    }
+    if (t != 0x2F && t != 0x29) return false;                                // baias
+    const StructSheetDesc* d = structSheet(t);
+    const int bays = std::min(6, d ? d->player[(s.owner >> 4) & 0x0F].storageBays : 0);
+    if (t == 0x29) {                                     // garagem: as baias guardam veiculos
+        for (int i = 0; i < bays; ++i) {
+            const bool ocupada = s.garageSlot[i] != 0;
+            if (ocupada == load && garageBayAvailable(b, i)) { sendBayTransfer(b, i); return feito(); }
+        }
+        return false;
+    }
+    const int v = dockedVehicle(b);                      // fabrica de estruturas: kits
+    if (!v) return false;
+    const bool cheio = g_units[v].cargo != 0;
+    if (load == cheio) return false;                     // O so com o veiculo vazio; U so com carga
+    for (int i = 0; i < bays; ++i) {
+        const bool ocupada = s.bayType[i] != 0;
+        if (ocupada == load && bayTransferAvailable(b, i)) { sendBayTransfer(b, i); return feito(); }
+    }
+    return false;
+}
+
+void GameState::debugKey(Renderer& r, SDL_Keycode k) {
+    SDL_Event e{};
+    e.type = SDL_KEYDOWN;
+    e.key.keysym.sym = k;
+    handleEvent(r, e);
 }
 
 void GameState::openReport(int k, int mode) {

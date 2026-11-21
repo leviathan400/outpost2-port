@@ -9,6 +9,59 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
 
 ---
 
+## 2026-11-21
+
+### Português
+
+**Novo**
+
+- **Atalhos O (carregar) e U (descarregar) na doca** (opção **Dock Hotkeys
+  (O/U)**, nas preferências e na aba Options; ou `DockHotkeys=1` na seção
+  `[Game]` do `OUTPOST2.INI`). Com uma estrutura selecionada e um veículo na
+  doca dela, o **O** carrega e o **U** descarrega sem abrir a tela de itens.
+  São as letras do L&OAD / &UNLOAD do original.
+  - **Structure Factory:** o O passa ao ConVec o kit da primeira baia
+    ocupada; o U guarda o kit dele na primeira baia vazia.
+  - **Garagem:** o U guarda o veículo da doca, o O tira o primeiro guardado.
+  - **Agridome, smelters e tanques:** carregam e descarregam o caminhão.
+
+  Desligada (o padrão), é o jogo original.
+
+**Corrigido**
+
+- O nome da opção da roda do mouse aparecia como "Wheel  Scroll Bars" (o "&"
+  sumia). Agora é **Wheel/Scroll Bars**.
+
+**Para quem acompanha o código:** seção 5.55 do PORT_STATUS; o modo de teste
+`--dockhotkeytest`.
+
+### English
+
+**New**
+
+- **O (load) and U (unload) dock hotkeys** (the **Dock Hotkeys (O/U)**
+  option, in the preferences and the Options tab; or `DockHotkeys=1` in the
+  `[Game]` section of `OUTPOST2.INI`). With a structure selected and a
+  vehicle on its dock, **O** loads and **U** unloads without opening the
+  items screen. These are the letters of the original's L&OAD / &UNLOAD.
+  - **Structure Factory:** O hands the ConVec the kit from the first
+    occupied bay; U stores its kit in the first empty bay.
+  - **Garage:** U stores the docked vehicle, O takes out the first stored
+    one.
+  - **Agridome, smelters and tanks:** they load and unload the truck.
+
+  Off (the default), it is the original game.
+
+**Fixed**
+
+- The mouse wheel option's name showed as "Wheel  Scroll Bars" (the "&" was
+  lost). It is now **Wheel/Scroll Bars**.
+
+**For those following the code:** section 5.55 of PORT_STATUS; the
+`--dockhotkeytest` test mode.
+
+---
+
 ## 2026-11-20
 
 ### Português
@@ -76,7 +129,7 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
   laboratórios, recursos, comunicações, espaçoporto), opções, objetivos,
   pesquisa, produção e lista de veículos. Com ela, a roda do mouse também
   **rola o mapa** (2 tiles por degrau; o arrasto lateral do touchpad, para os
-  lados). Na tela de preferências ela se chama **Wheel & Scroll Bars**.
+  lados). Na tela de preferências ela se chama **Wheel/Scroll Bars**.
   Desligada (o padrão), é o jogo original.
 
 **Para quem acompanha o código:** seções 5.48 a 5.52 do PORT_STATUS; os modos
@@ -148,7 +201,7 @@ de teste `--brieftest`, `--listscrolltest`, `--panescrolltest`,
   resources, communications, spaceport), options, objectives, research,
   production and the vehicle list. With it, the mouse wheel also **scrolls the
   map** (2 tiles per notch; a touchpad's sideways swipe, sideways). In the
-  preferences screen it is called **Wheel & Scroll Bars**. Off (the default),
+  preferences screen it is called **Wheel/Scroll Bars**. Off (the default),
   it is the original game.
 
 **For those following the code:** sections 5.48 to 5.52 of PORT_STATUS; the

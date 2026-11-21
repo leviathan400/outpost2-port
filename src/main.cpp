@@ -4820,6 +4820,126 @@ static int runTubeTest(const std::string& mapName, const std::string& prefix) {
     return ruins ? 1 : 0;
 }
 
+// --dockhotkeytest <mapa>: os atalhos O (Load) / U (Unload) da doca (5.55,
+// opcao [Game] DockHotkeys). Structure Factory com o ConVec na doca: desligada
+// o O nao faz nada; ligada, O pega o kit da 1a baia ocupada e U guarda na 1a
+// baia VAZIA (pulando a ocupada). Agridome com o caminhao: O carrega comida,
+// U descarrega. Garagem: U guarda o veiculo da doca numa vaga.
+static int runDockHotkeyTest(const std::string& mapName) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 dockhotkeytest", 640, 480, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.load(mapName)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    struct Caso { std::string nome; long long obtido, esperado; };
+    std::vector<Caso> casos;
+    op2::resetUnits();
+    op2::g_playerData[0].isEden = 1;
+    const int W = op2::g_gameMap.width(), H = op2::g_gameMap.height();
+    int bx = -1, by = -1;
+    for (int y = 3; y < H - 16 && bx < 0; ++y)
+        for (int x = 3; x < W - 26 && bx < 0; ++x) {
+            bool ok = true;
+            for (int dy = -1; dy <= 14 && ok; ++dy)
+                for (int dx = -2; dx <= 24 && ok; ++dx)
+                    if (!op2::g_gameMap.isPassable(op2::LOCATION{x + dx, y + dy})) ok = false;
+            if (ok) { bx = x; by = y; }
+        }
+    if (bx < 0) { std::printf("[DockKey] sem area livre\n"); return 3; }
+    auto roda = [&](int n) { for (int t = 0; t < n; ++t) gs.onIdle(renderer, 0.2501f / 4.0f); };
+    auto ateSair = [&](int v) { for (int t = 0; t < 1500 && op2::g_units[v].field22 == 0x0D; ++t) gs.onIdle(renderer, 0.2501f / 4.0f); };
+
+    // ---- Structure Factory + ConVec
+    op2::Unit sf, cv;
+    op2::TethysGame::CreateUnit(sf, op2::mapStructureFactory, op2::LOCATION{bx + 2, by + 1}, 0);
+    int dx = 0, dy = 0;
+    op2::dockCell(sf.id(), dx, dy);
+    op2::TethysGame::CreateUnit(cv, op2::mapConVec, op2::LOCATION{dx, dy}, 0, 0);
+    op2::UnitRecord& s = op2::g_units[sf.id()];
+    const op2::UnitRecord& c = op2::g_units[cv.id()];
+    s.bayType[0] = 0; s.bayType[1] = static_cast<uint8_t>(op2::mapTokamak); s.bayType[2] = 0;
+    roda(4);
+    gs.setSelection({sf.id()});
+    std::printf("[DockKey] fabrica %d, ConVec %d na doca (%d,%d): atracado %d\n", sf.id(), cv.id(), dx, dy, op2::dockedVehicle(sf.id()));
+    casos.push_back({"o ConVec esta na doca da fabrica (premissa)", op2::dockedVehicle(sf.id()) == cv.id() ? 1 : 0, 1});
+    gs.debugDockHotkeys(false);
+    gs.debugKey(renderer, SDLK_o);
+    roda(2);
+    casos.push_back({"desligada: O nao mexe no ConVec", (c.field22 != 0x0D && c.cargo == 0) ? 1 : 0, 1});
+    gs.debugDockHotkeys(true);
+    gs.debugKey(renderer, SDLK_o);
+    roda(1);
+    casos.push_back({"ligada: O poe o ConVec na troca (0x0D)", c.field22, 0x0D});
+    ateSair(cv.id());
+    casos.push_back({"... e ele sai com o kit da 1a baia ocupada", c.cargo, op2::mapTokamak});
+    casos.push_back({"... que fica vazia", s.bayType[1], 0});
+    s.bayType[0] = 0x27;                                       // a 1a baia agora ocupada
+    roda(2);
+    gs.debugKey(renderer, SDLK_u);
+    roda(1);
+    ateSair(cv.id());
+    casos.push_back({"U guarda o kit na 1a baia VAZIA (a 1, nao a 0)", s.bayType[1], op2::mapTokamak});
+    casos.push_back({"... a ocupada fica como estava", s.bayType[0], 0x27});
+    casos.push_back({"... e o ConVec sai vazio", c.cargo, 0});
+    gs.debugKey(renderer, SDLK_u);                             // vazio: U nao tem o que fazer
+    roda(2);
+    casos.push_back({"U com o ConVec vazio nao faz nada", c.field22 != 0x0D ? 1 : 0, 1});
+
+    // ---- Agridome + caminhao
+    op2::Unit ag, tr;
+    op2::TethysGame::CreateUnit(ag, static_cast<op2::map_id>(0x27), op2::LOCATION{bx + 12, by + 1}, 0);
+    op2::dockCell(ag.id(), dx, dy);
+    op2::TethysGame::CreateUnit(tr, op2::mapCargoTruck, op2::LOCATION{dx, dy}, 0, 0);
+    op2::PlayerData& pd = op2::g_playerData[0];
+    pd.foodStored = 5000;
+    roda(4);
+    gs.setSelection({ag.id()});
+    const op2::UnitRecord& t = op2::g_units[tr.id()];
+    casos.push_back({"o caminhao esta na doca do Agridome (premissa)", op2::dockedVehicle(ag.id()) == tr.id() ? 1 : 0, 1});
+    const int comida0 = pd.foodStored;
+    gs.debugKey(renderer, SDLK_o);
+    roda(1); ateSair(tr.id()); roda(4);
+    const int comidaCarregada = t.cargo;
+    casos.push_back({"Agridome: O carrega comida no caminhao", (t.cargo & 0xF) == 1 && (t.cargo >> 4) > 0 ? 1 : 0, 1});
+    const int comida1 = pd.foodStored;
+    gs.debugKey(renderer, SDLK_u);
+    roda(1); ateSair(tr.id()); roda(4);
+    casos.push_back({"Agridome: U descarrega o caminhao", t.cargo, 0});
+    casos.push_back({"... e a comida volta ao estoque", pd.foodStored > comida1 ? 1 : 0, 1});
+    std::printf("[DockKey] comida %d -> %d (carga 0x%X) -> %d\n", comida0, comida1, comidaCarregada, pd.foodStored);
+
+    // ---- Garagem + veiculo
+    op2::Unit gar, ly;
+    op2::TethysGame::CreateUnit(gar, static_cast<op2::map_id>(0x29), op2::LOCATION{bx + 3, by + 9}, 0);
+    op2::dockCell(gar.id(), dx, dy);
+    op2::TethysGame::CreateUnit(ly, op2::mapScout, op2::LOCATION{dx, dy}, 0, 0);
+    op2::g_playerData[0].workers = std::max(op2::g_playerData[0].workers, 40);
+    op2::colonyMarkDirty(0);
+    roda(30);
+    gs.setSelection({gar.id()});
+    const op2::UnitRecord& g = op2::g_units[gar.id()];
+    auto guardados = [&]() { int n = 0; for (int i = 0; i < 6; ++i) if (g.garageSlot[i]) ++n; return n; };
+    const int antesG = guardados();
+    gs.debugKey(renderer, SDLK_u);
+    roda(600);
+    std::printf("[DockKey] garagem %d: veiculo %d na doca, vagas ocupadas %d -> %d\n", gar.id(), ly.id(), antesG, guardados());
+    casos.push_back({"Garagem: U guarda o veiculo da doca", guardados() - antesG, 1});
+
+    int ruins = 0;
+    for (const Caso& k : casos) {
+        const bool ok = k.obtido == k.esperado;
+        if (!ok) ++ruins;
+        std::printf("[DockKey] %-48s %lld (esperado %lld) %s\n", k.nome.c_str(), k.obtido, k.esperado, ok ? "ok" : "FALHOU");
+    }
+    std::printf("[DockKey] %d casos, %d falhas\n", (int)casos.size(), ruins);
+    std::fflush(stdout);
+    renderer.shutdown(); SDL_Quit();
+    return ruins ? 1 : 0;
+}
+
 // --e05objtest [DLL] [prefixo.bmp]: o objetivo NOVO no meio da missao. A E05
 // acrescenta objetivos pelos callbacks (PantherObj, NextRes, HasSpacePort...),
 // cada um com CreateVictoryCondition + AddMessage("New Objective"). Dispara o
@@ -10521,6 +10641,8 @@ int main(int argc, char* argv[]) {
             return runBriefTest();
         if (std::strcmp(argv[i], "--listscrolltest") == 0)
             return runListScrollTest();
+        if (std::strcmp(argv[i], "--dockhotkeytest") == 0 && i + 1 < argc)
+            return runDockHotkeyTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--e05objtest") == 0)
             return runE05ObjTest(i + 1 < argc && argv[i + 1][0] != '-' ? argv[i + 1] : "E05.DLL",
                                  i + 2 < argc && argv[i + 2][0] != '-' ? argv[i + 2] : "");

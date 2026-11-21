@@ -191,6 +191,7 @@ void GameSettings::loadFrom(const Config& cfg) {
     productionQueue   = cfg.getInt("Game", "ProductionQueue", productionQueue);
     rightClickOrders  = cfg.getInt("Game", "RightClickOrders", rightClickOrders);
     listScrollBars    = cfg.getInt("Game", "ListScrollBars", listScrollBars);
+    dockHotkeys       = cfg.getInt("Game", "DockHotkeys", dockHotkeys);
     showBottomRow     = cfg.getInt("Game", "ShowBottomRow", showBottomRow);
     name              = cfg.getString("Game", "Name", name);
 
@@ -226,6 +227,7 @@ void GameSettings::saveTo(Config& cfg) const {
     cfg.setInt("Game", "ProductionQueue", productionQueue);
     cfg.setInt("Game", "RightClickOrders", rightClickOrders);
     cfg.setInt("Game", "ListScrollBars", listScrollBars);
+    cfg.setInt("Game", "DockHotkeys", dockHotkeys);
     cfg.setInt("Game", "ShowBottomRow", showBottomRow);
     cfg.setString("Game", "Name", name);
 

@@ -172,15 +172,16 @@ outpost2_modern.exe                      # main menu
 outpost2_modern.exe --game eden01.map    # opens a map directly
 ```
 
-The game's `OUTPOST2.INI` file is respected. The port adds thirteen keys the
+The game's `OUTPOST2.INI` file is respected. The port adds fourteen keys the
 original doesn't have — AI level, night darkness, volume, demo camera,
 fullscreen, the menu skin (`MenuSkin`), horizontal map wrap (`MapWrap`), the
 map's bottom row (`ShowBottomRow`), the one-click ore route
 (`AutoOreRoute`), refused-command diagnostics (`CommandDebug`), the
 production queue (`ProductionQueue`), right-click orders
-(`RightClickOrders`) and in-game list scroll bars (`ListScrollBars`); they are documented in `PORT_STATUS.EN.md`.
+(`RightClickOrders`) and in-game list scroll bars (`ListScrollBars`) and the O/U dock hotkeys
+(`DockHotkeys`); they are documented in `PORT_STATUS.EN.md`.
 
-There are **133 command-line modes** for tests and captures, among them a
+There are **134 command-line modes** for tests and captures, among them a
 regression battery (`--savetest` proves save/reload determinism). The list is
 in `PORT_STATUS.EN.md`.
 
@@ -214,7 +215,7 @@ and what was checked and discarded from the cheat lists that circulate.
 
 ```
 src/
-  main.cpp        entry point + the 133 test/capture modes
+  main.cpp        entry point + the 134 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -235,6 +236,15 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
 ---
 
 ## Recent changes
+
+### 2026-11-21
+
+- **O/U dock hotkeys (optional).** With the **Dock Hotkeys (O/U)** option on,
+  select the structure with a vehicle on its dock and press **O** to load or
+  **U** to unload, without opening the items screen. At the Structure
+  Factory, O takes the kit from the first occupied bay and U stores it in the
+  first empty one. The garage, Agridome, smelters and tanks work too. Off
+  (the default), it is the original game.
 
 ### 2026-11-20
 
@@ -261,7 +271,7 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
   page arrows, and the wheel scrolls the list under the cursor.
 - **Scrolling the map up and down from the screen edge works again** in a
   maximized window (the cursor left the window over the title bar or the
-  taskbar and scrolling stopped). And, with the **Wheel & Scroll Bars** option
+  taskbar and scrolling stopped). And, with the **Wheel/Scroll Bars** option
   (the new name of List Scroll Bars), the mouse wheel scrolls the map.
 - **Eden mission 05: the empty Cargo Trucks objective** never completed.
   Fixed; all 22 objectives of the mission were checked one by one.

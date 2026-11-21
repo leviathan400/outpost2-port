@@ -141,6 +141,13 @@ struct GameSettings {
     // tiles por degrau; a lateral do touchpad, para os lados -- 5.51).
     // 0 = so as setas de pagina e nada de roda, como no original.
     int listScrollBars = 0;
+    // "DockHotkeys": acrescimo DESTE porte (5.55). 1 = com UMA estrutura sua
+    // selecionada e um veiculo na doca dela, O (Load) e U (Unload) agem sem
+    // abrir a tela de baias/estoque: Structure Factory e Garage escolhem a
+    // baia sozinhas (O: a 1a com item; U: a 1a vazia); Agridome, smelters e
+    // tanques fazem o L&OAD/&UNLOAD do caminhao. 0 = como o original (so pelo
+    // painel aberto).
+    int dockHotkeys = 0;
     // Fork: "MapWrap". 0 = like the original: the map view stops at the map's
     // left/right edges; only "around the world" maps (512 tiles wide) wrap.
     // 1 = every map wraps horizontally (the port's old behaviour).

@@ -48,7 +48,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 133 modos de teste/captura
+  main.cpp        entrada + os 134 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -140,7 +140,8 @@ preferências; o original ignora chaves que não conhece.
 | `CommandDebug` | 0/1 | 0 | Diagnóstico (acréscimo deste porte): cada comando de prédio recusado — produzir, pesquisar, treinar, o repetido que o anel descarta — vira uma linha no registro de mensagens com o motivo (`not enough workers`, `needs 400 common ore`…). 0 = mudo, como no original. Também se troca pelo jogo: a caixa **Command Debug** no `GAME PREFERENCES` do menu e a linha de mesmo nome no `Game Preferences` da aba Options (ver 5.39). |
 | `ProductionQueue` | 0/1 | 0 | Fila de produção (acréscimo deste porte): cada clique num item da lista da fábrica soma +1 ao pedido (o número aparece na frente do item; clique direito tira 1), o `BUILD IT` manda o pedido para a fila e a fábrica produz um item atrás do outro; o clique que o minério não cobre não soma. 0 = um item por ordem, como no original. Também se troca pelo jogo: a caixa **Production Queue** no `GAME PREFERENCES` do menu e a linha de mesmo nome no `Game Preferences` da aba Options (ver 5.40). |
 | `RightClickOrders` | 0/1 | 0 | O esquema de mouse dos RTS modernos (veio do fork): o esquerdo só seleciona e o **direito** dá a ordem (o comando padrão da 5.42). 0 = como o original: o **esquerdo** faz tudo — com seleção, executa o comando padrão quando ele aceita o alvo, senão seleciona — e o direito cancela a mira e desseleciona. Também se troca pelo jogo: a caixa **Right-Click Orders** no `GAME PREFERENCES` do menu e a linha de mesmo nome na aba Options (ver 5.44). |
-| `ListScrollBars` | 0/1 | 0 | As listas da partida (relatórios, opções, objetivos, pesquisa, produção, veículos) ganham uma barra de rolagem arrastável no lugar das setas de página, e a roda do mouse rola a lista sob o cursor (acréscimo deste porte). 0 = só as setas de página, como no original. Também se troca pelo jogo: a caixa **Wheel & Scroll Bars** no `GAME PREFERENCES` e a linha de mesmo nome na aba Options (ver 5.50). |
+| `ListScrollBars` | 0/1 | 0 | As listas da partida (relatórios, opções, objetivos, pesquisa, produção, veículos) ganham uma barra de rolagem arrastável no lugar das setas de página, e a roda do mouse rola a lista sob o cursor (acréscimo deste porte). 0 = só as setas de página, como no original. Também se troca pelo jogo: a caixa **Wheel/Scroll Bars** no `GAME PREFERENCES` e a linha de mesmo nome na aba Options (ver 5.50). |
+| `DockHotkeys` | 0/1 | 0 | Com uma estrutura sua selecionada e um veículo na doca: **O** carrega e **U** descarrega sem abrir o painel (Structure Factory e Garage escolhem a baia sozinhas; Agridome, smelters e tanques fazem o L&OAD/&UNLOAD do caminhão). 0 = só pelo painel, como no original. Também se troca pelo jogo: a caixa **Dock Hotkeys (O/U)** no `GAME PREFERENCES` e a linha de mesmo nome na aba Options (ver 5.55). |
 
 Todas, menos `AILevel` dentro da partida, também se trocam pelas telas de
 preferências — ver 5.29.
@@ -2412,7 +2413,8 @@ estavam em tela nenhuma.
 | `CommandDebug` | **novo (5.39):** caixa *Command Debug* (1210) | **novo (5.39):** *Command Debug* `On`/`Off` |
 | `ProductionQueue` | **novo (5.40):** caixa *Production Queue* (1211) | **novo (5.40):** *Production Queue* `On`/`Off` |
 | `RightClickOrders` | **novo (5.44):** caixa *Right-Click Orders* (1212) | **novo (5.44):** *Right-Click Orders* `On`/`Off` |
-| `ListScrollBars` | **novo (5.50):** caixa *Wheel & Scroll Bars* (1213) | **novo (5.50):** *Wheel & Scroll Bars* `On`/`Off` |
+| `ListScrollBars` | **novo (5.50):** caixa *Wheel/Scroll Bars* (1213) | **novo (5.50):** *Wheel/Scroll Bars* `On`/`Off` |
+| `DockHotkeys` | **novo (5.55):** caixa *Dock Hotkeys (O/U)* (1214) | **novo (5.55):** *Dock Hotkeys (O/U)* `On`/`Off` |
 
 **No menu principal**, o diálogo ficou **160 px mais largo** (360 → 520;
 `kPrX` 140 → 60) e ganhou uma **coluna à direita**, *"Port extras:"*, que
@@ -3679,7 +3681,7 @@ exigência da janela em primeiro plano (`SDL_WINDOW_INPUT_FOCUS`), acréscimo do
 porte: janela atrás de outra não rola.
 
 **A roda no mapa** (pedido; mesma chave `ListScrollBars`, cujo rótulo virou
-*Wheel & Scroll Bars* no `GAME PREFERENCES` e na aba Options):
+*Wheel/Scroll Bars* no `GAME PREFERENCES` e na aba Options):
 
 - sobre a **vista**, a roda rola o mapa **2 tiles (64 px) por degrau**, para
   cima e para baixo;
@@ -3837,6 +3839,60 @@ começo.
 - rola a lista até o fim, cumpre vários objetivos (40 → 24 linhas) e confere
   que a janela vai até o fim da lista cheia de objetivos. Antes ficava 1 linha.
 
+## 5.55. Atalhos O (Load) e U (Unload) com o veículo na doca (`DockHotkeys`, opção do porte) (2026-11-21)
+
+Pedido do usuário: *uma tecla de atalho para Load e Unload quando um veículo
+estiver na doca de uma estrutura, para não precisar abrir a tela de itens; no
+Unload, o próprio sistema acha o espaço vazio. Para a Structure Factory e
+para as outras estruturas onde houver Load e Unload.* Pediu os atalhos
+padrão: **O** e **U**, as letras do `L&OAD` / `&UNLOAD` do original.
+
+**No original** o Load/Unload só existe com o painel aberto:
+
+- **recursos** (Agridome 0x27, smelters 0x36/0x38, tanques 0x19/0x1A): o
+  `sub_463170` mostra `L&OAD` / `&UNLOAD` (pacotes `0x0B` / `0x0C`);
+- **baias** (Structure Factory 0x2F, Garage 0x29): cada baia é um botão, e o
+  clique **troca** a baia com o veículo da doca (`sub_456BC0` /
+  `sendBayTransfer`, pacote `0x0A`).
+
+A Vehicle Factory não tem Load/Unload, e o Spaceport troca as baias com a
+**plataforma** de lançamento, não com um veículo. Os dois ficam de fora.
+
+**Com `DockHotkeys=1`**, com **uma** estrutura sua selecionada e um veículo na
+doca dela, sem abrir o painel:
+
+- **recursos:** O e U fazem o `L&OAD` / `&UNLOAD` do caminhão, com as mesmas
+  condições do painel;
+- **Structure Factory:**
+  - **O** pega o kit da **1ª baia ocupada**, só com o ConVec vazio (não troca
+    um kit por outro sem pedir);
+  - **U** guarda na **1ª baia vazia**, só com o ConVec carregado;
+- **Garage:** **U** guarda o veículo da doca na 1ª vaga livre, e **O** tira o
+  1º veículo guardado.
+
+Sem nada a fazer, a tecla segue para os botões, como antes. Com Ctrl (o O de
+depuração) ou Alt (o Alt+O dos objetivos) ela não age.
+
+`GameState::dockHotkey`. A chave tem caixa no `GAME PREFERENCES` (*Dock
+Hotkeys (O/U)*, 1214; as dez caixas da coluna passaram a 15 px, de +62 a
++197, e o rótulo e a barra da noite desceram para +214 / +230) e a linha de
+mesmo nome na aba Options.
+
+**Corrigido junto:** o rótulo da 5.51, *Wheel & Scroll Bars*, saía *Wheel
+Scroll Bars*, porque o `&` é a marca da letra de atalho. Passou a *Wheel/Scroll
+Bars*.
+
+**Teste:** `--dockhotkeytest <mapa>` (novo, 14 casos):
+
+- **Structure Factory com o ConVec na doca:**
+  - desligada, o O não faz nada;
+  - ligada, o O põe o ConVec na troca e ele sai com o kit da 1ª baia ocupada;
+  - o U guarda na 1ª baia **vazia**, pulando a ocupada;
+  - o U com o ConVec vazio não faz nada;
+- **Agridome:** O carrega comida no caminhão, U descarrega e ela volta ao
+  estoque;
+- **Garage:** U guarda o veículo da doca.
+
 ## 6. Build e execução
 
 **Toolchain:** CMake >= 3.15 + MSVC, C++17, SDL2 2.30.9 (em `third_party/`).
@@ -3903,6 +3959,7 @@ São 109 modos. Os que cobrem regressão de verdade:
 | `--objdump <DLL> [tiques]` | Lista os objetivos da missão com o gatilho por trás de cada um (tipo e campos) e a população (5.52) |
 | `--techunlocktest [DLL]` | O que cada pesquisa libera: a cadeia da reciclagem (GORF, SALVAGE, 50%/60%) e a árvore inteira (liberação antes/depois, `UNIT_PROP`) (5.53) |
 | `--e05objtest [DLL] [prefixo]` | O objetivo novo no meio da E05, os botões de aba e a lista de objetivos rolada que encolhe (5.54) |
+| `--dockhotkeytest <mapa>` | Os atalhos O/U da doca: Structure Factory, Agridome e Garage, com a opção `DockHotkeys` desligada e ligada (5.55) |
 | `--tubetest <mapa> [prefixo]` | o Earthworker ligando prédios com tubo: retas inteiras, a doca que não liga, a animação de trabalho |
 | `--waypointtest <mapa> [bmp]` | pontos de passagem com Ctrl + clique: limites por comando, o pacote com os pontos antes do alvo, a unidade passando por eles, patrulha e obra, e o desenho |
 | `--selecttest <mapa>` | a área de clique das unidades, e a seleção com Shift e com o botão do meio (soma, tira, caixa que soma, as exceções) |

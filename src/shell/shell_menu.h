@@ -353,6 +353,7 @@ private:
     bool m_prefProdQueue = false;     // "ProductionQueue" (5.40), caixa 1211
     bool m_prefRightClick = false;    // "RightClickOrders" (5.44), caixa 1212
     bool m_prefListScroll = false;    // "ListScrollBars" (5.50), caixa 1213
+    bool m_prefDockKeys = false;      // "DockHotkeys" (5.55), caixa 1214
     int  m_prefNightDarkness = 100;
     void applyMenuSkin(bool on);
     bool m_prefApplyScreen = false;   // aplicar o escolhido (ACCEPT)

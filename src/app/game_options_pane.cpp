@@ -172,7 +172,9 @@ std::vector<std::string> GameOptionsPane::items() const {
     add("Right-Click Orders<R>%s", onOff(g_opt.rightClickOrders));
     // Extra deste porte (5.50/5.51): barra de rolagem e roda nas listas, e a
     // roda rolando o mapa.
-    add("Wheel & Scroll Bars<R>%s", onOff(g_opt.listScrollBars));
+    add("Wheel/Scroll Bars<R>%s", onOff(g_opt.listScrollBars));
+    // Extra deste porte (5.55): O/U carregam e descarregam o veiculo da doca.
+    add("Dock Hotkeys (O/U)<R>%s", onOff(g_opt.dockHotkeys));
     return out;
 }
 
@@ -253,6 +255,7 @@ void GameOptionsPane::bump(int i, int dir) {
     case OPT_PROD_QUEUE:    g_opt.productionQueue = !g_opt.productionQueue; break;
     case OPT_RIGHT_CLICK:   g_opt.rightClickOrders = !g_opt.rightClickOrders; break;
     case OPT_LIST_SCROLL:   g_opt.listScrollBars = !g_opt.listScrollBars; break;
+    case OPT_DOCK_KEYS:     g_opt.dockHotkeys = !g_opt.dockHotkeys; break;
     default: return;
     }
     clampAll();
