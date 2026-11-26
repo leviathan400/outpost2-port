@@ -182,7 +182,7 @@ fila de produção (`ProductionQueue`), o clique direito dando ordens
 (`RightClickOrders`) e a barra de rolagem nas listas da partida
 (`ListScrollBars`) e os atalhos O/U da doca (`DockHotkeys`); estão documentadas no `PORT_STATUS.BR.md`.
 
-Há **134 modos de linha de comando** para testes e capturas, entre eles uma
+Há **136 modos de linha de comando** para testes e capturas, entre eles uma
 bateria de regressão (`--savetest` prova o determinismo de salvar/recarregar).
 A lista está no `PORT_STATUS.BR.md`.
 
@@ -216,7 +216,7 @@ e descartado das listas de cheat que circulam por aí.
 
 ```
 src/
-  main.cpp        entrada + os 134 modos de teste/captura
+  main.cpp        entrada + os 136 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -238,6 +238,15 @@ cursores `.ANI`.
 ---
 
 ## Mudanças recentes
+
+### 2026-11-26
+
+- **Os botões das abas como no original.** Numa missão só de unidades ficam
+  desabilitados Factories, Labs, Resources e Space Program; Comunicações e
+  Objetivos ficam sempre disponíveis (antes as Comunicações ficavam
+  desabilitadas e o Space Program, sempre ativo). Lembrete: a tela
+  "Communications Satellite: Not Operational" é a do **Space Program** (quinto
+  botão); os objetivos são o **sexto**, o redondo mais à direita, ou Alt+O.
 
 ### 2026-11-21
 

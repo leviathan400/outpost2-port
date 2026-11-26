@@ -48,7 +48,7 @@ com o registro de `src/mission/op2_api.cpp`.
 
 ```
 src/
-  main.cpp        entrada + os 134 modos de teste/captura
+  main.cpp        entrada + os 136 modos de teste/captura
   app/            TApp, UIState, GameState (o jogo), ShellState, HUD,
                   as 6 abas do quadro, minimapa, globo, diálogos
   game/           a simulação: unidades, estruturas, movimento, pathfinder,
@@ -3893,6 +3893,54 @@ Bars*.
   estoque;
 - **Garage:** U guarda o veículo da doca.
 
+## 5.56. Os botões das abas: quem desabilita numa missão só de unidades, e a tela do Space Program (2026-11-26)
+
+Relato: *na missão 05 do Eden, a aba de objetivos é trocada por uma tela do
+espaçoporto ("Communications Satellite: Not Operational") e os objetivos
+pendentes somem.*
+
+**A tela do relato é a aba Space Program: Satellites**, o **quinto** botão da
+barra. A dos objetivos é o **sexto**, o redondo mais à direita, que fica verde
+quando aceso. Conferido no asm:
+
+- o `sub_45C960` monta os seis botões com a arte `dword_4D5390`;
+- os painéis estão em `[botão+0xA4]`: o quinto é `dword_56A0A8` (vtable
+  `off_4D5AC8`: `loc_46CCE0` / `sub_46CD00`, o Space Program) e o sexto é
+  `unk_565AC8` (os objetivos);
+- o `vt[3]` do painel do espaço (`sub_459E00`) devolve sempre 1, então a aba
+  está disponível numa missão de colônia, também no original.
+
+**A cadeia da E05** não troca a aba nem marca objetivos indevidamente.
+Conferido na DLL e reproduzido no porte (`--e05chain`):
+
+- o `ROP` cria "Completely research the Space Program." e o gatilho da
+  pesquisa 5405;
+- o `SpaceDone` cria "Build a Spaceport." e o gatilho OPERATIONAL do
+  espaçoporto;
+- o `HasSpacePort` cria "Launch a satellite.";
+- cada um com `AddMessage("New Objective")`.
+
+Em todos os passos os pendentes continuam pendentes (15 → 17 → 17) e a aba
+fica nos objetivos. Os dois saves recentes do usuário rodados com o
+`--savewatch` (10.000 tiques cada) também não mudaram a aba.
+
+**Corrigido (fidelidade):** numa missão **só de unidades** (DescBlock+0xC), o
+`sub_45C770` desabilita os botões **0, 1, 2 e 4**: Factories, Labs, Resources
+e Space Program. As Comunicações (3) e os Objetivos (5) ficam sempre. O porte
+desabilitava 0..3, inclusive as Comunicações, e deixava o Space Program sempre
+ativo. `GameState::tabDisabled`: o desenho (frame 2) e o clique seguem a regra
+do original. No `--objdump`, as missões E04, E06 e P04 mostram `111010`, e as
+de colônia, tudo ativo.
+
+**Testes e sondas novos:**
+
+- `--e05chain [DLL]`: a cadeia do espaçoporto numa partida limpa, com o
+  estado de cada objetivo antes e depois de cada passo;
+- `--savewatch <save> [tiques]`: carrega um jogo salvo com a aba dos
+  objetivos aberta e registra cada mudança da aba e da lista;
+- o `--objdump` passou a mostrar os botões desabilitados;
+- o `--e05objtest` ganhou a cadeia ROP → pesquisa → espaçoporto.
+
 ## 6. Build e execução
 
 **Toolchain:** CMake >= 3.15 + MSVC, C++17, SDL2 2.30.9 (em `third_party/`).
@@ -3960,6 +4008,8 @@ São 109 modos. Os que cobrem regressão de verdade:
 | `--techunlocktest [DLL]` | O que cada pesquisa libera: a cadeia da reciclagem (GORF, SALVAGE, 50%/60%) e a árvore inteira (liberação antes/depois, `UNIT_PROP`) (5.53) |
 | `--e05objtest [DLL] [prefixo]` | O objetivo novo no meio da E05, os botões de aba e a lista de objetivos rolada que encolhe (5.54) |
 | `--dockhotkeytest <mapa>` | Os atalhos O/U da doca: Structure Factory, Agridome e Garage, com a opção `DockHotkeys` desligada e ligada (5.55) |
+| `--e05chain [DLL]` | A cadeia do espaçoporto da E05 numa partida limpa: o estado de cada objetivo a cada passo (5.56) |
+| `--savewatch <save> [tiques]` | Carrega um jogo salvo com a aba dos objetivos aberta e registra cada mudança da aba e da lista (5.56) |
 | `--tubetest <mapa> [prefixo]` | o Earthworker ligando prédios com tubo: retas inteiras, a doca que não liga, a animação de trabalho |
 | `--waypointtest <mapa> [bmp]` | pontos de passagem com Ctrl + clique: limites por comando, o pacote com os pontos antes do alvo, a unidade passando por eles, patrulha e obra, e o desenho |
 | `--selecttest <mapa>` | a área de clique das unidades, e a seleção com Shift e com o botão do meio (soma, tira, caixa que soma, as exceções) |

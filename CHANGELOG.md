@@ -9,6 +9,52 @@ details of each one are in [PORT_STATUS.BR.md](PORT_STATUS.BR.md)
 
 ---
 
+## 2026-11-26
+
+### Português
+
+**Corrigido**
+
+- **Os botões das abas numa missão só de unidades.** Como no original, ficam
+  desabilitados Factories, Labs, Resources e Space Program, e Comunicações e
+  Objetivos continuam disponíveis. Antes as Comunicações ficavam desabilitadas
+  e o Space Program, sempre ativo.
+
+**Conferido**
+
+- **A aba de objetivos na missão 05 do Eden.** A cadeia do espaçoporto
+  (pesquisa do Space Program → construir o espaçoporto → lançar o satélite)
+  acrescenta os objetivos novos sem marcar nem esconder os pendentes, e não
+  troca a aba. A tela "Communications Satellite: Not Operational" é a do
+  **Space Program**, o quinto botão da barra; os objetivos são o **sexto**, o
+  redondo mais à direita (ou Alt+O), como no original.
+
+**Para quem acompanha o código:** seção 5.56 do PORT_STATUS; os modos
+`--e05chain` e `--savewatch`.
+
+### English
+
+**Fixed**
+
+- **Tab buttons in a units-only mission.** As in the original, Factories,
+  Labs, Resources and Space Program are disabled, and Communications and
+  Objectives stay available. Communications used to be disabled and the
+  Space Program always enabled.
+
+**Checked**
+
+- **The objectives tab in Eden mission 05.** The spaceport chain (Space
+  Program research → build the spaceport → launch the satellite) adds the
+  new objectives without marking or hiding the pending ones, and does not
+  switch the tab. The "Communications Satellite: Not Operational" screen is
+  the **Space Program**, the fifth tab button; objectives are the **sixth**,
+  the round rightmost one (or Alt+O), as in the original.
+
+**For those following the code:** section 5.56 of PORT_STATUS; the
+`--e05chain` and `--savewatch` modes.
+
+---
+
 ## 2026-11-21
 
 ### Português

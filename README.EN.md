@@ -181,7 +181,7 @@ production queue (`ProductionQueue`), right-click orders
 (`RightClickOrders`) and in-game list scroll bars (`ListScrollBars`) and the O/U dock hotkeys
 (`DockHotkeys`); they are documented in `PORT_STATUS.EN.md`.
 
-There are **134 command-line modes** for tests and captures, among them a
+There are **136 command-line modes** for tests and captures, among them a
 regression battery (`--savetest` proves save/reload determinism). The list is
 in `PORT_STATUS.EN.md`.
 
@@ -215,7 +215,7 @@ and what was checked and discarded from the cheat lists that circulate.
 
 ```
 src/
-  main.cpp        entry point + the 134 test/capture modes
+  main.cpp        entry point + the 136 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -236,6 +236,15 @@ PBMP tilesets, the `op2_art` sprites, the data sheets and the `.ANI` cursors.
 ---
 
 ## Recent changes
+
+### 2026-11-26
+
+- **Tab buttons as in the original.** In a units-only mission, Factories,
+  Labs, Resources and Space Program are disabled; Communications and
+  Objectives are always available (Communications used to be disabled and
+  the Space Program always enabled). Reminder: the "Communications Satellite:
+  Not Operational" screen is the **Space Program** (fifth button); objectives
+  are the **sixth**, the round rightmost one, or Alt+O.
 
 ### 2026-11-21
 

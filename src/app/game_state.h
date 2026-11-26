@@ -489,9 +489,13 @@ private:
     void closeTabPanes() {
         m_comms.close(); m_factories.close(); m_labs.close(); m_resources.close(); m_space.close();
     }
-    // DescBlock+0xC (missão só de unidades): abas 0..3 desabilitadas (sub_45C770)
+    // DescBlock+0xC (missão só de unidades): botões 0, 1, 2 e 4 desabilitados (sub_45C770, 5.56)
     // e os atalhos dos relatórios ignorados (sub_498890).
     bool reportsDisabled() const;
+    bool tabDisabled(int k) const;   // botoes 0,1,2,4 numa missao so de unidades (5.56)
+public:
+    bool debugTabDisabled(int k) const { return tabDisabled(k); }
+private:
     void openReport(int k, int mode);   // sub_45D020 direto (atalhos): a seleção fica
     // Painel de aba aberto no quadro (índice em dword_4D5390) ou −1 = o status da
     // seleção (sub_45CC30: unidade escolhida, ou nada).

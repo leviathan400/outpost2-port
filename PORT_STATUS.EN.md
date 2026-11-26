@@ -157,7 +157,13 @@
 > dock, O loads and U unloads without opening the pane — the Structure
 > Factory and Garage pick the bay, O the first occupied one, U the first
 > empty one; resource structures run the truck's L&OAD/&UNLOAD; new
-> `--dockhotkeytest`).
+> `--dockhotkeytest`) and **5.56** (tab buttons: in a units-only mission
+> `sub_45C770` disables buttons 0, 1, 2 and 4 — Factories, Labs, Resources,
+> Space Program — while Communications and Objectives stay enabled; the port
+> disabled 0..3 and always enabled the Space Program. The "Communications
+> Satellite: Not Operational" screen reported in E05 is the Space Program tab,
+> the fifth button; objectives are the sixth. New `--e05chain` and
+> `--savewatch`).
 > The recent
 > changes are summarised in
 > [README.EN.md](README.EN.md).
@@ -210,7 +216,7 @@ coverage by comparing the DLLs' import tables against the registry in
 
 ```
 src/
-  main.cpp        entry point + the 134 test/capture modes
+  main.cpp        entry point + the 136 test/capture modes
   app/            TApp, UIState, GameState (the game), ShellState, HUD,
                   the frame's 6 tabs, minimap, globe, dialogs
   game/           the simulation: units, structures, movement, pathfinder,
@@ -802,7 +808,7 @@ mission DLLs and the original resources from the working directory).
 
 ### Command-line tests
 
-There are 134 modes. The ones that cover real regressions:
+There are 136 modes. The ones that cover real regressions:
 
 | Mode | What it proves |
 |---|---|

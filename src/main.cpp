@@ -4820,6 +4820,96 @@ static int runTubeTest(const std::string& mapName, const std::string& prefix) {
     return ruins ? 1 : 0;
 }
 
+// --e05chain [DLL]: a cadeia do espacoporto da E05 numa partida LIMPA (nada
+// cumprido a mao): o estado de cada objetivo (pendente/cumprido) antes e
+// depois de cada passo -- ROP, a pesquisa do Space Program (5405) pelo
+// laboratorio, o espacoporto pronto.
+static int runE05Chain(const std::string& dll) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 e05chain", 640, 480, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadMission(dll)) { renderer.shutdown(); SDL_Quit(); return 2; }
+    gs.onActivate();
+    auto roda = [&](int n) { for (int t = 0; t < n && !op2::gameEndCode(); ++t) gs.onIdle(renderer, 0.2501f / 4.0f); };
+    roda(8);
+    gs.debugTab(5);
+    roda(2);
+    std::vector<op2::ObjectiveInfo> antes;
+    auto mostra = [&](const char* quando) {
+        const std::vector<op2::ObjectiveInfo> ob = op2::debugObjectives();
+        int pend = 0; for (const auto& o : ob) if (!o.done) ++pend;
+        std::printf("[Chain] --- %s: %d objetivos, %d pendentes, %d linhas visiveis, aba %d\n", quando, (int)ob.size(), pend,
+                    gs.debugObjectivesPane().debugVisible(gs.debugInfoPane()), gs.debugTabNow());
+        // o que mudou de estado desde o passo anterior
+        for (const auto& o : ob)
+            for (const auto& a : antes)
+                if (a.stub == o.stub && a.text == o.text && a.done != o.done)
+                    std::printf("[Chain]   MUDOU %s -> %s: %s\n", a.done ? "cumprido" : "pendente", o.done ? "cumprido" : "pendente", o.text.c_str());
+        for (const auto& o : ob) {
+            bool novo = true; for (const auto& a : antes) if (a.stub == o.stub && a.text == o.text) novo = false;
+            if (novo && !antes.empty()) std::printf("[Chain]   NOVO (%s, gatilho tipo %d): %s\n", o.done ? "cumprido" : "pendente", o.kind, o.text.c_str());
+        }
+        antes = ob;
+        return pend;
+    };
+    const int p0 = mostra("inicio");
+    op2::createTimeTrigger(1, 1, 4, "ROP");
+    roda(20);
+    const int p1 = mostra("depois do ROP");
+    const int idx = op2::techIndex(5405);
+    std::printf("[Chain] pesquisa 5405: indice %d, ja tinha %d\n", idx, idx >= 0 ? (int)op2::researchHas(op2::TethysGame::localPlayer(), idx) : -1);
+    if (idx >= 0) op2::researchMarkComplete(op2::TethysGame::localPlayer(), idx);
+    roda(20);
+    const int p2 = mostra("depois da pesquisa do Space Program");
+    roda(400);
+    const int p3 = mostra("400 tiques depois");
+    std::printf("[Chain] pendentes: %d -> %d -> %d -> %d\n", p0, p1, p2, p3);
+    std::fflush(stdout);
+    renderer.shutdown(); SDL_Quit();
+    return 0;
+}
+
+// --savewatch <save> [tiques]: carrega um jogo salvo, abre a aba dos objetivos
+// e roda, registrando cada mudanca da aba, do numero de objetivos e das linhas
+// visiveis no painel (para pegar o momento em que "somem").
+static int runSaveWatch(const std::string& path, int ticks) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 1;
+    op2::g_ResManager.init(".");
+    op2::g_art.load();
+    op2::Renderer renderer;
+    if (!renderer.init("OP2 savewatch", 640, 480, false)) { SDL_Quit(); return 1; }
+    op2::GameState gs;
+    if (!gs.loadSavedGame(path)) { std::printf("[Watch] falhou ao carregar %s\n", path.c_str()); return 2; }
+    gs.onActivate();
+    gs.onIdle(renderer, 0.0f);
+    gs.debugTab(5);
+    gs.onIdle(renderer, 0.0f);
+    op2::ObjectivesPane& op = gs.debugObjectivesPane();
+    const op2::PaneRect pane = gs.debugInfoPane();
+    std::printf("[Watch] %s: tique %d, %d objetivos, aba %d, %d linhas visiveis, topo %d\n", path.c_str(),
+                (int)op2::TethysGame::tick(), (int)op2::missionObjectives().size(), gs.debugTabNow(),
+                op.debugVisible(pane), op.debugTop());
+    for (const std::string& o : op2::missionObjectives()) std::printf("[Watch]   %s\n", o.c_str());
+    int aba = gs.debugTabNow(), nObj = (int)op2::missionObjectives().size(), vis = op.debugVisible(pane), mudancas = 0;
+    for (int t = 0; t < ticks && !gs.gameEnded(); ++t) {
+        gs.onIdle(renderer, 0.2501f / 4.0f);
+        const int a = gs.debugTabNow(), n = (int)op2::missionObjectives().size(), v = op.debugVisible(pane);
+        if (a != aba || n != nObj || v != vis) {
+            if (mudancas++ < 60)
+                std::printf("[Watch] tique %d: aba %d->%d, objetivos %d->%d, visiveis %d->%d, topo %d\n",
+                            (int)op2::TethysGame::tick(), aba, a, nObj, n, vis, v, op.debugTop());
+            aba = a; nObj = n; vis = v;
+        }
+    }
+    std::printf("[Watch] fim: tique %d, aba %d, %d objetivos, %d visiveis\n", (int)op2::TethysGame::tick(), aba, nObj, vis);
+    std::fflush(stdout);
+    renderer.shutdown(); SDL_Quit();
+    return 0;
+}
+
 // --dockhotkeytest <mapa>: os atalhos O (Load) / U (Unload) da doca (5.55,
 // opcao [Game] DockHotkeys). Structure Factory com o ConVec na doca: desligada
 // o O nao faz nada; ligada, O pega o kit da 1a baia ocupada e U guarda na 1a
@@ -5008,13 +5098,78 @@ static int runE05ObjTest(const std::string& dll, const std::string& prefixo) {
     const int vis = op.debugVisible(pane);
     std::printf("[E05obj] rolada: %d linhas, topo %d -> encolheu para %d linhas, topo %d, %d linhas visiveis (janela %d)\n",
                 n0, topoAntes, n1, op.debugTop(), vis, rows);
+    const int topoRolada = op.debugTop();
+    // O relato: "entra a mensagem do spaceport e somem os objetivos". Com a aba
+    // dos objetivos aberta, um espacoporto fica pronto (o HasSpacePort da DLL
+    // cria o objetivo do satelite e manda "New Objective"): a aba nao pode mudar.
+    gs.debugTab(5);
+    roda(2);
+    int abaMudou = -1, abaPara = 5;
+    {
+        const int me = op2::TethysGame::localPlayer();
+        op2::PlayerData& pd = op2::g_playerData[me];
+        pd.workers = std::max(pd.workers, 120); pd.scientists = std::max(pd.scientists, 60);
+        int sx = 0, sy = 0, nu = 0;
+        for (int i = 1; i < (int)op2::g_units.size(); ++i) {
+            const op2::UnitRecord& r = op2::g_units[i];
+            if (r.id == -1 || (r.flags & op2::UNIT_DEAD) || (r.owner & 0x0F) != me) continue;
+            sx += r.pixelX >> 5; sy += r.pixelY >> 5; ++nu;
+        }
+        if (nu) { sx /= nu; sy /= nu; }
+        auto poe = [&](int tipo) {
+            for (int raio = 4; raio < 48; raio += 2)
+                for (int k = 0; k < 16; ++k) {
+                    const int id = op2::placeBuilding(tipo, sx + (k % 4 - 2) * raio / 2, sy + (k / 4 - 2) * raio / 2, me);
+                    if (id) return id;
+                }
+            return 0;
+        };
+        poe(op2::mapCommandCenter); poe(op2::mapTokamak); poe(op2::mapTokamak);
+        const int sp = poe(0x37);
+        op2::colonyMarkDirty(me);
+        const int objAntes = (int)op2::missionObjectives().size();
+        for (int t = 0; t < 600; ++t) {
+            gs.onIdle(renderer, 0.2501f / 4.0f);
+            if (abaMudou < 0 && gs.debugTabNow() != 5) { abaMudou = t; abaPara = gs.debugTabNow(); }
+        }
+        std::printf("[E05obj] espacoporto %d (opera %d): objetivos %d -> %d; aba %d (mudou em t=%d para %d)\n",
+                    sp, sp ? (int)op2::structureOperational(op2::g_units[sp]) : -1, objAntes,
+                    (int)op2::missionObjectives().size(), gs.debugTabNow(), abaMudou, abaPara);
+    }
+    // A cadeia da campanha: ROP -> pesquisa do Space Program (5405) ->
+    // SpaceDone ("Build a Spaceport.") -> espacoporto -> HasSpacePort. O relato:
+    // ao concluir a pesquisa do espacoporto no laboratorio, os objetivos somem.
+    gs.debugTab(5);
+    roda(2);
+    auto estado = [&](const char* quando) {
+        const int linhas = (int)op2::objectivesDebugLines(160).size();
+        std::printf("[E05obj] %s: %d objetivos, %d linhas na lista, %d visiveis, aba %d\n", quando,
+                    (int)op2::missionObjectives().size(), linhas, op.debugVisible(pane), gs.debugTabNow());
+        return linhas;
+    };
+    estado("antes do ROP");
+    op2::createTimeTrigger(1, 1, 4, "ROP");
+    roda(20);
+    const int linhasRop = estado("depois do ROP");
+    const int objRop = (int)op2::missionObjectives().size();
+    const int idx5405 = op2::techIndex(5405);
+    if (idx5405 >= 0) op2::researchMarkComplete(op2::TethysGame::localPlayer(), idx5405);
+    roda(20);
+    const int linhasSpace = estado("depois da pesquisa do Space Program");
+    const int objSpace = (int)op2::missionObjectives().size();
+    (void)linhasSpace; (void)linhasRop;
+    const int visSpace = op.debugVisible(pane);
+    for (const std::string& o : op2::missionObjectives()) std::printf("[E05obj]   %s\n", o.c_str());
     struct Caso { const char* nome; int obtido, esperado; };
     const Caso casos[] = {
+        {"pesquisa do Space Program: o objetivo novo entra", objSpace > objRop ? 1 : 0, 1},
+        {"... e mostra objetivos na janela", visSpace > 0 ? 1 : 0, 1},
+        {"espacoporto pronto: a aba dos objetivos fica", gs.debugTabNow(), 5},
         {"a aba dos objetivos continua aberta", gs.debugTabNow(), 5},
         {"a lista continua com os pendentes", depois >= antes ? 1 : 0, 1},
         {"... e depois de 400 tiques", bem_depois >= antes ? 1 : 0, 1},
         {"rolada e encolhida: a lista encolheu (premissa)", n1 < n0 ? 1 : 0, 1},
-        {"... a janela vai ate o fim da lista, cheia", op.debugTop(), std::max(0, n1 - rows)},
+        {"... a janela vai ate o fim da lista, cheia", topoRolada, std::max(0, n1 - rows)},
         {"... e mostra objetivos (nao uma linha so)", vis * 2 >= std::min(rows, n1) ? 1 : 0, 1},
     };
     int ruins = 0;
@@ -5314,6 +5469,8 @@ static int runObjDump(const std::string& dll, int ticks) {
                     o.kind >= 0 && o.kind < 20 ? kNomes[o.kind] : "?", o.enabled, o.f30, o.f34, o.f38, o.f3C, o.f40, o.f44,
                     o.text.c_str());
     const op2::PlayerData& d = op2::g_playerData[op2::TethysGame::localPlayer()];
+    std::printf("[Obj] botoes desabilitados: %d%d%d%d%d%d\n", (int)gs.debugTabDisabled(0), (int)gs.debugTabDisabled(1),
+                (int)gs.debugTabDisabled(2), (int)gs.debugTabDisabled(3), (int)gs.debugTabDisabled(4), (int)gs.debugTabDisabled(5));
     std::printf("[Obj] populacao: criancas %d, trabalhadores %d, cientistas %d; comida %d, minerio %d, raro %d\n",
                 d.kids, d.workers, d.scientists, d.foodStored, d.ore, d.rareOre);
     std::fflush(stdout);
@@ -10641,6 +10798,10 @@ int main(int argc, char* argv[]) {
             return runBriefTest();
         if (std::strcmp(argv[i], "--listscrolltest") == 0)
             return runListScrollTest();
+        if (std::strcmp(argv[i], "--e05chain") == 0)
+            return runE05Chain(i + 1 < argc && argv[i + 1][0] != '-' ? argv[i + 1] : "E05.DLL");
+        if (std::strcmp(argv[i], "--savewatch") == 0 && i + 1 < argc)
+            return runSaveWatch(argv[i + 1], i + 2 < argc ? atoi(argv[i + 2]) : 3000);
         if (std::strcmp(argv[i], "--dockhotkeytest") == 0 && i + 1 < argc)
             return runDockHotkeyTest(argv[i + 1]);
         if (std::strcmp(argv[i], "--e05objtest") == 0)

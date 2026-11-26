@@ -3127,6 +3127,7 @@ bool GameState::tabRect(int k, PaneRect& r) const {
 // sub_45C620: clicar na aba limpa a seleção (sub_41A8E0, com o quadro como
 // origem: sem [+0x484]), volta o painel ao modo 0 (vt[5]) e o põe no quadro
 // (sub_45D020, aba acesa). PROVISÓRIO: só as abas já portadas respondem.
+bool GameState::tabDisabled(int k) const { return (k <= 2 || k == 4) && reportsDisabled(); }   // sub_45C770
 bool GameState::reportsDisabled() const {
     return m_mission && m_mission->desc && m_mission->desc->boolUnitMission;
 }
@@ -3197,7 +3198,12 @@ void GameState::openReport(int k, int mode) {
 }
 
 void GameState::openTab(int k) {
-    if (k == 5 ? !m_mission : k == 4 ? false : (k < 0 || k > 3 || reportsDisabled())) return;
+    // sub_45C770 (5.56): numa missao so de unidades o original desabilita os
+    // botoes 0, 1, 2 e 4 (Factories, Labs, Resources, Space Program); as
+    // Comunicacoes (3) e os Objetivos (5) ficam sempre. O porte desabilitava
+    // 0..3 e deixava o Space Program sempre ativo.
+    if (k < 0 || k > 5) return;
+    if (k == 5 ? !m_mission : (tabDisabled(k))) return;
     m_targetCmd = -1;
     m_selected.clear();
     m_lastSel.clear();
@@ -3694,7 +3700,7 @@ void GameState::renderPanel(Renderer& renderer) {
                 if (anim >= g_art.numAnimations()) continue;
                 const ArtAnimation& an = g_art.animation(anim);
                 // Botão (sub_40AEE0): sub_403E00 com o hotspot no canto do retângulo.
-                const int fr = (k <= 3 && reportsDisabled()) ? 2 : k == current ? 1 : 0;
+                const int fr = tabDisabled(k) ? 2 : k == current ? 1 : 0;
                 blitArtFrame(fb, VW, VH, anim, fr, winL + x, winT, -1,
                              kColX, kPaneWinY, kColX + kColW, pane.t);
                 x += static_cast<int>(an.header[3]) - static_cast<int>(an.header[1]);
