@@ -163,7 +163,14 @@
 > disabled 0..3 and always enabled the Space Program. The "Communications
 > Satellite: Not Operational" screen reported in E05 is the Space Program tab,
 > the fifth button; objectives are the sixth. New `--e05chain` and
-> `--savewatch`).
+> `--savewatch`), **5.57** (the collaborator's pull requests #4–#10: the
+> `--harness` now runs OP2TestHarness scripts almost entirely — economy,
+> earthwork, disaster and group verbs, telemetry, the full trace, gamedata,
+> mouse/keyboard input, audio, real missions; outside `harness_mode.cpp` only
+> readers and hooks that are neutral without `--harness`) and **5.58** (PR
+> #11: morale starts at 50 as in the original's `Player.Initialize` — our
+> `sub_490190`, `mov [esi+40h], 32h` — so the Agridome makes 40 instead of
+> 36 from the start).
 > The recent
 > changes are summarised in
 > [README.EN.md](README.EN.md).

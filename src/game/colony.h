@@ -54,7 +54,8 @@ struct ColonyState {
     // Moral (sub_44E550) — campos +0x38..+0x78 do registro do jogador. O
     // nível em si fica em PlayerData::morale (+0x34).
     int moraleEvents = 0;        // +0x38 pontos de evento (decaem por EVENT_DEC_RATE)
-    int moraleValue = 0;         // +0x40 valor 0..99 (varia no máx. ±5 por ciclo)
+    int moraleValue = 50;        // +0x40 valor 0..99 (varia no máx. ±5 por ciclo); Player.Initialize
+                                 // (0x490270) começa em 0x32, por isso o 1º ciclo já dá 45
     int moraleTrend = 0;         // +0x44 +1 / 0 / -1
     int crowding = 0;            // +0x48 pop*100 / capacidade das residências
     int foodState = 0;           // +0x4C 0 sobra, 1 déficit c/ estoque, 2 déficit, 3 fome

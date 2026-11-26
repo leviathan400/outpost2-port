@@ -256,6 +256,9 @@ cursores `.ANI`.
   Factory, o O pega o kit da primeira baia ocupada e o U guarda na primeira
   vazia. Vale também para a garagem e para Agridome, smelters e tanques.
   Desligada (o padrão), é o jogo original.
+- **A moral começa em 50, como no original**, e não em 0. Antes a colônia
+  começava com a moral "Terrible", e o Agridome produzia 36 de comida em vez
+  de 40.
 
 ### 2026-11-20
 

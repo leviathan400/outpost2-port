@@ -3941,6 +3941,51 @@ de colônia, tudo ativo.
 - o `--objdump` passou a mostrar os botões desabilitados;
 - o `--e05objtest` ganhou a cadeia ROP → pesquisa → espaçoporto.
 
+## 5.57. O `--harness` roda os roteiros do OP2TestHarness (PRs #4 a #10, do colaborador) (2026-11-26)
+
+Série de pull requests do colaborador (leviathan400), encadeada. O
+OP2TestHarness joga um cenário no jogo **original** e grava o que aconteceu;
+o `--harness` joga o mesmo roteiro no porte, para comparar os dois tique a
+tique. A série entrou toda:
+
+- **#4:** os verbos de economia, colônia, obras, comandos com alvo, desastres
+  e grupos de IA. Cada um manda o mesmo pacote ou faz a mesma chamada da API
+  de missão que o harness faz no original;
+- **#5:** `telemetry.jsonl` e `--eco` (a colônia, as unidades e os beacons,
+  com os nomes de campo do original), e o roteiro em ordem de tique;
+- **#6:** o `trace.jsonl` com todos os campos: comando, ação, rota, EMP,
+  espuma, ESG, casas ocupadas, disparos, o alocador de objetos;
+- **#7:** o `gamedata.json`, os dados do jogo como carregados;
+- **#8:** a entrada de mouse e teclado (`click`, `drag`, `key`, `uilist`...);
+- **#9:** o `audio.jsonl` e o verbo `shot`;
+- **#10:** `--mission` e `--difficulty`, as missões de verdade.
+
+**Revisado no merge:** fora do `harness_mode.cpp` só entraram leitores (as
+entradas do MORALE.TXT, as máscaras da moral forçada, a linha do MINES.TXT, o
+anel de unidades livres, o modo de alcance das armas, o estado da música) e
+ganchos **neutros** sem o `--harness`. O relógio das vozes e do filtro de
+mensagens (`soundClock`) continua o `SDL_GetTicks`; o registro de sons
+(`soundLog`) é vazio; e o mouse do arrasto do minimapa é o de verdade
+(`m_harnessButtons = -1`). A regressão inteira passou com a série.
+
+## 5.58. A moral começa em 50, como no original (PR #11, do colaborador) (2026-11-26)
+
+O `Player.Initialize` do original zera o registro do jogador e põe o **valor**
+da moral (+0x40) em **0x32 (50)**. É o nosso `sub_490190`, conferido no asm:
+`rep stosd` de 0x132 dwords e depois `mov [esi+40h], 32h`. O **nível**
+(+0x34) fica em 0 até o primeiro ciclo de moral, que no jogador humano vem no
+tique 0 e leva o valor a 45 ("Fair") pelo limite de ±5.
+
+O porte começava com o valor em 0 e o nível em Fair. A colônia ficava em
+"Terrible" desde o início: o bônus negativo de comida deixava o Agridome em 36
+em vez de 40, e os números de mortes saíam diferentes. Agora
+`ColonyState::moraleValue` começa em 50 e `PlayerData::morale` em
+`MORALE_EXCELLENT` (0, o registro zerado).
+
+O colaborador conferiu com o OP2TestHarness nos cinco jogos de colônia, 20.000
+tiques cada: a moral, o nível, a comida estocada e a produção do Agridome
+batem com o original em todos os tiques conferidos.
+
 ## 6. Build e execução
 
 **Toolchain:** CMake >= 3.15 + MSVC, C++17, SDL2 2.30.9 (em `third_party/`).
